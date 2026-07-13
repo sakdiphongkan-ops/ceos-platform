@@ -1,17 +1,21 @@
 {
-  "name": "ceos-platform",
+  "name": "monorepo",
   "version": "1.0.0",
   "private": true,
+  "workspaces": [
+    "packages/ceos-platform",
+    "packages/clerk-netlify-template"
+  ],
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start"
+    "dev:platform": "npm run dev -w packages/ceos-platform",
+    "dev:clerk": "npm run dev -w packages/clerk-netlify-template",
+    "dev:all": "npm run dev -w packages/ceos-platform & npm run dev -w packages/clerk-netlify-template",
+    "build:platform": "npm run build -w packages/ceos-platform",
+    "build:clerk": "npm run build -w packages/clerk-netlify-template",
+    "build:all": "npm run build -w packages/ceos-platform && npm run build -w packages/clerk-netlify-template",
+    "start:platform": "npm run start -w packages/ceos-platform",
+    "start:clerk": "npm run start -w packages/clerk-netlify-template",
+    "lint:clerk": "npm run lint -w packages/clerk-netlify-template"
   },
-  "dependencies": {
-    "next": "14.2.5",
-    "react": "18.3.1",
-    "react-dom": "18.3.1",
-    "typescript": "5.5.4",
-    "lucide-react": "^0.468.0"
-  }
+  "dependencies": {}
 }

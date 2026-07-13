@@ -1,66 +1,56 @@
-# CEOS Platform
+# Monorepo - CEOS Platform
 
-A modern platform built with Next.js, Tailwind CSS, shadcn/ui, and Supabase.
+Monorepo that combines two Next.js projects using npm workspaces.
 
-## Tech Stack
+## Projects
 
-- **Frontend**: Next.js 14+ with TypeScript
-- **Styling**: Tailwind CSS
-- **UI Components**: shadcn/ui
-- **Database**: Supabase (PostgreSQL)
-- **Authentication**: Supabase Auth
+- **ceos-platform**: Main platform using Next.js 14
+- **clerk-netlify-template**: Authentication template with Clerk
 
-## Getting Started
+## Quick Start
 
-### Prerequisites
-
-- Node.js 18+
-- npm or yarn
-
-### Installation
-
+### Install Dependencies
 ```bash
 npm install
-# or
-yarn install
-```
-
-### Environment Variables
-
-Create a `.env.local` file:
-
-```env
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
 ### Development
 
+Run individual project:
 ```bash
-npm run dev
-# or
-yarn dev
+npm run dev:platform    # Run ceos-platform
+npm run dev:clerk       # Run clerk-netlify-template
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-## Project Structure
-
-```
-├── app/                 # Next.js app directory
-├── components/          # React components
-│   └── ui/             # shadcn/ui components
-├── lib/                # Utility functions
-│   └── supabase.ts     # Supabase client
-├── types/              # TypeScript types
-├── migrations/         # Database migrations
-└── public/             # Static assets
+Run all projects:
+```bash
+npm run dev:all
 ```
 
-## Database Migrations
+### Build
 
-Migrations are stored in the `migrations/` directory.
+```bash
+npm run build:all       # Build all projects
+```
 
-## License
+### Project Structure
 
-MIT
+```
+monorepo/
+├── packages/
+│   ├── ceos-platform/
+│   └── clerk-netlify-template/
+├── package.json (root workspaces config)
+└── README.md
+```
+
+## Workspaces
+
+This monorepo uses npm workspaces to manage dependencies across packages. All packages share the same `node_modules` directory at the root level, reducing disk space and installation time.
+
+## Next Steps
+
+1. Copy files from original repos to their respective package directories
+2. Update import paths if needed
+3. Install dependencies: `npm install`
+4. Test each project runs correctly

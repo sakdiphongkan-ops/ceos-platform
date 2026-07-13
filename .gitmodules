@@ -1,0 +1,3 @@
+[submodule "packages/clerk-netlify-template"]
+	path = packages/clerk-netlify-template
+	url = https://github.com/sakdiphongkan-ops/clerk-netlify-template.git
