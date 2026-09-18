@@ -92,7 +92,7 @@ function monteCarlo(rows:Trade[],iterations=3000){
 export async function GET(req:Request){
  const u=new URL(req.url);
  const batch=Math.max(0,Math.min(4,Number(u.searchParams.get("batch")??"0")));
- const lookbackDays=Math.max(30,Math.min(60,Number(u.searchParams.get("days")??"60")));
+ const requestedLookbackDays=Math.max(30,Math.min(60,Number(u.searchParams.get("days")??"60")));\n const lookbackDays=Math.min(59,requestedLookbackDays);
  const start=Math.floor((Date.now()-lookbackDays*86400000)/1000),end=Math.floor(Date.now()/1000);
  const selected=SYMBOLS.slice(batch*10,batch*10+10);
  const fetched=await Promise.allSettled(selected.map(s=>fetchBars(s,start,end)));
@@ -115,7 +115,7 @@ export async function GET(req:Request){
  const oosSummary=Object.values(oosAll).map((rows:Trade[])=>({id:rows[0]?.strategyId??0,name:rows[0]?.name??"",family:rows[0]?.family??"",...summarize(rows),monteCarlo:monteCarlo(rows)})).sort((a,b)=>b.totalNetBps-a.totalNetBps);
  return NextResponse.json({
   status:"COMPLETED",mode:"RESEARCH_ONLY",testType:"60D-WALK-FORWARD-100-STRATEGY",
-  period:{lookbackDays,sessions:sessions.length,start:sessions[0]??null,end:sessions.at(-1)??null},
+  period:{requestedLookbackDays,effectiveLookbackDays:lookbackDays,sessions:sessions.length,start:sessions[0]??null,end:sessions.at(-1)??null},
   data:{batch,universeSize:SYMBOLS.length,requestedSymbols:selected,symbolsReturned:[...data.keys()],symbolsFailed:errors,bars15m:[...data.values()].reduce((n,a)=>n+a.length,0)},
   rules:{interval:"15m",entry:"completed 15m close -> next 15m open",exit:"4 bars after entry",costBps:COST_BPS,walkForward:"20 train sessions -> 5 OOS sessions, step 5",selection:"top 10 by train total net bps; no OOS peeking",minTrainSignals:10},
   strategiesTested:strategies.length,folds:foldResults.length,foldResults,oosSummary:oosSummary.slice(0,20)
