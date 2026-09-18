@@ -178,7 +178,7 @@ export async function GET(){
     mode:"RESEARCH_ONLY",
     testType:"LUNA-15M-PRICE-ONLY-PROXY",
     exactLunaStatus:"NOT_EXACT_LUNA: historical Yahoo data has OHLCV but not historical SET bid/ask sizes/order-book imbalance.",
-    period:{start:"2026-09-10",end:"2026-09-18",tradingSessions:[...sessions].sort()},
+    period:{start:"2026-09-10",end:"2026-09-18",tradingSessions:Array.from(sessions).sort()},
     universe:{name:"SET50 H2 2026 proxy",symbols:SYMBOLS,count:SYMBOLS.length},
     data:{symbolsReturned:data.size,symbolsFailed:errors.length,bars15m:bars,errors},
     strategy:{
