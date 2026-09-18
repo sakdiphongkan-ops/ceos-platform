@@ -55,3 +55,28 @@ HISTORICAL_CSV=/path/to/file.csv npm run import:csv
 The importer stores immutable source metadata including SHA-256 checksum, time range, symbol count, row count and raw quote payload. Replay uses the same execution engine and risk limits as paper execution.
 
 SET's historical tick service provides trading ticker and bids/offers, with SET tick history available from September 2012. Raw SET files should be transformed into the normalized CSV contract before import, preserving original timestamp/order sequence.
+
+## SET raw-file normalization
+
+The official SET service provides historical intraday tick data as daily files containing trading ticker and/or bids/offers. SET states that tick data is available from September 2012 and can be delivered by website download or API. Raw files must be normalized before replay. See SET's current data service for licensing and access terms.
+
+This repository therefore uses a mapping-driven adapter rather than assuming an undocumented raw-file layout.
+
+Workflow:
+
+```bash
+SET_RAW_FILE=/path/to/set-file.csv npm run inspect:set
+SET_RAW_FILE=/path/to/set-file.csv npm run normalize:set
+BACKTEST_FILE=/path/to/set-file.normalized.csv npm run backtest:15m
+```
+
+Optional column overrides are available when a purchased SET file uses headers that cannot be auto-detected:
+
+```bash
+SET_TS_COLUMN=... SET_SYMBOL_COLUMN=... SET_LAST_COLUMN=... \\
+SET_BID_COLUMN=... SET_ASK_COLUMN=... \\
+SET_BID_SIZE_COLUMN=... SET_ASK_SIZE_COLUMN=... \\
+SET_RAW_FILE=/path/to/set-file.csv npm run normalize:set
+```
+
+The normalizer is deliberately conservative: it rejects invalid timestamps/prices, bid>ask, and timestamp regressions; it preserves source row sequence and emits a SHA-256 checksum. It does not fabricate missing bid/ask values or OHLC data.
