@@ -1,0 +1,24 @@
+name: LUNA-TH1H CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: luna-th1h
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: luna-th1h/package.json
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm run backtest:fixture
