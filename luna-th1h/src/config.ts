@@ -13,6 +13,8 @@ export const config={
   executionTest:bool("LUNA_EXECUTION_TEST",false),
   timezone:process.env.LUNA_TIMEZONE ?? "Asia/Bangkok",
   marketDataProvider:process.env.MARKET_DATA_PROVIDER ?? "mock",
+  reduceOnlyTime:process.env.LUNA_REDUCE_ONLY_TIME ?? "16:20",
+  forceCloseTime:process.env.LUNA_FORCE_CLOSE_TIME ?? "16:25",
   supabaseUrl:process.env.SUPABASE_URL ?? "",
   supabaseAnonKey:process.env.SUPABASE_ANON_KEY ?? "",
   supabaseFunctionUrl:process.env.SUPABASE_FUNCTION_URL ?? "",
