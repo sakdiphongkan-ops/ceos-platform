@@ -82,13 +82,13 @@ def health():
     }
 
 @app.get("/portfolio")
-def portfolio(x_luna_gateway: str | None = Header(default=None)):
+def portfolio(x_luna_gateway: Optional[str] = Header(default=None)):
     auth(x_luna_gateway)
     eq = client()
     return {"ok": True, "data": eq.get_portfolio()}
 
 @app.post("/place")
-def place(payload: PlaceOrder, x_luna_gateway: str | None = Header(default=None)):
+def place(payload: PlaceOrder, x_luna_gateway: Optional[str] = Header(default=None)):
     auth(x_luna_gateway)
     eq = client()
     if payload.side not in {"BUY", "SELL"}:
@@ -119,7 +119,7 @@ def place(payload: PlaceOrder, x_luna_gateway: str | None = Header(default=None)
     }
 
 @app.post("/cancel")
-def cancel(payload: CancelOrder, x_luna_gateway: str | None = Header(default=None)):
+def cancel(payload: CancelOrder, x_luna_gateway: Optional[str] = Header(default=None)):
     auth(x_luna_gateway)
     eq = client()
     if not hasattr(eq, "cancel_order"):
@@ -133,7 +133,7 @@ def cancel(payload: CancelOrder, x_luna_gateway: str | None = Header(default=Non
     }
 
 @app.get("/diagnostics")
-def diagnostics(x_luna_gateway: str | None = Header(default=None)):
+def diagnostics(x_luna_gateway: Optional[str] = Header(default=None)):
     auth(x_luna_gateway)
     return {
         "ok": True,
