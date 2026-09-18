@@ -1,14 +1,24 @@
 {
-  "name":"luna-th1h-worker",
-  "private":true,
-  "version":"0.1.0",
-  "type":"module",
-  "scripts":{
-    "start":"tsx src/index.ts","build":"tsc --noEmit",
-    "dev":"tsx watch src/index.ts",
-    "typecheck":"tsc --noEmit",
-    "backtest:fixture":"tsx src/research.ts","replay:file":"tsx src/replay-file.ts","import:csv":"tsx src/import-historical.ts"
+  "name": "luna-th1h-worker",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "build": "tsc --noEmit",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "backtest:fixture": "tsx src/research.ts",
+    "replay:file": "tsx src/replay-file.ts",
+    "import:csv": "tsx src/import-historical.ts",
+    "backtest:15m": "tsx src/replay-15m.ts"
   },
-  "dependencies":{"@supabase/supabase-js":"^2.57.0"},
-  "devDependencies":{"tsx":"^4.19.1","typescript":"^5.5.4","@types/node":"^22.10.0"}
+  "dependencies": {
+    "@supabase/supabase-js": "^2.57.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.1",
+    "typescript": "^5.5.4",
+    "@types/node": "^22.10.0"
+  }
 }
