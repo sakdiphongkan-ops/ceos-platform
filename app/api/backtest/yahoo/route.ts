@@ -51,14 +51,14 @@ function runProxy(data:Map<string,Bar[]>){
   const sessions=new Set<string>();
   const all=new Map<number,{symbol:string;bar:Bar}[]>();
 
-  for(const [symbol,bars] of data){
+  for(const [symbol,bars] of Array.from(data.entries())){
     for(const b of bars){sessions.add(day(b.ts));const a=all.get(b.ts)??[];a.push({symbol,bar:b});all.set(b.ts,a);}
   }
   const times=[...all.keys()].sort((a,b)=>a-b);
 
   function markValue(){
     let mv=0;
-    for(const [s,p] of positions){const last=data.get(s)?.find(b=>b.ts===currentTs)?.close??p.avg;mv+=p.qty*last;}
+    for(const [s,p] of Array.from(positions.entries())){const last=data.get(s)?.find(b=>b.ts===currentTs)?.close??p.avg;mv+=p.qty*last;}
     return mv;
   }
   let currentTs=times[0]??0;
