@@ -9,10 +9,21 @@ jobs:
   research:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - name: Run research
-        run: node scripts/research/multitf.mjs | tee multitf-result.json
+        run: node scripts/research/multitf.mjs > multitf-result.json && cat multitf-result.json
+      - name: Save result into repository
+        run: |
+          mkdir -p research-results
+          cp multitf-result.json research-results/multitf-result.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research-results/multitf-result.json
+          git diff --cached --quiet || git commit -m "Save LUNA multi-timeframe research result"
+          git push
       - name: Upload result
         uses: actions/upload-artifact@v4
         with:
