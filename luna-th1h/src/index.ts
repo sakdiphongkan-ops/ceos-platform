@@ -1,6 +1,7 @@
 import {config} from "./config.js";
 import {marketQuotes} from "./market/provider.js";
 import {StrategyV1,VERSION as STRATEGY_V1_VERSION} from "./strategy-v1.js";
+import {liveGatewayDiagnostics,liveGatewayHealth,placeLiveOrder} from "./live-gateway.js";
 import {applyFill,createPortfolio,mark,planOrder,simulateFill,snapshot, type PortfolioState} from "./execution.js";
 import type {Quote,Signal} from "./types.js";
 
@@ -77,6 +78,34 @@ async function writeSnapshot(){
     ts:new Date().toISOString(),
     portfolio:snapshot(portfolio)
   });
+}
+
+async function getExecutionControl(){
+  const response=await ingest("",{action:"get_execution_control"});
+  const control=(response as {control?:{
+    execution_mode:string;armed:boolean;kill_switch:boolean;max_daily_loss:number;
+    max_order_notional:number;max_orders_per_minute:number
+  }}).control;
+  if(!control) throw new Error("Supabase did not return execution control.");
+  return control;
+}
+
+async function preflightLive(){
+  if(config.executionMode!=="live") throw new Error("LIVE_EXECUTION_MODE_REQUIRED");
+  if(config.mode!=="live") throw new Error("LUNA_MODE_MUST_BE_LIVE_FOR_LIVE_EXECUTION");
+  if(String(process.env.LIVE_RECONCILIATION_READY ?? "false").toLowerCase()!=="true"){
+    throw new Error("LIVE_RECONCILIATION_NOT_READY");
+  }
+  const control=await getExecutionControl();
+  if(control.execution_mode!=="live" || !control.armed || control.kill_switch){
+    throw new Error(`LIVE_CONTROL_BLOCKED execution_mode=${control.execution_mode} armed=${control.armed} kill_switch=${control.kill_switch}`);
+  }
+  const health=await liveGatewayHealth();
+  if(!health.ok || !health.live_armed) throw new Error("LIVE_GATEWAY_NOT_ARMED");
+  const diagnostics=await liveGatewayDiagnostics();
+  if(!diagnostics?.credentials_present || !diagnostics?.python_sdk_loaded){
+    throw new Error(`LIVE_GATEWAY_DIAGNOSTICS_FAILED: ${JSON.stringify(diagnostics)}`);
+  }
 }
 
 async function startSession(){
@@ -171,6 +200,50 @@ async function executeSignal(q:Quote,signal:Signal){
 
   const fill=simulateFill(plan);
   const clientOrderId=`${sessionId}:${q.symbol}:${signal.ts}:${plan.side}:${executionTestStep}`;
+
+  if(config.executionMode==="live"){
+    try{
+      const brokerOrder=await placeLiveOrder({
+        clientOrderId,
+        symbol:plan.symbol,
+        side:plan.side,
+        qty:plan.qty,
+        price:plan.referencePrice,
+        reason:signal.reason
+      });
+      await ingest("",{
+        action:"record_broker_event",
+        event:{
+          session_id:sessionId,
+          client_order_id:brokerOrder.client_order_id,
+          broker_order_id:brokerOrder.broker_order_id,
+          event_type:"BROKER_ORDER_SUBMITTED",
+          ts:new Date().toISOString(),
+          payload:{
+            symbol:brokerOrder.symbol,
+            side:brokerOrder.side,
+            qty:brokerOrder.qty,
+            price:brokerOrder.price,
+            raw:brokerOrder.raw
+          },
+          idempotency_key:sessionId+":BROKER_ORDER_SUBMITTED:"+brokerOrder.client_order_id
+        }
+      });
+      await audit("BROKER_ORDER_SUBMITTED",{
+        client_order_id:brokerOrder.client_order_id,
+        broker_order_id:brokerOrder.broker_order_id,
+        symbol:brokerOrder.symbol,
+        side:brokerOrder.side,
+        qty:brokerOrder.qty,
+        price:brokerOrder.price
+      },signal.strategyVersion);
+      console.log(JSON.stringify({event:"LIVE_ORDER_SUBMITTED",brokerOrderId:brokerOrder.broker_order_id}));
+      return;
+    }catch(err){
+      await audit("BROKER_ORDER_ERROR",{client_order_id:clientOrderId,error:String(err)},signal.strategyVersion);
+      throw err;
+    }
+  }
 
   await audit("ORDER_SUBMITTED",{
     client_order_id:clientOrderId,
@@ -275,7 +348,8 @@ async function main(){
     strategy:STRATEGY_V1_VERSION
   }));
 
-  if(config.mode!=="paper") throw new Error("Only paper mode is enabled in this build.");
+  if(!["paper","live"].includes(config.mode)) throw new Error(`Unknown LUNA_MODE: ${config.mode}`);
+  if(config.mode==="live" || config.executionMode==="live") await preflightLive();
   if(!["mock","set-marketplace"].includes(config.marketDataProvider)){
     throw new Error(`Unknown MARKET_DATA_PROVIDER: ${config.marketDataProvider}`);
   }
