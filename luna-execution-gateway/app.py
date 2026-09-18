@@ -2,7 +2,7 @@ import hashlib
 import os
 import time
 import uuid
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
@@ -26,7 +26,7 @@ PIN = os.getenv("SETTRADE_PIN", "")
 _investor = None
 _equity = None
 
-def auth(x_luna_gateway: str | None):
+def auth(x_luna_gateway: Optional[str]):
     if not GATEWAY_KEY or x_luna_gateway != GATEWAY_KEY:
         raise HTTPException(status_code=401, detail="unauthorized")
 
