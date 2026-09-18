@@ -11,7 +11,9 @@
     "backtest:fixture": "tsx src/research.ts",
     "replay:file": "tsx src/replay-file.ts",
     "import:csv": "tsx src/import-historical.ts",
-    "backtest:15m": "tsx src/replay-15m.ts"
+    "backtest:15m": "tsx src/replay-15m.ts",
+    "inspect:set": "tsx src/set-schema-inspector.ts",
+    "normalize:set": "tsx src/normalize-set-file.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.0"
