@@ -1,0 +1,1 @@
+The worker writes through the Supabase luna-api Edge Function. Direct table access is protected by RLS. The Edge Function uses its server-side secret key for inserts and returns a compact control-room feed for GET requests.
