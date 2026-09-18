@@ -54,7 +54,7 @@ function runProxy(data:Map<string,Bar[]>){
   for(const [symbol,bars] of Array.from(data.entries())){
     for(const b of bars){sessions.add(day(b.ts));const a=all.get(b.ts)??[];a.push({symbol,bar:b});all.set(b.ts,a);}
   }
-  const times=[...all.keys()].sort((a,b)=>a-b);
+  const times=Array.from(all.keys()).sort((a,b)=>a-b);
 
   function markValue(){
     let mv=0;
