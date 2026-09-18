@@ -109,13 +109,12 @@ export class StrategyV1{
       if(st.entryTs===null) st.entryTs=ctx.nowMs;
       const stopLoss=ctx.avgPrice*(1-this.params.stopLossBps/10_000);
       const takeProfit=ctx.avgPrice*(1+this.params.takeProfitBps/10_000);
-      const crossDown=st.previousFast!==null && st.previousSlow!==null &&
-        st.previousFast>=st.previousSlow && st.emaFast<st.emaSlow;
+      const trendBroken=st.emaFast<st.emaSlow;
       const timedOut=ctx.nowMs-st.entryTs>=this.params.maxHoldMs;
 
-      if(crossDown){
+      if(trendBroken){
         st.lastDecisionTs=ctx.nowMs; st.entryTs=null;
-        return {symbol:q.symbol,ts:q.ts,action:"SELL",reason:"EMA_CROSS_DOWN",strategyVersion:VERSION};
+        return {symbol:q.symbol,ts:q.ts,action:"SELL",reason:"EMA_TREND_BREAK",strategyVersion:VERSION};
       }
       if(price<=stopLoss){
         st.lastDecisionTs=ctx.nowMs; st.entryTs=null;
@@ -137,15 +136,14 @@ export class StrategyV1{
       return {symbol:q.symbol,ts:q.ts,action:"HOLD",reason:"COOLDOWN",strategyVersion:VERSION};
     }
 
-    const crossUp=st.previousFast!==null && st.previousSlow!==null &&
-      st.previousFast<=st.previousSlow && st.emaFast>st.emaSlow;
+    const trendUp=st.emaFast>st.emaSlow;
 
-    if(crossUp && momentumBps>=this.params.minMomentumBps && spreadBps<=this.params.maxSpreadBps && imbalance>=this.params.minImbalance){
+    if(trendUp && momentumBps>=this.params.minMomentumBps && spreadBps<=this.params.maxSpreadBps && imbalance>=this.params.minImbalance){
       st.lastDecisionTs=ctx.nowMs;
       st.entryTs=ctx.nowMs;
       return {
         symbol:q.symbol,ts:q.ts,action:"BUY",
-        reason:`EMA_CROSS_UP momentum=${momentumBps.toFixed(2)}bps spread=${spreadBps.toFixed(2)}bps imbalance=${imbalance.toFixed(3)}`,
+        reason:`EMA_TREND_UP momentum=${momentumBps.toFixed(2)}bps spread=${spreadBps.toFixed(2)}bps imbalance=${imbalance.toFixed(3)}`,
         strategyVersion:VERSION
       };
     }
