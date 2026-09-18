@@ -13,8 +13,8 @@ function splitCsvLine(line:string){
   let quoted=false;
   for(let i=0;i<line.length;i++){
     const c=line[i];
-    if(c==="""){
-      if(quoted && line[i+1]==="""){cell+=""";i++;continue;}
+    if(c==='"'){
+      if(quoted && line[i+1]==='"'){cell+='"';i++;continue;}
       quoted=!quoted;continue;
     }
     if(c==="," && !quoted){cells.push(cell);cell="";continue;}
@@ -51,9 +51,12 @@ export async function readNormalizedCsv(path:string):Promise<Quote[]>{
   const rows:Quote[]=[];
   for(let n=1;n<lines.length;n++){
     const c=splitCsvLine(lines[n]);
-    const ts=new Date(c[iTs]).toISOString();
+    const rawTs=c[iTs];
+    const parsedTs=new Date(rawTs);
+    if(!Number.isFinite(parsedTs.getTime())) throw new Error(`INVALID_CSV_TIMESTAMP at line ${n+1}: ${rawTs}`);
+
     rows.push({
-      ts,
+      ts:parsedTs.toISOString(),
       symbol:c[iSymbol],
       bid:parseNumber(c[iBid]),
       ask:parseNumber(c[iAsk]),
