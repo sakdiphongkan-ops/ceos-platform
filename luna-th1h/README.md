@@ -80,3 +80,52 @@ SET_RAW_FILE=/path/to/set-file.csv npm run normalize:set
 ```
 
 The normalizer is deliberately conservative: it rejects invalid timestamps/prices, bid>ask, and timestamp regressions; it preserves source row sequence and emits a SHA-256 checksum. It does not fabricate missing bid/ask values or OHLC data.
+
+## Research Engine v2 — multi-day / multi-stock OOS research
+
+Research v2 treats all normalized CSVs as one chronological dataset and evaluates candidate entries cross-sectionally at the same timestamp. It:
+
+- splits by trading sessions (60% TRAIN / 20% VALIDATION / 20% TEST), not arbitrary rows;
+- ranks simultaneous BUY candidates using fixed, auditable weights for momentum, order-book imbalance and spread;
+- caps simultaneous candidate selection;
+- closes positions at each session end;
+- selects the strategy variant using VALIDATION P&L only, then reports that locked variant's TEST result as OOS;
+- deduplicates identical `timestamp + symbol` observations;
+- supports a historical universe membership file so symbols are eligible only during their actual membership interval.
+
+Run:
+
+```bash
+RESEARCH_INPUT=/path/to/normalized-csv-directory npm run research:v2
+```
+
+For a survivorship-control file:
+
+```bash
+RESEARCH_INPUT=/path/to/data \
+UNIVERSE_CSV=/path/to/universe.csv \
+npm run research:v2
+```
+
+Universe CSV format:
+
+```csv
+symbol,market,start_date,end_date
+PTT,SET,2001-01-01,
+ABC,mai,2020-01-01,2024-12-31
+```
+
+Without `UNIVERSE_CSV`, the report explicitly marks survivorship control as `UNVERIFIED_SURVIVORSHIP_CONTROL`; the engine does not claim that the dataset is survivorship-bias-free.
+
+Environment controls:
+
+```text
+LUNA_MAX_CROSS_SECTIONAL_CANDIDATES=5
+LUNA_RANK_MOMENTUM_WEIGHT=1
+LUNA_RANK_IMBALANCE_WEIGHT=20
+LUNA_RANK_SPREAD_WEIGHT=0.25
+LUNA_ALLOWED_MARKETS=SET,mai
+LUNA_TIMEZONE=Asia/Bangkok
+```
+
+Research v2 remains paper/research only. It does not enable live execution.
