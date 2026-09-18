@@ -187,10 +187,29 @@ function SignalBadge({signal,large=false}:{signal:"BUY"|"SELL"|"HOLD";large?:boo
 function SideBadge({side}:{side:"BUY"|"SELL"}) { return <span className={`side-badge ${side.toLowerCase()}`}>{side}</span>; }
 function StatusBadge({status}:{status:string}) { return <span className={`status-badge ${status.toLowerCase()}`}>{status}</span>; }
 function ResearchPanel({feed}:{feed:LunaFeed|null}) {
-  const strategy=feed?.sessions?.[0]?.strategy_version??"luna-th1h-v1.0.0";
-  return <div className="research-panel"><div className="research-banner"><div><div className="eyebrow">RESEARCH MODE</div><h3>Walk-forward validation</h3><p>Train 60% · Validation 20% · Test 20%. No live orders are created by this view.</p></div><span className="safe-badge"><ShieldCheck size={14}/> PAPER ONLY</span></div><div className="research-grid"><div><strong>Strategy</strong><span>{strategy}</span></div><div><strong>Dataset</strong><span>{feed?.ticks?.length??0} session ticks</span></div><div><strong>Live feed</strong><span>{feed?"Connected":"Unavailable"}</span></div><div><strong>Next step</strong><span>Import historical SET 15m data</span></div></div><div className="research-note"><strong>Data gate:</strong> Fixture data is explicitly separated from historical-market research. Results must not be treated as evidence of live profitability. The next real-data input is a licensed SET intraday/tick dataset normalized to 15-minute research bars.</div><div className="research-source"><span>Historical source</span><strong>SET Intraday / Tick Data</strong><span>Required fields</span><strong>timestamp · symbol · bid · ask · last · bid size · ask size</strong><span>Bar engine</span><strong>Deterministic 15m bucket → last valid quote</strong><span>Status</span><strong>WAITING FOR LICENSED DATA</strong></div><div className="research-pipeline"><span>1. SOURCE</span><b>→</b><span>2. CHECKSUM</span><b>→</b><span>3. NORMALIZE</span><b>→</b><span>4. 15m BARS</span><b>→</b><span>5. WALK-FORWARD</span><b>→</b><span>6. AUDIT</span></div></div></div>;
-}
-function Detail({label,value,positive}:{label:string;value:string;positive?:boolean}) {
-  return <div className="detail-item"><span>{label}</span><strong className={positive===undefined?"":positive?"positive":"negative"}>{value}</strong></div>;
+  const strategy = feed?.sessions?.[0]?.strategy_version ?? "luna-th1h-v1.0.0";
+  const tickCount = feed?.ticks?.length ?? 0;
+  const feedStatus = feed ? "Connected" : "Unavailable";
+  return (
+    <section className="research-panel">
+      <h3>Walk-forward validation</h3>
+      <p>Train 60% · Validation 20% · Test 20%</p>
+      <p>Strategy: {strategy}</p>
+      <p>Session ticks: {tickCount}</p>
+      <p>Live feed: {feedStatus}</p>
+      <p>Paper only · No live orders are created by this view.</p>
+      <p>Historical source: SET Intraday / Tick Data</p>
+      <p>Status: WAITING FOR LICENSED DATA</p>
+    </section>
+  );
 }
 
+function Detail({label,value,positive}:{label:string;value:string;positive?:boolean}) {
+  const tone = positive === undefined ? "" : positive ? "positive" : "negative";
+  return (
+    <div className="detail-item">
+      <span>{label}</span>
+      <strong className={tone}>{value}</strong>
+    </div>
+  );
+}
