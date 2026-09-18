@@ -1,5 +1,5 @@
 import {config} from "./config.js";
-import {mockQuotes} from "./market/mock.js";
+import {marketQuotes} from "./market/provider.js";
 import {StrategyV1,VERSION as STRATEGY_V1_VERSION} from "./strategy-v1.js";
 import {applyFill,createPortfolio,mark,planOrder,simulateFill,snapshot, type PortfolioState} from "./execution.js";
 import type {Quote,Signal} from "./types.js";
@@ -254,7 +254,7 @@ async function main(){
 
   await startSession();
 
-  for await(const q of mockQuotes()){
+  for await(const q of marketQuotes(config.marketDataProvider)){
     if(!sessionId) throw new Error("Session is not active");
     await handleQuote(q);
   }
