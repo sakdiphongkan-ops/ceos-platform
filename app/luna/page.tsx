@@ -176,3 +176,16 @@ export default function LunaPortfolioPage() {
   </main>
 }
 
+
+function Metric({label,value,sub,positive}:{label:string;value:string;sub:string;positive?:boolean}) {
+  return <div className="metric-card"><div className="metric-label">{label}</div><div className={`metric-value ${positive===undefined?"":positive?"positive":"negative"}`}>{value}</div><div className="metric-sub">{sub}</div></div>;
+}
+function SignalBadge({signal,large=false}:{signal:"BUY"|"SELL"|"HOLD";large?:boolean}) {
+  return <span className={`signal-badge ${signal.toLowerCase()} ${large?"large":""}`}>{signal}</span>;
+}
+function SideBadge({side}:{side:"BUY"|"SELL"}) { return <span className={`side-badge ${side.toLowerCase()}`}>{side}</span>; }
+function StatusBadge({status}:{status:string}) { return <span className={`status-badge ${status.toLowerCase()}`}>{status}</span>; }
+function Detail({label,value,positive}:{label:string;value:string;positive?:boolean}) {
+  return <div className="detail-item"><span>{label}</span><strong className={positive===undefined?"":positive?"positive":"negative"}>{value}</strong></div>;
+}
+
