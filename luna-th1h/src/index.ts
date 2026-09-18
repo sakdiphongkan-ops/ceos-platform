@@ -301,8 +301,14 @@ async function executeSignal(q:Quote,signal:Signal){
 async function handleQuote(q:Quote){
   const signal=getSignal(q);
 
-  await ingest("",{action:"tick",session_id:sessionId,quote:q});
-  await ingest("",{action:"signal",session_id:sessionId,signal});
+  const now=Date.now();
+  const lastPersist=lastPersistBySymbol.get(q.symbol) ?? 0;
+  const shouldPersist=(now-lastPersist)>=PERSIST_SIGNAL_MS || signal.action!=="HOLD";
+  if(shouldPersist){
+    await ingest("",{action:"tick",session_id:sessionId,quote:q});
+    await ingest("",{action:"signal",session_id:sessionId,signal});
+    lastPersistBySymbol.set(q.symbol,now);
+  }
 
   console.log(JSON.stringify({event:"SIGNAL",quote:q,signal}));
 
@@ -350,11 +356,14 @@ async function main(){
 
   if(!["paper","live"].includes(config.mode)) throw new Error(`Unknown LUNA_MODE: ${config.mode}`);
   if(config.mode==="live" || config.executionMode==="live") await preflightLive();
-  if(!["mock","set-marketplace"].includes(config.marketDataProvider)){
+  if(!["mock","set-marketplace","settrade-gateway"].includes(config.marketDataProvider)){
     throw new Error(`Unknown MARKET_DATA_PROVIDER: ${config.marketDataProvider}`);
   }
   if(config.marketDataProvider==="set-marketplace" && !process.env.SET_MARKETPLACE_API_KEY){
     throw new Error("SET_MARKETPLACE_API_KEY is required when MARKET_DATA_PROVIDER=set-marketplace.");
+  }
+  if(config.marketDataProvider==="settrade-gateway" && (!config.marketDataGatewayUrl || !config.marketDataGatewayKey)){
+    throw new Error("LUNA_MARKET_GATEWAY_URL and LUNA_MARKET_GATEWAY_KEY are required when MARKET_DATA_PROVIDER=settrade-gateway.");
   }
   if(!config.supabaseFunctionUrl || !config.supabaseAnonKey || !config.lunaAgentKey){
     throw new Error("Supabase ingest security configuration is incomplete.");
