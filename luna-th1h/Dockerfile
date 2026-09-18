@@ -1,7 +1,7 @@
 FROM node:22-alpine
 WORKDIR /app
-COPY luna-th1h/package*.json ./
+COPY package*.json ./
 RUN npm install
-COPY luna-th1h/tsconfig.json ./
-COPY luna-th1h/src ./src
+COPY tsconfig.json ./
+COPY src ./src
 CMD ["npm","start"]
