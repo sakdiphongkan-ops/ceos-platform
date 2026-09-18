@@ -57,7 +57,7 @@ async function fetchSnapshot():Promise<Quote[]>{
   if(!res.ok) throw new Error(`SET_API_HTTP_${res.status}: ${text.slice(0,300)}`);
 
   const payload=JSON.parse(text) as unknown;
-  const rows=Array.isArray(payload)
+  const rows:unknown[] = Array.isArray(payload)
     ? payload
     : Array.isArray((payload as any)?.data)
       ? (payload as any).data
@@ -65,7 +65,7 @@ async function fetchSnapshot():Promise<Quote[]>{
         ? (payload as any).stock
         : [];
 
-  return rows.map(toQuote).filter((x):x is Quote=>x!==null);
+  return rows.map((row):Quote|null=>toQuote(row as SetStock)).filter((x):x is Quote=>x!==null);
 }
 
 export async function* setMarketplaceQuotes():AsyncGenerator<Quote>{
