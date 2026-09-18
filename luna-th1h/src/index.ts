@@ -1,6 +1,6 @@
 import {config} from "./config.js";
 import {mockQuotes} from "./market/mock.js";
-import {evaluate, VERSION as STRATEGY_VERSION} from "./strategy.js";
+import {StrategyV1,VERSION as STRATEGY_V1_VERSION} from "./strategy-v1.js";
 import {applyFill,createPortfolio,mark,planOrder,simulateFill,snapshot, type PortfolioState} from "./execution.js";
 import type {Quote,Signal} from "./types.js";
 
@@ -11,9 +11,10 @@ let auditChain="GENESIS";
 let heartbeatTimer:NodeJS.Timeout|undefined;
 let portfolio:PortfolioState;
 let executionTestStep=0;
+const strategyV1=new StrategyV1();
 
 function activeStrategyVersion(){
-  return config.executionTest?EXECUTION_TEST_VERSION:STRATEGY_VERSION;
+  return config.executionTest?EXECUTION_TEST_VERSION:STRATEGY_V1_VERSION;
 }
 
 function todayInTimezone(timezone:string){
@@ -88,7 +89,7 @@ async function startSession(){
       strategy_version:activeStrategyVersion(),
       strategy_description:config.executionTest
         ?"Deterministic execution-engine self-test: BUY then SELL a synthetic paper symbol."
-        :"LUNA-TH1H paper-trading worker; no live entries until validated strategy rules are installed.",
+        :"LUNA-TH1H Strategy v1: EMA cross + momentum + spread + order-book imbalance with stop/take-profit/time exit.",
       initial_capital:config.initialCapital
     }
   });
@@ -108,17 +109,22 @@ async function startSession(){
 }
 
 function getSignal(q:Quote):Signal{
-  if(!config.executionTest || q.symbol!=="__LUNA_TEST__") return evaluate(q);
+  if(config.executionTest && q.symbol==="__LUNA_TEST__"){
+    executionTestStep++;
+    const action=executionTestStep===1?"BUY":executionTestStep===2?"SELL":"HOLD";
+    return {
+      symbol:q.symbol,ts:q.ts,action,
+      reason:"Deterministic execution-engine self-test",
+      strategyVersion:EXECUTION_TEST_VERSION
+    };
+  }
 
-  executionTestStep++;
-  const action=executionTestStep===1?"BUY":executionTestStep===2?"SELL":"HOLD";
-  return {
-    symbol:q.symbol,
-    ts:q.ts,
-    action,
-    reason:"Deterministic execution-engine self-test",
-    strategyVersion:EXECUTION_TEST_VERSION
-  };
+  const pos=portfolio.positions[q.symbol];
+  return strategyV1.evaluate(q,{
+    positionQty:pos?.qty??0,
+    avgPrice:pos?.avgPrice??0,
+    nowMs:Date.parse(q.ts)
+  });
 }
 
 async function executeSignal(q:Quote,signal:Signal){
@@ -133,7 +139,7 @@ async function executeSignal(q:Quote,signal:Signal){
     return;
   }
 
-  const fill=simulateFill(plan,q);
+  const fill=simulateFill(plan);
   const clientOrderId=`${sessionId}:${q.symbol}:${signal.ts}:${plan.side}:${executionTestStep}`;
 
   await audit("ORDER_SUBMITTED",{
@@ -234,7 +240,8 @@ async function main(){
     mode:config.mode,
     provider:config.marketDataProvider,
     capital:config.initialCapital,
-    executionTest:config.executionTest
+    executionTest:config.executionTest,
+    strategy:STRATEGY_V1_VERSION
   }));
 
   if(config.mode!=="paper") throw new Error("Only paper mode is enabled in this build.");
