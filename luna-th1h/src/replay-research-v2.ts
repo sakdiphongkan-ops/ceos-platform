@@ -38,11 +38,16 @@ const out=runResearchV2(quotes,Number(process.env.LUNA_INITIAL_CAPITAL??1_000_00
 const summary=(r:any)=>({finalEquity:+r.finalEquity.toFixed(2),netPnl:+r.netPnl.toFixed(2),returnPct:+r.returnPct.toFixed(4),maxDrawdown:+r.maxDrawdown.toFixed(2),tradeCount:r.tradeCount,winCount:r.winCount,lossCount:r.lossCount,totalFees:+r.totalFees.toFixed(2),totalSlippage:+r.totalSlippage.toFixed(2)});
 const selected=out.selectedVariant?out.results.find(r=>r.variant===out.selectedVariant):null;
 const datasetHash=createHash("sha256").update(hashes.sort().join("")).digest("hex");
-console.log(JSON.stringify({
+const report={
   event:"RESEARCH_V2_COMPLETE",
   dataset:{files:csvs.length,rows:quotes.length,symbols:new Set(quotes.map(q=>q.symbol)).size,start_ts:quotes[0]?.ts,end_ts:quotes.at(-1)?.ts,checksum_sha256:datasetHash,universe_control:universeFile?"VERIFIED_FROM_FILE":"UNVERIFIED_SURVIVORSHIP_CONTROL"},
   config:{maxCandidatesPerTimestamp:config.maxCandidatesPerTimestamp,ranking:config.ranking,allowedMarkets:config.allowedMarkets,sessionTimeZone:config.sessionTimeZone},
   selectedVariant:out.selectedVariant,splitSizes:out.splitSizes,
   variants:out.results.map(r=>({variant:r.variant,params:r.params,train:summary(r.train),validation:summary(r.validation),test:summary(r.test)})),
-  oos:selected?summary(selected.test):null
-},null,2));
+  oos:selected?summary(selected.test):null,
+  oos_equity_curve:selected?.test.equityCurve??[],
+  selection_rule:"highest validation net P&L; TEST untouched until after variant selection"
+},null,2);
+const reportPath=process.env.RESEARCH_V2_REPORT;
+if(reportPath){await fs.mkdir(path.dirname(reportPath),{recursive:true});await fs.writeFile(reportPath,JSON.stringify(report,null,2),"utf8");}
+console.log(JSON.stringify({event:report.event,dataset:report.dataset,selectedVariant:report.selectedVariant,splitSizes:report.splitSizes,oos:report.oos,oosEquityCurvePoints:report.oos_equity_curve.length,reportPath}));
