@@ -52,7 +52,7 @@ function makeStrategies():Strategy[]{
  const rsiMom=[[5,60],[7,60],[9,60],[10,60],[12,60],[14,55],[14,60],[14,65],[16,60],[20,60]];
  for(const [n,th] of rsiMom)add("RSI-MOM",`RSI momentum ${n}/${th}`,"Momentum / trend confirmation family",{n,th},(i,s)=>{const r=s.rsi.get(n)!;const e=s.ema.get(20)!;return{ok:r[i]>th&&s.bars[i].close>e[i],score:r[i]-th}},(i,s)=>s.rsi.get(n)![i]<50);
  const bb=[[10,1.5],[10,2],[14,1.5],[14,2],[14,2.5],[20,1.5],[20,2],[20,2.5],[30,2],[30,2.5]];
- for(const [n,k] of bb){const key=n*10+Math.round(k*10);add("BB","Bollinger breakout "+n+"/"+k,"Breakout / volatility expansion family",{n,k},(i,s)=>{const b=s.bb.get(key)!;return{ok:s.bars[i].close>b.upper[i],score:((s.bars[i].close/b.upper[i])-1)*10000}},(i,s)=>s.bars[i].close<b.mid[i]);}
+ for(const [n,k] of bb){const key=n*10+Math.round(k*10);add("BB","Bollinger breakout "+n+"/"+k,"Breakout / volatility expansion family",{n,k},(i,s)=>{const b=s.bb.get(key)!;return{ok:s.bars[i].close>b.upper[i],score:((s.bars[i].close/b.upper[i])-1)*10000}},(i,s)=>{const b=s.bb.get(key)!;return s.bars[i].close<b.mid[i]});}
  const macds=[[3,12,3],[3,12,5],[3,20,5],[5,20,3],[5,20,5],[5,30,5],[8,20,3],[8,30,5],[10,30,5],[10,30,9]];
  for(const [f,l,sg] of macds){const key=`${f}-${l}-${sg}`;add("MACD",`MACD ${key}`,"Moving-average trend/momentum family",{f,l,sg},(i,s)=>{const m=s.macd.get(key)!;return{ok:m.line[i]>m.signal[i]&&m.line[i]>0,score:m.line[i]-m.signal[i]}},(i,s)=>{const m=s.macd.get(key)!;return m.line[i]<m.signal[i]});}
  const st=[[5,20],[5,30],[7,20],[7,30],[9,20],[9,30],[12,20],[12,30],[14,20],[14,30]];
