@@ -121,13 +121,18 @@ def _update_quote(symbol: str, data: Dict[str, Any], channel: str):
 
     quote["raw"] = data
     with _quote_lock:
+        was_new = symbol not in _quotes
         _quotes[symbol] = quote
+    if was_new:
+        print(f"LUNA_MARKETDATA first_quote symbol={symbol}", flush=True)
 
 
 def _start_marketdata():
     global _collectors_started, _collector_error
     if not REALTIME_ENABLED:
+        print("LUNA_MARKETDATA disabled", flush=True)
         return
+    print(f"LUNA_MARKETDATA starting symbols={len(SYMBOLS)} bid_offer={REALTIME_BOOK}", flush=True)
     if _collectors_started:
         return
     if not SYMBOLS:
@@ -168,8 +173,10 @@ def _start_marketdata():
                     _collector_error = f"book:{symbol}:{exc}"
 
         _collectors_started = True
+        print(f"LUNA_MARKETDATA subscriptions_started target={len(SYMBOLS)}", flush=True)
     except Exception as exc:
         _collector_error = str(exc)
+        print(f"LUNA_MARKETDATA startup_error={exc}", flush=True)
 
 
 @app.on_event("startup")
