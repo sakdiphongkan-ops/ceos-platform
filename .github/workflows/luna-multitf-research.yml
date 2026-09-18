@@ -1,0 +1,20 @@
+name: LUNA multi-timeframe research
+on:
+  push:
+    paths:
+      - "scripts/research/multitf.mjs"
+      - ".github/workflows/luna-multitf-research.yml"
+  workflow_dispatch:
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run research
+        run: node scripts/research/multitf.mjs | tee multitf-result.json
+      - name: Upload result
+        uses: actions/upload-artifact@v4
+        with:
+          name: luna-multitf-result
+          path: multitf-result.json
