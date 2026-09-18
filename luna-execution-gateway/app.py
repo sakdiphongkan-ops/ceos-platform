@@ -26,6 +26,16 @@ REALTIME_ENABLED = os.getenv("REALTIME_MARKETDATA_ENABLED", "false").lower() == 
 REALTIME_BOOK = os.getenv("REALTIME_BID_OFFER_ENABLED", "true").lower() == "true"
 SYMBOLS = [s.strip().upper() for s in os.getenv("SETTRADE_REALTIME_SYMBOLS", "").split(",") if s.strip()]
 
+SETTRADE_MARKETDATA_CREDENTIALS = {
+    "SETTRADE_BROKER_ID": BROKER_ID,
+    "SETTRADE_APP_ID": APP_ID,
+    "SETTRADE_APP_SECRET": APP_SECRET,
+    "SETTRADE_APP_CODE": APP_CODE,
+}
+
+def missing_marketdata_credentials():
+    return [k for k, v in SETTRADE_MARKETDATA_CREDENTIALS.items() if not v]
+
 _investor = None
 _equity = None
 _quote_lock = threading.Lock()
@@ -45,8 +55,9 @@ def investor_client():
     if Investor is None:
         raise HTTPException(status_code=503, detail="settrade_sdk_unavailable")
     if _investor is None:
-        if not all([BROKER_ID, APP_ID, APP_SECRET, APP_CODE]):
-            raise HTTPException(status_code=503, detail="settrade_marketdata_credentials_missing")
+        missing = missing_marketdata_credentials()
+        if missing:
+            raise HTTPException(status_code=503, detail={"error": "settrade_marketdata_credentials_missing", "missing": missing})
         _investor = Investor(
             app_id=APP_ID,
             app_secret=APP_SECRET,
@@ -133,6 +144,11 @@ def _start_marketdata():
         print("LUNA_MARKETDATA disabled", flush=True)
         return
     print(f"LUNA_MARKETDATA starting symbols={len(SYMBOLS)} bid_offer={REALTIME_BOOK}", flush=True)
+    missing = missing_marketdata_credentials()
+    if missing:
+        _collector_error = f"credentials_missing:{','.join(missing)}"
+        print(f"LUNA_MARKETDATA credentials_missing names={','.join(missing)}", flush=True)
+        return
     if _collectors_started:
         return
     if not SYMBOLS:
@@ -213,6 +229,7 @@ def health():
         "realtime_quote_count": quote_count,
         "collector_started": _collectors_started,
         "collector_error": _collector_error,
+        "marketdata_missing_credentials": missing_marketdata_credentials(),
         "timestamp": int(time.time()),
     }
 
@@ -229,6 +246,7 @@ def quotes(x_luna_gateway: Optional[str] = Header(default=None)):
         "target": len(SYMBOLS),
         "collector_started": _collectors_started,
         "collector_error": _collector_error,
+        "marketdata_missing_credentials": missing_marketdata_credentials(),
         "quotes": data,
     }
 
@@ -303,7 +321,8 @@ def diagnostics(x_luna_gateway: Optional[str] = Header(default=None)):
         "ok": True,
         "live_armed": LIVE_ARMED,
         "provider": "settrade-open-api",
-        "credentials_present": all([BROKER_ID, APP_ID, APP_SECRET, APP_CODE]),
+        "credentials_present": not missing_marketdata_credentials(),
+        "missing_credentials": missing_marketdata_credentials(),
         "python_sdk_loaded": Investor is not None,
         "realtime_marketdata_enabled": REALTIME_ENABLED,
         "realtime_bid_offer_enabled": REALTIME_BOOK,
