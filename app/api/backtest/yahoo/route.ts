@@ -150,7 +150,7 @@ function runProxy(data:Map<string,Bar[]>){
 
   const finalEquity=cash;
   const byDay=new Map<string,number>();
-  for(const t of trades){const d=day(Date.parse(t.ts)/1000);byDay.set(d,(byDay.get(d)??0)+(t.side==="SELL"?t.pnl:0)-(t.side==="BUY"?t.fee:0));}
+  for(const t of trades){const d=day(Date.parse(t.ts)/1000);byDay.set(d,(byDay.get(d)??0)+(t.side==="SELL"?t.pnl:0));}
   const wins=trades.filter(t=>t.side==="SELL"&&t.pnl>0).length;
   const losses=trades.filter(t=>t.side==="SELL"&&t.pnl<0).length;
   return {
