@@ -1,0 +1,7 @@
+FROM node:22-alpine
+WORKDIR /app
+COPY luna-th1h/package*.json ./
+RUN npm install
+COPY luna-th1h/tsconfig.json ./
+COPY luna-th1h/src ./src
+CMD ["npm","start"]
