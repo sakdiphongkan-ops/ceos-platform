@@ -47,7 +47,7 @@ const report={
   oos:selected?summary(selected.test):null,
   oos_equity_curve:selected?.test.equityCurve??[],
   selection_rule:"highest validation net P&L; TEST untouched until after variant selection"
-},null,2);
+};
 const reportPath=process.env.RESEARCH_V2_REPORT;
 if(reportPath){await fs.mkdir(path.dirname(reportPath),{recursive:true});await fs.writeFile(reportPath,JSON.stringify(report,null,2),"utf8");}
 console.log(JSON.stringify({event:report.event,dataset:report.dataset,selectedVariant:report.selectedVariant,splitSizes:report.splitSizes,oos:report.oos,oosEquityCurvePoints:report.oos_equity_curve.length,reportPath}));
