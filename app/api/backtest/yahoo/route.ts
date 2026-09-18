@@ -133,7 +133,7 @@ function runProxy(data:Map<string,Bar[]>){
     }
 
     let mv=0;
-    for(const [s,p] of positions) mv+=p.qty*(nextBars.get(s)?.open??p.avg);
+    for(const [s,p] of Array.from(positions.entries())) mv+=p.qty*(nextBars.get(s)?.open??p.avg);
     eq.push({ts:nextTs,equity:cash+mv});
   }
 
