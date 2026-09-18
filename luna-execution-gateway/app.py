@@ -182,7 +182,7 @@ def _start_marketdata():
 @app.on_event("startup")
 def startup():
     if REALTIME_ENABLED:
-        threading.Thread(target=_start_marketdata, daemon=True).start()
+        _start_marketdata()
 
 
 class PlaceOrder(BaseModel):
