@@ -126,7 +126,7 @@ export default function LunaPortfolioPage() {
       if(o.side==="BUY") bySymbol.set(o.symbol,{symbol:o.symbol,entry:price,exit:0,qty,pnl:0,duration:"—"});
       else if(cur){cur.exit=price;cur.pnl=(price-cur.entry)*Math.min(cur.qty,qty);bySymbol.set(o.symbol,cur);}
     }
-    return [...bySymbol.values()].filter(x=>x.exit>0);
+    return Array.from(bySymbol.values()).filter(x=>x.exit>0);
   },[sessionOrders,feed?.fills]);
 
   const filteredPositions=positions.filter(p=>`${p.symbol} ${p.name}`.toLowerCase().includes(query.toLowerCase()));
