@@ -108,6 +108,29 @@ async function startSession(){
   console.log(JSON.stringify({event:"LUNA_SESSION_STARTED",sessionId,strategyVersion:activeStrategyVersion()}));
 }
 
+function localMinutes(ts:string,timezone:string){
+  const parts=new Intl.DateTimeFormat("en-GB",{
+    timeZone:timezone,hour:"2-digit",minute:"2-digit",hourCycle:"h23"
+  }).formatToParts(new Date(ts));
+  const hour=Number(parts.find(p=>p.type==="hour")?.value ?? 0);
+  const minute=Number(parts.find(p=>p.type==="minute")?.value ?? 0);
+  return hour*60+minute;
+}
+function hhmmMinutes(value:string){
+  const [h,m]=value.split(":").map(Number);
+  if(!Number.isInteger(h)||!Number.isInteger(m)||h<0||h>23||m<0||m>59) throw new Error(`INVALID_HHMM: ${value}`);
+  return h*60+m;
+}
+function marketPhase(ts:string){
+  const minutes=localMinutes(ts,config.timezone);
+  const reduceOnly=hhmmMinutes(config.reduceOnlyTime);
+  const forceClose=hhmmMinutes(config.forceCloseTime);
+  if(forceClose<=reduceOnly) throw new Error("forceCloseTime must be after reduceOnlyTime");
+  if(minutes>=forceClose) return "FORCE_CLOSE";
+  if(minutes>=reduceOnly) return "REDUCE_ONLY";
+  return "ACTIVE";
+}
+
 function getSignal(q:Quote):Signal{
   if(config.executionTest && q.symbol==="__LUNA_TEST__"){
     executionTestStep++;
@@ -120,6 +143,13 @@ function getSignal(q:Quote):Signal{
   }
 
   const pos=portfolio.positions[q.symbol];
+  const phase=marketPhase(q.ts);
+  if(pos?.qty>0 && phase==="FORCE_CLOSE"){
+    return {symbol:q.symbol,ts:q.ts,action:"SELL",reason:"FORCE_CLOSE_EOD",strategyVersion:STRATEGY_V1_VERSION};
+  }
+  if(phase!=="ACTIVE"){
+    return {symbol:q.symbol,ts:q.ts,action:"HOLD",reason:`${phase}_ENTRY_BLOCK`,strategyVersion:STRATEGY_V1_VERSION};
+  }
   return strategyV1.evaluate(q,{
     positionQty:pos?.qty??0,
     avgPrice:pos?.avgPrice??0,
@@ -211,6 +241,7 @@ async function handleQuote(q:Quote){
         audit("HEARTBEAT",{
           provider:config.marketDataProvider,
           last_quote_ts:q.ts,
+          market_phase:marketPhase(q.ts),
           execution_test:config.executionTest
         }),
         writeSnapshot()
@@ -245,8 +276,11 @@ async function main(){
   }));
 
   if(config.mode!=="paper") throw new Error("Only paper mode is enabled in this build.");
-  if(config.marketDataProvider!=="mock"){
-    throw new Error("Market-data adapter not installed. Keep MARKET_DATA_PROVIDER=mock until an authorized provider is configured.");
+  if(!["mock","set-marketplace"].includes(config.marketDataProvider)){
+    throw new Error(`Unknown MARKET_DATA_PROVIDER: ${config.marketDataProvider}`);
+  }
+  if(config.marketDataProvider==="set-marketplace" && !process.env.SET_MARKETPLACE_API_KEY){
+    throw new Error("SET_MARKETPLACE_API_KEY is required when MARKET_DATA_PROVIDER=set-marketplace.");
   }
   if(!config.supabaseFunctionUrl || !config.supabaseAnonKey || !config.lunaAgentKey){
     throw new Error("Supabase ingest security configuration is incomplete.");
