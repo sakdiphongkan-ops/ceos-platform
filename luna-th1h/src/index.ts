@@ -9,10 +9,7 @@ let heartbeatTimer:NodeJS.Timeout|undefined;
 
 function todayInTimezone(timezone:string){
   return new Intl.DateTimeFormat("en-CA", {
-    timeZone:timezone,
-    year:"numeric",
-    month:"2-digit",
-    day:"2-digit"
+    timeZone:timezone, year:"numeric", month:"2-digit", day:"2-digit"
   }).format(new Date());
 }
 
@@ -37,9 +34,7 @@ async function ingest(path:string,body:Record<string,unknown>,agentRequired=true
   for(let attempt=1;attempt<=3;attempt++){
     try{
       const res=await fetch(`${config.supabaseFunctionUrl}/${path}`,{
-        method:"POST",
-        headers,
-        body:JSON.stringify(body)
+        method:"POST",headers,body:JSON.stringify(body)
       });
       const text=await res.text();
       let payload:unknown=text;
@@ -59,13 +54,24 @@ async function audit(eventType:string,payload:Record<string,unknown>,strategyVer
   const canonical=JSON.stringify({prev:auditChain,ts,eventType,payload,strategyVersion});
   auditChain=await sha256(canonical);
   await ingest("",{
-    action:"audit",
+    action:"audit",session_id:sessionId,ts,event_type:eventType,payload,
+    strategy_version:strategyVersion,hash:auditChain
+  });
+}
+
+async function snapshot(){
+  await ingest("",{
+    action:"snapshot",
     session_id:sessionId,
-    ts,
-    event_type:eventType,
-    payload,
-    strategy_version:strategyVersion,
-    hash:auditChain
+    ts:new Date().toISOString(),
+    portfolio:{
+      cash:config.initialCapital,
+      market_value:0,
+      gross_exposure:0,
+      realized_pnl:0,
+      unrealized_pnl:0,
+      fees:0
+    }
   });
 }
 
@@ -97,10 +103,10 @@ async function handleQuote(q:Quote){
 
   if(!heartbeatTimer){
     heartbeatTimer=setInterval(()=>{
-      audit("HEARTBEAT",{
-        provider:config.marketDataProvider,
-        last_quote_ts:q.ts
-      }).catch(err=>console.error(JSON.stringify({event:"AUDIT_ERROR",error:String(err)})));
+      Promise.all([
+        audit("HEARTBEAT",{provider:config.marketDataProvider,last_quote_ts:q.ts}),
+        snapshot()
+      ]).catch(err=>console.error(JSON.stringify({event:"HEARTBEAT_ERROR",error:String(err)})));
     },60_000);
   }
 }
@@ -110,6 +116,7 @@ async function endSession(status="CLOSED"){
   heartbeatTimer=undefined;
   if(!sessionId) return;
   try{
+    await snapshot();
     await audit("SESSION_ENDED",{status});
     await ingest("",{action:"end_session",session_id:sessionId,status});
   }catch(err){
@@ -121,9 +128,7 @@ async function endSession(status="CLOSED"){
 
 async function main(){
   console.log(JSON.stringify({
-    event:"LUNA_BOOT",
-    mode:config.mode,
-    provider:config.marketDataProvider,
+    event:"LUNA_BOOT",mode:config.mode,provider:config.marketDataProvider,
     capital:config.initialCapital
   }));
 
@@ -136,6 +141,7 @@ async function main(){
   }
 
   await startSession();
+  await snapshot();
 
   for await(const q of mockQuotes()){
     if(!sessionId) throw new Error("Session is not active");
