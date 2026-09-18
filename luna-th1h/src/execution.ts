@@ -103,7 +103,7 @@ export function planOrder(signal:Signal,q:Quote,state:PortfolioState):PlannedOrd
     currentPositionNotional:currentNotional,
     cash:state.cash
   });
-  if(!risk.ok) return risk;
+    if(!risk.ok) return {accepted:false,reason:risk.reason};
   return {accepted:true,symbol:q.symbol,side,qty,referencePrice,reason:signal.reason};
 }
 
