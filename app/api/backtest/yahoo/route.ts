@@ -24,7 +24,7 @@ const TZ="Asia/Bangkok";
 
 type Bar={ts:number;open:number;high:number;low:number;close:number;volume:number};
 type Position={qty:number;avg:number;entryIndex:number};
-type Trade={ts:number;symbol:string;side:"BUY"|"SELL";qty:number;ref:number;fill:number;fee:number;slippage:number;pnl:number;reason:string};
+type Trade={ts:string;symbol:string;side:"BUY"|"SELL";qty:number;ref:number;fill:number;fee:number;slippage:number;pnl:number;reason:string};
 
 function ema(prev:number|null,v:number,p:number){if(prev===null)return v;const k=2/(p+1);return prev+(v-prev)*k;}
 function day(ts:number){return new Intl.DateTimeFormat("en-CA",{timeZone:TZ,year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(ts*1000));}
@@ -109,7 +109,7 @@ function runProxy(data:Map<string,Bar[]>){
 
     buys.sort((a,b)=>b.score-a.score||a.symbol.localeCompare(b.symbol));
     let chosen=0;
-    let gross=[...positions].reduce((s,[symbol,p])=>s+p.qty*(currentBars.get(symbol)?.close??p.avg),0);
+    let gross=Array.from(positions.entries()).reduce((s,[symbol,p])=>s+p.qty*(currentBars.get(symbol)?.close??p.avg),0);
     for(const {symbol,reason} of buys){
       if(chosen>=MAX_CANDIDATES) break;
       const nb=nextBars.get(symbol); if(!nb) continue;
@@ -140,7 +140,7 @@ function runProxy(data:Map<string,Bar[]>){
   // Force close at the final available bar using that bar's close.
   const finalTs=times.at(-1)??0;
   const finalBars=new Map((all.get(finalTs)??[]).map(x=>[x.symbol,x.bar]));
-  for(const [symbol,p] of [...positions]){
+  for(const [symbol,p] of Array.from(positions.entries())){
     const b=finalBars.get(symbol); if(!b) continue;
     const ref=b.close, fill=ref*(1-SLIPPAGE_BPS/10000), notional=fill*p.qty, fee=notional*((FEE_BPS+SELL_TAX_BPS)/10000);
     const pnl=(notional-fee)-p.avg*p.qty; cash+=notional-fee;
@@ -170,8 +170,8 @@ export async function GET(){
   const data=new Map<string,Bar[]>();
   const errors:{symbol:string;error:string}[]=[];
   results.forEach((r,i)=>{if(r.status==="fulfilled")data.set(SYMBOLS[i],r.value);else errors.push({symbol:SYMBOLS[i],error:String(r.reason)})});
-  const bars=[...data.values()].reduce((n,a)=>n+a.length,0);
-  const sessions=new Set([...data.values()].flat().map(b=>day(b.ts)));
+  const bars=Array.from(data.values()).reduce((n,a)=>n+a.length,0);
+  const sessions=new Set(Array.from(data.values()).flat().map(b=>day(b.ts)));
   const backtest=runProxy(data);
   return NextResponse.json({
     status:"COMPLETED",
