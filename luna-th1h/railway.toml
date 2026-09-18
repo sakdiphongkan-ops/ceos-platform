@@ -1,0 +1,6 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "luna-th1h/Dockerfile"
+
+[deploy]
+restartPolicyType = "ALWAYS"
