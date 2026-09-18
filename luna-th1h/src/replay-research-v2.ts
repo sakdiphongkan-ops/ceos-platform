@@ -30,7 +30,7 @@ const config={...DEFAULT_RESEARCH_V2_CONFIG,
     spreadWeight:Number(process.env.LUNA_RANK_SPREAD_WEIGHT??0.25)
   },
   allowedMarkets:(process.env.LUNA_ALLOWED_MARKETS??"SET,mai").split(",").map(x=>x.trim()),
-  sessionTimeZone:process.env.LUNA_TIMEZONE??"Asia/Bangkok"),
+  sessionTimeZone:process.env.LUNA_TIMEZONE??"Asia/Bangkok",
   universeMemberships:memberships
 };
 const quotes=[...dedup.values()].sort((a,b)=>a.ts.localeCompare(b.ts)||a.symbol.localeCompare(b.symbol));
