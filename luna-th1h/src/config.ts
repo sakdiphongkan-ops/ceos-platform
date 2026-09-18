@@ -1,4 +1,5 @@
 const num=(name:string, fallback:number)=>Number(process.env[name] ?? fallback);
+
 export const config={
   mode:process.env.LUNA_MODE ?? "paper",
   initialCapital:num("LUNA_INITIAL_CAPITAL",1_000_000),
@@ -7,5 +8,7 @@ export const config={
   timezone:process.env.LUNA_TIMEZONE ?? "Asia/Bangkok",
   marketDataProvider:process.env.MARKET_DATA_PROVIDER ?? "mock",
   supabaseUrl:process.env.SUPABASE_URL ?? "",
-  supabaseKey:process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
+  supabaseAnonKey:process.env.SUPABASE_ANON_KEY ?? "",
+  supabaseFunctionUrl:process.env.SUPABASE_FUNCTION_URL ?? "",
+  lunaAgentKey:process.env.LUNA_AGENT_KEY ?? "",
 };
