@@ -158,7 +158,7 @@ function runProxy(data:Map<string,Bar[]>){
     returnPct:money((finalEquity/INITIAL-1)*100),maxDrawdown:money(maxDrawdown(eq)),
     trades:trades.length,closedTrades:wins+losses,wins,losses,winRate:money((wins+losses)?wins/(wins+losses)*100:0),
     fees:money(trades.reduce((s,t)=>s+t.fee,0)),slippage:money(trades.reduce((s,t)=>s+t.slippage,0)),
-    dailyPnl:[...byDay.entries()].map(([date,pnl])=>({date,pnl:money(pnl)})),
+    dailyPnl:Array.from(byDay.entries()).map(([date,pnl])=>({date,pnl:money(pnl)})),
     tradeLog:trades.map(t=>({...t,pnl:money(t.pnl),fee:money(t.fee),slippage:money(t.slippage),ref:money(t.ref),fill:money(t.fill)}))
   };
 }
