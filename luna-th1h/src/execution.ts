@@ -18,7 +18,7 @@ export interface PortfolioState{
   marks:Record<string,Quote>;
 }
 
-export interface PlannedOrder{
+export type PlannedOrder = {
   accepted:true;
   symbol:string;
   side:Side;
@@ -81,7 +81,12 @@ export function planOrder(signal:Signal,q:Quote,state:PortfolioState):PlannedOrd
     if(qty<=0) return {accepted:false,reason:"INSUFFICIENT_CASH_OR_POSITION_HEADROOM"};
 
     const notional=qty*referencePrice;
-    const risk=validateOrder({symbol:q.symbol,side,notional,grossExposure:currentGrossExposure(state),currentPositionNotional:currentNotional,cash:state.cash});
+    const risk=validateOrder({
+      symbol:q.symbol,side,notional,
+      grossExposure:currentGrossExposure(state),
+      currentPositionNotional:currentNotional,
+      cash:state.cash
+    });
     if(!risk.ok) return risk;
     return {accepted:true,symbol:q.symbol,side,qty,referencePrice,reason:signal.reason};
   }
@@ -92,12 +97,17 @@ export function planOrder(signal:Signal,q:Quote,state:PortfolioState):PlannedOrd
   if(qty<=0) return {accepted:false,reason:"NO_SELLABLE_LIQUIDITY"};
 
   const notional=qty*referencePrice;
-  const risk=validateOrder({symbol:q.symbol,side,notional,grossExposure:currentGrossExposure(state),currentPositionNotional:currentNotional,cash:state.cash});
+  const risk=validateOrder({
+    symbol:q.symbol,side,notional,
+    grossExposure:currentGrossExposure(state),
+    currentPositionNotional:currentNotional,
+    cash:state.cash
+  });
   if(!risk.ok) return risk;
   return {accepted:true,symbol:q.symbol,side,qty,referencePrice,reason:signal.reason};
 }
 
-export function simulateFill(order:Extract<PlannedOrder,{accepted:true}>,q:Quote):SimulatedFill{
+export function simulateFill(order:Extract<PlannedOrder,{accepted:true}>):SimulatedFill{
   const slippageRate=config.slippageBps/10000;
   const feeRate=config.feeBps/10000;
   const taxRate=order.side==="SELL"?config.sellTaxBps/10000:0;
@@ -110,7 +120,10 @@ export function simulateFill(order:Extract<PlannedOrder,{accepted:true}>,q:Quote
   const totalCashDelta=order.side==="BUY"
     ? -(notional+fee)
     : (notional-fee);
-  return {symbol:order.symbol,side:order.side,qty:order.qty,referencePrice:order.referencePrice,fillPrice,notional,fee,slippage,totalCashDelta};
+  return {
+    symbol:order.symbol,side:order.side,qty:order.qty,
+    referencePrice:order.referencePrice,fillPrice,notional,fee,slippage,totalCashDelta
+  };
 }
 
 export function applyFill(state:PortfolioState,fill:SimulatedFill){
@@ -118,7 +131,9 @@ export function applyFill(state:PortfolioState,fill:SimulatedFill){
   if(fill.side==="BUY"){
     const newQty=pos.qty+fill.qty;
     const newCost=pos.costBasis+fill.notional+fill.fee;
-    state.positions[fill.symbol]={qty:newQty,avgPrice:newCost/newQty,costBasis:newCost,realizedPnl:pos.realizedPnl};
+    state.positions[fill.symbol]={
+      qty:newQty,avgPrice:newCost/newQty,costBasis:newCost,realizedPnl:pos.realizedPnl
+    };
   }else{
     if(fill.qty>pos.qty) throw new Error("SELL_EXCEEDS_POSITION");
     const realized=(fill.notional-fill.fee)-(pos.avgPrice*fill.qty);
