@@ -14,6 +14,7 @@ on:
       - "scripts/one_million_search_staged.py"
       - "scripts/tests/test_one_million_search_staged.py"
       - "scripts/research/qa_forward_returns.py"
+      - "scripts/research/qa_multiple_testing.py"
   workflow_dispatch:
 
 jobs:
@@ -65,6 +66,10 @@ jobs:
           python scripts/one_million_search_staged.py             --input data/set_2000_2025/factors.csv             --output research/one_million_v3             --max-trials 1000000             --finalists 200             --screen-days 120             --development-fraction 0.60             --min-names-per-day 20             --cost-bps 45             --oos-days 20             --holdout-days 40             --purge-days 1             --min-trades 30 \
             --min-positive-fold-fraction 0.50
 
+      - name: Multiple-testing diagnostics
+        run: |
+          python scripts/research/qa_multiple_testing.py             --results research/one_million_v3/results.csv             --manifest research/one_million_v3/manifest.json             --output research/multiple_testing.json
+
       - name: Upload research results artifact
         uses: actions/upload-artifact@v4
         with:
@@ -75,6 +80,7 @@ jobs:
             data/set_2000_2025/factors.manifest.json
             research/return_qa.json
             research/return_extremes.csv
+            research/multiple_testing.json
             research/one_million_v3/screen_ledger.jsonl.gz
             research/one_million_v3/screen_top.csv
             research/one_million_v3/results.csv
