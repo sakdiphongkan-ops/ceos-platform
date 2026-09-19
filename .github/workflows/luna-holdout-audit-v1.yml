@@ -1,0 +1,72 @@
+name: LUNA Holdout Audit v1
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["LUNA Adaptive Tournament v2"]
+    types: [completed]
+
+concurrency:
+  group: luna-holdout-audit-v1
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'master')
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: write
+    env:
+      SUPABASE_URL: https://wigzicwgcsrhdummrbjx.supabase.co
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: python -m pip install -U pip pandas numpy requests
+      - name: Export data
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          test -n "$SUPABASE_SERVICE_ROLE_KEY"
+          mkdir -p data/luna_monthly
+          python scripts/research/export_supabase_monthly_factors.py             --output data/luna_monthly/monthly_price_factors.csv             --start 2021-09-01 --end 2026-08-01
+      - name: Run frozen holdout audit
+        run: |
+          rm -rf research/luna_holdout_audit_v1
+          python scripts/research/luna_holdout_audit_v1.py             --input data/luna_monthly/monthly_price_factors.csv             --catalog research-results/luna-adaptive-tournament-v2/formula-catalog.json             --output research/luna_holdout_audit_v1             --holdout-months 12 --top-n 25 --cost-bps 20 --k 20
+      - name: Validate
+        run: |
+          test -s research/luna_holdout_audit_v1/summary.json
+          test -s research/luna_holdout_audit_v1/holdout_ranked.csv
+          python - <<'PY'
+          import json
+          x=json.load(open("research/luna_holdout_audit_v1/summary.json"))
+          assert x["holdout_months"] == 12
+          assert x["top_n_frozen"] == 25
+          assert x["selection_guard"]
+          print(json.dumps(x,indent=2))
+          PY
+      - name: Commit audit result
+        run: |
+          mkdir -p research-results/luna-holdout-audit-v1
+          cp research/luna_holdout_audit_v1/summary.json research-results/luna-holdout-audit-v1-summary.json
+          cp research/luna_holdout_audit_v1/holdout_ranked.csv research-results/luna-holdout-audit-v1/holdout-ranked.csv
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research-results/
+          git diff --cached --quiet || git commit -m "research(luna): save holdout audit result"
+          git push
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: luna-holdout-audit-v1
+          path: research/luna_holdout_audit_v1/
+          retention-days: 14
