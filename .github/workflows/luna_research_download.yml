@@ -27,55 +27,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install pandas
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - name: Install Playwright
-        run: |
-          npm init -y >/dev/null 2>&1
-          npm install playwright@1.55.0
-          npx playwright install --with-deps chromium
-
       - name: Download Mendeley dataset
         run: |
           mkdir -p data/raw
-          node <<'NODE'
-          const { chromium } = require("playwright");
-          const fs = require("fs");
-
-          (async () => {
-            const browser = await chromium.launch({headless:true});
-          const page = await browser.newPage({acceptDownloads:true});
-          await page.goto("https://data.mendeley.com/datasets/gybmm9t3mr/1", {waitUntil:"domcontentloaded", timeout:120000});
-          await page.waitForTimeout(3000);
-
-          for (const selector of [
-            "#onetrust-accept-btn-handler",
-            "button:has-text('Accept All Cookies')",
-            "button:has-text('Accept All')"
-          ]) {
-            const el = page.locator(selector).first();
-            if (await el.count() && await el.isVisible().catch(()=>false)) {
-              await el.click({force:true}).catch(()=>{});
-              break;
-            }
-          }
-
-          const href = await page.locator("#download-all").getAttribute("href");
-          if (!href) throw new Error("Mendeley download URL not found");
-          const url = new URL(href, "https://data.mendeley.com/").href;
-          console.log("Downloading:", url);
-
-          const res = await fetch(url, {redirect:"follow"});
-          if (!res.ok) throw new Error("Mendeley HTTP " + res.status);
-          const buf = Buffer.from(await res.arrayBuffer());
-          fs.writeFileSync("data/raw/gybmm9t3mr-1.zip", buf);
-          console.log("Downloaded bytes:", buf.length);
-          await browser.close();
-          })().catch(err => { console.error(err); process.exit(1); });
-          NODE
+          curl -fL --retry 3 --retry-delay 2             "https://data.mendeley.com/public-api/zip/gybmm9t3mr/download/1"             -o data/raw/gybmm9t3mr-1.zip
+          test -s data/raw/gybmm9t3mr-1.zip
+          ls -lh data/raw/gybmm9t3mr-1.zip
 
       - name: Inspect and normalize dataset
         run: |
