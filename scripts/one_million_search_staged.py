@@ -529,6 +529,7 @@ def main() -> None:
     ap.add_argument("--min-trades", type=int, default=30)
     ap.add_argument("--min-positive-fold-fraction", type=float, default=0.50)
     ap.add_argument("--monthly-hurdle", type=float, default=0.07)
+    ap.add_argument("--min-factor-coverage", type=float, default=0.20)
     ap.add_argument("--adaptive", action="store_true", default=True)
     args = ap.parse_args()
 
@@ -539,9 +540,16 @@ def main() -> None:
         raise SystemExit(f"Missing columns: {sorted(missing)}")
     df["date"] = pd.to_datetime(df["date"], errors="raise").dt.date
     df = df.replace([np.inf, -np.inf], np.nan).sort_values(["date", "symbol"]).reset_index(drop=True)
-    available = [f for f in FEATURES if f in df.columns]
+    coverage = {
+        f: float(pd.to_numeric(df[f], errors="coerce").notna().mean())
+        for f in FEATURES if f in df.columns
+    }
+    available = [f for f, c in coverage.items() if c >= args.min_factor_coverage]
     if len(available) < 3:
-        raise SystemExit("Need at least 3 recognized factor columns.")
+        raise SystemExit(
+            "Need at least 3 recognized factor columns with coverage >= "
+            f"{args.min_factor_coverage:.0%}; available={available}"
+        )
 
     out = Path(args.output)
     out.mkdir(parents=True, exist_ok=True)
@@ -647,6 +655,8 @@ def main() -> None:
         "purge_days": args.purge_days,
         "min_positive_fold_fraction": args.min_positive_fold_fraction,
         "features_used": available,
+        "factor_coverage_threshold": args.min_factor_coverage,
+        "factor_coverage": coverage,
         "input_sha256": hashlib.sha256(Path(args.input).read_bytes()).hexdigest(),
         "screen_definition": "deterministic development-only smooth tail-signal covariance proxy; screen window is inside development period and excludes one purge day before OOS",
         "exact_definition": "cross-sectional percentile rules with forward OOS validation and a holdout that is computed for reporting but excluded from eligibility/ranking",
