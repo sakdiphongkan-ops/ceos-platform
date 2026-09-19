@@ -42,6 +42,15 @@ jobs:
         run: |
           python scripts/research/download_mendeley_set.py             --zip data/raw/gybmm9t3mr-1.zip             --output-dir data/set_2000_2025
 
+      - name: Build technical factor dataset
+        run: |
+          python scripts/research/build_factor_dataset.py             --prices data/set_2000_2025/prices.csv             --output data/set_2000_2025/factors.csv
+
+      - name: Pilot 1M engine on real SET data
+        run: |
+          rm -rf research/pilot_5000
+          python scripts/one_million_search.py             --input data/set_2000_2025/factors.csv             --output research/pilot_5000             --max-trials 5000             --cost-bps 45             --train-days 120             --oos-days 20             --holdout-days 40             --min-trades 30
+
       - name: Upload research dataset artifact
         uses: actions/upload-artifact@v4
         with:
@@ -49,5 +58,10 @@ jobs:
           path: |
             data/set_2000_2025/prices.csv
             data/set_2000_2025/manifest.json
+            data/set_2000_2025/factors.csv
+            data/set_2000_2025/factors.manifest.json
+            research/pilot_5000/results.csv
+            research/pilot_5000/passed.csv
+            research/pilot_5000/manifest.json
           compression-level: 0
           retention-days: 14
