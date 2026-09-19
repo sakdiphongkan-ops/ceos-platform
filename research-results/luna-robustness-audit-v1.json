@@ -129,5 +129,15 @@
     "These are separate pre-existing Supabase research windows, not a fresh frozen 12-month holdout from the new adaptive tournament.",
     "The 1,000-formula GitHub adaptive tournament did not complete because the GitHub Actions Supabase service-role secret is unavailable.",
     "No formula is promoted based on this audit alone."
-  ]
+  ],
+  "hurdle_audit": {
+    "target_geometric_monthly": 0.07,
+    "equivalent_annual_cagr": 1.2521915889608248,
+    "variants_meeting_hurdle_in_both_test_and_recent_oos_at_20bps": 0,
+    "variants_meeting_hurdle_in_test_at_20bps": 0,
+    "variants_meeting_hurdle_in_recent_oos_at_20bps": 0,
+    "max_test_cagr_at_20bps": 0.38398108237998146,
+    "max_recent_oos_cagr_at_20bps": 0.4786857844246516,
+    "note": "No persisted 130-variant candidate reaches the 7% geometric-monthly hurdle in either TEST or RECENT_OOS at 20 bps, despite several variants having positive multi-window returns."
+  }
 }
