@@ -83,6 +83,9 @@ def normalize_fundamentals(path: Path, out: Path) -> dict:
     df["symbol"] = clean_symbols(df["symbol"])
     if df["available_at"].isna().any():
         raise SystemExit(f"{path}: null available_at")
+    dup = df.duplicated(["symbol","available_at"], keep=False)
+    if dup.any():
+        raise SystemExit(f"{path}: duplicate symbol+available_at fundamentals: {int(dup.sum())}")
     nums = [c for c in df.columns if c not in {"asof_date", "symbol", "available_at", "raw"}]
     for c in nums:
         df[c] = pd.to_numeric(df[c], errors="coerce")
