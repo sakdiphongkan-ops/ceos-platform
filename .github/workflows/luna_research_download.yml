@@ -9,6 +9,8 @@ on:
     paths:
       - ".github/workflows/luna_research_download.yml"
       - "scripts/research/download_mendeley_set.py"
+      - "scripts/research/build_factor_dataset.py"
+      - "scripts/one_million_search.py"
   workflow_dispatch:
 
 jobs:
@@ -40,7 +42,7 @@ jobs:
 
       - name: Inspect and normalize dataset
         run: |
-          python scripts/research/download_mendeley_set.py             --zip data/raw/gybmm9t3mr-1.zip             --output-dir data/set_2000_2025
+          python scripts/research/download_mendeley_set.py             --zip data/raw/gybmm9t3mr-1.zip             --output-dir data/set_2000_2025             --quarantine-invalid             --max-invalid-rate 0.01
 
       - name: Build technical factor dataset
         run: |
@@ -58,10 +60,11 @@ jobs:
           path: |
             data/set_2000_2025/prices.csv
             data/set_2000_2025/manifest.json
+            data/set_2000_2025/invalid_rows.csv
             data/set_2000_2025/factors.csv
             data/set_2000_2025/factors.manifest.json
-            research/pilot_5000/results.csv
-            research/pilot_5000/passed.csv
-            research/pilot_5000/manifest.json
+            research/pilot_20/results.csv
+            research/pilot_20/passed.csv
+            research/pilot_20/manifest.json
           compression-level: 0
           retention-days: 14
