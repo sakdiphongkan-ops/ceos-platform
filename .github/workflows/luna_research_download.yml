@@ -62,7 +62,7 @@ jobs:
       - name: Staged 1M hypothesis search v3 on real SET data
         run: |
           rm -rf research/one_million_v3
-          python scripts/one_million_search_staged.py             --input data/set_2000_2025/factors.csv             --output research/one_million_v2             --max-trials 1000000             --finalists 200             --screen-days 120             --development-fraction 0.60             --min-names-per-day 20             --cost-bps 45             --oos-days 20             --holdout-days 40             --purge-days 1             --min-trades 30 \
+          python scripts/one_million_search_staged.py             --input data/set_2000_2025/factors.csv             --output research/one_million_v3             --max-trials 1000000             --finalists 200             --screen-days 120             --development-fraction 0.60             --min-names-per-day 20             --cost-bps 45             --oos-days 20             --holdout-days 40             --purge-days 1             --min-trades 30 \
             --min-positive-fold-fraction 0.50
 
       - name: Upload research results artifact
