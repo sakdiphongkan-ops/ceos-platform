@@ -1,0 +1,35 @@
+{
+  "status": "COMPLETED",
+  "engine": "luna-monthly-regime-sql-probe-v1",
+  "dataset_id": "1af83c59-a56f-461f-b03e-f3d04e67e384",
+  "dataset_window": "2021-10-01 to 2026-07-01 holding months",
+  "cost_bps": 40,
+  "regime_definition": "0.5*z(breadth1 vs prior 12 months)+0.5*z(breadth6 vs prior 12 months); threshold ±0.50; neutral in between",
+  "regime_counts": {
+    "ON": 15,
+    "OFF": 16,
+    "NEUTRAL": 15
+  },
+  "best_conditional_probe": {
+    "on_strategy": "LIQ_HIGH_K5",
+    "off_strategy": "MOM1_LOW_K5",
+    "oos_geomean_monthly": 0.05510816751295993,
+    "holdout_geomean_monthly": 0.014386330066089867,
+    "oos_positive_month_fraction": 0.5,
+    "holdout_positive_month_fraction": 0.5,
+    "oos_worst_month": -0.05643941969366301,
+    "holdout_worst_month": -0.06672448542192827,
+    "selection_basis": "top result among the SQL probe's development-ranked conditional pairs"
+  },
+  "blend_probe": {
+    "best_oos_seen_in_unrestricted_probe": "M1L+M6L_W0.35_K10",
+    "oos_geomean_monthly": 0.0559819350585067,
+    "dev_geomean_monthly": -0.04796135185429025,
+    "holdout_geomean_monthly": -0.002963933852998496,
+    "warning": "This 5.60% OOS number was not selected using only development; it is therefore not a valid final result."
+  },
+  "conclusion": "No tested conditional or two-factor probe reached the 7% monthly OOS hurdle with an independent holdout confirmation.",
+  "next_engine": "scripts/research/monthly_regime_search.py",
+  "workflow": ".github/workflows/luna-monthly-regime.yml",
+  "note": "The workflow is manual and requires the SUPABASE_SERVICE_ROLE_KEY GitHub secret. Holdout is reporting-only and excluded from selection."
+}
