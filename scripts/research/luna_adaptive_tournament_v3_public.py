@@ -67,7 +67,7 @@ def main():
     sym=df["symbol"].to_numpy()
 
     rng=np.random.default_rng(args.seed)
-    formulas=[{"id":"M1_REV_K20","terms":[("MOM_5",-1.0)]}]
+    formulas=[{"id":"M1_REV_K20","terms":[("MOM_20",-1.0)]}]
     # Keep factor-count/seed generation identical in structure to v2.
     for i in range(1,args.formula_count):
         n=int(rng.integers(2,5))
