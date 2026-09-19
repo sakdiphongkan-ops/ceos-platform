@@ -120,7 +120,6 @@ def covariance_score(signal: np.ndarray, y: np.ndarray) -> tuple[float, float, f
 def build_screen_stats(
     df: pd.DataFrame,
     features: list[str],
-    screen_days: int,
     development_end_idx: int,
     screen_days: int,
     holdout_days: int,
