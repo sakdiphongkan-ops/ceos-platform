@@ -74,15 +74,17 @@ export function runResearch(quotes:Quote[],initialCapital=1_000_000){
 
 const fixtureQuotes:Quote[]=[];
 if(process.env.RESEARCH_FIXTURE==="true"){
-  // Kept deterministic and explicitly labeled; never mixed with live-market data.
-  fixtureQuotes.push(...makeFixture());
-  const runs=runResearch(fixtureQuotes);
-  for(const x of runs){
-    console.log(JSON.stringify({variant:x.variant,params:x.params,train:summary(x.train),validation:summary(x.validation),test:summary(x.test)}));
-    await persist(x.train,x.variant-1,"TRAIN");
-    await persist(x.validation,x.variant-1,"VALIDATION");
-    await persist(x.test,x.variant-1,"TEST");
-  }
+  void (async()=>{
+    // Kept deterministic and explicitly labeled; never mixed with live-market data.
+    fixtureQuotes.push(...makeFixture());
+    const runs=runResearch(fixtureQuotes);
+    for(const x of runs){
+      console.log(JSON.stringify({variant:x.variant,params:x.params,train:summary(x.train),validation:summary(x.validation),test:summary(x.test)}));
+      await persist(x.train,x.variant-1,"TRAIN");
+      await persist(x.validation,x.variant-1,"VALIDATION");
+      await persist(x.test,x.variant-1,"TEST");
+    }
+  })().catch((err)=>{console.error(err);process.exitCode=1;});
 }else{
   console.log(JSON.stringify({event:"RESEARCH_IDLE",strategy:STRATEGY_V1_VERSION,message:"Provide historical 15m SET quotes to run non-fixture research."}));
 }
