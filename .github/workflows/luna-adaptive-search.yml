@@ -45,7 +45,7 @@ jobs:
       - name: Run Adaptive Search v1
         run: |
           rm -rf research/luna_monthly_adaptive_v1
-          python scripts/research/monthly_walk_forward_adaptive_search.py             --input data/luna_monthly/monthly_price_factors.csv             --output research/luna_monthly_adaptive_v1             --lookback-months 24             --min-history-months 12             --cost-bps 40             --k-values 5,10,20
+          python scripts/research/monthly_walk_forward_adaptive_search.py             --input data/luna_monthly/monthly_price_factors.csv             --output research/luna_monthly_adaptive_v1             --lookback-months 24             --min-history-months 12             --cost-bps 20             --k-values 5,10,20
 
       - name: Validate output
         run: |
