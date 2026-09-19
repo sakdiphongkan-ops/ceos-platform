@@ -188,37 +188,34 @@ function SystemControlRoom({strategy,asOf}:{strategy:string;asOf:string}) {
   const refresh=useCallback(async()=>{
     setLoading(true); setError("");
     try{
-      const [selfTest,readiness,fast,finalDecision,audit] = await Promise.all([
-        fetch(`${LUNA_API}?view=system_test&strategy=${encodeURIComponent(strategy)}&as_of=${encodeURIComponent(asOf)}`,{cache:"no-store"}).then(r=>r.json()),
-        fetch(`${LUNA_API}?view=readiness&strategy=${encodeURIComponent(strategy)}&as_of=${encodeURIComponent(asOf)}`,{cache:"no-store"}).then(r=>r.json()),
-        fetch(`${LUNA_API}?view=fast&strategy=${encodeURIComponent(strategy)}&as_of=${encodeURIComponent(asOf)}&limit=20`,{cache:"no-store"}).then(r=>r.json()),
-        fetch(`${LUNA_API}?view=final&strategy=${encodeURIComponent(strategy)}&month=${encodeURIComponent(asOf.slice(0,7)+"-01")}&as_of=${encodeURIComponent(asOf)}&limit=20`,{cache:"no-store"}).then(r=>r.json()),
-        fetch(`${LUNA_API}?view=paper_audit&strategy=${encodeURIComponent(strategy)}&as_of=${encodeURIComponent(asOf)}`,{cache:"no-store"}).then(r=>r.json()),
-      ]);
-      if(!selfTest.ok || !readiness.ok || !fast.ok || !finalDecision.ok || !audit.ok) throw new Error("LUNA control API returned partial data");
-      setState({selfTest:selfTest.result,readiness:readiness.readiness,fast,final:finalDecision,audit:audit.result});
+      const res=await fetch(`${LUNA_API}?view=latest_control&strategy=${encodeURIComponent(strategy)}`,{cache:"no-store"});
+      if(!res.ok) throw new Error(`Control API ${res.status}`);
+      const data=await res.json();
+      if(!data.ok) throw new Error("LUNA control API returned partial data");
+      setState(data);
     }catch(e){setError(e instanceof Error?e.message:"Unable to load LUNA control state");}
     finally{setLoading(false);}
-  },[strategy,asOf]);
+  },[strategy]);
 
   useEffect(()=>{refresh(); const id=setInterval(refresh,15000); return()=>clearInterval(id);},[refresh]);
 
-  const checks=state?.selfTest?.checks??[];
+  const test=state?.system_test??{};
+  const checks=test?.checks??[];
   const passed=checks.filter((c:any)=>c.pass).length;
   const total=checks.length;
-  const status=state?.selfTest?.overall_status??"LOADING";
+  const status=test?.overall_status??"LOADING";
   const readiness=state?.readiness??{};
   const fastRows=state?.fast?.forecast_rank??[];
-  const ladder=state?.fast?.forecast_ladder;
   const finalSummary=state?.final?.summary??{};
-  const audit=state?.audit??{};
+  const audit=state?.paper_audit??{};
+  const verifiedAsOf=state?.as_of_date??asOf;
 
   return <section className="control-room-card">
     <div className="control-room-head">
       <div>
         <div className="section-label">LUNA SYSTEM CONTROL ROOM</div>
         <div className="control-room-title">ตรวจสอบระบบจริง · {strategy}</div>
-        <div className="control-room-sub">Backend-backed status, gates, forecast ladder and execution safety — ไม่ใช่ mock data</div>
+        <div className="control-room-sub">Verified market date: {verifiedAsOf} · backend-backed safety state — ไม่ใช่ mock data</div>
       </div>
       <div className="control-room-actions">
         <span className={`system-status ${status.toLowerCase()}`}><CircleDot size={11}/>{status}</span>
@@ -229,8 +226,8 @@ function SystemControlRoom({strategy,asOf}:{strategy:string;asOf:string}) {
     {error && <div className="error-banner compact"><span>{error}</span><button onClick={refresh}>Retry</button></div>}
 
     <div className="control-grid">
-      <div className="control-stat"><span>SELF-TEST</span><strong>{loading?"—":`${passed}/${total}`}</strong><small>{state?.selfTest?.integrity?"Integrity PASS":"ตรวจพบ gate ที่ยังไม่พร้อม"}</small></div>
-      <div className="control-stat"><span>MONTH CLOSE</span><strong>{readiness.month_closed?"CLOSED":"OPEN"}</strong><small>{asOf}</small></div>
+      <div className="control-stat"><span>SELF-TEST</span><strong>{loading?"—":`${passed}/${total}`}</strong><small>{test?.summary?.integrity?"Integrity PASS":"ตรวจพบ gate ที่ยังไม่พร้อม"}</small></div>
+      <div className="control-stat"><span>MONTH CLOSE</span><strong>{readiness.month_closed?"CLOSED":"OPEN"}</strong><small>{verifiedAsOf}</small></div>
       <div className="control-stat"><span>CEOS FEED</span><strong>{readiness.ceos_feed_rows??0}</strong><small>{readiness.ceos_allowed_rows??0} allowed</small></div>
       <div className="control-stat"><span>PAPER</span><strong>{readiness.paper_execution_permitted?"READY":"LOCKED"}</strong><small>{readiness.execution_mode??"—"}</small></div>
       <div className="control-stat"><span>LIVE</span><strong>{readiness.live_execution_permitted?"READY":"LOCKED"}</strong><small>live execution gate</small></div>
@@ -248,22 +245,23 @@ function SystemControlRoom({strategy,asOf}:{strategy:string;asOf:string}) {
       <div className="control-panel">
         <div className="mini-title"><Layers3 size={15}/> Forecast / Final Authority</div>
         <div className="forecast-meta">
-          <span>Top 20 live rank</span><strong>{fastRows.length}</strong>
+          <span>Top 20 fast rank</span><strong>{fastRows.length}</strong>
           <span>Final rows</span><strong>{finalSummary.rows??0}</strong>
           <span>Paper-ready rows</span><strong>{finalSummary.paper_sim_ready??0}</strong>
         </div>
         <div className="ladder-row">
-          {[10,5,3,1,0].map((n:number)=><span key={n} className={`stage-chip ${ladder?"ready":""}`}>T-{n===0?0:n}</span>)}
+          {[10,5,3,1,0].map((n:number)=><span key={n} className="stage-chip ready">T-{n}</span>)}
         </div>
         <div className="top-symbols">
-          {(fastRows??[]).slice(0,10).map((r:any)=><span key={r.symbol}>{r.rank_no}. {r.symbol}</span>)}
+          {fastRows.slice(0,10).map((r:any)=><span key={r.symbol}>{r.rank_no}. {r.symbol}</span>)}
+          {!fastRows.length && <span>No verified signal snapshot</span>}
         </div>
       </div>
       <div className="control-panel">
         <div className="mini-title"><History size={15}/> Paper audit</div>
         <div className="audit-kpis">
           <div><span>Preview</span><strong>{audit.preview_rows??0}</strong></div>
-          <div><span>Blocked incomplete month</span><strong>{audit.incomplete_month_blocked_rows??0}</strong></div>
+          <div><span>Incomplete month blocked</span><strong>{audit.incomplete_month_blocked_rows??0}</strong></div>
           <div><span>Orders created</span><strong>{audit.orders_total??0}</strong></div>
           <div><span>Live orders</span><strong>{audit.live_orders_created?"YES":"NO"}</strong></div>
         </div>
