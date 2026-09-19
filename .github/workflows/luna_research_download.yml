@@ -58,7 +58,8 @@ jobs:
 
       - name: Audit forward-return quality
         run: |
-          python scripts/research/qa_forward_returns.py             --input data/set_2000_2025/factors.csv             --output research/return_qa.json             --extremes-output research/return_extremes.csv             --warn-abs-return 0.20
+          python scripts/research/qa_forward_returns.py             --input data/set_2000_2025/factors.csv             --output research/return_qa.json             --extremes-output research/return_extremes.csv             --warn-abs-return 0.20 \
+            --hard-invalid
 
       - name: Staged 1M hypothesis search v3 on real SET data
         run: |
