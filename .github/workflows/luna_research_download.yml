@@ -1,0 +1,83 @@
+name: LUNA Research Dataset Download
+
+on:
+  push:
+    paths:
+      - ".github/workflows/luna_research_download.yml"
+      - "scripts/research/download_mendeley_set.py"
+  workflow_dispatch:
+
+jobs:
+  download-set-history:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Playwright
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Download Mendeley dataset
+        run: |
+          mkdir -p data/raw
+          node <<'NODE'
+          const { chromium } = require("playwright");
+          const fs = require("fs");
+
+          (async () => {
+            const browser = await chromium.launch({headless:true});
+            const page = await browser.newPage({acceptDownloads:true});
+            await page.goto("https://data.mendeley.com/datasets/gybmm9t3mr/1", {waitUntil:"domcontentloaded", timeout:120000});
+            await page.waitForTimeout(5000);
+
+            const buttons = page.getByText(/Download All/i);
+            const count = await buttons.count();
+            if (!count) throw new Error("Download All button not found");
+
+            const button = buttons.first();
+            const downloadPromise = page.waitForEvent("download", {timeout:120000});
+            await button.click();
+            const download = await downloadPromise;
+            const failure = await download.failure();
+            if (failure) throw new Error("Mendeley download failed: " + failure);
+
+            await download.saveAs("data/raw/gybmm9t3mr-1.zip");
+            console.log("Downloaded:", await download.suggestedFilename());
+            await browser.close();
+          })().catch(err => { console.error(err); process.exit(1); });
+          NODE
+
+      - name: Inspect and normalize dataset
+        run: |
+          python scripts/research/download_mendeley_set.py             --zip data/raw/gybmm9t3mr-1.zip             --output-dir data/set_2000_2025
+
+      - name: Upload research dataset artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: luna-set-price-dataset-2000-2025
+          path: |
+            data/set_2000_2025/prices.csv
+            data/set_2000_2025/manifest.json
+          compression-level: 0
+          retention-days: 14
