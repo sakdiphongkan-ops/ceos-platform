@@ -1,0 +1,17 @@
+name: CEOS-LUNA audit
+
+on:
+  push:
+    paths:
+      - "app/api/backtest/ceos-luna/**"
+      - "scripts/ceos_luna_audit.py"
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python scripts/ceos_luna_audit.py
