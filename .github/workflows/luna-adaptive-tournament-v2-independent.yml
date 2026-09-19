@@ -45,7 +45,11 @@ jobs:
       - name: Build monthly price factors
         run: |
           mkdir -p data/luna_monthly_independent
-          python scripts/research/build_monthly_price_factors_from_daily_v1.py             --prices data/set_2000_2025/prices.csv             --output data/luna_monthly_independent/monthly_price_factors.csv
+          python scripts/research/build_monthly_price_factors_from_daily_v1.py             --prices data/set_2000_2025/prices.csv             --output data/luna_monthly_independent/monthly_price_factors_raw.csv
+
+          python scripts/research/filter_last_5y_monthly.py \
+            --input data/luna_monthly_independent/monthly_price_factors_raw.csv \
+            --output data/luna_monthly_independent/monthly_price_factors.csv
 
       - name: Run 1000-formula tournament
         run: |
@@ -61,7 +65,7 @@ jobs:
           p="research/luna_adaptive_tournament_v2_independent/summary.json"
           x=json.load(open(p))
           assert x["formula_count"] == 1000
-          assert x["months_traded"] >= 36
+          assert 36 <= x["months_traded"] <= 72
           assert x["leakage_guard"]
           assert x["data_contiguity_guard"]
           print(json.dumps(x, indent=2))
@@ -78,6 +82,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add research-results/
           git diff --cached --quiet || git commit -m "research(luna): save independent adaptive tournament v2 result"
+          git pull --rebase origin master
           git push
 
       - name: Upload artifact
