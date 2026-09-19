@@ -30,15 +30,15 @@ OUT_COLS = [
     "ASSET_G","CAPEX_G","INVESTMENT_RATE","DIV_G","PAYOUT","BUYBACK","DE",
     "NET_DEBT_EBITDA","INTEREST_COVER","CURRENT_RATIO","RSI14",
     "DIST_MA20","DIST_MA60","BREAKOUT20","BREAKOUT55",
-    "fwd_return_1d","fwd_return_5d","fwd_return_20d",
+    "fwd_return","fwd_return_1d","fwd_return_5d","fwd_return_20d",
 ]
 
 def rsi(s: pd.Series, n: int = 14) -> pd.Series:
     d = s.diff()
     up = d.clip(lower=0)
     dn = -d.clip(upper=0)
-    au = up.rolling(n, min_periods=n).mean()
-    ad = dn.rolling(n, min_periods=n).mean()
+    au = up.ewm(alpha=1/n, adjust=False, min_periods=n).mean()
+    ad = dn.ewm(alpha=1/n, adjust=False, min_periods=n).mean()
     rs = au / ad.replace(0, np.nan)
     out = 100 - 100 / (1 + rs)
     out = out.where(ad.ne(0), 100.0)
@@ -120,11 +120,7 @@ def main() -> None:
     p["AMOUNT"] = g["amount"].apply(adv).reset_index(level=0, drop=True)
     p["ADV20"] = p["AMOUNT"]
     p["TURNOVER"] = np.nan
-
-    d = ret.groupby(p["symbol"]).apply(lambda s: s.rolling(14, min_periods=14).apply(
-        lambda x: (x.gt(0).sum() / len(x)) * 100, raw=False
-    )).reset_index(level=0, drop=True)
-    p["RSI14"] = d
+    p["RSI14"] = g[px].apply(rsi).reset_index(level=0, drop=True)
 
     bench = load_benchmark(args.benchmark)
     p["REL_MOM"] = np.nan
@@ -153,8 +149,8 @@ def main() -> None:
         keep = list(dict.fromkeys([c for c in keep if c in f.columns]))
         f = f[keep].copy()
         p = pd.merge_asof(
-            p.sort_values(["symbol","decision_ts"]),
-            f,
+            p.sort_values(["decision_ts","symbol"]),
+            f.sort_values(["available_at","symbol"]),
             left_on="decision_ts",
             right_on="available_at",
             by="symbol",
@@ -171,8 +167,11 @@ def main() -> None:
         for c in [c for c in OUT_COLS if c.isupper() and c not in p.columns]:
             p[c] = np.nan
 
+    # Rebuild the groupby after any merge so no stale frame/index can leak into returns.
+    g2 = p.groupby("symbol", group_keys=False)
     for h in [1,5,20]:
-        p[f"fwd_return_{h}d"] = g[px].shift(-h) / p[px] - 1
+        p[f"fwd_return_{h}d"] = g2[px].shift(-h) / p[px] - 1
+    p["fwd_return"] = p["fwd_return_1d"]
 
     if "market" not in p.columns:
         p["market"] = np.nan
