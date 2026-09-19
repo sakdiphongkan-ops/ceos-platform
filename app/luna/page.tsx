@@ -43,6 +43,7 @@ type Trade = {
 };
 
 const LUNA_API = "https://wigzicwgcsrhdummrbjx.supabase.co/functions/v1/luna-api";
+const LUNA_STRATEGY = "luna-m2s0k20rev-r25e50-v1.0";
 const TIMEFRAME = "15m";
 
 type LunaFeed = {
@@ -152,6 +153,7 @@ export default function LunaPortfolioPage() {
     </header>
     <div className="page">
       <section className="hero-row"><div><div className="eyebrow">INTRADAY CONTROL · LIVE PORTFOLIO</div><h2>What LUNA owns right now</h2><p>Database-backed holdings, executions, P&amp;L and risk exposure.</p></div><div className="hero-meta"><div className="data-chip"><span className="data-dot"/> {live ? "LIVE DATA" : "DATA OFFLINE"}</div><div className="safe-badge"><ShieldCheck size={15}/> {session?.mode?.toUpperCase()??"PAPER"} / SAFE</div></div></section>
+      <SystemControlRoom strategy={LUNA_STRATEGY} asOf={session?.session_date ?? new Date().toISOString().slice(0,10)} />
       {error&&<div className="error-banner"><span>{error}</span><button onClick={load}>Retry</button></div>}
       <section className="summary-grid"><Metric label="Market ticks" value={String(sessionTicks.length)} sub="Latest session feed"/><Metric label="Signals" value={String(sessionSignals.length)} sub="15m strategy signals"/><Metric label="Orders" value={String(sessionOrders.length)} sub="Recorded this session"/>
         <Metric label="Total Equity" value={`฿${money(equity)}`} sub={`Initial ฿${money(initial)}`} positive={equity>=initial}/>
@@ -177,6 +179,103 @@ export default function LunaPortfolioPage() {
   </main>
 }
 
+
+function SystemControlRoom({strategy,asOf}:{strategy:string;asOf:string}) {
+  const [state,setState]=useState<any|null>(null);
+  const [loading,setLoading]=useState(true);
+  const [error,setError]=useState("");
+
+  const refresh=useCallback(async()=>{
+    setLoading(true); setError("");
+    try{
+      const [selfTest,readiness,fast,finalDecision,audit] = await Promise.all([
+        fetch(`${LUNA_API}?view=system_test&strategy=${encodeURIComponent(strategy)}&as_of=${encodeURIComponent(asOf)}`,{cache:"no-store"}).then(r=>r.json()),
+        fetch(`${LUNA_API}?view=readiness&strategy=${encodeURIComponent(strategy)}&as_of=${encodeURIComponent(asOf)}`,{cache:"no-store"}).then(r=>r.json()),
+        fetch(`${LUNA_API}?view=fast&strategy=${encodeURIComponent(strategy)}&as_of=${encodeURIComponent(asOf)}&limit=20`,{cache:"no-store"}).then(r=>r.json()),
+        fetch(`${LUNA_API}?view=final&strategy=${encodeURIComponent(strategy)}&month=${encodeURIComponent(asOf.slice(0,7)+"-01")}&as_of=${encodeURIComponent(asOf)}&limit=20`,{cache:"no-store"}).then(r=>r.json()),
+        fetch(`${LUNA_API}?view=paper_audit&strategy=${encodeURIComponent(strategy)}&as_of=${encodeURIComponent(asOf)}`,{cache:"no-store"}).then(r=>r.json()),
+      ]);
+      if(!selfTest.ok || !readiness.ok || !fast.ok || !finalDecision.ok || !audit.ok) throw new Error("LUNA control API returned partial data");
+      setState({selfTest:selfTest.result,readiness:readiness.readiness,fast,final:finalDecision,audit:audit.result});
+    }catch(e){setError(e instanceof Error?e.message:"Unable to load LUNA control state");}
+    finally{setLoading(false);}
+  },[strategy,asOf]);
+
+  useEffect(()=>{refresh(); const id=setInterval(refresh,15000); return()=>clearInterval(id);},[refresh]);
+
+  const checks=state?.selfTest?.checks??[];
+  const passed=checks.filter((c:any)=>c.pass).length;
+  const total=checks.length;
+  const status=state?.selfTest?.overall_status??"LOADING";
+  const readiness=state?.readiness??{};
+  const fastRows=state?.fast?.forecast_rank??[];
+  const ladder=state?.fast?.forecast_ladder;
+  const finalSummary=state?.final?.summary??{};
+  const audit=state?.audit??{};
+
+  return <section className="control-room-card">
+    <div className="control-room-head">
+      <div>
+        <div className="section-label">LUNA SYSTEM CONTROL ROOM</div>
+        <div className="control-room-title">ตรวจสอบระบบจริง · {strategy}</div>
+        <div className="control-room-sub">Backend-backed status, gates, forecast ladder and execution safety — ไม่ใช่ mock data</div>
+      </div>
+      <div className="control-room-actions">
+        <span className={`system-status ${status.toLowerCase()}`}><CircleDot size={11}/>{status}</span>
+        <button className="filter-button" onClick={refresh} disabled={loading}><RefreshCw size={14}/>{loading?"Checking…":"Run check"}</button>
+      </div>
+    </div>
+
+    {error && <div className="error-banner compact"><span>{error}</span><button onClick={refresh}>Retry</button></div>}
+
+    <div className="control-grid">
+      <div className="control-stat"><span>SELF-TEST</span><strong>{loading?"—":`${passed}/${total}`}</strong><small>{state?.selfTest?.integrity?"Integrity PASS":"ตรวจพบ gate ที่ยังไม่พร้อม"}</small></div>
+      <div className="control-stat"><span>MONTH CLOSE</span><strong>{readiness.month_closed?"CLOSED":"OPEN"}</strong><small>{asOf}</small></div>
+      <div className="control-stat"><span>CEOS FEED</span><strong>{readiness.ceos_feed_rows??0}</strong><small>{readiness.ceos_allowed_rows??0} allowed</small></div>
+      <div className="control-stat"><span>PAPER</span><strong>{readiness.paper_execution_permitted?"READY":"LOCKED"}</strong><small>{readiness.execution_mode??"—"}</small></div>
+      <div className="control-stat"><span>LIVE</span><strong>{readiness.live_execution_permitted?"READY":"LOCKED"}</strong><small>live execution gate</small></div>
+      <div className="control-stat"><span>KILL SWITCH</span><strong>{readiness.kill_switch?"ON":"OFF"}</strong><small>{readiness.armed?"ARMED":"DISARMED"}</small></div>
+    </div>
+
+    <div className="control-columns">
+      <div className="control-panel">
+        <div className="mini-title"><ShieldCheck size={15}/> Gate audit</div>
+        <div className="gate-list">
+          {checks.map((c:any)=><div className="gate-row" key={c.name}><span>{c.name.replaceAll("_"," ")}</span><GateBadge pass={!!c.pass}/></div>)}
+          {!checks.length && <div className="muted">กำลังโหลดผล self-test…</div>}
+        </div>
+      </div>
+      <div className="control-panel">
+        <div className="mini-title"><Layers3 size={15}/> Forecast / Final Authority</div>
+        <div className="forecast-meta">
+          <span>Top 20 live rank</span><strong>{fastRows.length}</strong>
+          <span>Final rows</span><strong>{finalSummary.rows??0}</strong>
+          <span>Paper-ready rows</span><strong>{finalSummary.paper_sim_ready??0}</strong>
+        </div>
+        <div className="ladder-row">
+          {[10,5,3,1,0].map((n:number)=><span key={n} className={`stage-chip ${ladder?"ready":""}`}>T-{n===0?0:n}</span>)}
+        </div>
+        <div className="top-symbols">
+          {(fastRows??[]).slice(0,10).map((r:any)=><span key={r.symbol}>{r.rank_no}. {r.symbol}</span>)}
+        </div>
+      </div>
+      <div className="control-panel">
+        <div className="mini-title"><History size={15}/> Paper audit</div>
+        <div className="audit-kpis">
+          <div><span>Preview</span><strong>{audit.preview_rows??0}</strong></div>
+          <div><span>Blocked incomplete month</span><strong>{audit.incomplete_month_blocked_rows??0}</strong></div>
+          <div><span>Orders created</span><strong>{audit.orders_total??0}</strong></div>
+          <div><span>Live orders</span><strong>{audit.live_orders_created?"YES":"NO"}</strong></div>
+        </div>
+        <div className="audit-note">Snapshot-backed · {audit.month_closed?"closed month":"current month locked"}</div>
+      </div>
+    </div>
+  </section>;
+}
+
+function GateBadge({pass}:{pass:boolean}) {
+  return <span className={`gate-badge ${pass?"pass":"fail"}`}>{pass?"PASS":"BLOCK"}</span>;
+}
 
 function Metric({label,value,sub,positive}:{label:string;value:string;sub:string;positive?:boolean}) {
   return <div className="metric-card"><div className="metric-label">{label}</div><div className={`metric-value ${positive===undefined?"":positive?"positive":"negative"}`}>{value}</div><div className="metric-sub">{sub}</div></div>;
