@@ -1,0 +1,90 @@
+name: LUNA Adaptive Tournament v2 - Independent SET Data
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "scripts/research/luna_adaptive_tournament_v2.py"
+      - "scripts/research/build_monthly_price_factors_from_daily_v1.py"
+      - ".github/workflows/luna-adaptive-tournament-v2-independent.yml"
+      - "scripts/research/download_mendeley_set.py"
+  workflow_dispatch:
+
+concurrency:
+  group: luna-adaptive-tournament-v2-independent
+  cancel-in-progress: true
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          python -m pip install -U pip pandas numpy python-dateutil
+
+      - name: Download historical SET dataset
+        run: |
+          mkdir -p data/raw
+          curl -fL --retry 3 --retry-delay 2             "https://data.mendeley.com/public-api/zip/gybmm9t3mr/download/1"             -o data/raw/gybmm9t3mr-1.zip
+          test -s data/raw/gybmm9t3mr-1.zip
+
+      - name: Normalize SET history
+        run: |
+          python scripts/research/download_mendeley_set.py             --zip data/raw/gybmm9t3mr-1.zip             --output-dir data/set_2000_2025             --quarantine-invalid             --max-invalid-rate 0.01
+
+      - name: Build monthly price factors
+        run: |
+          mkdir -p data/luna_monthly_independent
+          python scripts/research/build_monthly_price_factors_from_daily_v1.py             --prices data/set_2000_2025/prices.csv             --output data/luna_monthly_independent/monthly_price_factors.csv
+
+      - name: Run 1000-formula tournament
+        run: |
+          rm -rf research/luna_adaptive_tournament_v2_independent
+          python scripts/research/luna_adaptive_tournament_v2.py             --input data/luna_monthly_independent/monthly_price_factors.csv             --output research/luna_adaptive_tournament_v2_independent             --formula-count 1000             --lookback-months 24             --min-history-months 12             --cost-bps 20             --k 20             --seed 20260920
+
+      - name: Validate
+        run: |
+          test -s research/luna_adaptive_tournament_v2_independent/summary.json
+          test -s research/luna_adaptive_tournament_v2_independent/tournament_selection_ledger.csv
+          python - <<'PY'
+          import json
+          p="research/luna_adaptive_tournament_v2_independent/summary.json"
+          x=json.load(open(p))
+          assert x["formula_count"] == 1000
+          assert x["months_traded"] >= 36
+          assert x["leakage_guard"]
+          assert x["data_contiguity_guard"]
+          print(json.dumps(x, indent=2))
+          PY
+
+      - name: Save independent result
+        run: |
+          mkdir -p research-results/luna-adaptive-tournament-v2-independent
+          cp research/luna_adaptive_tournament_v2_independent/summary.json             research-results/luna-adaptive-tournament-v2-independent-summary.json
+          cp research/luna_adaptive_tournament_v2_independent/tournament_selection_ledger.csv             research-results/luna-adaptive-tournament-v2-independent/selection-ledger.csv
+          cp research/luna_adaptive_tournament_v2_independent/formula_catalog.json             research-results/luna-adaptive-tournament-v2-independent/formula-catalog.json
+          cp data/luna_monthly_independent/monthly_price_factors.manifest.json             research-results/luna-adaptive-tournament-v2-independent-dataset.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research-results/
+          git diff --cached --quiet || git commit -m "research(luna): save independent adaptive tournament v2 result"
+          git push
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: luna-adaptive-tournament-v2-independent
+          path: |
+            research/luna_adaptive_tournament_v2_independent/
+            data/luna_monthly_independent/monthly_price_factors.manifest.json
+          retention-days: 14
