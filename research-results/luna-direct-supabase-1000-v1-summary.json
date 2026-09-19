@@ -1,0 +1,296 @@
+{
+  "status": "COMPLETED",
+  "engine": "luna-direct-supabase-1000-v1",
+  "source": {
+    "table": "public.luna_research_monthly_price_factors",
+    "rows": 51562,
+    "period_signal_months": [
+      "2021-09-01",
+      "2026-07-01"
+    ],
+    "note": "Run executed directly against the connected Supabase database to bypass the blocked GitHub Actions secret."
+  },
+  "config": {
+    "formula_count": 1000,
+    "k": 20,
+    "cost_bps": 20,
+    "lookback_months": 24,
+    "min_history_months": 12
+  },
+  "adaptive": {
+    "months": 47,
+    "geometric_monthly_return": -0.0077083560713836485,
+    "cumulative_return": -0.30489773020647193,
+    "positive_month_pct": 0.3191489361702128,
+    "min_monthly_return": -0.16392775026546894,
+    "max_monthly_return": 0.15168761906243564,
+    "max_drawdown_pct": -0.46293406384961155,
+    "final_baht": 20853.068093805843,
+    "months_ge_7pct": 5
+  },
+  "direct_m1_alias": {
+    "months": 59,
+    "geometric_monthly_return": 0.0014391261108452902,
+    "cumulative_return": 0.08855094345448022,
+    "positive_month_pct": 0.4915254237288136,
+    "min_monthly_return": -0.17967704048232985,
+    "max_monthly_return": 0.29666901141099156,
+    "max_drawdown_pct": -0.43060920767905453,
+    "final_baht": 32656.528303634404
+  },
+  "exact_persisted_m1": {
+    "strategy_version": "luna-m1s0k20rev-v1",
+    "months": 59,
+    "min_month": "2021-10-31",
+    "max_month": "2026-08-31",
+    "geometric_monthly_return": 0.006556127881564541,
+    "cumulative_return": 0.4704214597467422,
+    "positive_month_pct": 0.5423728813559322,
+    "min_monthly_return": -0.18410469861537182,
+    "max_monthly_return": 0.27299531804639127,
+    "max_drawdown_pct": -0.4735760363437528,
+    "average_turnover": 0.9127118644067796,
+    "total_transaction_cost": 0.1077
+  },
+  "top_full_period_formulas": [
+    [
+      "F0324",
+      [
+        [
+          "vol20",
+          -0.231301
+        ],
+        [
+          "high52_ratio",
+          -0.768699
+        ]
+      ],
+      0.010479297848875913,
+      0.8497702945114525
+    ],
+    [
+      "F0410",
+      [
+        [
+          "vol20",
+          -0.494918
+        ],
+        [
+          "maxdd60",
+          0.505082
+        ]
+      ],
+      0.010363563395088482,
+      0.8373118650891964
+    ],
+    [
+      "F0120",
+      [
+        [
+          "mom6",
+          -0.505328
+        ],
+        [
+          "mom3",
+          0.494672
+        ]
+      ],
+      0.010330645088425294,
+      0.833783411382016
+    ],
+    [
+      "F0306",
+      [
+        [
+          "avg_amount20",
+          -0.330008
+        ],
+        [
+          "vol20",
+          -0.252467
+        ],
+        [
+          "mom12",
+          0.417525
+        ]
+      ],
+      0.01026983313863572,
+      0.8272825996065469
+    ],
+    [
+      "F0218",
+      [
+        [
+          "mom12",
+          0.276926
+        ],
+        [
+          "avg_amount20",
+          -0.307887
+        ],
+        [
+          "maxdd60",
+          0.241417
+        ],
+        [
+          "vol20",
+          -0.17377
+        ]
+      ],
+      0.010253521301154311,
+      0.8255427172099614
+    ],
+    [
+      "F0483",
+      [
+        [
+          "avg_amount20",
+          -0.718204
+        ],
+        [
+          "mom6",
+          -0.281796
+        ]
+      ],
+      0.0099743821425895,
+      0.7960198329383203
+    ],
+    [
+      "F0012",
+      [
+        [
+          "mom6",
+          -0.51374
+        ],
+        [
+          "mom1",
+          0.48626
+        ]
+      ],
+      0.00991526895710515,
+      0.7898282714780835
+    ],
+    [
+      "F0933",
+      [
+        [
+          "avg_amount20",
+          -0.511544
+        ],
+        [
+          "maxdd60",
+          0.488456
+        ]
+      ],
+      0.009848118109361703,
+      0.782820293043738
+    ],
+    [
+      "F0368",
+      [
+        [
+          "high52_ratio",
+          -0.407965
+        ],
+        [
+          "maxdd60",
+          0.592035
+        ]
+      ],
+      0.009806513516182891,
+      0.7784919067295966
+    ],
+    [
+      "F0203",
+      [
+        [
+          "mom3",
+          0.330191
+        ],
+        [
+          "vol20",
+          -0.330617
+        ],
+        [
+          "maxdd60",
+          0.339192
+        ]
+      ],
+      0.009691998210855202,
+      0.7666314410769413
+    ]
+  ],
+  "top_adaptive_selections": [
+    [
+      "F0197",
+      11
+    ],
+    [
+      "F0492",
+      7
+    ],
+    [
+      "F0811",
+      5
+    ],
+    [
+      "F0621",
+      4
+    ],
+    [
+      "F0270",
+      3
+    ],
+    [
+      "F0884",
+      3
+    ],
+    [
+      "F0899",
+      3
+    ],
+    [
+      "F0373",
+      2
+    ],
+    [
+      "F0129",
+      2
+    ],
+    [
+      "F0045",
+      2
+    ],
+    [
+      "F0142",
+      1
+    ],
+    [
+      "F0241",
+      1
+    ],
+    [
+      "F0731",
+      1
+    ],
+    [
+      "F0116",
+      1
+    ],
+    [
+      "F0011",
+      1
+    ]
+  ],
+  "hurdle": {
+    "target_geometric_monthly": 0.07,
+    "equivalent_annual_cagr": 1.2521915889608248,
+    "adaptive_result_meets_target": false,
+    "best_fixed_full_period_geometric_monthly": 0.010479297848875913
+  },
+  "interpretation_guards": [
+    "This is a fresh deterministic 1,000-formula search against the current Supabase monthly-factor table, not the blocked GitHub v2 NumPy-PCG64 catalog.",
+    "The direct monthly-factor M1 alias does not reproduce the persisted exact M1 engine; the persisted strategy remains the benchmark for Apple-to-Apple comparison.",
+    "No formula is promoted to production from this run."
+  ]
+}
