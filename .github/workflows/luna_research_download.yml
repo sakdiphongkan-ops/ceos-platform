@@ -59,15 +59,13 @@ jobs:
           rm -rf research/one_million
           python scripts/one_million_search_staged.py             --input data/set_2000_2025/factors.csv             --output research/one_million             --max-trials 1000000             --finalists 200             --screen-days 120             --cost-bps 45             --train-days 120             --oos-days 20             --holdout-days 40             --min-trades 30
 
-      - name: Upload research dataset artifact
+      - name: Upload research results artifact
         uses: actions/upload-artifact@v4
         with:
-          name: luna-set-price-dataset-2000-2025
+          name: luna-one-million-results
           path: |
-            data/set_2000_2025/prices.csv
             data/set_2000_2025/manifest.json
             data/set_2000_2025/invalid_rows.csv
-            data/set_2000_2025/factors.csv
             data/set_2000_2025/factors.manifest.json
             research/one_million/screen_ledger.jsonl.gz
             research/one_million/screen_top.csv
