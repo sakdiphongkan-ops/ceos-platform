@@ -1,5 +1,9 @@
 name: LUNA Research Dataset Download
 
+concurrency:
+  group: luna-research-download
+  cancel-in-progress: true
+
 on:
   push:
     paths:
