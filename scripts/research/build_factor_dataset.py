@@ -29,7 +29,7 @@ OUT_COLS = [
     "VOL_10","VOL_20","BETA","MAXDD_60","ATR_PCT","ADV20","TURNOVER","AMOUNT",
     "ASSET_G","CAPEX_G","INVESTMENT_RATE","DIV_G","PAYOUT","BUYBACK","DE",
     "NET_DEBT_EBITDA","INTEREST_COVER","CURRENT_RATIO","RSI14",
-    "DIST_MA20","DIST_MA60","BREAKOUT20","BREAKOUT55",
+    "DIST_MA20","DIST_MA60","BREAKOUT20","BREAKOUT55","SKEW_20","SKEW_60","QUALITY_SCORE","VALUE_QUALITY","MOM_BLEND","CONSERVATIVE_SCORE","SAFETY_SCORE","GROWTH_QUALITY","INV_QUALITY",
     "fwd_return","fwd_return_1d","fwd_return_5d","fwd_return_20d",
 ]
 
@@ -107,6 +107,8 @@ def main() -> None:
         p[f"MOM_{n}"] = g[px].pct_change(n)
     p["VOL_10"] = ret.groupby(p["symbol"]).rolling(10, min_periods=10).std().reset_index(level=0, drop=True)
     p["VOL_20"] = ret.groupby(p["symbol"]).rolling(20, min_periods=20).std().reset_index(level=0, drop=True)
+p["SKEW_20"] = ret.groupby(p["symbol"]).rolling(20, min_periods=20).skew().reset_index(level=0, drop=True)
+p["SKEW_60"] = ret.groupby(p["symbol"]).rolling(60, min_periods=60).skew().reset_index(level=0, drop=True)
     p["MAXDD_60"] = p[px] / g[px].rolling(60, min_periods=60).max().reset_index(level=0, drop=True) - 1
     p["DIST_MA20"] = p[px] / g[px].rolling(20, min_periods=20).mean().reset_index(level=0, drop=True) - 1
     p["DIST_MA60"] = p[px] / g[px].rolling(60, min_periods=60).mean().reset_index(level=0, drop=True) - 1
@@ -168,6 +170,26 @@ def main() -> None:
         for c in [c for c in OUT_COLS if c.isupper() and c not in p.columns]:
             p[c] = np.nan
 
+    # Derived multi-signal composites. Every component is point-in-time and the
+    # cross-sectional ranks are computed using only information on the same decision date.
+    # They expand the search space without introducing forward data.
+    rank_cols = [
+        "ROIC","ROE","ROA","GPM","NPM","CFO_MARGIN","REV_G","EPS_G","NI_G","FCF_G",
+        "EARNINGS_YIELD","FCF_YIELD","DIV_YIELD","MOM_20","MOM_60","MOM_120","REL_MOM",
+        "VOL_20","DE","NET_DEBT_EBITDA","INTEREST_COVER","CURRENT_RATIO",
+        "ASSET_G","CAPEX_G","INVESTMENT_RATE","PAYOUT","BUYBACK","SKEW_20","SKEW_60"
+    ]
+    ranks = {name: p.groupby("date")[name].rank(pct=True) for name in rank_cols if name in p.columns}
+    def rr(name: str) -> pd.Series:
+        return ranks.get(name, pd.Series(np.nan, index=p.index))
+    p["QUALITY_SCORE"] = (rr("ROIC") + rr("ROE") + rr("GPM") + rr("NPM") + rr("CFO_MARGIN") - rr("DE")) / 5.0
+    p["VALUE_QUALITY"] = (rr("EARNINGS_YIELD") + rr("FCF_YIELD") + rr("ROIC") + rr("CFO_MARGIN")) / 4.0
+    p["MOM_BLEND"] = (rr("MOM_20") + rr("MOM_60") + rr("MOM_120") + rr("REL_MOM")) / 4.0
+    p["CONSERVATIVE_SCORE"] = (rr("MOM_120") + rr("DIV_YIELD") + rr("FCF_YIELD") - rr("VOL_20")) / 4.0
+    p["SAFETY_SCORE"] = (rr("INTEREST_COVER") + rr("CURRENT_RATIO") + rr("ROIC") - rr("DE") - rr("NET_DEBT_EBITDA")) / 5.0
+    p["GROWTH_QUALITY"] = (rr("REV_G") + rr("EPS_G") + rr("FCF_G") + rr("ROIC") + rr("CFO_MARGIN")) / 5.0
+    p["INV_QUALITY"] = (rr("ROIC") - rr("ASSET_G") - rr("CAPEX_G") - rr("INVESTMENT_RATE") + rr("FCF_G")) / 5.0
+
     # Rebuild the groupby after any merge so no stale frame/index can leak into returns.
     g2 = p.groupby("symbol", group_keys=False)
     for h in [1,5,20]:
@@ -184,6 +206,8 @@ def main() -> None:
 
     manifest = {
         "feature_version": args.feature_version,
+        "derived_composites": ["QUALITY_SCORE","VALUE_QUALITY","MOM_BLEND","CONSERVATIVE_SCORE","SAFETY_SCORE","GROWTH_QUALITY","INV_QUALITY"],
+
         "rows": int(len(out)),
         "symbols": int(out["symbol"].nunique()),
         "start": str(out["date"].min()),
