@@ -12,6 +12,7 @@ on:
       - "scripts/research/build_factor_dataset.py"
       - "scripts/one_million_search.py"
       - "scripts/one_million_search_staged.py"
+      - "scripts/tests/test_one_million_search_staged.py"
   workflow_dispatch:
 
 jobs:
@@ -33,6 +34,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install pandas
+
+      - name: Smoke test staged 1M engine
+        run: |
+          python scripts/tests/test_one_million_search_staged.py
 
       - name: Download Mendeley dataset
         run: |
