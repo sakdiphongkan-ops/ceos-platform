@@ -1,0 +1,128 @@
+name: LUNA Independent Seed Replication v1
+
+on:
+  workflow_run:
+    workflows: ["LUNA Independent Holdout Audit v1"]
+    types: [completed]
+  workflow_dispatch:
+
+concurrency:
+  group: luna-independent-seed-replication
+  cancel-in-progress: true
+
+jobs:
+  replicate:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          python -m pip install -U pip pandas numpy python-dateutil
+
+      - name: Download historical SET dataset
+        run: |
+          mkdir -p data/raw
+          curl -fL --retry 3 --retry-delay 2 \
+            "https://data.mendeley.com/public-api/zip/gybmm9t3mr/download/1" \
+            -o data/raw/gybmm9t3mr-1.zip
+          test -s data/raw/gybmm9t3mr-1.zip
+
+      - name: Normalize SET history
+        run: |
+          python scripts/research/download_mendeley_set.py \
+            --zip data/raw/gybmm9t3mr-1.zip \
+            --output-dir data/set_2000_2025 \
+            --quarantine-invalid \
+            --max-invalid-rate 0.01
+
+      - name: Build monthly price factors
+        run: |
+          mkdir -p data/luna_monthly_independent
+          python scripts/research/build_monthly_price_factors_from_daily_v1.py \
+            --prices data/set_2000_2025/prices.csv \
+            --output data/luna_monthly_independent/monthly_price_factors.csv
+
+      - name: Run five independent seeds
+        run: |
+          rm -rf research/luna_seed_replication_v1
+          mkdir -p research/luna_seed_replication_v1
+          for seed_value in 20260920 20260921 20260922 20260923 20260924; do
+            mkdir -p "research/luna_seed_replication_v1/seed_\${seed_value}"
+            python scripts/research/luna_adaptive_tournament_v2.py \
+              --input data/luna_monthly_independent/monthly_price_factors.csv \
+              --output "research/luna_seed_replication_v1/seed_\${seed_value}" \
+              --formula-count 1000 \
+              --lookback-months 24 \
+              --min-history-months 12 \
+              --cost-bps 20 \
+              --k 20 \
+              --seed "\${seed_value}"
+            python - "\${seed_value}" <<'PY'
+          import json, sys
+          from pathlib import Path
+          seed_value=sys.argv[1]
+          p=Path(f"research/luna_seed_replication_v1/seed_{seed_value}/summary.json")
+          x=json.loads(p.read_text())
+          x["seed"]=int(seed_value)
+          p.write_text(json.dumps(x,indent=2),encoding="utf-8")
+          PY
+          done
+
+      - name: Aggregate seed stability
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import pandas as pd
+
+          rows=[]
+          for p in sorted(Path("research/luna_seed_replication_v1").glob("seed_*/summary.json")):
+              x=json.loads(p.read_text())
+              rows.append({
+                  "seed":x["seed"],
+                  "months":x["months_traded"],
+                  "geometric_monthly_return":x["geometric_monthly_return"],
+                  "cumulative_return":x["cumulative_return"],
+                  "positive_month_pct":x["positive_month_pct"],
+                  "months_ge_7pct":x["months_ge_7pct"],
+                  "max_drawdown_pct":x["max_drawdown_pct"],
+              })
+          df=pd.DataFrame(rows)
+          out={
+              "status":"COMPLETED",
+              "seed_count":int(len(df)),
+              "seed_metrics":rows,
+              "geometric_monthly_mean":float(df.geometric_monthly_return.mean()),
+              "geometric_monthly_median":float(df.geometric_monthly_return.median()),
+              "geometric_monthly_min":float(df.geometric_monthly_return.min()),
+              "geometric_monthly_max":float(df.geometric_monthly_return.max()),
+              "seeds_ge_7pct":int((df.geometric_monthly_return>=0.07).sum()),
+              "note":"Fresh formula catalogs for each seed. This is a replication/stability diagnostic, not an additional selection pass."
+          }
+          Path("research-results/luna-independent-seed-replication-v1-summary.json").write_text(json.dumps(out,indent=2),encoding="utf-8")
+          PY
+
+      - name: Save result
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research-results/luna-independent-seed-replication-v1-summary.json
+          git diff --cached --quiet || git commit -m "research(luna): save independent seed replication summary"
+          git push
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: luna-independent-seed-replication-v1
+          path: research/luna_seed_replication_v1/
+          retention-days: 14
