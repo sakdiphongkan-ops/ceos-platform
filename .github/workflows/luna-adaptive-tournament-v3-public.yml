@@ -72,7 +72,7 @@ jobs:
           import json
           x=json.load(open("research/luna_adaptive_tournament_v3_public/summary.json"))
           assert x["formula_count"] == 1000
-          assert x["months_traded"] >= 36
+          assert 36 <= x["months_traded"] <= 72
           assert x["leakage_guard"]
           assert x["data_contiguity_guard"]
           print(json.dumps(x, indent=2))
@@ -89,6 +89,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add research-results/
           git diff --cached --quiet || git commit -m "research(luna): save adaptive tournament v3 public result"
+          git pull --rebase origin master
           git push
 
       - name: Upload full result artifact
