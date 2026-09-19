@@ -1,0 +1,71 @@
+name: LUNA Research Data Quality
+
+concurrency:
+  group: luna-research-data-quality
+  cancel-in-progress: true
+
+on:
+  push:
+    paths:
+      - ".github/workflows/luna_research_data_quality.yml"
+      - "scripts/research/download_mendeley_set.py"
+      - "scripts/research/build_factor_dataset.py"
+      - "scripts/research/qa_forward_returns.py"
+      - "scripts/research/qa_price_adjustments.py"
+  workflow_dispatch:
+
+jobs:
+  quality-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas
+
+      - name: Download Mendeley dataset
+        run: |
+          mkdir -p data/raw
+          curl -fL --retry 3 --retry-delay 2             "https://data.mendeley.com/public-api/zip/gybmm9t3mr/download/1"             -o data/raw/gybmm9t3mr-1.zip
+          test -s data/raw/gybmm9t3mr-1.zip
+
+      - name: Normalize prices
+        run: |
+          python scripts/research/download_mendeley_set.py             --zip data/raw/gybmm9t3mr-1.zip             --output-dir data/set_2000_2025             --quarantine-invalid             --max-invalid-rate 0.01
+
+      - name: Build factors
+        run: |
+          python scripts/research/build_factor_dataset.py             --prices data/set_2000_2025/prices.csv             --output data/set_2000_2025/factors.csv
+
+      - name: Audit forward returns
+        run: |
+          python scripts/research/qa_forward_returns.py             --input data/set_2000_2025/factors.csv             --output research/return_qa.json             --extremes-output research/return_extremes.csv             --warn-abs-return 0.20             --hard-invalid
+
+      - name: Reconcile raw and adjusted prices
+        run: |
+          python scripts/research/qa_price_adjustments.py             --input data/set_2000_2025/prices.csv             --output research/price_adjustment_qa.json             --extremes-output research/price_adjustment_extremes.csv             --threshold 0.20
+
+      - name: Upload data-quality artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: luna-research-data-quality
+          path: |
+            data/set_2000_2025/manifest.json
+            data/set_2000_2025/invalid_rows.csv
+            research/return_qa.json
+            research/return_extremes.csv
+            research/price_adjustment_qa.json
+            research/price_adjustment_extremes.csv
+          compression-level: 0
+          retention-days: 14
