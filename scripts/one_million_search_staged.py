@@ -32,7 +32,7 @@ FEATURES = [
     "ASSET_G", "CAPEX_G", "INVESTMENT_RATE",
     "DIV_G", "PAYOUT", "BUYBACK",
     "DE", "NET_DEBT_EBITDA", "INTEREST_COVER", "CURRENT_RATIO",
-    "RSI14", "DIST_MA20", "DIST_MA60", "BREAKOUT20", "BREAKOUT55",
+    "RSI14", "DIST_MA20", "DIST_MA60", "BREAKOUT20", "BREAKOUT55", "SKEW_20", "SKEW_60", "QUALITY_SCORE", "VALUE_QUALITY", "MOM_BLEND", "CONSERVATIVE_SCORE", "SAFETY_SCORE", "GROWTH_QUALITY", "INV_QUALITY",
 ]
 
 
@@ -61,35 +61,64 @@ def generate_rules(features: list[str], max_trials: int):
         for q in qs
         for d in ("top", "bottom")
     ]
+    if max_trials <= 0:
+        return
+
+    single_budget = max(1, int(round(max_trials * 0.25)))
+    pair_budget = max(0, int(round(max_trials * 0.35)))
+    blend_budget = max(0, max_trials - single_budget - pair_budget)
+
     emitted = 0
-    for r in base:
-        yield r
-        emitted += 1
-        if emitted >= max_trials:
-            return
-    for i, a in enumerate(base):
-        for b in base[i + 1:]:
-            for op in ("and", "or"):
-                yield Rule(
-                    a.feature, a.direction, a.quantile, op,
-                    b.feature, b.direction, b.quantile,
-                )
-                emitted += 1
-                if emitted >= max_trials:
-                    return
-    weights = np.linspace(0.01, 0.99, 141)
-    for a in base:
-        for b in base:
-            if a.feature == b.feature:
+    # Deterministic evenly-spaced singles across the full feature/threshold universe.
+    single_budget = min(single_budget, len(base))
+    if single_budget:
+        step = len(base) / single_budget
+        seen = set()
+        for j in range(single_budget):
+            idx = min(len(base) - 1, int(j * step))
+            if idx in seen:
                 continue
-            for w in weights:
-                yield Rule(
-                    a.feature, a.direction, a.quantile, "blend",
-                    b.feature, b.direction, b.quantile, float(w),
-                )
-                emitted += 1
-                if emitted >= max_trials:
-                    return
+            seen.add(idx)
+            yield base[idx]
+            emitted += 1
+
+    # Deterministic AND/OR combinations.
+    if emitted < max_trials and pair_budget:
+        for i, a in enumerate(base):
+            for b in base[i + 1:]:
+                for op in ("and", "or"):
+                    yield Rule(
+                        a.feature, a.direction, a.quantile, op,
+                        b.feature, b.direction, b.quantile,
+                    )
+                    emitted += 1
+                    if emitted >= single_budget + pair_budget or emitted >= max_trials:
+                        break
+                if emitted >= single_budget + pair_budget or emitted >= max_trials:
+                    break
+            if emitted >= single_budget + pair_budget or emitted >= max_trials:
+                break
+
+    # Weighted blends are explicitly included in every sufficiently large batch.
+    if emitted < max_trials and blend_budget:
+        weights = (0.20, 0.35, 0.50, 0.65, 0.80)
+        blend_target = min(max_trials, single_budget + pair_budget + blend_budget)
+        for a in base:
+            for b in base:
+                if a.feature == b.feature and a.direction == b.direction and a.quantile == b.quantile:
+                    continue
+                for w in weights:
+                    yield Rule(
+                        a.feature, a.direction, a.quantile, "blend",
+                        b.feature, b.direction, b.quantile, float(w),
+                    )
+                    emitted += 1
+                    if emitted >= blend_target:
+                        break
+                if emitted >= blend_target:
+                    break
+            if emitted >= blend_target:
+                break
 
 
 def signal_from_rank(rank: pd.Series, direction: str, q: float) -> np.ndarray:
@@ -215,6 +244,44 @@ def daily_metrics(daily: np.ndarray, counts: np.ndarray, cost: float) -> dict:
     }
 
 
+def monthly_metrics(daily: np.ndarray, counts: np.ndarray, dates: list) -> dict:
+    valid = np.isfinite(daily) & (counts > 0)
+    if not valid.any():
+        return {
+            "months": 0, "geomean_monthly": 0.0, "median_monthly": 0.0,
+            "positive_month_fraction": 0.0, "months_ge_7pct": 0,
+            "month_7pct_hit_rate": 0.0, "worst_month": 0.0, "best_month": 0.0,
+            "cagr_from_monthly": 0.0,
+        }
+    frame = pd.DataFrame({
+        "date": pd.to_datetime(np.asarray(dates)[valid]),
+        "ret": np.asarray(daily)[valid].astype(float),
+    })
+    frame["month"] = frame["date"].dt.to_period("M")
+    m = frame.groupby("month", sort=True)["ret"].apply(lambda x: float(np.prod(1.0 + x.to_numpy()) - 1.0))
+    vals = m.to_numpy(dtype=float)
+    if len(vals) == 0:
+        return {
+            "months": 0, "geomean_monthly": 0.0, "median_monthly": 0.0,
+            "positive_month_fraction": 0.0, "months_ge_7pct": 0,
+            "month_7pct_hit_rate": 0.0, "worst_month": 0.0, "best_month": 0.0,
+            "cagr_from_monthly": 0.0,
+        }
+    geomean = float(np.prod(1.0 + vals) ** (1.0 / len(vals)) - 1.0)
+    cagr = float((1.0 + geomean) ** 12 - 1.0)
+    return {
+        "months": int(len(vals)),
+        "geomean_monthly": geomean,
+        "median_monthly": float(np.median(vals)),
+        "positive_month_fraction": float((vals > 0).mean()),
+        "months_ge_7pct": int((vals >= 0.07).sum()),
+        "month_7pct_hit_rate": float((vals >= 0.07).mean()),
+        "worst_month": float(vals.min()),
+        "best_month": float(vals.max()),
+        "cagr_from_monthly": cagr,
+    }
+
+
 def exact_period(
     rule: Rule,
     ranks: dict[str, np.ndarray],
@@ -280,6 +347,70 @@ def exact_period(
     return daily, counts
 
 
+def candidate_variants(rule: Rule):
+    qvals = (0.05, 0.10, 0.20, 0.30, 0.40)
+    out = []
+    if rule.op == "single":
+        for q in qvals:
+            out.append(Rule(rule.feature, rule.direction, q, "single"))
+    elif rule.op in ("and", "or"):
+        for q1 in qvals:
+            for q2 in qvals:
+                out.append(Rule(
+                    rule.feature, rule.direction, q1, rule.op,
+                    rule.feature2, rule.direction2, q2,
+                ))
+    else:
+        weights = (0.20, 0.35, 0.50, 0.65, 0.80)
+        for q1 in qvals:
+            for q2 in qvals:
+                for w in weights:
+                    out.append(Rule(
+                        rule.feature, rule.direction, q1, "blend",
+                        rule.feature2, rule.direction2, q2, float(w),
+                    ))
+    # Deduplicate by stable rule id.
+    dedup = {}
+    for r in out:
+        dedup[r.id] = r
+    return list(dedup.values())
+
+
+def adaptive_tune(
+    base_rule: Rule,
+    ranks: dict[str, np.ndarray],
+    rets: np.ndarray,
+    day_ids: np.ndarray,
+    dates: list,
+    starts: np.ndarray,
+    ends: np.ndarray,
+    development_end_idx: int,
+    purge_days: int,
+    cost_bps: float,
+) -> tuple[Rule, dict]:
+    # Inner development split: use the latter third of development as validation.
+    val_end = max(1, development_end_idx - purge_days)
+    val_start = max(0, int(development_end_idx * 0.40))
+    variants = candidate_variants(base_rule)
+    best_rule = base_rule
+    best_score = -np.inf
+    best_detail = {}
+    for r in variants:
+        daily, counts = exact_period(
+            r, ranks, rets, day_ids, starts, ends, val_start, val_end, cost_bps / 10000.0
+        )
+        dates_slice = dates[val_start:val_end]
+        mm = monthly_metrics(daily, counts, dates_slice)
+        dd = daily_metrics(daily, counts, 0.0)["max_drawdown"]
+        # Tune for geometric monthly compounding with a modest drawdown penalty.
+        score = mm["geomean_monthly"] - 0.15 * dd
+        if score > best_score:
+            best_score = score
+            best_rule = r
+            best_detail = {**mm, "validation_max_drawdown": dd, "validation_score": score}
+    return best_rule, best_detail
+
+
 def exact_walk_forward(
     rule: Rule,
     ranks: dict[str, np.ndarray],
@@ -293,10 +424,20 @@ def exact_walk_forward(
     holdout_days: int,
     purge_days: int,
     cost_bps: float,
+    adaptive: bool = True,
 ) -> dict:
     n_days = len(dates)
     if n_days <= development_end_idx + oos_days + holdout_days + purge_days:
         raise ValueError("Not enough dates for development/OOS/holdout/purge windows")
+
+    tuned_rule = rule
+    tuning = {}
+    if adaptive:
+        tuned_rule, tuning = adaptive_tune(
+            rule, ranks, rets, day_ids, dates, starts, ends,
+            development_end_idx, purge_days, cost_bps
+        )
+
     holdout_start = n_days - holdout_days
     oos_end_limit = holdout_start - purge_days
     n_folds = (oos_end_limit - development_end_idx) // oos_days
@@ -304,10 +445,10 @@ def exact_walk_forward(
     oos_end = development_end_idx + n_folds * oos_days
 
     oos_daily, oos_counts = exact_period(
-        rule, ranks, rets, day_ids, starts, ends, oos_start, oos_end, cost_bps / 10000.0
+        tuned_rule, ranks, rets, day_ids, starts, ends, oos_start, oos_end, cost_bps / 10000.0
     )
     hold_daily, hold_counts = exact_period(
-        rule, ranks, rets, day_ids, starts, ends, n_days - holdout_days, n_days, cost_bps / 10000.0
+        tuned_rule, ranks, rets, day_ids, starts, ends, n_days - holdout_days, n_days, cost_bps / 10000.0
     )
 
     folds = []
@@ -321,9 +462,25 @@ def exact_walk_forward(
 
     all_oos = daily_metrics(oos_daily, oos_counts, 0.0)
     hold = daily_metrics(hold_daily, hold_counts, 0.0)
+    oos_monthly = monthly_metrics(oos_daily, oos_counts, dates[oos_start:oos_end])
+    hold_monthly = monthly_metrics(
+        hold_daily, hold_counts, dates[n_days - holdout_days:n_days]
+    )
     positive = [f["oos_return"] for f in folds if f["oos_trades"] > 0]
 
     return {
+        "rule_base_id": rule.id,
+        "rule_tuned_id": tuned_rule.id,
+        "tuned_feature": tuned_rule.feature,
+        "tuned_direction": tuned_rule.direction,
+        "tuned_quantile": tuned_rule.quantile,
+        "tuned_op": tuned_rule.op,
+        "tuned_feature2": tuned_rule.feature2,
+        "tuned_direction2": tuned_rule.direction2,
+        "tuned_quantile2": tuned_rule.quantile2,
+        "tuned_weight": tuned_rule.weight,
+        "adaptive_tuning": bool(adaptive),
+        "validation": tuning,
         "folds": n_folds,
         "oos_trades": int(sum(f["oos_trades"] for f in folds)),
         "oos_return_sum": float(sum(positive)),
@@ -334,9 +491,19 @@ def exact_walk_forward(
         ] or [0.0])),
         "oos_return": float(all_oos["return"]),
         "oos_t_stat": float(all_oos["t_stat"]),
+        "oos_geomean_monthly": float(oos_monthly["geomean_monthly"]),
+        "oos_median_monthly": float(oos_monthly["median_monthly"]),
+        "oos_positive_month_fraction": float(oos_monthly["positive_month_fraction"]),
+        "oos_month_7pct_hit_rate": float(oos_monthly["month_7pct_hit_rate"]),
+        "oos_months_ge_7pct": int(oos_monthly["months_ge_7pct"]),
+        "oos_cagr_from_monthly": float(oos_monthly["cagr_from_monthly"]),
         "holdout_return": float(hold["return"]),
         "holdout_trades": int(hold["trades"]),
         "holdout_t_stat": float(hold["t_stat"]),
+        "holdout_geomean_monthly": float(hold_monthly["geomean_monthly"]),
+        "holdout_median_monthly": float(hold_monthly["median_monthly"]),
+        "holdout_month_7pct_hit_rate": float(hold_monthly["month_7pct_hit_rate"]),
+        "holdout_cagr_from_monthly": float(hold_monthly["cagr_from_monthly"]),
         "folds_detail": folds,
     }
 
@@ -356,6 +523,8 @@ def main() -> None:
     ap.add_argument("--purge-days", type=int, default=1)
     ap.add_argument("--min-trades", type=int, default=30)
     ap.add_argument("--min-positive-fold-fraction", type=float, default=0.50)
+    ap.add_argument("--monthly-hurdle", type=float, default=0.07)
+    ap.add_argument("--adaptive", action="store_true", default=True)
     args = ap.parse_args()
 
     df = pd.read_csv(args.input)
@@ -421,9 +590,12 @@ def main() -> None:
         try:
             wf = exact_walk_forward(
                 rule, ranks, rets, day_ids, dates, starts, ends,
-                development_end_idx, args.oos_days, args.holdout_days, args.purge_days, args.cost_bps
+                development_end_idx, args.oos_days, args.holdout_days, args.purge_days, args.cost_bps,
+                adaptive=args.adaptive,
             )
             result.update({k: v for k, v in wf.items() if k != "folds_detail"})
+            result["monthly_hurdle"] = float(args.monthly_hurdle)
+            result["oos_hurdle_pass"] = bool(result["oos_geomean_monthly"] >= args.monthly_hurdle)
             positive_fold_min = int(np.ceil(result["folds"] * args.min_positive_fold_fraction))
             result["eligible"] = bool(
                 result["oos_trades"] >= args.min_trades
@@ -447,8 +619,8 @@ def main() -> None:
     results = pd.DataFrame([{k: v for k, v in x.items() if k != "folds_detail"} for x in final_rows])
     if not results.empty:
         passed = results[results["eligible"] == True].sort_values(
-            ["oos_return_sum", "oos_t_stat", "oos_positive_folds"],
-            ascending=False,
+            ["oos_hurdle_pass", "oos_geomean_monthly", "oos_return_sum", "oos_t_stat", "oos_positive_folds"],
+            ascending=[False, False, False, False, False],
         )
     else:
         passed = results
@@ -472,7 +644,7 @@ def main() -> None:
         "input_sha256": hashlib.sha256(Path(args.input).read_bytes()).hexdigest(),
         "screen_definition": "deterministic development-only smooth tail-signal covariance proxy; screen window is inside development period and excludes one purge day before OOS",
         "exact_definition": "cross-sectional percentile rules with forward OOS validation and a holdout that is computed for reporting but excluded from eligibility/ranking",
-        "selection_rule": "Eligibility and ranking use OOS only. Holdout is excluded from selection and is reported as blind confirmation. Majority-of-fold stability is required.",
+        "selection_rule": "Eligibility and ranking use OOS only. Candidate parameters are tuned only inside development validation, then frozen before OOS. Holdout is excluded from selection and is reported as blind confirmation. Majority-of-fold stability is required.",
         "selection_warning": "All hypotheses are screened, but only finalists receive exact full-period evaluation; screen_proxy is not a return estimate. Multiple-testing correction and independent validation are still required before treating a finalist as validated.",
     }
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
