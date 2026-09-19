@@ -1,0 +1,101 @@
+name: LUNA Independent Holdout Audit v1
+
+on:
+  workflow_run:
+    workflows: ["LUNA Adaptive Tournament v2 - Independent SET Data"]
+    types: [completed]
+  workflow_dispatch:
+
+concurrency:
+  group: luna-independent-holdout
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          python -m pip install -U pip pandas numpy python-dateutil
+
+      - name: Download historical SET dataset
+        run: |
+          mkdir -p data/raw
+          curl -fL --retry 3 --retry-delay 2 \
+            "https://data.mendeley.com/public-api/zip/gybmm9t3mr/download/1" \
+            -o data/raw/gybmm9t3mr-1.zip
+          test -s data/raw/gybmm9t3mr-1.zip
+
+      - name: Normalize SET history
+        run: |
+          python scripts/research/download_mendeley_set.py \
+            --zip data/raw/gybmm9t3mr-1.zip \
+            --output-dir data/set_2000_2025 \
+            --quarantine-invalid \
+            --max-invalid-rate 0.01
+
+      - name: Build monthly price factors
+        run: |
+          mkdir -p data/luna_monthly_independent
+          python scripts/research/build_monthly_price_factors_from_daily_v1.py \
+            --prices data/set_2000_2025/prices.csv \
+            --output data/luna_monthly_independent/monthly_price_factors.csv
+
+      - name: Verify catalog exists
+        run: |
+          test -s research-results/luna-adaptive-tournament-v2-independent/formula-catalog.json
+
+      - name: Run frozen 12-month holdout
+        run: |
+          rm -rf research/luna_independent_holdout_v1
+          python scripts/research/luna_holdout_audit_v1.py \
+            --input data/luna_monthly_independent/monthly_price_factors.csv \
+            --catalog research-results/luna-adaptive-tournament-v2-independent/formula-catalog.json \
+            --output research/luna_independent_holdout_v1 \
+            --holdout-months 12 \
+            --top-n 25 \
+            --k 20 \
+            --cost-bps 20
+
+      - name: Validate
+        run: |
+          test -s research/luna_independent_holdout_v1/summary.json
+          test -s research/luna_independent_holdout_v1/holdout_ranked.csv
+          python - <<'PY'
+          import json
+          x=json.load(open("research/luna_independent_holdout_v1/summary.json"))
+          assert x["selection_guard"]
+          assert x["holdout_months"] == 12
+          print(json.dumps(x, indent=2))
+          PY
+
+      - name: Save result
+        run: |
+          mkdir -p research-results/luna-independent-holdout-v1
+          cp research/luna_independent_holdout_v1/summary.json \
+            research-results/luna-independent-holdout-v1-summary.json
+          cp research/luna_independent_holdout_v1/holdout_ranked.csv \
+            research-results/luna-independent-holdout-v1/holdout-ranked.csv
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research-results/
+          git diff --cached --quiet || git commit -m "research(luna): save independent frozen holdout audit"
+          git push
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: luna-independent-holdout-v1
+          path: research/luna_independent_holdout_v1/
+          retention-days: 14
