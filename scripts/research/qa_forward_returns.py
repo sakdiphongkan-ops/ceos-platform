@@ -7,7 +7,6 @@ import argparse
 import json
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 
@@ -20,7 +19,7 @@ def main() -> None:
     ap.add_argument("--hard-invalid", action="store_true")
     args = ap.parse_args()
 
-    df = pd.read_csv(args.input, usecols=["date", "symbol", "fwd_return", "fwd_return_1d", "close"] if "close" in pd.read_csv(args.input, nrows=0).columns else ["date", "symbol", "fwd_return", "fwd_return_1d"])
+    df = pd.read_csv(args.input, usecols=["date", "symbol", "fwd_return", "fwd_return_1d"])
     for c in ["fwd_return", "fwd_return_1d"]:
         df[c] = pd.to_numeric(df[c], errors="coerce")
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
@@ -31,8 +30,7 @@ def main() -> None:
     thresholds = [args.warn_abs_return, 0.50, 1.00, 2.00, 5.00]
     counts = {f"abs_gt_{int(t*100)}pct": int((abs_r > t).sum()) for t in thresholds}
 
-    extremes = df.loc[abs_r.reindex(df.index, fill_value=False)].copy()
-    # Also include all returns whose magnitude is above the warning threshold.
+    # Include all returns whose magnitude is above the warning threshold.
     mask = df["fwd_return_1d"].abs() > args.warn_abs_return
     extremes = df.loc[mask].copy()
     extremes["abs_return"] = extremes["fwd_return_1d"].abs()
