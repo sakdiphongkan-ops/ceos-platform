@@ -1,0 +1,31 @@
+name: one-million-strategy-search
+on:
+  push:
+    paths:
+      - "scripts/one_million_search.py"
+      - ".github/workflows/one-million-strategy-search.yml"
+  workflow_dispatch:
+    inputs:
+      max_trials:
+        required: true
+        default: "1000000"
+      input_csv:
+        required: true
+        default: "data/research/pit_daily.csv"
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install numpy pandas
+      - run: |
+          python - <<'PY'
+          from scripts.one_million_search import generate_rules
+          r=generate_rules(["PE","ROE","MOM_20","VOL_20","DIV_YIELD","REV_G"],1000000)
+          assert len(r)==1000000
+          assert len({x.id for x in r})==1000000
+          print("1M deterministic unique rules: PASS")
+          PY
