@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Development-split, auditable search of up to one million deterministic hypotheses.
+"""Development-split, auditable search of up to one million deterministic hypotheses with a blind holdout.
 
 Phase 1 screens every generated rule with a fast, point-in-time proxy on the
 last screen_days of a development-only window with cross-sectional coverage checks. Phase 2 runs exact walk-forward OOS + locked holdout
@@ -355,6 +355,7 @@ def main() -> None:
     ap.add_argument("--holdout-days", type=int, default=40)
     ap.add_argument("--purge-days", type=int, default=1)
     ap.add_argument("--min-trades", type=int, default=30)
+    ap.add_argument("--min-positive-fold-fraction", type=float, default=0.50)
     args = ap.parse_args()
 
     df = pd.read_csv(args.input)
@@ -423,12 +424,15 @@ def main() -> None:
                 development_end_idx, args.oos_days, args.holdout_days, args.purge_days, args.cost_bps
             )
             result.update({k: v for k, v in wf.items() if k != "folds_detail"})
+            positive_fold_min = int(np.ceil(result["folds"] * args.min_positive_fold_fraction))
             result["eligible"] = bool(
                 result["oos_trades"] >= args.min_trades
-                and result["oos_positive_folds"] >= 3
+                and result["oos_positive_folds"] >= positive_fold_min
                 and result["oos_return_sum"] > 0
-                and result["holdout_trades"] >= max(10, args.min_trades // 2)
+                and result["oos_return"] > 0
             )
+            result["selection_holdout_blind"] = True
+            result["positive_fold_min"] = positive_fold_min
             result["status"] = "passed_gate" if result["eligible"] else "rejected"
             result["folds_detail"] = wf["folds_detail"]
         except Exception as exc:
@@ -443,7 +447,7 @@ def main() -> None:
     results = pd.DataFrame([{k: v for k, v in x.items() if k != "folds_detail"} for x in final_rows])
     if not results.empty:
         passed = results[results["eligible"] == True].sort_values(
-            ["oos_return_sum", "holdout_return", "oos_positive_folds"],
+            ["oos_return_sum", "oos_t_stat", "oos_positive_folds"],
             ascending=False,
         )
     else:
@@ -451,7 +455,7 @@ def main() -> None:
     passed.to_csv(out / "passed.csv", index=False)
 
     manifest = {
-        "engine": "luna-one-million-staged-v2",
+        "engine": "luna-one-million-staged-v3",
         "trials_committed": committed,
         "max_trials_requested": args.max_trials,
         "finalists_exact": len(finalists),
@@ -463,11 +467,13 @@ def main() -> None:
         "oos_days": args.oos_days,
         "holdout_days": args.holdout_days,
         "purge_days": args.purge_days,
+        "min_positive_fold_fraction": args.min_positive_fold_fraction,
         "features_used": available,
         "input_sha256": hashlib.sha256(Path(args.input).read_bytes()).hexdigest(),
         "screen_definition": "deterministic development-only smooth tail-signal covariance proxy; screen window is inside development period and excludes one purge day before OOS",
-        "exact_definition": "cross-sectional percentile rules with walk-forward OOS and locked holdout",
-        "selection_warning": "All hypotheses are screened, but only finalists receive exact full-period evaluation; screen_proxy is not a return estimate. Multiple-testing correction is still required before treating a finalist as validated.",
+        "exact_definition": "cross-sectional percentile rules with forward OOS validation and a holdout that is computed for reporting but excluded from eligibility/ranking",
+        "selection_rule": "Eligibility and ranking use OOS only. Holdout is excluded from selection and is reported as blind confirmation. Majority-of-fold stability is required.",
+        "selection_warning": "All hypotheses are screened, but only finalists receive exact full-period evaluation; screen_proxy is not a return estimate. Multiple-testing correction and independent validation are still required before treating a finalist as validated.",
     }
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     print(json.dumps({
