@@ -1,0 +1,132 @@
+name: LUNA 1000 Formula Search - 5Y
+
+on:
+  push:
+    paths:
+      - ".github/workflows/luna-1000-5y.yml"
+      - "scripts/research/filter_last_5y.py"
+      - "scripts/one_million_search_staged.py"
+  workflow_dispatch:
+
+jobs:
+  search:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy python-dateutil
+
+      - name: Download historical SET dataset
+        run: |
+          mkdir -p data/raw
+          curl -fL --retry 3 --retry-delay 2 \
+            "https://data.mendeley.com/public-api/zip/gybmm9t3mr/download/1" \
+            -o data/raw/gybmm9t3mr-1.zip
+          test -s data/raw/gybmm9t3mr-1.zip
+
+      - name: Normalize SET history
+        run: |
+          python scripts/research/download_mendeley_set.py \
+            --zip data/raw/gybmm9t3mr-1.zip \
+            --output-dir data/set_2000_2025 \
+            --quarantine-invalid \
+            --max-invalid-rate 0.01
+
+      - name: Build canonical factor dataset
+        run: |
+          python scripts/research/build_factor_dataset.py \
+            --prices data/set_2000_2025/prices.csv \
+            --output data/set_2000_2025/factors.csv
+
+      - name: Restrict to trailing 5 years
+        run: |
+          python scripts/research/filter_last_5y.py \
+            --input data/set_2000_2025/factors.csv \
+            --output data/set_2000_2025/factors_5y.csv
+
+      - name: Run exactly 1000 deterministic hypotheses
+        run: |
+          rm -rf research/luna_1000_5y
+          python scripts/one_million_search_staged.py \
+            --input data/set_2000_2025/factors_5y.csv \
+            --output research/luna_1000_5y \
+            --max-trials 1000 \
+            --finalists 100 \
+            --screen-days 120 \
+            --development-fraction 0.60 \
+            --min-names-per-day 20 \
+            --cost-bps 45 \
+            --oos-days 20 \
+            --holdout-days 40 \
+            --purge-days 1 \
+            --min-trades 30 \
+            --min-positive-fold-fraction 0.50
+
+      - name: Multiple-testing diagnostics
+        run: |
+          python scripts/research/qa_multiple_testing.py \
+            --results research/luna_1000_5y/results.csv \
+            --manifest research/luna_1000_5y/manifest.json \
+            --output research/luna_1000_5y/multiple_testing.json
+
+      - name: Build compact repository result
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import pandas as pd
+
+          r = pd.read_csv("research/luna_1000_5y/results.csv")
+          passed = r[r["eligible"] == True].sort_values(
+              ["oos_return_sum","oos_t_stat","oos_positive_folds"],
+              ascending=False
+          )
+          out = {
+              "status": "COMPLETED",
+              "engine": "luna-one-million-staged-v3",
+              "trials": int(json.load(open("research/luna_1000_5y/manifest.json"))["trials_committed"]),
+              "window": json.load(open("research/luna_1000_5y/manifest.json"))["input_sha256"],
+              "tested": int(len(r)),
+              "eligible": int(len(passed)),
+              "top20_oos": passed.head(20).to_dict(orient="records"),
+              "note": "Selection/ranking uses OOS only; holdout is reported by the engine but excluded from eligibility."
+          }
+          Path("research-results/luna-1000-5y-result.json").write_text(
+              json.dumps(out, indent=2, default=str),
+              encoding="utf-8"
+          )
+          PY
+
+      - name: Save compact result
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research-results/luna-1000-5y-result.json
+          git diff --cached --quiet || git commit -m "Save LUNA 1000-formula 5Y research result"
+          git push
+
+      - name: Upload full research artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: luna-1000-5y-results
+          path: |
+            data/set_2000_2025/manifest.json
+            data/set_2000_2025/factors.manifest.json
+            research/luna_1000_5y/screen_top.csv
+            research/luna_1000_5y/results.csv
+            research/luna_1000_5y/passed.csv
+            research/luna_1000_5y/multiple_testing.json
+            research/luna_1000_5y/manifest.json
+          compression-level: 0
+          retention-days: 14
