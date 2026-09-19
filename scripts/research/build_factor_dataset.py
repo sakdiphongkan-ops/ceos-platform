@@ -144,15 +144,16 @@ def main() -> None:
             raise SystemExit("fundamentals require symbol and available_at")
         f["symbol"] = f["symbol"].astype("string").str.strip().str.upper()
         f["available_at"] = pd.to_datetime(f["available_at"], utc=True)
-        f = f.sort_values(["symbol","available_at"])
-        keep = ["symbol","available_at"] + [c for c in f.columns if c.lower() in set(FUND_COLS.values())]
+        f = f.rename(columns={"available_at":"fund_available_at"})
+        f = f.sort_values(["symbol","fund_available_at"])
+        keep = ["symbol","fund_available_at"] + [c for c in f.columns if c.lower() in set(FUND_COLS.values())]
         keep = list(dict.fromkeys([c for c in keep if c in f.columns]))
         f = f[keep].copy()
         p = pd.merge_asof(
             p.sort_values(["decision_ts","symbol"]),
-            f.sort_values(["available_at","symbol"]),
+            f.sort_values(["fund_available_at","symbol"]),
             left_on="decision_ts",
-            right_on="available_at",
+            right_on="fund_available_at",
             by="symbol",
             direction="backward",
             suffixes=("", "_fund"),
@@ -162,7 +163,7 @@ def main() -> None:
                 p[out_name] = pd.to_numeric(p[src], errors="coerce")
             elif out_name not in p.columns:
                 p[out_name] = np.nan
-        p["available_at"] = p[["available_at","decision_ts"]].min(axis=1)
+        p["available_at"] = p[["available_at","fund_available_at"]].max(axis=1)
     else:
         for c in [c for c in OUT_COLS if c.isupper() and c not in p.columns]:
             p[c] = np.nan
