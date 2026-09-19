@@ -130,7 +130,11 @@ function run(data:Map<string,Bar[]>, scores:Map<string,any>) {
   const trades:any[]=[];
   const allTimes=Array.from(new Set(Array.from(data.values()).flat().map(x=>x.ts))).sort((a,b)=>a-b);
   const idx=new Map<string,Map<number,number>>();
-  for(const [s,b] of data){const m=new Map<number,number>();b.forEach((x,i)=>m.set(x.ts,i));idx.set(s,m);}
+  data.forEach((b,s)=>{
+    const m=new Map<number,number>();
+    b.forEach((x,i)=>m.set(x.ts,i));
+    idx.set(s,m);
+  });
   let peak=INITIAL,maxDD=0;
   for(let ti=0;ti<allTimes.length;ti++){
     const ts=allTimes[ti],next=allTimes[ti+1];
