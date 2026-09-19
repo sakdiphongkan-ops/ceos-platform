@@ -13,6 +13,7 @@ on:
       - "scripts/one_million_search.py"
       - "scripts/one_million_search_staged.py"
       - "scripts/tests/test_one_million_search_staged.py"
+      - "scripts/tests/test_one_million_search_staged.py"
   workflow_dispatch:
 
 jobs:
@@ -56,7 +57,7 @@ jobs:
 
       - name: Staged 1M hypothesis search on real SET data
         run: |
-          rm -rf research/one_million
+          rm -rf research/one_million_v2
           python scripts/one_million_search_staged.py             --input data/set_2000_2025/factors.csv             --output research/one_million             --max-trials 1000000             --finalists 200             --screen-days 120             --cost-bps 45             --train-days 120             --oos-days 20             --holdout-days 40             --min-trades 30
 
       - name: Upload research results artifact
@@ -67,10 +68,10 @@ jobs:
             data/set_2000_2025/manifest.json
             data/set_2000_2025/invalid_rows.csv
             data/set_2000_2025/factors.manifest.json
-            research/one_million/screen_ledger.jsonl.gz
-            research/one_million/screen_top.csv
-            research/one_million/results.csv
-            research/one_million/passed.csv
-            research/one_million/manifest.json
+            research/one_million_v2/screen_ledger.jsonl.gz
+            research/one_million_v2/screen_top.csv
+            research/one_million_v2/results.csv
+            research/one_million_v2/passed.csv
+            research/one_million_v2/manifest.json
           compression-level: 0
           retention-days: 14
