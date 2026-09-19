@@ -14,7 +14,7 @@ on:
 jobs:
   download-set-history:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     permissions:
       contents: read
 
@@ -48,8 +48,8 @@ jobs:
 
       - name: Pilot 1M engine on real SET data
         run: |
-          rm -rf research/pilot_5000
-          python scripts/one_million_search.py             --input data/set_2000_2025/factors.csv             --output research/pilot_5000             --max-trials 5000             --cost-bps 45             --train-days 120             --oos-days 20             --holdout-days 40             --min-trades 30
+          rm -rf research/pilot_20
+          python scripts/one_million_search.py             --input data/set_2000_2025/factors.csv             --output research/pilot_20             --max-trials 20             --cost-bps 45             --train-days 120             --oos-days 20             --holdout-days 40             --min-trades 30
 
       - name: Upload research dataset artifact
         uses: actions/upload-artifact@v4
