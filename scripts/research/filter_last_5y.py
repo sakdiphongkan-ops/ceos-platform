@@ -31,7 +31,7 @@ def main() -> None:
         "symbols": int(out["symbol"].nunique()),
         "start": str(min(out["date"])),
         "end": str(max(out["date"])),
-        "window": "trailing-5-calendar-years"
+        "window": "trailing-5-calendar-years-v1"
     })
 
 if __name__ == "__main__":
