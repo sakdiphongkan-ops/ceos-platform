@@ -9,8 +9,10 @@ SET/mai raw files
 -> normalized EOD / fundamentals / corporate actions
 -> `build_factor_dataset.py`
 -> `factor.csv`
--> `scripts/one_million_search.py`
--> OOS + holdout + costs
+-> `scripts/one_million_search_staged.py`
+-> deterministic 1M screen
+-> exact finalists
+-> OOS + locked holdout + costs
 
 ## Required price columns
 
@@ -61,5 +63,7 @@ python scripts/one_million_search.py \
 - Missing factors stay missing; they are not fabricated.
 - Corporate actions remain a separate audit table.
 - The 1M engine must not use the final holdout to generate or tune rules.
+- A one-day purge is used at train/OOS and OOS/holdout boundaries because `fwd_return_1d` points to the next trading observation.
+- Every hypothesis is screened; only deterministic finalists receive exact full-period OOS/holdout evaluation. The screen score is a ranking proxy, not a return estimate.
 
 The Supabase schema lives in `migrations/002_luna_research_data_layer_v1.sql`.
