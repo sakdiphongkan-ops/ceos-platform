@@ -44,12 +44,14 @@ def main() -> None:
         "finalists_evaluated": int(len(df)),
         "diagnostic_method": "two-sided normal approximation from reported t-statistics; conservative family-wise correction uses all 1M hypotheses",
         "bonferroni_alpha_0_05": 0.05 / m,
-        "oos_min_bonferroni_p": float(min((p for p in oos_p.dropna()), default=1.0)),
-        "holdout_min_bonferroni_p": float(min((p for p in hold_p.dropna()), default=1.0)),
+        "oos_min_bonferroni_p_all_directions": float(min((p for p in oos_p.dropna()), default=1.0)),
+        "holdout_min_bonferroni_p_all_directions": float(min((p for p in hold_p.dropna()), default=1.0)),
         "oos_max_positive_t": float(oos_t[oos_t > 0].max()) if (oos_t > 0).any() else None,
         "holdout_max_positive_t": float(hold_t[hold_t > 0].max()) if (hold_t > 0).any() else None,
-        "oos_finalists_below_bonferroni_alpha": int((oos_p < 0.05 / m).sum()),
-        "holdout_finalists_below_bonferroni_alpha": int((hold_p < 0.05 / m).sum()),
+        "oos_best_positive_p": float(min((p for p, t in zip(oos_p, oos_t) if math.isfinite(p) and math.isfinite(t) and t > 0), default=1.0)),
+        "holdout_best_positive_p": float(min((p for p, t in zip(hold_p, hold_t) if math.isfinite(p) and math.isfinite(t) and t > 0), default=1.0)),
+        "oos_positive_finalists_below_bonferroni_alpha": int(((oos_p < 0.05 / m) & (oos_t > 0)).sum()),
+        "holdout_positive_finalists_below_bonferroni_alpha": int(((hold_p < 0.05 / m) & (hold_t > 0)).sum()),
         "warning": "This is a diagnostic, not a formal dependent-data p-value. Serial correlation, data-mining dependence, and the staged screen can make ordinary t-statistics anti-conservative.",
     }
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)
