@@ -602,6 +602,7 @@ def main() -> None:
                 and result["oos_positive_folds"] >= positive_fold_min
                 and result["oos_return_sum"] > 0
                 and result["oos_return"] > 0
+                and result["oos_hurdle_pass"]
             )
             result["selection_holdout_blind"] = True
             result["positive_fold_min"] = positive_fold_min
