@@ -186,21 +186,106 @@ function SignalBadge({signal,large=false}:{signal:"BUY"|"SELL"|"HOLD";large?:boo
 }
 function SideBadge({side}:{side:"BUY"|"SELL"}) { return <span className={`side-badge ${side.toLowerCase()}`}>{side}</span>; }
 function StatusBadge({status}:{status:string}) { return <span className={`status-badge ${status.toLowerCase()}`}>{status}</span>; }
-function ResearchPanel({feed}:{feed:LunaFeed|null}) {
-  const strategy = feed?.sessions?.[0]?.strategy_version ?? "luna-th1h-v1.0.0";
-  const tickCount = feed?.ticks?.length ?? 0;
-  const feedStatus = feed ? "Connected" : "Unavailable";
+function ResearchPanel() {
+  const [data, setData] = useState<any|null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [showAll, setShowAll] = useState(false);
+
+  const run = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/backtest/tournament100?mode=signal&universe=full", { cache: "no-store" });
+      if (!res.ok) throw new Error(`Backtest API ${res.status}`);
+      const json = await res.json();
+      setData(json);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to load research results");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { run(); }, [run]);
+
+  const rows = showAll ? (data?.allResults ?? []) : (data?.top20 ?? []);
+
   return (
-    <section className="research-panel">
-      <h3>Walk-forward validation</h3>
-      <p>Train 60% · Validation 20% · Test 20%</p>
-      <p>Strategy: {strategy}</p>
-      <p>Session ticks: {tickCount}</p>
-      <p>Live feed: {feedStatus}</p>
-      <p>Paper only · No live orders are created by this view.</p>
-      <p>Historical source: SET Intraday / Tick Data</p>
-      <p>Status: WAITING FOR LICENSED DATA</p>
-    </section>
+    <div style={{display:"grid",gap:14}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+        <div>
+          <div className="section-label">FORMULA RESEARCH</div>
+          <h3 style={{margin:"4px 0 4px"}}>100 สูตร — ผลทดสอบจริงจาก backtest engine</h3>
+          <p style={{margin:0,opacity:.68}}>
+            {data ? `${data.period?.start ?? "—"} → ${data.period?.end ?? "—"} · ${data.data?.bars15m ?? 0} bars · ${data.data?.symbolsReturned ?? 0}/${data.data?.universeCount ?? 0} symbols` : "กำลังโหลดผลทดสอบ…"}
+          </p>
+        </div>
+        <button onClick={run} disabled={loading} className="filter-button">
+          <RefreshCw size={14}/>{loading ? "Loading…" : "Refresh results"}
+        </button>
+      </div>
+
+      {error && (
+        <div className="error-banner">
+          <span>{error}</span>
+          <button onClick={run}>Retry</button>
+        </div>
+      )}
+
+      {!error && !data && loading && (
+        <div className="loading-state"><RefreshCw size={17}/> Loading backtest results…</div>
+      )}
+
+      {data && (
+        <>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:10}}>
+            <div className="mini-card"><div className="mini-title">Strategies tested</div><strong style={{fontSize:24}}>{data.strategiesTested ?? 0}</strong><div className="muted">signal study</div></div>
+            <div className="mini-card"><div className="mini-title">Universe</div><strong style={{fontSize:24}}>{data.data?.symbolsReturned ?? 0}/{data.data?.universeCount ?? 0}</strong><div className="muted">symbols with data</div></div>
+            <div className="mini-card"><div className="mini-title">Trading cost</div><strong style={{fontSize:24}}>{data.rules?.costModelBps ?? 0} bps</strong><div className="muted">fee + tax + slippage</div></div>
+            <div className="mini-card"><div className="mini-title">Ranking</div><strong style={{fontSize:24}}>Net bps</strong><div className="muted">after stated costs</div></div>
+          </div>
+
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr><th>#</th><th>FAMILY</th><th>FORMULA</th><th>SIGNALS</th><th>WIN %</th><th>AVG NET BPS</th><th>MEDIAN</th><th>PF</th><th>TOTAL NET BPS</th></tr>
+              </thead>
+              <tbody>
+                {rows.length ? rows.map((r:any, i:number) => (
+                  <tr key={`${r.id}-${i}`}>
+                    <td>{i+1}</td>
+                    <td><span className="signal-badge hold">{r.family}</span></td>
+                    <td><div><strong>{r.name}</strong></div><div className="muted">{r.source}</div></td>
+                    <td>{r.signals}</td>
+                    <td>{Number(r.winRate ?? 0).toFixed(2)}%</td>
+                    <td className={(r.avgNetBps ?? 0) >= 0 ? "positive" : "negative"}>{Number(r.avgNetBps ?? 0).toFixed(2)}</td>
+                    <td className={(r.medianNetBps ?? 0) >= 0 ? "positive" : "negative"}>{Number(r.medianNetBps ?? 0).toFixed(2)}</td>
+                    <td>{Number(r.profitFactor ?? 0) >= 999 ? "∞" : Number(r.profitFactor ?? 0).toFixed(2)}</td>
+                    <td className={(r.totalNetBps ?? 0) >= 0 ? "positive" : "negative"}><strong>{Number(r.totalNetBps ?? 0).toFixed(2)}</strong></td>
+                  </tr>
+                )) : <tr><td colSpan={9} className="empty-table">No research results returned.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+            <div className="muted">Showing {rows.length} of {(data.allResults ?? []).length} strategies</div>
+            <button className="filter-button" onClick={()=>setShowAll(v=>!v)}>
+              {showAll ? "Show top 20" : "Show all 100"}
+            </button>
+          </div>
+
+          <div className="mini-card" style={{borderColor:"#eadfae"}}>
+            <div className="mini-title">Research validity</div>
+            <div style={{lineHeight:1.55}}>
+              Entry = completed 15m close → next 15m open · fixed horizon = {data.rules?.fixedHorizonBars ?? 4} bars · lookahead controlled by the research engine.
+              This is a research proxy using accessible public market data, not a licensed point-in-time SETSMART dataset.
+            </div>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
