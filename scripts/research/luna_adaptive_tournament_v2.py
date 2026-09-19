@@ -153,6 +153,7 @@ def main():
       "lookback_months":args.lookback_months,"min_history_months":args.min_history_months,
       "cost_bps_per_one_way_turnover":args.cost_bps,
       "benchmark_included":"M1_REV_K20",
+      "data_contiguity_guard":"forward return is used only when the next observation is exactly the next calendar month",
       "initial_capital_baht":30000,
       "leakage_guard":"month t selection uses only strictly prior months; t return is never in selection history"
     }
