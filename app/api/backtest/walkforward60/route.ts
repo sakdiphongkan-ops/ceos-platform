@@ -92,7 +92,8 @@ function monteCarlo(rows:Trade[],iterations=3000){
 export async function GET(req:Request){
  const u=new URL(req.url);
  const batch=Math.max(0,Math.min(4,Number(u.searchParams.get("batch")??"0")));
- const requestedLookbackDays=Math.max(30,Math.min(60,Number(u.searchParams.get("days")??"60")));\n const lookbackDays=Math.min(59,requestedLookbackDays);
+ const requestedLookbackDays=Math.max(30,Math.min(60,Number(u.searchParams.get("days")??"60")));
+ const lookbackDays=Math.min(59,requestedLookbackDays);
  const start=Math.floor((Date.now()-lookbackDays*86400000)/1000),end=Math.floor(Date.now()/1000);
  const selected=SYMBOLS.slice(batch*10,batch*10+10);
  const fetched=await Promise.allSettled(selected.map(s=>fetchBars(s,start,end)));
