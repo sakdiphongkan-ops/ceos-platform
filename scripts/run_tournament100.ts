@@ -1,4 +1,3 @@
-async function main(){
 import { buildSeries, makeStrategies, fetchBars, runSignalStudy } from "../lib/tournament100-core";
 async function main(){
 const SYMBOLS = [
@@ -66,10 +65,6 @@ const output = {
 };
 
 console.log(JSON.stringify(output, null, 2));
-
-}
-
-main().catch((error)=>{ console.error(error); process.exit(1); });
 }
 
 main().catch((error)=>{ console.error(error); process.exit(1); });
