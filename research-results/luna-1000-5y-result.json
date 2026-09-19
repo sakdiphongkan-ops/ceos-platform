@@ -1,7 +1,7 @@
 {
   "status": "COMPLETED",
   "engine": "luna-one-million-staged-v3",
-  "trials": 930,
+  "trials": 1000,
   "window": "bee64d33af4fbdf48db5fc52302a7d8e6b9d19a6cf4359b7ec9062af20921711",
   "tested": 100,
   "eligible": 0,
