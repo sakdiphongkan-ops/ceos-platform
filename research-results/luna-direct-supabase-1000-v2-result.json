@@ -1,0 +1,94 @@
+{
+  "status": "COMPLETED",
+  "engine": "luna-direct-supabase-1000-v2",
+  "dataset_rows": 51562,
+  "months": 59,
+  "period": [
+    "2021-09-01",
+    "2026-07-01"
+  ],
+  "formula_count": 1000,
+  "k": 20,
+  "cost_bps": 20,
+  "lookback_months": 24,
+  "min_history_months": 12,
+  "active_factors": [
+    "mom1",
+    "mom3",
+    "mom6",
+    "high52_ratio",
+    "vol20",
+    "avg_amount20"
+  ],
+  "excluded_factor": "maxdd60 (0% coverage in persisted monthly table)",
+  "adaptive": {
+    "months": 47,
+    "geometric_monthly_return": 0.004841594503101065,
+    "cumulative_return": 0.2548372073088314,
+    "positive_month_pct": 0.5957446808510638,
+    "max_drawdown_pct": -0.31419318995655343,
+    "final_capital_baht": 37645.11621926494,
+    "months_ge_7pct": 6
+  },
+  "exact_persisted_m1": {
+    "months": 59,
+    "geometric_monthly_return": 0.006556127881564541,
+    "cumulative_return": 0.4704214597467422,
+    "positive_month_pct": 0.5423728813559322,
+    "min_monthly_return": -0.18410469861537182,
+    "max_monthly_return": 0.2729953180463913
+  },
+  "adaptive_selection_frequency": [
+    [
+      "F0141",
+      22
+    ],
+    [
+      "F0890",
+      12
+    ],
+    [
+      "F0635",
+      5
+    ],
+    [
+      "F0227",
+      4
+    ],
+    [
+      "F0807",
+      2
+    ],
+    [
+      "F0789",
+      1
+    ],
+    [
+      "F0769",
+      1
+    ]
+  ],
+  "top_full_period_formulas": [
+    [
+      "F0890",
+      0.016775497725415978
+    ],
+    [
+      "F0807",
+      0.016256078812554087
+    ],
+    [
+      "F0717",
+      0.015007897275145954
+    ],
+    [
+      "F0195",
+      0.013990896437424905
+    ],
+    [
+      "F0432",
+      0.013180853678109061
+    ]
+  ],
+  "note": "Emergency direct audit executed through the connected Supabase database. Formula generation is deterministic hash-seeded and is not identical to the NumPy PCG64 catalog in GitHub tournament v2. Do not treat this as the official v2 artifact; it is a cross-check while Actions fallback is being repaired."
+}
