@@ -38,7 +38,16 @@ def main():
     df["month_end"]=pd.to_datetime(df.month_end).dt.to_period("M").dt.to_timestamp("M")
     df=df.sort_values(["month_end","symbol"]).drop_duplicates(["month_end","symbol"])
     df["adj_close"]=pd.to_numeric(df.adj_close,errors="coerce")
-    df["fwd1"]=df.groupby("symbol").adj_close.shift(-1)/df.adj_close-1
+    # Strict calendar-contiguous forward return: a missing month is NOT a 1M return.
+    df["_next_month"]=df.groupby("symbol").month_end.shift(-1)
+    df["_next_adj_close"]=df.groupby("symbol").adj_close.shift(-1)
+    expected=df.month_end+pd.offsets.MonthEnd(1)
+    df["fwd1"]=np.where(
+        df["_next_month"].eq(expected),
+        df["_next_adj_close"]/df.adj_close-1,
+        np.nan,
+    )
+    df.drop(columns=["_next_month","_next_adj_close"],inplace=True)
     for f in FACTORS: df[f]=pd.to_numeric(df[f],errors="coerce")
     months=sorted(df.month_end.dropna().unique())
     # Cross-sectional percentile ranks, computed independently each month.
