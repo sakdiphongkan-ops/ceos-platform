@@ -1,5 +1,9 @@
 name: LUNA 1000 Formula Search - 5Y
 
+concurrency:
+  group: luna-1000-5y
+  cancel-in-progress: true
+
 on:
   push:
     paths:
