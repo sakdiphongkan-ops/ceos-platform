@@ -61,8 +61,9 @@ jobs:
 
       - name: Staged 1M hypothesis search v2 on real SET data
         run: |
-          rm -rf research/one_million_v2
-          python scripts/one_million_search_staged.py             --input data/set_2000_2025/factors.csv             --output research/one_million_v2             --max-trials 1000000             --finalists 200             --screen-days 120             --development-fraction 0.60             --min-names-per-day 20             --cost-bps 45             --oos-days 20             --holdout-days 40             --purge-days 1             --min-trades 30
+          rm -rf research/one_million_v3
+          python scripts/one_million_search_staged.py             --input data/set_2000_2025/factors.csv             --output research/one_million_v2             --max-trials 1000000             --finalists 200             --screen-days 120             --development-fraction 0.60             --min-names-per-day 20             --cost-bps 45             --oos-days 20             --holdout-days 40             --purge-days 1             --min-trades 30 \
+            --min-positive-fold-fraction 0.50
 
       - name: Upload research results artifact
         uses: actions/upload-artifact@v4
@@ -74,10 +75,10 @@ jobs:
             data/set_2000_2025/factors.manifest.json
             research/return_qa.json
             research/return_extremes.csv
-            research/one_million_v2/screen_ledger.jsonl.gz
-            research/one_million_v2/screen_top.csv
-            research/one_million_v2/results.csv
-            research/one_million_v2/passed.csv
-            research/one_million_v2/manifest.json
+            research/one_million_v3/screen_ledger.jsonl.gz
+            research/one_million_v3/screen_top.csv
+            research/one_million_v3/results.csv
+            research/one_million_v3/passed.csv
+            research/one_million_v3/manifest.json
           compression-level: 0
           retention-days: 14
