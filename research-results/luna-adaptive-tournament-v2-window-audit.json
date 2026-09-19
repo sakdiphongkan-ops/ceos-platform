@@ -1,0 +1,14 @@
+{
+  "status": "INVALIDATED_FOR_5Y_COMPARISON",
+  "affected_commit": "469d8dc9807ea048f534822aed325c004c0586b7",
+  "affected_result": "research-results/luna-adaptive-tournament-v2-summary.json",
+  "reason": "The no-secret fallback downloaded the public historical dataset but the workflow originally failed to trim the monthly factor table to its trailing five calendar years. The completed run therefore covered 475 traded months beginning in 1985-08-31, not the intended trailing-5-year window.",
+  "action_taken": [
+    "Added scripts/research/filter_last_5y_monthly.py",
+    "Updated the adaptive tournament fallback to apply the strict trailing-5-year filter",
+    "Added a validation guard requiring 40-72 traded months",
+    "Updated the holdout fallback to use the same filtered dataset"
+  ],
+  "do_not_use_for_conclusion": true,
+  "replacement_run_sha": "de7c2cce9c656ce50e9d52275a576631cf18d400"
+}
