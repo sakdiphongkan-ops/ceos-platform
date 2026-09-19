@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Staged, auditable search of up to one million deterministic hypotheses.
+"""Development-split, auditable search of up to one million deterministic hypotheses.
 
-Phase 1 screens every generated rule with a fast, point-in-time proxy on a
-training-only window. Phase 2 runs exact walk-forward OOS + locked holdout
+Phase 1 screens every generated rule with a fast, point-in-time proxy on the
+last screen_days of a development-only window with cross-sectional coverage checks. Phase 2 runs exact walk-forward OOS + locked holdout
 evaluation on the deterministic top-N finalists.
 
 This avoids pretending that 1M rules x millions of rows can be brute-forced
@@ -121,19 +121,28 @@ def build_screen_stats(
     df: pd.DataFrame,
     features: list[str],
     screen_days: int,
-    train_days: int,
-    oos_days: int,
+    development_end_idx: int,
+    screen_days: int,
     holdout_days: int,
     purge_days: int,
+    min_names_per_day: int,
 ) -> dict[tuple[str, str, float], tuple[float, float, float]]:
     dates = sorted(df["date"].unique())
-    screen_end = train_days - purge_days
-    if screen_end <= 0 or len(dates) < train_days + oos_days + holdout_days + purge_days:
-        raise ValueError("Not enough dates for screen/OOS/holdout/purge")
+    screen_end = development_end_idx - purge_days
+    if screen_end <= 0 or len(dates) <= development_end_idx + holdout_days + purge_days:
+        raise ValueError("Not enough dates for development/OOS/holdout/purge")
     end = screen_end
     start = max(0, end - screen_days)
     screen_dates = set(dates[start:end])
     s = df[df["date"].isin(screen_dates)].copy()
+    daily_counts = s.groupby("date")["symbol"].transform("count")
+    s = s.loc[daily_counts >= min_names_per_day].copy()
+    valid_screen_dates = s["date"].nunique()
+    if valid_screen_dates < max(30, screen_days // 2):
+        raise ValueError(
+            f"Insufficient screen coverage: {valid_screen_dates} valid days "
+            f"with >= {min_names_per_day} names"
+        )
     y = s["fwd_return"].to_numpy(dtype=np.float64)
     stats = {}
     for f in features:
@@ -280,20 +289,20 @@ def exact_walk_forward(
     dates: list,
     starts: np.ndarray,
     ends: np.ndarray,
-    train_days: int,
+    development_end_idx: int,
     oos_days: int,
     holdout_days: int,
     purge_days: int,
     cost_bps: float,
 ) -> dict:
     n_days = len(dates)
-    if n_days < train_days + oos_days + holdout_days + purge_days:
-        raise ValueError("Not enough dates for train/OOS/holdout/purge windows")
+    if n_days <= development_end_idx + oos_days + holdout_days + purge_days:
+        raise ValueError("Not enough dates for development/OOS/holdout/purge windows")
     holdout_start = n_days - holdout_days
     oos_end_limit = holdout_start - purge_days
-    n_folds = (oos_end_limit - train_days) // oos_days
-    oos_start = train_days
-    oos_end = train_days + n_folds * oos_days
+    n_folds = (oos_end_limit - development_end_idx) // oos_days
+    oos_start = development_end_idx
+    oos_end = development_end_idx + n_folds * oos_days
 
     oos_daily, oos_counts = exact_period(
         rule, ranks, rets, day_ids, starts, ends, oos_start, oos_end, cost_bps / 10000.0
@@ -340,8 +349,9 @@ def main() -> None:
     ap.add_argument("--max-trials", type=int, default=1_000_000)
     ap.add_argument("--finalists", type=int, default=200)
     ap.add_argument("--screen-days", type=int, default=120)
+    ap.add_argument("--development-fraction", type=float, default=0.60)
+    ap.add_argument("--min-names-per-day", type=int, default=20)
     ap.add_argument("--cost-bps", type=float, default=45.0)
-    ap.add_argument("--train-days", type=int, default=120)
     ap.add_argument("--oos-days", type=int, default=20)
     ap.add_argument("--holdout-days", type=int, default=40)
     ap.add_argument("--purge-days", type=int, default=1)
@@ -362,8 +372,18 @@ def main() -> None:
     out = Path(args.output)
     out.mkdir(parents=True, exist_ok=True)
 
+    dates = sorted(df["date"].unique())
+    development_end_idx = int(len(dates) * args.development_fraction)
+    if development_end_idx <= args.screen_days + args.purge_days:
+        raise SystemExit("development_fraction leaves too little screen history")
     stats = build_screen_stats(
-        df, available, args.screen_days, args.train_days, args.oos_days, args.holdout_days, args.purge_days
+        df,
+        available,
+        development_end_idx,
+        args.screen_days,
+        args.holdout_days,
+        args.purge_days,
+        args.min_names_per_day,
     )
 
     heap: list[tuple[float, int, dict]] = []
@@ -401,7 +421,7 @@ def main() -> None:
         try:
             wf = exact_walk_forward(
                 rule, ranks, rets, day_ids, dates, starts, ends,
-                args.train_days, args.oos_days, args.holdout_days, args.purge_days, args.cost_bps
+                development_end_idx, args.oos_days, args.holdout_days, args.purge_days, args.cost_bps
             )
             result.update({k: v for k, v in wf.items() if k != "folds_detail"})
             result["eligible"] = bool(
@@ -432,19 +452,21 @@ def main() -> None:
     passed.to_csv(out / "passed.csv", index=False)
 
     manifest = {
-        "engine": "luna-one-million-staged-v1",
+        "engine": "luna-one-million-staged-v2",
         "trials_committed": committed,
         "max_trials_requested": args.max_trials,
         "finalists_exact": len(finalists),
         "screen_days": args.screen_days,
+        "development_fraction": args.development_fraction,
+        "development_end_idx": development_end_idx,
+        "min_names_per_day": args.min_names_per_day,
         "cost_bps": args.cost_bps,
-        "train_days": args.train_days,
         "oos_days": args.oos_days,
         "holdout_days": args.holdout_days,
         "purge_days": args.purge_days,
         "features_used": available,
         "input_sha256": hashlib.sha256(Path(args.input).read_bytes()).hexdigest(),
-        "screen_definition": "deterministic training-only smooth tail-signal covariance proxy with one-day purge before OOS",
+        "screen_definition": "deterministic development-only smooth tail-signal covariance proxy; screen window is inside development period and excludes one purge day before OOS",
         "exact_definition": "cross-sectional percentile rules with walk-forward OOS and locked holdout",
         "selection_warning": "All hypotheses are screened, but only finalists receive exact full-period evaluation; screen_proxy is not a return estimate. Multiple-testing correction is still required before treating a finalist as validated.",
     }
