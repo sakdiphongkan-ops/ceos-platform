@@ -49,13 +49,19 @@ def main():
     )
     df.drop(columns=["_next_month","_next_adj_close"],inplace=True)
     for f in FACTORS: df[f]=pd.to_numeric(df[f],errors="coerce")
+    factor_coverage={f:float(df[f].notna().mean()) for f in FACTORS}
+    active_factors=[f for f in FACTORS if factor_coverage[f] >= 0.80]
+    if len(active_factors) < 3:
+        raise SystemExit(f"Need at least 3 factors with >=80% coverage; coverage={factor_coverage}")
     months=sorted(df.month_end.dropna().unique())
-    # Cross-sectional percentile ranks, computed independently each month.
+    # Cross-sectional ranks: sparse factor values stay NaN and only prevent
+    # scores for formulas that actually use the missing factor.
     R=np.stack([
         df.groupby("month_end")[f].rank(pct=True,method="average").to_numpy()
-        for f in FACTORS
+        for f in active_factors
     ],axis=1)
-    valid=np.isfinite(df.fwd1.to_numpy()) & np.all(np.isfinite(R),axis=1)
+    factor_pos={f:i for i,f in enumerate(active_factors)}
+    valid=np.isfinite(df.fwd1.to_numpy())
     df=df.loc[valid].reset_index(drop=True); R=R[valid]; y=df.fwd1.to_numpy()
     months=sorted(df.month_end.unique())
     month_idx={m:i for i,m in enumerate(months)}
@@ -63,8 +69,8 @@ def main():
     rng=np.random.default_rng(args.seed)
     formulas=[{"id":"M1_REV_K20","terms":[("mom1",-1.0)]}]
     for i in range(1,args.formula_count):
-        n=int(rng.integers(2,5))
-        inds=rng.choice(len(FACTORS),size=n,replace=False)
+        n=int(rng.integers(2,min(5,len(active_factors)+1)))
+        inds=rng.choice(len(active_factors),size=n,replace=False)
         raw=rng.uniform(0.25,1.0,size=n)
         signs=rng.choice([-1.0,1.0],size=n)
         w=(raw*signs); w=w/np.sum(np.abs(w))
@@ -73,15 +79,15 @@ def main():
     # Candidate returns: each formula uses equal-weight top-K and a turnover-aware cost.
     candidates={}
     month_arrays={m:np.where(df.month_end.to_numpy()==m)[0] for m in months}
-    factor_pos={f:i for i,f in enumerate(FACTORS)}
     for formula in formulas:
         ret=[]; prev=set()
-        weights=np.zeros(len(FACTORS))
+        weights=np.zeros(len(active_factors))
         for f,w in formula["terms"]: weights[factor_pos[f]]=w
         for m in months:
             ix=month_arrays[m]
             score=R[ix]@weights
-            order=ix[np.argsort(-score,kind="mergesort")]
+            finite=np.isfinite(score)
+            order=ix[finite][np.argsort(-score[finite],kind="mergesort")]
             chosen=order[:args.k]
             if len(chosen)==0: continue
             gross=float(np.nanmean(y[chosen]))
@@ -146,6 +152,8 @@ def main():
       "status":"COMPLETED","engine":"luna-adaptive-tournament-v2",
       "dataset_sha256":hashlib.sha256(Path(args.input).read_bytes()).hexdigest(),
       "formula_count":len(formulas),"months_traded":len(r),
+      "factor_coverage":factor_coverage,"active_factors":active_factors,
+      "excluded_sparse_factors":[f for f in FACTORS if f not in active_factors],
       "geometric_monthly_return":adaptive_stats["geometric_monthly_return"],
       "cumulative_return":adaptive_stats["cumulative_return"],
       "positive_month_pct":adaptive_stats["positive_month_pct"],
