@@ -13,7 +13,6 @@ on:
       - "scripts/one_million_search.py"
       - "scripts/one_million_search_staged.py"
       - "scripts/tests/test_one_million_search_staged.py"
-      - "scripts/tests/test_one_million_search_staged.py"
   workflow_dispatch:
 
 jobs:
@@ -55,10 +54,10 @@ jobs:
         run: |
           python scripts/research/build_factor_dataset.py             --prices data/set_2000_2025/prices.csv             --output data/set_2000_2025/factors.csv
 
-      - name: Staged 1M hypothesis search on real SET data
+      - name: Staged 1M hypothesis search v2 on real SET data
         run: |
           rm -rf research/one_million_v2
-          python scripts/one_million_search_staged.py             --input data/set_2000_2025/factors.csv             --output research/one_million             --max-trials 1000000             --finalists 200             --screen-days 120             --cost-bps 45             --train-days 120             --oos-days 20             --holdout-days 40             --min-trades 30
+          python scripts/one_million_search_staged.py             --input data/set_2000_2025/factors.csv             --output research/one_million_v2             --max-trials 1000000             --finalists 200             --screen-days 120             --development-fraction 0.60             --min-names-per-day 20             --cost-bps 45             --oos-days 20             --holdout-days 40             --purge-days 1             --min-trades 30
 
       - name: Upload research results artifact
         uses: actions/upload-artifact@v4
