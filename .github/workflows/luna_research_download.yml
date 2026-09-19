@@ -47,24 +47,33 @@ jobs:
 
           (async () => {
             const browser = await chromium.launch({headless:true});
-            const page = await browser.newPage({acceptDownloads:true});
-            await page.goto("https://data.mendeley.com/datasets/gybmm9t3mr/1", {waitUntil:"domcontentloaded", timeout:120000});
-            await page.waitForTimeout(5000);
+          const page = await browser.newPage({acceptDownloads:true});
+          await page.goto("https://data.mendeley.com/datasets/gybmm9t3mr/1", {waitUntil:"domcontentloaded", timeout:120000});
+          await page.waitForTimeout(3000);
 
-            const buttons = page.getByText(/Download All/i);
-            const count = await buttons.count();
-            if (!count) throw new Error("Download All button not found");
+          for (const selector of [
+            "#onetrust-accept-btn-handler",
+            "button:has-text('Accept All Cookies')",
+            "button:has-text('Accept All')"
+          ]) {
+            const el = page.locator(selector).first();
+            if (await el.count() && await el.isVisible().catch(()=>false)) {
+              await el.click({force:true}).catch(()=>{});
+              break;
+            }
+          }
 
-            const button = buttons.first();
-            const downloadPromise = page.waitForEvent("download", {timeout:120000});
-            await button.click();
-            const download = await downloadPromise;
-            const failure = await download.failure();
-            if (failure) throw new Error("Mendeley download failed: " + failure);
+          const href = await page.locator("#download-all").getAttribute("href");
+          if (!href) throw new Error("Mendeley download URL not found");
+          const url = new URL(href, "https://data.mendeley.com/").href;
+          console.log("Downloading:", url);
 
-            await download.saveAs("data/raw/gybmm9t3mr-1.zip");
-            console.log("Downloaded:", await download.suggestedFilename());
-            await browser.close();
+          const res = await fetch(url, {redirect:"follow"});
+          if (!res.ok) throw new Error("Mendeley HTTP " + res.status);
+          const buf = Buffer.from(await res.arrayBuffer());
+          fs.writeFileSync("data/raw/gybmm9t3mr-1.zip", buf);
+          console.log("Downloaded bytes:", buf.length);
+          await browser.close();
           })().catch(err => { console.error(err); process.exit(1); });
           NODE
 
