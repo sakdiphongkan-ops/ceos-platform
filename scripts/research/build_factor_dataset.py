@@ -107,8 +107,8 @@ def main() -> None:
         p[f"MOM_{n}"] = g[px].pct_change(n)
     p["VOL_10"] = ret.groupby(p["symbol"]).rolling(10, min_periods=10).std().reset_index(level=0, drop=True)
     p["VOL_20"] = ret.groupby(p["symbol"]).rolling(20, min_periods=20).std().reset_index(level=0, drop=True)
-p["SKEW_20"] = ret.groupby(p["symbol"]).rolling(20, min_periods=20).skew().reset_index(level=0, drop=True)
-p["SKEW_60"] = ret.groupby(p["symbol"]).rolling(60, min_periods=60).skew().reset_index(level=0, drop=True)
+    p["SKEW_20"] = ret.groupby(p["symbol"]).rolling(20, min_periods=20).skew().reset_index(level=0, drop=True)
+    p["SKEW_60"] = ret.groupby(p["symbol"]).rolling(60, min_periods=60).skew().reset_index(level=0, drop=True)
     p["MAXDD_60"] = p[px] / g[px].rolling(60, min_periods=60).max().reset_index(level=0, drop=True) - 1
     p["DIST_MA20"] = p[px] / g[px].rolling(20, min_periods=20).mean().reset_index(level=0, drop=True) - 1
     p["DIST_MA60"] = p[px] / g[px].rolling(60, min_periods=60).mean().reset_index(level=0, drop=True) - 1
