@@ -137,7 +137,7 @@ def build_screen_stats(
     daily_counts = s.groupby("date")["symbol"].transform("count")
     s = s.loc[daily_counts >= min_names_per_day].copy()
     valid_screen_dates = s["date"].nunique()
-    if valid_screen_dates < max(30, screen_days // 2):
+    if valid_screen_dates < min(screen_days, max(30, screen_days // 2)):
         raise ValueError(
             f"Insufficient screen coverage: {valid_screen_dates} valid days "
             f"with >= {min_names_per_day} names"
