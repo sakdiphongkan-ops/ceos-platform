@@ -106,21 +106,54 @@ def main():
     ledger=pd.DataFrame(rows)
     ledger.to_csv(out/"tournament_selection_ledger.csv",index=False)
     r=ledger.realized_return.dropna() if not ledger.empty else pd.Series(dtype=float)
+
+    def perf_stats(x):
+        x=pd.Series(x,dtype=float).dropna()
+        if len(x)==0:
+            return {"geometric_monthly_return":-1.0,"cumulative_return":-1.0,
+                    "positive_month_pct":0.0,"min_monthly_return":None,
+                    "max_monthly_return":None,"max_drawdown_pct":None,
+                    "max_drawdown_baht":None,"peak_baht":None,"trough_baht":None}
+        eq=30000.0*np.cumprod(1+x.to_numpy())
+        peak=np.maximum.accumulate(eq)
+        dd=eq/peak-1.0
+        k=int(np.argmin(dd))
+        return {
+            "geometric_monthly_return":geo(x),
+            "cumulative_return":float(eq[-1]/30000.0-1),
+            "positive_month_pct":float((x>0).mean()),
+            "min_monthly_return":float(x.min()),
+            "max_monthly_return":float(x.max()),
+            "max_drawdown_pct":float(dd.min()),
+            "max_drawdown_baht":float((eq-peak).min()),
+            "peak_baht":float(peak[k]),
+            "trough_baht":float(eq[k])
+        }
+
+    benchmark_stats=perf_stats(candidates["M1_REV_K20"].net_return)
+    adaptive_stats=perf_stats(r)
+
     summary={
       "status":"COMPLETED","engine":"luna-adaptive-tournament-v2",
       "dataset_sha256":hashlib.sha256(Path(args.input).read_bytes()).hexdigest(),
       "formula_count":len(formulas),"months_traded":len(r),
-      "geometric_monthly_return":geo(r),
-      "cumulative_return":float(np.prod(1+r)-1) if len(r) else -1,
-      "positive_month_pct":float((r>0).mean()) if len(r) else 0,
+      "geometric_monthly_return":adaptive_stats["geometric_monthly_return"],
+      "cumulative_return":adaptive_stats["cumulative_return"],
+      "positive_month_pct":adaptive_stats["positive_month_pct"],
       "months_ge_7pct":int((r>=.07).sum()) if len(r) else 0,
-      "min_monthly_return":float(r.min()) if len(r) else None,
-      "max_monthly_return":float(r.max()) if len(r) else None,
+      "min_monthly_return":adaptive_stats["min_monthly_return"],
+      "max_monthly_return":adaptive_stats["max_monthly_return"],
+      "max_drawdown_pct":adaptive_stats["max_drawdown_pct"],
+      "max_drawdown_baht":adaptive_stats["max_drawdown_baht"],
+      "peak_baht":adaptive_stats["peak_baht"],
+      "trough_baht":adaptive_stats["trough_baht"],
+      "benchmark_m1":benchmark_stats,
       "average_turnover":float(ledger.turnover.mean()) if len(ledger) else 0,
       "total_transaction_cost":float(ledger.transaction_cost.sum()) if len(ledger) else 0,
       "lookback_months":args.lookback_months,"min_history_months":args.min_history_months,
       "cost_bps_per_one_way_turnover":args.cost_bps,
       "benchmark_included":"M1_REV_K20",
+      "initial_capital_baht":30000,
       "leakage_guard":"month t selection uses only strictly prior months; t return is never in selection history"
     }
     (out/"summary.json").write_text(json.dumps(summary,indent=2,default=str),encoding="utf-8")
