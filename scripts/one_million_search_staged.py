@@ -124,11 +124,12 @@ def build_screen_stats(
     train_days: int,
     oos_days: int,
     holdout_days: int,
+    purge_days: int,
 ) -> dict[tuple[str, str, float], tuple[float, float, float]]:
     dates = sorted(df["date"].unique())
-    screen_end = train_days
-    if screen_end <= 0 or len(dates) < train_days + oos_days + holdout_days:
-        raise ValueError("Not enough dates for screen/OOS/holdout")
+    screen_end = train_days - purge_days
+    if screen_end <= 0 or len(dates) < train_days + oos_days + holdout_days + purge_days:
+        raise ValueError("Not enough dates for screen/OOS/holdout/purge")
     end = screen_end
     start = max(0, end - screen_days)
     screen_dates = set(dates[start:end])
@@ -282,12 +283,15 @@ def exact_walk_forward(
     train_days: int,
     oos_days: int,
     holdout_days: int,
+    purge_days: int,
     cost_bps: float,
 ) -> dict:
     n_days = len(dates)
-    if n_days < train_days + oos_days + holdout_days:
-        raise ValueError("Not enough dates for train/OOS/holdout windows")
-    n_folds = (n_days - holdout_days - train_days) // oos_days
+    if n_days < train_days + oos_days + holdout_days + purge_days:
+        raise ValueError("Not enough dates for train/OOS/holdout/purge windows")
+    holdout_start = n_days - holdout_days
+    oos_end_limit = holdout_start - purge_days
+    n_folds = (oos_end_limit - train_days) // oos_days
     oos_start = train_days
     oos_end = train_days + n_folds * oos_days
 
@@ -340,6 +344,7 @@ def main() -> None:
     ap.add_argument("--train-days", type=int, default=120)
     ap.add_argument("--oos-days", type=int, default=20)
     ap.add_argument("--holdout-days", type=int, default=40)
+    ap.add_argument("--purge-days", type=int, default=1)
     ap.add_argument("--min-trades", type=int, default=30)
     args = ap.parse_args()
 
@@ -358,13 +363,15 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
 
     stats = build_screen_stats(
-        df, available, args.screen_days, args.train_days, args.oos_days, args.holdout_days
+        df, available, args.screen_days, args.train_days, args.oos_days, args.holdout_days, args.purge_days
     )
 
     heap: list[tuple[float, int, dict]] = []
     screen_path = out / "screen_ledger.jsonl.gz"
+    committed = 0
     with gzip.open(screen_path, "wt", encoding="utf-8") as ledger:
         for i, rule in enumerate(generate_rules(available, args.max_trials), 1):
+            committed = i
             score = proxy_for_rule(rule, stats)
             rec = {
                 "trial": i,
@@ -394,7 +401,7 @@ def main() -> None:
         try:
             wf = exact_walk_forward(
                 rule, ranks, rets, day_ids, dates, starts, ends,
-                args.train_days, args.oos_days, args.holdout_days, args.cost_bps
+                args.train_days, args.oos_days, args.holdout_days, args.purge_days, args.cost_bps
             )
             result.update({k: v for k, v in wf.items() if k != "folds_detail"})
             result["eligible"] = bool(
@@ -426,7 +433,7 @@ def main() -> None:
 
     manifest = {
         "engine": "luna-one-million-staged-v1",
-        "trials_committed": int(sum(1 for _ in generate_rules(available, args.max_trials))),
+        "trials_committed": committed,
         "max_trials_requested": args.max_trials,
         "finalists_exact": len(finalists),
         "screen_days": args.screen_days,
@@ -434,9 +441,10 @@ def main() -> None:
         "train_days": args.train_days,
         "oos_days": args.oos_days,
         "holdout_days": args.holdout_days,
+        "purge_days": args.purge_days,
         "features_used": available,
         "input_sha256": hashlib.sha256(Path(args.input).read_bytes()).hexdigest(),
-        "screen_definition": "deterministic training-only smooth tail-signal covariance proxy",
+        "screen_definition": "deterministic training-only smooth tail-signal covariance proxy with one-day purge before OOS",
         "exact_definition": "cross-sectional percentile rules with walk-forward OOS and locked holdout",
         "selection_warning": "All hypotheses are screened, but only finalists receive exact full-period evaluation; screen_proxy is not a return estimate. Multiple-testing correction is still required before treating a finalist as validated.",
     }
