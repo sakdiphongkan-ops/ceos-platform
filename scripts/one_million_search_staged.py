@@ -216,28 +216,33 @@ def prepare_exact_frame(df: pd.DataFrame, features: list[str]) -> tuple[dict[str
 
 
 def daily_metrics(daily: np.ndarray, counts: np.ndarray, cost: float) -> dict:
-    valid = np.isfinite(daily) & (counts > 0)
-    x = daily[valid] - cost
-    if x.size == 0:
+    observed = np.isfinite(daily)
+    if not observed.any():
         return {
             "trades": 0, "return": 0.0, "win_rate": 0.0,
             "profit_factor": 0.0, "max_drawdown": 1.0, "avg_names": 0.0,
             "mean_daily": 0.0, "std_daily": 0.0, "t_stat": 0.0,
         }
+    # A day with no selected names means the strategy stays in cash: return = 0%.
+    # Do not drop those days, otherwise inactivity artificially compounds returns.
+    x = np.where(observed, daily.astype(np.float64), 0.0)
+    traded = observed & (counts > 0)
+    x = x - np.where(traded, cost, 0.0)
     equity = np.cumprod(1.0 + x)
     peak = np.maximum.accumulate(equity)
     dd = 1.0 - equity / peak
-    gains = x[x > 0].sum()
-    losses = -x[x < 0].sum()
+    traded_x = x[traded]
+    gains = traded_x[traded_x > 0].sum()
+    losses = -traded_x[traded_x < 0].sum()
     mean = float(x.mean())
     std = float(x.std(ddof=1)) if x.size > 1 else 0.0
     return {
-        "trades": int(x.size),
+        "trades": int(traded.sum()),
         "return": float(equity[-1] - 1.0),
-        "win_rate": float((x > 0).mean()),
+        "win_rate": float((traded_x > 0).mean()) if traded_x.size else 0.0,
         "profit_factor": float(gains / losses) if losses > 0 else float("inf"),
         "max_drawdown": float(dd.max()),
-        "avg_names": float(counts[valid].mean()),
+        "avg_names": float(counts[traded].mean()) if traded.any() else 0.0,
         "mean_daily": mean,
         "std_daily": std,
         "t_stat": float(mean / (std / np.sqrt(x.size))) if std > 0 else 0.0,
@@ -245,8 +250,8 @@ def daily_metrics(daily: np.ndarray, counts: np.ndarray, cost: float) -> dict:
 
 
 def monthly_metrics(daily: np.ndarray, counts: np.ndarray, dates: list) -> dict:
-    valid = np.isfinite(daily) & (counts > 0)
-    if not valid.any():
+    observed = np.isfinite(daily)
+    if not observed.any():
         return {
             "months": 0, "geomean_monthly": 0.0, "median_monthly": 0.0,
             "positive_month_fraction": 0.0, "months_ge_7pct": 0,
@@ -254,8 +259,8 @@ def monthly_metrics(daily: np.ndarray, counts: np.ndarray, dates: list) -> dict:
             "cagr_from_monthly": 0.0,
         }
     frame = pd.DataFrame({
-        "date": pd.to_datetime(np.asarray(dates)[valid]),
-        "ret": np.asarray(daily)[valid].astype(float),
+        "date": pd.to_datetime(np.asarray(dates)),
+        "ret": np.where(observed, np.asarray(daily, dtype=float), 0.0),
     })
     frame["month"] = frame["date"].dt.to_period("M")
     m = frame.groupby("month", sort=True)["ret"].apply(lambda x: float(np.prod(1.0 + x.to_numpy()) - 1.0))
