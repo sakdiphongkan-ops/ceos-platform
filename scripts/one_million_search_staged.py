@@ -64,13 +64,12 @@ def generate_rules(features: list[str], max_trials: int):
     if max_trials <= 0:
         return
 
-    single_budget = max(1, int(round(max_trials * 0.25)))
+    requested_single = max(1, int(round(max_trials * 0.25)))
     pair_budget = max(0, int(round(max_trials * 0.35)))
-    blend_budget = max(0, max_trials - single_budget - pair_budget)
+    blend_budget = max(0, max_trials - requested_single - pair_budget)
 
     emitted = 0
-    # Deterministic evenly-spaced singles across the full feature/threshold universe.
-    single_budget = min(single_budget, len(base))
+    single_budget = min(requested_single, len(base))
     if single_budget:
         step = len(base) / single_budget
         seen = set()
@@ -82,8 +81,9 @@ def generate_rules(features: list[str], max_trials: int):
             yield base[idx]
             emitted += 1
 
-    # Deterministic AND/OR combinations.
-    if emitted < max_trials and pair_budget:
+    # Keep the requested allocation while accounting for the actual number of singles emitted.
+    pair_target = min(max_trials, emitted + pair_budget)
+    if emitted < pair_target:
         for i, a in enumerate(base):
             for b in base[i + 1:]:
                 for op in ("and", "or"):
@@ -92,17 +92,17 @@ def generate_rules(features: list[str], max_trials: int):
                         b.feature, b.direction, b.quantile,
                     )
                     emitted += 1
-                    if emitted >= single_budget + pair_budget or emitted >= max_trials:
+                    if emitted >= pair_target or emitted >= max_trials:
                         break
-                if emitted >= single_budget + pair_budget or emitted >= max_trials:
+                if emitted >= pair_target or emitted >= max_trials:
                     break
-            if emitted >= single_budget + pair_budget or emitted >= max_trials:
+            if emitted >= pair_target or emitted >= max_trials:
                 break
 
-    # Weighted blends are explicitly included in every sufficiently large batch.
-    if emitted < max_trials and blend_budget:
-        weights = (0.20, 0.35, 0.50, 0.65, 0.80)
-        blend_target = min(max_trials, single_budget + pair_budget + blend_budget)
+    # Fill the remainder with weighted blends so the generator always emits exactly max_trials
+    # whenever the rule universe is large enough.
+    weights = (0.20, 0.35, 0.50, 0.65, 0.80)
+    if emitted < max_trials:
         for a in base:
             for b in base:
                 if a.feature == b.feature and a.direction == b.direction and a.quantile == b.quantile:
@@ -113,11 +113,11 @@ def generate_rules(features: list[str], max_trials: int):
                         b.feature, b.direction, b.quantile, float(w),
                     )
                     emitted += 1
-                    if emitted >= blend_target:
+                    if emitted >= max_trials:
                         break
-                if emitted >= blend_target:
+                if emitted >= max_trials:
                     break
-            if emitted >= blend_target:
+            if emitted >= max_trials:
                 break
 
 
