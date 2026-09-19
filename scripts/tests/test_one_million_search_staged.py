@@ -61,11 +61,11 @@ def main() -> None:
     stats = eng.build_screen_stats(
         df,
         ["MOM_5", "RSI14", "VOL_20"],
+        development_end_idx=6,
         screen_days=4,
-        train_days=6,
-        oos_days=2,
         holdout_days=2,
         purge_days=1,
+        min_names_per_day=2,
     )
     assert stats
     print("staged LUNA engine smoke test: PASS")
