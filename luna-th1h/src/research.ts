@@ -1,6 +1,7 @@
 import {runBacktest} from "./backtest.js";
 import {StrategyV1,VERSION as STRATEGY_V1_VERSION,type StrategyParams} from "./strategy-v1.js";
 import type {Quote} from "./types.js";
+import {makeFixture} from "./research-fixture.js";
 
 export type ResearchSplit={name:"TRAIN"|"VALIDATION"|"TEST";quotes:Quote[]};
 
@@ -74,7 +75,6 @@ export function runResearch(quotes:Quote[],initialCapital=1_000_000){
 const fixtureQuotes:Quote[]=[];
 if(process.env.RESEARCH_FIXTURE==="true"){
   // Kept deterministic and explicitly labeled; never mixed with live-market data.
-  const {makeFixture}=await import("./research-fixture.js");
   fixtureQuotes.push(...makeFixture());
   const runs=runResearch(fixtureQuotes);
   for(const x of runs){
