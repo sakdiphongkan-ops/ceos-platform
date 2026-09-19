@@ -126,10 +126,10 @@ def build_screen_stats(
     holdout_days: int,
 ) -> dict[tuple[str, str, float], tuple[float, float, float]]:
     dates = sorted(df["date"].unique())
-    protected_end = len(dates) - holdout_days
-    if protected_end <= train_days + oos_days:
+    screen_end = train_days
+    if screen_end <= 0 or len(dates) < train_days + oos_days + holdout_days:
         raise ValueError("Not enough dates for screen/OOS/holdout")
-    end = protected_end
+    end = screen_end
     start = max(0, end - screen_days)
     screen_dates = set(dates[start:end])
     s = df[df["date"].isin(screen_dates)].copy()
@@ -245,7 +245,7 @@ def exact_period(
         cnt = cnts[sl]
         sm = sums[sl]
         good = cnt > 0
-        daily[good] = sm[good] / cnt[good]
+        daily[good] = sm[good] / cnt[good] - cost
         counts[:] = cnt.astype(np.int32)
         return daily, counts
 
@@ -266,7 +266,7 @@ def exact_period(
         threshold = float(np.nanquantile(score[valid], 1.0 - min(rule.quantile, rule.quantile2)))
         m = valid & (score >= threshold)
         if m.any():
-            daily[d - day_start] = float(rets[lo:hi][m].mean())
+            daily[d - day_start] = float(rets[lo:hi][m].mean()) - cost
             counts[d - day_start] = int(m.sum())
     return daily, counts
 
