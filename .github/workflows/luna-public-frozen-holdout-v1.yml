@@ -1,0 +1,92 @@
+name: LUNA Public Frozen Holdout v1
+
+on:
+  workflow_run:
+    workflows: ["LUNA Adaptive Tournament v3 - Public Data"]
+    types: [completed]
+  workflow_dispatch:
+
+concurrency:
+  group: luna-public-frozen-holdout-v1
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    if: \${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy python-dateutil
+      - name: Download SET history
+        run: |
+          mkdir -p data/raw
+          curl -fL --retry 3 --retry-delay 2 \
+            "https://data.mendeley.com/public-api/zip/gybmm9t3mr/download/1" \
+            -o data/raw/gybmm9t3mr-1.zip
+          test -s data/raw/gybmm9t3mr-1.zip
+      - name: Normalize
+        run: |
+          rm -rf data/set_2000_2025
+          python scripts/research/download_mendeley_set.py \
+            --zip data/raw/gybmm9t3mr-1.zip \
+            --output-dir data/set_2000_2025 \
+            --quarantine-invalid \
+            --max-invalid-rate 0.01
+      - name: Build factors
+        run: |
+          python scripts/research/build_factor_dataset.py \
+            --prices data/set_2000_2025/prices.csv \
+            --output data/set_2000_2025/factors.csv
+      - name: Restrict five years
+        run: |
+          python scripts/research/filter_last_5y.py \
+            --input data/set_2000_2025/factors.csv \
+            --output data/set_2000_2025/factors_5y.csv
+      - name: Build monthly panel
+        run: |
+          python scripts/research/build_monthly_factor_panel.py \
+            --factors data/set_2000_2025/factors_5y.csv \
+            --prices data/set_2000_2025/prices.csv \
+            --output data/set_2000_2025/monthly/factors.csv
+      - name: Run frozen holdout
+        run: |
+          rm -rf research/luna_public_frozen_holdout_v1
+          python scripts/research/luna_public_frozen_holdout_v1.py \
+            --input data/set_2000_2025/monthly/factors.csv \
+            --output research/luna_public_frozen_holdout_v1 \
+            --formula-count 1000 \
+            --seed 20260920 \
+            --holdout-months 12 \
+            --train-months 36 \
+            --top-n 25 \
+            --k 20 \
+            --cost-bps 0,20,40,60
+      - name: Validate
+        run: |
+          test -s research/luna_public_frozen_holdout_v1/summary.json
+          test -s research/luna_public_frozen_holdout_v1/holdout-ranked.csv
+      - name: Save result
+        run: |
+          mkdir -p research-results/luna-public-frozen-holdout-v1
+          cp research/luna_public_frozen_holdout_v1/summary.json research-results/luna-public-frozen-holdout-v1-summary.json
+          cp research/luna_public_frozen_holdout_v1/holdout-ranked.csv research-results/luna-public-frozen-holdout-v1/holdout-ranked.csv
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research-results/
+          git diff --cached --quiet || git commit -m "research(luna): save public frozen holdout result"
+          git push
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: luna-public-frozen-holdout-v1
+          path: research/luna_public_frozen_holdout_v1/
+          retention-days: 14
