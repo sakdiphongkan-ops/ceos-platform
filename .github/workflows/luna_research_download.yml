@@ -11,12 +11,13 @@ on:
       - "scripts/research/download_mendeley_set.py"
       - "scripts/research/build_factor_dataset.py"
       - "scripts/one_million_search.py"
+      - "scripts/one_million_search_staged.py"
   workflow_dispatch:
 
 jobs:
   download-set-history:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
     permissions:
       contents: read
 
@@ -48,10 +49,10 @@ jobs:
         run: |
           python scripts/research/build_factor_dataset.py             --prices data/set_2000_2025/prices.csv             --output data/set_2000_2025/factors.csv
 
-      - name: Pilot 1M engine on real SET data
+      - name: Staged 1M hypothesis search on real SET data
         run: |
-          rm -rf research/pilot_20
-          python scripts/one_million_search.py             --input data/set_2000_2025/factors.csv             --output research/pilot_20             --max-trials 20             --cost-bps 45             --train-days 120             --oos-days 20             --holdout-days 40             --min-trades 30
+          rm -rf research/one_million
+          python scripts/one_million_search_staged.py             --input data/set_2000_2025/factors.csv             --output research/one_million             --max-trials 1000000             --finalists 200             --screen-days 120             --cost-bps 45             --train-days 120             --oos-days 20             --holdout-days 40             --min-trades 30
 
       - name: Upload research dataset artifact
         uses: actions/upload-artifact@v4
@@ -63,8 +64,10 @@ jobs:
             data/set_2000_2025/invalid_rows.csv
             data/set_2000_2025/factors.csv
             data/set_2000_2025/factors.manifest.json
-            research/pilot_20/results.csv
-            research/pilot_20/passed.csv
-            research/pilot_20/manifest.json
+            research/one_million/screen_ledger.jsonl.gz
+            research/one_million/screen_top.csv
+            research/one_million/results.csv
+            research/one_million/passed.csv
+            research/one_million/manifest.json
           compression-level: 0
           retention-days: 14
