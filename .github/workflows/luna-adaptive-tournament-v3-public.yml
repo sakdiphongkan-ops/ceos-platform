@@ -1,0 +1,99 @@
+name: LUNA Adaptive Tournament v3 - Public Data
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "scripts/research/build_monthly_factor_panel.py"
+      - "scripts/research/luna_adaptive_tournament_v3_public.py"
+      - ".github/workflows/luna-adaptive-tournament-v3-public.yml"
+      - "scripts/research/download_mendeley_set.py"
+      - "scripts/research/build_factor_dataset.py"
+      - "scripts/research/filter_last_5y.py"
+  workflow_dispatch:
+
+concurrency:
+  group: luna-adaptive-tournament-v3-public
+  cancel-in-progress: true
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy python-dateutil
+
+      - name: Download SET history
+        run: |
+          mkdir -p data/raw
+          curl -fL --retry 3 --retry-delay 2             "https://data.mendeley.com/public-api/zip/gybmm9t3mr/download/1"             -o data/raw/gybmm9t3mr-1.zip
+          test -s data/raw/gybmm9t3mr-1.zip
+
+      - name: Normalize SET history
+        run: |
+          rm -rf data/set_2000_2025
+          python scripts/research/download_mendeley_set.py             --zip data/raw/gybmm9t3mr-1.zip             --output-dir data/set_2000_2025             --quarantine-invalid             --max-invalid-rate 0.01
+
+      - name: Build canonical point-in-time factors
+        run: |
+          rm -rf data/set_2000_2025/factors.csv data/set_2000_2025/factors.manifest.json
+          python scripts/research/build_factor_dataset.py             --prices data/set_2000_2025/prices.csv             --output data/set_2000_2025/factors.csv
+
+      - name: Restrict to trailing five years
+        run: |
+          python scripts/research/filter_last_5y.py             --input data/set_2000_2025/factors.csv             --output data/set_2000_2025/factors_5y.csv
+
+      - name: Build monthly point-in-time panel
+        run: |
+          rm -rf data/set_2000_2025/monthly
+          python scripts/research/build_monthly_factor_panel.py             --factors data/set_2000_2025/factors_5y.csv             --prices data/set_2000_2025/prices.csv             --output data/set_2000_2025/monthly/factors.csv
+
+      - name: Run 1,000-formula monthly tournament
+        run: |
+          rm -rf research/luna_adaptive_tournament_v3_public
+          python scripts/research/luna_adaptive_tournament_v3_public.py             --input data/set_2000_2025/monthly/factors.csv             --output research/luna_adaptive_tournament_v3_public             --formula-count 1000             --lookback-months 24             --min-history-months 12             --cost-bps 20             --k 20             --seed 20260920
+
+      - name: Validate
+        run: |
+          test -s research/luna_adaptive_tournament_v3_public/summary.json
+          test -s research/luna_adaptive_tournament_v3_public/selection-ledger.csv
+          python - <<'PY'
+          import json
+          x=json.load(open("research/luna_adaptive_tournament_v3_public/summary.json"))
+          assert x["formula_count"] == 1000
+          assert x["months_traded"] >= 36
+          assert x["leakage_guard"]
+          assert x["data_contiguity_guard"]
+          print(json.dumps(x, indent=2))
+          PY
+
+      - name: Save repository result
+        run: |
+          mkdir -p research-results/luna-adaptive-tournament-v3-public
+          cp research/luna_adaptive_tournament_v3_public/summary.json              research-results/luna-adaptive-tournament-v3-public-summary.json
+          cp research/luna_adaptive_tournament_v3_public/selection-ledger.csv              research-results/luna-adaptive-tournament-v3-public/selection-ledger.csv
+          cp research/luna_adaptive_tournament_v3_public/formula_catalog.json              research-results/luna-adaptive-tournament-v3-public/formula-catalog.json
+          cp data/set_2000_2025/monthly/factors.manifest.json              research-results/luna-adaptive-tournament-v3-public/monthly-panel-manifest.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research-results/
+          git diff --cached --quiet || git commit -m "research(luna): save adaptive tournament v3 public result"
+          git push
+
+      - name: Upload full result artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: luna-adaptive-tournament-v3-public
+          path: research/luna_adaptive_tournament_v3_public/
+          retention-days: 14
