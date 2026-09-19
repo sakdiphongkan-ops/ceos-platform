@@ -13,6 +13,17 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+      - name: Validate and patch runner syntax
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/research/multitf.mjs')
+          s=p.read_text()
+          s=s.replace('}),null,2));', '}),null,2));')
+          s=s.replace('},null,2));', '},null,2));')
+          p.write_text(s)
+          PY
+          node --check scripts/research/multitf.mjs
       - name: Run research
         run: node scripts/research/multitf.mjs > multitf-result.json && cat multitf-result.json
       - name: Save result into repository
