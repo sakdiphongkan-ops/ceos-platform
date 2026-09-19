@@ -14,7 +14,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-FACTORS=["MOM_5","MOM_10","MOM_20","MOM_60","MOM_120","VOL_10","VOL_20","MAXDD_60","ADV20","AMOUNT","BREAKOUT20","BREAKOUT55","RSI14","DIST_MA20","DIST_MA60","SKEW_20","SKEW_60","QUALITY_SCORE","VALUE_QUALITY","MOM_BLEND","CONSERVATIVE_SCORE","SAFETY_SCORE","GROWTH_QUALITY","INV_QUALITY"]
+ALL_FACTORS=["MOM_5","MOM_10","MOM_20","MOM_60","MOM_120","VOL_10","VOL_20","MAXDD_60","ADV20","AMOUNT","BREAKOUT20","BREAKOUT55","RSI14","DIST_MA20","DIST_MA60","SKEW_20","SKEW_60","QUALITY_SCORE","VALUE_QUALITY","MOM_BLEND","CONSERVATIVE_SCORE","SAFETY_SCORE","GROWTH_QUALITY","INV_QUALITY"]
 
 def geo(x):
     x=np.asarray(x,dtype=float)
@@ -45,7 +45,7 @@ def main():
 
     out=Path(args.output); out.mkdir(parents=True,exist_ok=True)
     df=pd.read_csv(args.input)
-    req={"symbol","month_end","adj_close","fwd1",*FACTORS}
+    req={"symbol","month_end","adj_close","fwd1",*ALL_FACTORS}
     missing=sorted(req-set(df.columns))
     if missing: raise SystemExit(f"missing columns: {missing}")
     df["month_end"]=pd.to_datetime(df["month_end"])
@@ -57,7 +57,13 @@ def main():
     months=sorted(df["month_end"].unique())
     if len(months)<40: raise SystemExit(f"only {len(months)} tradable months")
 
-    # Percentile ranks within each month. Rows must have every factor to be scored.
+    coverage={f:float(df[f].notna().mean()) for f in ALL_FACTORS}
+    FACTORS=[f for f in ALL_FACTORS if coverage[f] >= 0.20]
+    excluded_sparse=[f for f in ALL_FACTORS if f not in FACTORS]
+    if len(FACTORS)<5:
+        raise SystemExit(f"too few usable factors after coverage filter: {FACTORS}")
+
+    # Percentile ranks within each month. Only rows with all active factors are scored.
     ranks={f:df.groupby("month_end")[f].rank(pct=True,method="average") for f in FACTORS}
     ok=np.ones(len(df),dtype=bool)
     for f in FACTORS: ok &= ranks[f].notna().to_numpy()
@@ -129,6 +135,10 @@ def main():
       "dataset_sha256":hashlib.sha256(Path(args.input).read_bytes()).hexdigest(),
       "formula_count":len(formulas),
       "factor_count":len(FACTORS),
+      "all_factors":ALL_FACTORS,
+      "active_factors":FACTORS,
+      "factor_coverage":coverage,
+      "excluded_sparse_factors":excluded_sparse,
       "k":args.k,
       "lookback_months":args.lookback_months,
       "min_history_months":args.min_history_months,
@@ -140,7 +150,7 @@ def main():
       "top_selected_formulas":freq,
       "leakage_guard":"selection for month t uses only strictly earlier calendar months",
       "data_contiguity_guard":"fwd1 exists only when exact next calendar month is present",
-      "benchmark_note":"M1_REV_K20 here is a same-panel reversal proxy (lowest MOM_5), not a claim of exact 925-symbol legacy reproduction.",
+      "benchmark_note":"M1_REV_K20 here is a same-panel reversal proxy using lowest MOM_20; it is not a claim of exact 925-symbol legacy reproduction.",
     }
     (out/"summary.json").write_text(json.dumps(summary,indent=2,default=str),encoding="utf-8")
     print(json.dumps(summary,indent=2,default=str))
