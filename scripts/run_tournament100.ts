@@ -1,4 +1,4 @@
-import { buildSeries, makeStrategies, fetchBars, runSignalStudy } from "../app/api/backtest/tournament100/route.ts";
+import { buildSeries, makeStrategies, fetchBars, runSignalStudy } from "../lib/tournament100-core";
 
 const SYMBOLS = [
   "ADVANC","AOT","AWC","BANPU","BBL","BCP","BDMS","BEM","BH","BJC","CCET","COM7",
