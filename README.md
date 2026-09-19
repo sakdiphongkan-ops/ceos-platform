@@ -64,3 +64,5 @@ Migrations are stored in the `migrations/` directory.
 ## License
 
 MIT
+
+<!-- LUNA control-room deployment sync: 2026-09-19 -->
