@@ -1,0 +1,243 @@
+{
+  "status": "COMPLETED",
+  "engine": "luna-direct-frozen-holdout-v1",
+  "training_months": 47,
+  "holdout_months": 12,
+  "candidate_count": 1000,
+  "cost_bps": 20,
+  "k": 20,
+  "exact_persisted_m1_holdout": {
+    "start_month": "2025-09-30",
+    "end_month": "2026-08-31",
+    "geometric_monthly_return": 0.041392768561080234,
+    "cumulative_return": 0.6269518169873102,
+    "positive_month_pct": 0.75,
+    "min_monthly_return": -0.028903557371724536,
+    "max_monthly_return": 0.18169798479215105
+  },
+  "frozen_top25": [
+    {
+      "rank": 1,
+      "id": "F0141",
+      "hold_geo": 0.0050185623792600165,
+      "hold_cumulative": 0.06191314641118351,
+      "hold_pos_pct": 0.5,
+      "hold_max_dd": -0.08164565516510713,
+      "hold_months_ge_7pct": 0,
+      "terms": [
+        [
+          "high52_ratio",
+          0.5915073337839152
+        ],
+        [
+          "mom1",
+          -0.40849266621608477
+        ]
+      ]
+    },
+    {
+      "rank": 2,
+      "id": "F0890",
+      "hold_geo": 0.03210674881071518,
+      "hold_cumulative": 0.4611520585533533,
+      "hold_pos_pct": 0.75,
+      "hold_max_dd": -0.04203452588976564,
+      "hold_months_ge_7pct": 4,
+      "terms": [
+        [
+          "high52_ratio",
+          -0.34071612066112666
+        ],
+        [
+          "avg_amount20",
+          -0.21814146374729604
+        ],
+        [
+          "mom6",
+          -0.4411424155915773
+        ]
+      ]
+    },
+    {
+      "rank": 3,
+      "id": "F0807",
+      "hold_geo": 0.03357769572802449,
+      "hold_cumulative": 0.48633787892979785,
+      "hold_pos_pct": 0.8333333333333334,
+      "hold_max_dd": -0.04330841377912731,
+      "hold_months_ge_7pct": 4,
+      "terms": [
+        [
+          "avg_amount20",
+          -0.25482932453720913
+        ],
+        [
+          "high52_ratio",
+          -0.4218138671867898
+        ],
+        [
+          "mom6",
+          -0.32335680827600105
+        ]
+      ]
+    },
+    {
+      "rank": 4,
+      "id": "F0195",
+      "hold_geo": 0.034109126824191094,
+      "hold_cumulative": 0.4955345603540633,
+      "hold_pos_pct": 0.8333333333333334,
+      "hold_max_dd": -0.04330841377912731,
+      "hold_months_ge_7pct": 4,
+      "terms": [
+        [
+          "high52_ratio",
+          -0.34846529308522417
+        ],
+        [
+          "avg_amount20",
+          -0.2882536013377755
+        ],
+        [
+          "mom6",
+          -0.36328110557700033
+        ]
+      ]
+    },
+    {
+      "rank": 5,
+      "id": "F0717",
+      "hold_geo": 0.04069193080650635,
+      "hold_cumulative": 0.6138614444966992,
+      "hold_pos_pct": 0.75,
+      "hold_max_dd": -0.0430177891429252,
+      "hold_months_ge_7pct": 4,
+      "terms": [
+        [
+          "high52_ratio",
+          -0.47876250796611924
+        ],
+        [
+          "avg_amount20",
+          -0.27190310315266025
+        ],
+        [
+          "mom6",
+          -0.2493343888812205
+        ]
+      ]
+    },
+    {
+      "rank": 6,
+      "id": "F0227",
+      "hold_geo": 0.02756475466376207,
+      "hold_cumulative": 0.3858313935279838,
+      "hold_pos_pct": 0.6666666666666666,
+      "hold_max_dd": -0.061588503971791386,
+      "hold_months_ge_7pct": 4,
+      "terms": [
+        [
+          "avg_amount20",
+          -0.33625435893311745
+        ],
+        [
+          "mom6",
+          -0.6637456410668826
+        ]
+      ]
+    },
+    {
+      "rank": 7,
+      "id": "F0295",
+      "hold_geo": 0.007980519948579845,
+      "hold_cumulative": 0.10008354638053651,
+      "hold_pos_pct": 0.6666666666666666,
+      "hold_max_dd": -0.05768487925550736,
+      "hold_months_ge_7pct": 0,
+      "terms": [
+        [
+          "high52_ratio",
+          0.6285639118871712
+        ],
+        [
+          "mom1",
+          -0.3714360881128288
+        ]
+      ]
+    },
+    {
+      "rank": 8,
+      "id": "F0942",
+      "hold_geo": 0.018817682563882387,
+      "hold_cumulative": 0.25071306774556623,
+      "hold_pos_pct": 0.75,
+      "hold_max_dd": -0.04490495954625129,
+      "hold_months_ge_7pct": 2,
+      "terms": [
+        [
+          "avg_amount20",
+          -0.13396982482249797
+        ],
+        [
+          "high52_ratio",
+          -0.4161109716846249
+        ],
+        [
+          "vol20",
+          -0.13756040045526555
+        ],
+        [
+          "mom6",
+          -0.31235880303761154
+        ]
+      ]
+    },
+    {
+      "rank": 9,
+      "id": "F0871",
+      "hold_geo": 0.011953195703251263,
+      "hold_cumulative": 0.1532543851631063,
+      "hold_pos_pct": 0.75,
+      "hold_max_dd": -0.01583969726826895,
+      "hold_months_ge_7pct": 0,
+      "terms": [
+        [
+          "high52_ratio",
+          0.5245389669459694
+        ],
+        [
+          "mom1",
+          -0.23581476651480252
+        ],
+        [
+          "mom3",
+          -0.2396462665392282
+        ]
+      ]
+    },
+    {
+      "rank": 10,
+      "id": "F0432",
+      "hold_geo": 0.03878637210504854,
+      "hold_cumulative": 0.5787556635775888,
+      "hold_pos_pct": 0.8333333333333334,
+      "hold_max_dd": -0.04330841377912731,
+      "hold_months_ge_7pct": 4,
+      "terms": [
+        [
+          "high52_ratio",
+          -0.3721579989493229
+        ],
+        [
+          "avg_amount20",
+          -0.2977618803870208
+        ],
+        [
+          "mom6",
+          -0.33008012066365633
+        ]
+      ]
+    }
+  ],
+  "note": "Frozen Top-25 selected using the first 47 months only. Holdout is the final 12 months. This is a diagnostic audit and not a promotion decision; exact persisted M1 uses a different production engine/universe implementation."
+}
