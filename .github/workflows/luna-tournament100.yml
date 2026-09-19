@@ -1,0 +1,44 @@
+name: LUNA 100-strategy research
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "scripts/run_tournament100.ts"
+      - "app/api/backtest/tournament100/route.ts"
+      - ".github/workflows/luna-tournament100.yml"
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install runtime
+        run: npm install --no-fund --no-audit next@14.2.35 typescript@5.5.4 tsx@4.19.2
+
+      - name: Run 100-strategy research
+        run: npx tsx scripts/run_tournament100.ts > tournament100-result.json
+
+      - name: Save result
+        run: |
+          mkdir -p research-results
+          cp tournament100-result.json research-results/tournament100-result.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research-results/tournament100-result.json
+          git diff --cached --quiet || git commit -m "research: save LUNA 100-strategy result"
+          git push
+
+      - name: Upload result artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: luna-tournament100-result
+          path: tournament100-result.json
