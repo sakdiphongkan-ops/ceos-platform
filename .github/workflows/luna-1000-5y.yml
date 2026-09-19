@@ -71,7 +71,8 @@ jobs:
             --holdout-days 40 \
             --purge-days 1 \
             --min-trades 30 \
-            --min-positive-fold-fraction 0.50
+            --min-positive-fold-fraction 0.50 \
+            --monthly-hurdle 0.07
 
       - name: Multiple-testing diagnostics
         run: |
@@ -89,7 +90,7 @@ jobs:
 
           r = pd.read_csv("research/luna_1000_5y/results.csv")
           passed = r[r["eligible"] == True].sort_values(
-              ["oos_return_sum","oos_t_stat","oos_positive_folds"],
+              ["oos_geomean_monthly","oos_median_monthly","oos_t_stat","oos_positive_folds"],
               ascending=False
           )
           out = {
@@ -100,7 +101,7 @@ jobs:
               "tested": int(len(r)),
               "eligible": int(len(passed)),
               "top20_oos": passed.head(20).to_dict(orient="records"),
-              "note": "Selection/ranking uses OOS only; holdout is reported by the engine but excluded from eligibility."
+              "note": "Eligibility requires OOS geometric monthly return >= 7%; parameter tuning is development-only; holdout is reported but excluded from selection."
           }
           Path("research-results/luna-1000-5y-result.json").write_text(
               json.dumps(out, indent=2, default=str),
