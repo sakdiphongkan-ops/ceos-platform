@@ -148,4 +148,4 @@ export function runStrategy(strategy:Strategy,data:Map<string,Bar[]>,seriesMap:M
  const wins=trades.filter(t=>t.side==="SELL"&&t.pnl>0),losses=trades.filter(t=>t.side==="SELL"&&t.pnl<0),grossProfit=wins.reduce((s,t)=>s+t.pnl,0),grossLoss=Math.abs(losses.reduce((s,t)=>s+t.pnl,0));let peak=INITIAL,maxDD=0;for(const x of eq){peak=Math.max(peak,x.equity);maxDD=Math.max(maxDD,peak-x.equity)}
  return {id:strategy.id,family:strategy.family,name:strategy.name,source:strategy.source,finalEquity:money(cash),netPnl:money(cash-INITIAL),returnPct:money((cash/INITIAL-1)*100),maxDrawdown:money(maxDD),closedTrades:wins.length+losses.length,wins:wins.length,losses:losses.length,winRate:money((wins.length+losses.length)?wins.length/(wins.length+losses.length)*100:0),profitFactor:money(grossLoss?grossProfit/grossLoss:999),fees:money(trades.reduce((s,t)=>s+t.fee,0)),slippage:money(trades.reduce((s,t)=>s+t.slippage,0))}}
 
-export {SYMBOLS,FEE_BPS,SELL_TAX_BPS,SLIPPAGE_BPS};
+export {SYMBOLS,INITIAL,FEE_BPS,SELL_TAX_BPS,SLIPPAGE_BPS};
