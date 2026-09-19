@@ -151,12 +151,12 @@ function run(data:Map<string,Bar[]>, scores:Map<string,any>) {
     void buys;
     if(next!==undefined){
       const candidates:Array<{symbol:string;score:number}>=[];
-      for(const [symbol,bars] of data){
-        const i=idx.get(symbol)!.get(ts); if(i===undefined||i<16||positions.has(symbol)) continue;
-        const sc=scores.get(symbol); if(!sc) continue;
+      data.forEach((bars,symbol)=>{
+        const i=idx.get(symbol)!.get(ts); if(i===undefined||i<16||positions.has(symbol)) return;
+        const sc=scores.get(symbol); if(!sc) return;
         const alpha=ceosAlpha(sc,bars,i);
         if(alpha>=60) candidates.push({symbol,score:alpha});
-      }
+      });
       candidates.sort((a,b)=>b.score-a.score);
       for(const c of candidates.slice(0,MAX_CANDIDATES)){
         const b=data.get(c.symbol)![idx.get(c.symbol)!.get(ts)!+1]; if(!b) continue;
