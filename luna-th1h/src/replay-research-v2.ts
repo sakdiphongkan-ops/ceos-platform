@@ -12,6 +12,7 @@ async function filesIn(input:string):Promise<string[]>{
   const nested=await Promise.all(names.map(e=>filesIn(path.join(input,e.name))));
   return nested.flat().filter(f=>/\.csv$/i.test(f) && !/universe/i.test(path.basename(f)));
 }
+async function main(){
 const input=process.env.RESEARCH_INPUT??process.argv[2];
 if(!input) throw new Error("RESEARCH_INPUT is required.");
 const csvs=await filesIn(input);
@@ -51,3 +52,7 @@ const report={
 const reportPath=process.env.RESEARCH_V2_REPORT;
 if(reportPath){await fs.mkdir(path.dirname(reportPath),{recursive:true});await fs.writeFile(reportPath,JSON.stringify(report,null,2),"utf8");}
 console.log(JSON.stringify({event:report.event,dataset:report.dataset,selectedVariant:report.selectedVariant,splitSizes:report.splitSizes,oos:report.oos,oosEquityCurvePoints:report.oos_equity_curve.length,reportPath}));
+
+}
+
+main().catch((err)=>{console.error(err);process.exit(1);});
