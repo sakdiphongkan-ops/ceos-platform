@@ -1,0 +1,103 @@
+{
+  "status": "INTERIM_COMPLETED",
+  "engine": "luna-m1-theory-liquidity-pth-micro-v1",
+  "as_of": "2026-09-20",
+  "data_source": "public.luna_research_ranked_v2",
+  "evaluation_note": "Direct database micro-experiment. Period lengths are limited by available monthly rows in the selected date windows; this is not the final full-window promotion test.",
+  "locked_rules": {
+    "monthly_rebalance": true,
+    "k": 20,
+    "equal_weight": true,
+    "forward_next_month": true,
+    "cost_bps_one_way": 20,
+    "benchmark": "M1_REV_K20"
+  },
+  "variants": [
+    {
+      "code": "M1",
+      "dev_geo_monthly": -0.02319968268958564,
+      "oos_geo_monthly": 0.03499536956393901,
+      "holdout_geo_monthly": 0.05180010572923065
+    },
+    {
+      "code": "CL20",
+      "dev_geo_monthly": 0.015089103518407018,
+      "oos_geo_monthly": 0.04691251277519641,
+      "holdout_geo_monthly": 0.05531976306349395
+    },
+    {
+      "code": "CL30",
+      "dev_geo_monthly": 0.0010099386289297893,
+      "oos_geo_monthly": 0.04287351382024842,
+      "holdout_geo_monthly": 0.05351548299814069
+    },
+    {
+      "code": "CL20_F20",
+      "dev_geo_monthly": -0.009247393958514202,
+      "oos_geo_monthly": 0.01930679845380079,
+      "holdout_geo_monthly": 0.01908577862541441
+    },
+    {
+      "code": "CL20_F40",
+      "dev_geo_monthly": -0.008355414266653014,
+      "oos_geo_monthly": 0.007718235977974293,
+      "holdout_geo_monthly": 0.02887591476636643
+    },
+    {
+      "code": "CL_PTH",
+      "dev_geo_monthly": 0.013817713165600976,
+      "oos_geo_monthly": 0.04317244606387252,
+      "holdout_geo_monthly": 0.06034117414111399
+    },
+    {
+      "code": "CL_PTH_F20",
+      "dev_geo_monthly": -0.011241177723115833,
+      "oos_geo_monthly": 0.015072016458484922,
+      "holdout_geo_monthly": 0.01713762955294491
+    },
+    {
+      "code": "CL_PTH_F40",
+      "dev_geo_monthly": -0.01845789681678375,
+      "oos_geo_monthly": -0.0012846811497491371,
+      "holdout_geo_monthly": 0.02007629349478797
+    },
+    {
+      "code": "CL_PTH2",
+      "dev_geo_monthly": -0.01704262359523118,
+      "oos_geo_monthly": 0.017930765115466606,
+      "holdout_geo_monthly": 0.019008858404460496
+    },
+    {
+      "code": "SAFE_LIQ",
+      "dev_geo_monthly": -0.05792057291504644,
+      "oos_geo_monthly": 0.014543808373420408,
+      "holdout_geo_monthly": -0.020436542460079924
+    },
+    {
+      "code": "CONTRA_LIQ",
+      "dev_geo_monthly": 0.015089103518407018,
+      "oos_geo_monthly": 0.04691251277519641,
+      "holdout_geo_monthly": 0.05531976306349395
+    },
+    {
+      "code": "REV_LIQ_INT",
+      "dev_geo_monthly": -0.05829737897603115,
+      "oos_geo_monthly": 0.0082570637317256,
+      "holdout_geo_monthly": -0.011805299236007379
+    },
+    {
+      "code": "REV_PTH_INT",
+      "dev_geo_monthly": -0.028812872409723966,
+      "oos_geo_monthly": 0.03786490733402522,
+      "holdout_geo_monthly": 0.0466168927611522
+    }
+  ],
+  "findings": [
+    "Contrarian illiquidity direction is materially more promising than safe-liquidity in this interim window.",
+    "Adding a liquidity floor to the contrarian signal reduced performance in these tests.",
+    "A mild joint liquidity+52-week-high conditioning variant (CL_PTH) produced the strongest interim OOS/HOLDOUT among the tested representatives.",
+    "Interaction terms tested here were not robust in the interim window.",
+    "No variant is promoted; the 721-candidate v2 full research run remains the authoritative frozen test."
+  ],
+  "next_step": "Complete 721-candidate train+dev frozen search, then independently test volatility/regime conditioning only if the liquidity/PTH family does not produce a robust improvement."
+}
