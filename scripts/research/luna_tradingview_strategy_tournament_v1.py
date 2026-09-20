@@ -315,6 +315,23 @@ def main():
     ranking=ranking.sort_values(["robust_score","train_dev_geo"],ascending=[False,False])
     ranking.to_csv(out/"robust_ranking.csv")
 
+    baseline_audit={"available":False}
+    locked_path=Path("research-results/luna-m1-benchmark-locked-20260920.csv")
+    if locked_path.exists():
+        locked=pd.read_csv(locked_path,parse_dates=["month_end"]).set_index("month_end")
+        local=(evaluate(df,next(c for c in candidates if c.code=="BASELINE"),ref)
+               .set_index("month_end")["net_return"].rename("local"))
+        common=locked.join(local,how="inner")
+        if not common.empty:
+            diff=common["local"]-common["net_return"]
+            baseline_audit={
+                "available":True,
+                "common_months":int(len(common)),
+                "max_abs_diff":float(diff.abs().max()),
+                "mean_abs_diff":float(diff.abs().mean()),
+                "within_1bp":bool((diff.abs()<=0.0001).all())
+            }
+
     summary={
         "status":"COMPLETED",
         "engine":"luna-tradingview-strategy-tournament-v1",
@@ -325,6 +342,7 @@ def main():
         "selection_rule":"M1 bottom-K by 20-trading-day adjusted-close momentum for gate candidates; pool-50/100 second-stage rerank for evolution candidates.",
         "train_dev_only_selection":True,
         "frozen_periods":["OOS","HOLDOUT"],
+        "locked_m1_baseline_audit":baseline_audit,
         "costs_bps":[float(v) for v in args.costs.split(",")],
         "promotion_rule":"Candidate must beat locked M1 on both frozen OOS and HOLDOUT and remain positive at 20/40/60 bps; then replicate on fresh seeds/periods."
     }
