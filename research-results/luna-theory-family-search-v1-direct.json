@@ -1,0 +1,181 @@
+{
+  "status": "COMPLETED",
+  "engine": "luna-theory-family-search-v1-direct-supabase",
+  "dataset": {
+    "table": "public.luna_research_monthly_price_factors",
+    "period_start": "2021-09-01",
+    "realized_period_end": "2026-08-01",
+    "realized_months": 60,
+    "formula_count": 113
+  },
+  "protocol": {
+    "k": 20,
+    "cost_bps": 20,
+    "validation_selects_candidates": true,
+    "oos_window_months": 12,
+    "holdout_window_months": 12,
+    "holdout_excluded_from_selection": true,
+    "forward_return_requires_next_calendar_month": true
+  },
+  "top_validation_candidates": [
+    [
+      "TF_REV1_LIQLOW_0.25",
+      "REV1_LOW_LIQUIDITY",
+      1,
+      0.028906864238673,
+      0.017877885706026,
+      0.236938617329876,
+      0.666666666666667,
+      0.049020035159918,
+      0.775846378639751,
+      0.833333333333333
+    ],
+    [
+      "TF_REV1_LIQLOW_0.50",
+      "REV1_LOW_LIQUIDITY",
+      2,
+      0.021585620397082,
+      -0.011492533940836,
+      -0.129518699891768,
+      0.416666666666667,
+      0.056078462156263,
+      0.924660917938116,
+      0.916666666666667
+    ],
+    [
+      "TF_REV1_LIQLOW_0.75",
+      "REV1_LOW_LIQUIDITY",
+      3,
+      0.016152936656094,
+      -0.013425642165112,
+      -0.149727992177353,
+      0.25,
+      0.050504324314154,
+      0.806234502198461,
+      0.833333333333333
+    ],
+    [
+      "TF_REV1",
+      "REV1_CORE",
+      4,
+      0.010830486690838,
+      0.015509391264987,
+      0.20283852254882,
+      0.5,
+      0.018166358737403,
+      0.241151855359112,
+      0.666666666666667
+    ],
+    [
+      "TF_REV1_DD_0.25",
+      "REV1_DRAWDOWN",
+      5,
+      0.010830486690838,
+      0.015509391264987,
+      0.20283852254882,
+      0.5,
+      0.018166358737403,
+      0.241151855359112,
+      0.666666666666667
+    ],
+    [
+      "TF_REV1_H52_LV_1.00_0.50",
+      "REV1_HIGH52_LOWVOL",
+      15,
+      0.000314670504579,
+      0.005205602977383,
+      0.064287124078334,
+      0.5,
+      0.010481942747164,
+      0.133294249881635,
+      0.75
+    ],
+    [
+      "TF_MOM12_H52_LV_0.25_0.75",
+      "MOM12_HIGH52_LOWVOL",
+      23,
+      -0.001632366639201,
+      0.002385072941027,
+      0.028999322070907,
+      0.416666666667,
+      0.02104600196823,
+      0.283936985780574,
+      0.75
+    ],
+    [
+      "TF_MOM6_H52_LV_0.50_0.25",
+      "MOM6_HIGH52_LOWVOL",
+      31,
+      -0.002763889774487,
+      0.002178476055388,
+      0.026457218349493,
+      0.5,
+      0.022668031001464,
+      0.308627852175355,
+      0.666666666667
+    ],
+    [
+      "TF_REV1_H52_LIQLOW_0.25_0.25",
+      "REV1_HIGH52_LOW_LIQ",
+      9,
+      0.005675405935675,
+      -0.00937442985625,
+      -0.106870557789453,
+      0.25,
+      0.043026405562232,
+      0.657843914728067,
+      0.75
+    ],
+    [
+      "TF_REV1_H52_1.00",
+      "REV1_HIGH52",
+      13,
+      0.000873789603416,
+      -0.003024762487797,
+      -0.035699350509618,
+      0.333333333333333,
+      0.00461071233988,
+      0.056753409423088,
+      0.5
+    ]
+  ],
+  "result_columns": [
+    "formula_id",
+    "family",
+    "validation_rank",
+    "validation_geo",
+    "oos_geo",
+    "oos_cumulative",
+    "oos_positive_pct",
+    "holdout_geo",
+    "holdout_cumulative",
+    "holdout_positive_pct"
+  ],
+  "locked_benchmark_same_windows": {
+    "strategy_version": "luna-m1s0k20rev-v1",
+    "oos_2024_08_to_2025_07": {
+      "months": 12,
+      "geometric_monthly_return": 0.025927798159978,
+      "cumulative_return": 0.359569989150445,
+      "positive_month_pct": 0.5
+    },
+    "holdout_2025_08_to_2026_07": {
+      "months": 12,
+      "geometric_monthly_return": 0.032219475262297,
+      "cumulative_return": 0.463068249482506,
+      "positive_month_pct": 0.75
+    }
+  },
+  "gold_target": {
+    "geometric_monthly_return": 0.07,
+    "equivalent_annual_cagr": 1.2521915889608248,
+    "candidates_reaching_target_in_oos_top25": 0,
+    "candidates_reaching_target_in_holdout_top25": 0
+  },
+  "interpretation": {
+    "main_signal": "The validation-selected top family was short-term reversal plus a low-liquidity tilt.",
+    "persistence": "That top validation candidate delivered 1.79% geometric/month in OOS and 4.90% geometric/month in final holdout, below the 7% target.",
+    "benchmark_comparison": "M1 production delivered 2.59% geometric/month in the preceding OOS window and 3.22% in the final holdout window.",
+    "caution": "The low-liquidity effect is an implementation-risk hypothesis, not a promotion signal; it requires liquidity-floor and transaction-cost tests before use."
+  }
+}
