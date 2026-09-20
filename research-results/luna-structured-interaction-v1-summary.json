@@ -1,0 +1,790 @@
+{
+  "status": "COMPLETED",
+  "engine": "luna-structured-interaction-2000-v1",
+  "dataset_sha256": "e8ed4835dd633d839b432d14fa3ec683868bf4c2d5f60eecacc9746ee5a7a425",
+  "rows_monthly": 112163,
+  "months": 296,
+  "period": [
+    "1983-08-31 00:00:00",
+    "2008-03-31 00:00:00"
+  ],
+  "formula_count": 2000,
+  "k": 20,
+  "cost_bps": 20.0,
+  "features_used": [
+    "MOM_5",
+    "MOM_10",
+    "MOM_20",
+    "MOM_60",
+    "MOM_120",
+    "VOL_10",
+    "VOL_20",
+    "MAXDD_60",
+    "ATR_PCT",
+    "ADV20",
+    "AMOUNT",
+    "RSI14",
+    "DIST_MA20",
+    "DIST_MA60",
+    "BREAKOUT20",
+    "BREAKOUT55",
+    "SKEW_20",
+    "SKEW_60"
+  ],
+  "factor_coverage": {
+    "MOM_5": 0.9912811998274997,
+    "MOM_10": 0.9902426866186823,
+    "MOM_20": 0.9881656602010476,
+    "MOM_60": 0.9798609805534655,
+    "MOM_120": 0.9674797618400142,
+    "REL_MOM": 0.0,
+    "VOL_10": 0.9902426866186823,
+    "VOL_20": 0.9881656602010476,
+    "MAXDD_60": 0.980065257172272,
+    "ATR_PCT": 0.9973444039555148,
+    "ADV20": 0.9961187442426754,
+    "AMOUNT": 0.9961187442426754,
+    "RSI14": 0.9902131371706789,
+    "DIST_MA20": 0.9883733628428111,
+    "DIST_MA60": 0.980065257172272,
+    "BREAKOUT20": 0.9881656602010476,
+    "BREAKOUT55": 0.9808960677393259,
+    "SKEW_20": 0.9710222695774728,
+    "SKEW_60": 0.9651504944821759,
+    "QUALITY_SCORE": 0.0,
+    "VALUE_QUALITY": 0.0,
+    "MOM_BLEND": 0.0,
+    "CONSERVATIVE_SCORE": 0.0,
+    "SAFETY_SCORE": 0.0,
+    "GROWTH_QUALITY": 0.0,
+    "INV_QUALITY": 0.0,
+    "EARNINGS_YIELD": 0.0,
+    "FCF_YIELD": 0.0,
+    "DIV_YIELD": 0.0,
+    "ROIC": 0.0,
+    "ROE": 0.0,
+    "ROA": 0.0,
+    "GPM": 0.0,
+    "NPM": 0.0,
+    "CFO_MARGIN": 0.0,
+    "REV_G": 0.0,
+    "EPS_G": 0.0,
+    "FCF_G": 0.0,
+    "DE": 0.0,
+    "NET_DEBT_EBITDA": 0.0,
+    "INTEREST_COVER": 0.0,
+    "CURRENT_RATIO": 0.0
+  },
+  "split": {
+    "train_months": 35,
+    "validation_months": 12,
+    "holdout_months": 12,
+    "selection": "top50 by train -> top10 by validation -> blind holdout"
+  },
+  "holdout_candidates_ge_7pct": 0,
+  "top10_holdout": [
+    {
+      "fi": 1752,
+      "formula_id": "G1752",
+      "train_geo": 0.1239782584395357,
+      "train_positive": 0.6857142857142857,
+      "validation_geo": 0.08162991513234075,
+      "validation_positive": 0.9166666666666666,
+      "validation_cumulative": 1.5641550515324703,
+      "holdout": {
+        "months": 249,
+        "geometric_monthly_return": 0.022256094532093984,
+        "cumulative_return": 239.08631131032556,
+        "positive_month_pct": 0.6305220883534136,
+        "months_ge_7pct": 19,
+        "max_drawdown_pct": -0.37640005747076866,
+        "final_capital_baht": 7202589.339309767
+      },
+      "holdout_months_ge_7pct": 19,
+      "holdout_cost_stress": {
+        "0bps": {
+          "months": 249,
+          "geometric_monthly_return": 0.02327423470815515,
+          "cumulative_return": 306.6222351030988,
+          "positive_month_pct": 0.6385542168674698,
+          "months_ge_7pct": 23,
+          "max_drawdown_pct": -0.36483518514360347,
+          "final_capital_baht": 9228667.053092964
+        },
+        "20bps": {
+          "months": 249,
+          "geometric_monthly_return": 0.022256094532093984,
+          "cumulative_return": 239.08631131032556,
+          "positive_month_pct": 0.6305220883534136,
+          "months_ge_7pct": 19,
+          "max_drawdown_pct": -0.37640005747076866,
+          "final_capital_baht": 7202589.339309767
+        },
+        "45bps": {
+          "months": 249,
+          "geometric_monthly_return": 0.020983327738303137,
+          "cumulative_return": 175.05319896941924,
+          "positive_month_pct": 0.5983935742971888,
+          "months_ge_7pct": 19,
+          "max_drawdown_pct": -0.3905801620318988,
+          "final_capital_baht": 5281595.969082577
+        }
+      },
+      "formula": {
+        "id": "G1752",
+        "kind": "SUM2",
+        "features": [
+          "VOL_20",
+          "MAXDD_60"
+        ],
+        "orientations": [
+          1,
+          0
+        ],
+        "weights": [
+          0.35,
+          0.65
+        ]
+      }
+    },
+    {
+      "fi": 1753,
+      "formula_id": "G1753",
+      "train_geo": 0.1266221123079474,
+      "train_positive": 0.7142857142857143,
+      "validation_geo": 0.0808675074092684,
+      "validation_positive": 0.9166666666666666,
+      "validation_cumulative": 1.542550206578591,
+      "holdout": {
+        "months": 249,
+        "geometric_monthly_return": 0.021280076466910325,
+        "cumulative_return": 188.26488322130513,
+        "positive_month_pct": 0.6184738955823293,
+        "months_ge_7pct": 17,
+        "max_drawdown_pct": -0.3747940229510067,
+        "final_capital_baht": 5677946.496639154
+      },
+      "holdout_months_ge_7pct": 17,
+      "holdout_cost_stress": {
+        "0bps": {
+          "months": 249,
+          "geometric_monthly_return": 0.022250100407015472,
+          "cumulative_return": 238.73602988706935,
+          "positive_month_pct": 0.6224899598393574,
+          "months_ge_7pct": 17,
+          "max_drawdown_pct": -0.36359807585953796,
+          "final_capital_baht": 7192080.896612081
+        },
+        "20bps": {
+          "months": 249,
+          "geometric_monthly_return": 0.021280076466910325,
+          "cumulative_return": 188.26488322130513,
+          "positive_month_pct": 0.6184738955823293,
+          "months_ge_7pct": 17,
+          "max_drawdown_pct": -0.3747940229510067,
+          "final_capital_baht": 5677946.496639154
+        },
+        "45bps": {
+          "months": 249,
+          "geometric_monthly_return": 0.020067467223153335,
+          "cumulative_return": 139.79762727556684,
+          "positive_month_pct": 0.6024096385542169,
+          "months_ge_7pct": 17,
+          "max_drawdown_pct": -0.3901382121653375,
+          "final_capital_baht": 4223928.8182670055
+        }
+      },
+      "formula": {
+        "id": "G1753",
+        "kind": "SUM2",
+        "features": [
+          "VOL_20",
+          "MAXDD_60"
+        ],
+        "orientations": [
+          1,
+          0
+        ],
+        "weights": [
+          0.5,
+          0.5
+        ]
+      }
+    },
+    {
+      "fi": 1913,
+      "formula_id": "G1913",
+      "train_geo": 0.12778581955347934,
+      "train_positive": 0.7714285714285715,
+      "validation_geo": 0.07966460030334299,
+      "validation_positive": 0.9166666666666666,
+      "validation_cumulative": 1.5088017571041559,
+      "holdout": {
+        "months": 249,
+        "geometric_monthly_return": 0.021698822722184374,
+        "cumulative_return": 208.604376176351,
+        "positive_month_pct": 0.6224899598393574,
+        "months_ge_7pct": 17,
+        "max_drawdown_pct": -0.36565300466573925,
+        "final_capital_baht": 6288131.28529053
+      },
+      "holdout_months_ge_7pct": 17,
+      "holdout_cost_stress": {
+        "0bps": {
+          "months": 249,
+          "geometric_monthly_return": 0.022680142595502994,
+          "cumulative_return": 265.2048770205285,
+          "positive_month_pct": 0.6265060240963856,
+          "months_ge_7pct": 17,
+          "max_drawdown_pct": -0.3538722055672737,
+          "final_capital_baht": 7986146.310615855
+        },
+        "20bps": {
+          "months": 249,
+          "geometric_monthly_return": 0.021698822722184374,
+          "cumulative_return": 208.604376176351,
+          "positive_month_pct": 0.6224899598393574,
+          "months_ge_7pct": 17,
+          "max_drawdown_pct": -0.36565300466573936,
+          "final_capital_baht": 6288131.28529053
+        },
+        "45bps": {
+          "months": 249,
+          "geometric_monthly_return": 0.020472088202242222,
+          "cumulative_return": 154.4109030367671,
+          "positive_month_pct": 0.6024096385542169,
+          "months_ge_7pct": 17,
+          "max_drawdown_pct": -0.38313632573448664,
+          "final_capital_baht": 4662327.091103014
+        }
+      },
+      "formula": {
+        "id": "G1913",
+        "kind": "SUM2",
+        "features": [
+          "VOL_20",
+          "BREAKOUT55"
+        ],
+        "orientations": [
+          1,
+          0
+        ],
+        "weights": [
+          0.5,
+          0.5
+        ]
+      }
+    },
+    {
+      "fi": 1914,
+      "formula_id": "G1914",
+      "train_geo": 0.1290959472207447,
+      "train_positive": 0.7714285714285715,
+      "validation_geo": 0.07945041154277388,
+      "validation_positive": 0.9166666666666666,
+      "validation_cumulative": 1.5028357798049905,
+      "holdout": {
+        "months": 249,
+        "geometric_monthly_return": 0.02160089251881292,
+        "cumulative_return": 203.66079426944955,
+        "positive_month_pct": 0.6104417670682731,
+        "months_ge_7pct": 16,
+        "max_drawdown_pct": -0.33920346410909163,
+        "final_capital_baht": 6139823.828083486
+      },
+      "holdout_months_ge_7pct": 16,
+      "holdout_cost_stress": {
+        "0bps": {
+          "months": 249,
+          "geometric_monthly_return": 0.022548475231505494,
+          "cumulative_return": 256.8056667007945,
+          "positive_month_pct": 0.6265060240963856,
+          "months_ge_7pct": 16,
+          "max_drawdown_pct": -0.32915819318712536,
+          "final_capital_baht": 7734170.0010238355
+        },
+        "20bps": {
+          "months": 249,
+          "geometric_monthly_return": 0.02160089251881292,
+          "cumulative_return": 203.66079426944955,
+          "positive_month_pct": 0.6104417670682731,
+          "months_ge_7pct": 16,
+          "max_drawdown_pct": -0.33920346410909163,
+          "final_capital_baht": 6139823.828083486
+        },
+        "45bps": {
+          "months": 249,
+          "geometric_monthly_return": 0.020416339095522762,
+          "cumulative_return": 152.31109844508583,
+          "positive_month_pct": 0.5863453815261044,
+          "months_ge_7pct": 16,
+          "max_drawdown_pct": -0.351807618950049,
+          "final_capital_baht": 4599332.953352575
+        }
+      },
+      "formula": {
+        "id": "G1914",
+        "kind": "SUM2",
+        "features": [
+          "VOL_20",
+          "BREAKOUT55"
+        ],
+        "orientations": [
+          1,
+          0
+        ],
+        "weights": [
+          0.65,
+          0.35
+        ]
+      }
+    },
+    {
+      "fi": 1873,
+      "formula_id": "G1873",
+      "train_geo": 0.143917058542254,
+      "train_positive": 0.8,
+      "validation_geo": 0.07483718712927057,
+      "validation_positive": 0.8333333333333334,
+      "validation_cumulative": 1.3774544472410817,
+      "holdout": {
+        "months": 249,
+        "geometric_monthly_return": 0.01576373481685489,
+        "cumulative_return": 48.13411661231765,
+        "positive_month_pct": 0.6385542168674698,
+        "months_ge_7pct": 21,
+        "max_drawdown_pct": -0.2619330950628146,
+        "final_capital_baht": 1474023.4983695294
+      },
+      "holdout_months_ge_7pct": 21,
+      "holdout_cost_stress": {
+        "0bps": {
+          "months": 249,
+          "geometric_monthly_return": 0.01722883688221155,
+          "cumulative_return": 69.34725448100036,
+          "positive_month_pct": 0.6586345381526104,
+          "months_ge_7pct": 21,
+          "max_drawdown_pct": -0.2519068231324073,
+          "final_capital_baht": 2110417.634430011
+        },
+        "20bps": {
+          "months": 249,
+          "geometric_monthly_return": 0.01576373481685489,
+          "cumulative_return": 48.13411661231765,
+          "positive_month_pct": 0.6385542168674698,
+          "months_ge_7pct": 21,
+          "max_drawdown_pct": -0.2619330950628145,
+          "final_capital_baht": 1474023.4983695294
+        },
+        "45bps": {
+          "months": 249,
+          "geometric_monthly_return": 0.013932266038477081,
+          "cumulative_return": 30.349237218939912,
+          "positive_month_pct": 0.6024096385542169,
+          "months_ge_7pct": 21,
+          "max_drawdown_pct": -0.2742961228255799,
+          "final_capital_baht": 940477.1165681974
+        }
+      },
+      "formula": {
+        "id": "G1873",
+        "kind": "SUM2",
+        "features": [
+          "VOL_20",
+          "DIST_MA60"
+        ],
+        "orientations": [
+          1,
+          0
+        ],
+        "weights": [
+          0.5,
+          0.5
+        ]
+      }
+    },
+    {
+      "fi": 1008,
+      "formula_id": "G1008",
+      "train_geo": 0.1480029301083643,
+      "train_positive": 0.8285714285714286,
+      "validation_geo": 0.07040256490286123,
+      "validation_positive": 0.8333333333333334,
+      "validation_cumulative": 1.2623807300080263,
+      "holdout": {
+        "months": 249,
+        "geometric_monthly_return": 0.014207788238793428,
+        "cumulative_return": 32.54349927470472,
+        "positive_month_pct": 0.6184738955823293,
+        "months_ge_7pct": 21,
+        "max_drawdown_pct": -0.2557942382861327,
+        "final_capital_baht": 1006304.9782411417
+      },
+      "holdout_months_ge_7pct": 21,
+      "holdout_cost_stress": {
+        "0bps": {
+          "months": 249,
+          "geometric_monthly_return": 0.015663899649361435,
+          "cumulative_return": 46.94618623756597,
+          "positive_month_pct": 0.6546184738955824,
+          "months_ge_7pct": 22,
+          "max_drawdown_pct": -0.2455145655380756,
+          "final_capital_baht": 1438385.5871269791
+        },
+        "20bps": {
+          "months": 249,
+          "geometric_monthly_return": 0.014207788238793428,
+          "cumulative_return": 32.54349927470472,
+          "positive_month_pct": 0.6184738955823293,
+          "months_ge_7pct": 21,
+          "max_drawdown_pct": -0.2557942382861327,
+          "final_capital_baht": 1006304.9782411417
+        },
+        "45bps": {
+          "months": 249,
+          "geometric_monthly_return": 0.012387570943405368,
+          "cumulative_return": 20.446398401453397,
+          "positive_month_pct": 0.5863453815261044,
+          "months_ge_7pct": 19,
+          "max_drawdown_pct": -0.26993697059025734,
+          "final_capital_baht": 643391.9520436019
+        }
+      },
+      "formula": {
+        "id": "G1008",
+        "kind": "SUM2",
+        "features": [
+          "MOM_60",
+          "VOL_20"
+        ],
+        "orientations": [
+          0,
+          1
+        ],
+        "weights": [
+          0.5,
+          0.5
+        ]
+      }
+    },
+    {
+      "fi": 1007,
+      "formula_id": "G1007",
+      "train_geo": 0.1419266897182081,
+      "train_positive": 0.8285714285714286,
+      "validation_geo": 0.0688660612535541,
+      "validation_positive": 0.9166666666666666,
+      "validation_cumulative": 1.2237166626240086,
+      "holdout": {
+        "months": 249,
+        "geometric_monthly_return": 0.01657022506777217,
+        "cumulative_return": 58.869954130384315,
+        "positive_month_pct": 0.5943775100401606,
+        "months_ge_7pct": 17,
+        "max_drawdown_pct": -0.29849250013058204,
+        "final_capital_baht": 1796098.6239115295
+      },
+      "holdout_months_ge_7pct": 17,
+      "holdout_cost_stress": {
+        "0bps": {
+          "months": 249,
+          "geometric_monthly_return": 0.01793220584255728,
+          "cumulative_return": 82.5593198784048,
+          "positive_month_pct": 0.6184738955823293,
+          "months_ge_7pct": 19,
+          "max_drawdown_pct": -0.28623981618786154,
+          "final_capital_baht": 2506779.596352144
+        },
+        "20bps": {
+          "months": 249,
+          "geometric_monthly_return": 0.01657022506777217,
+          "cumulative_return": 58.869954130384315,
+          "positive_month_pct": 0.5943775100401606,
+          "months_ge_7pct": 17,
+          "max_drawdown_pct": -0.29849250013058204,
+          "final_capital_baht": 1796098.6239115295
+        },
+        "45bps": {
+          "months": 249,
+          "geometric_monthly_return": 0.0148676392269953,
+          "cumulative_return": 38.44043750799395,
+          "positive_month_pct": 0.5863453815261044,
+          "months_ge_7pct": 16,
+          "max_drawdown_pct": -0.3143783551072822,
+          "final_capital_baht": 1183213.1252398184
+        }
+      },
+      "formula": {
+        "id": "G1007",
+        "kind": "SUM2",
+        "features": [
+          "MOM_60",
+          "VOL_20"
+        ],
+        "orientations": [
+          0,
+          1
+        ],
+        "weights": [
+          0.35,
+          0.65
+        ]
+      }
+    },
+    {
+      "fi": 1654,
+      "formula_id": "G1654",
+      "train_geo": 0.12466454888000711,
+      "train_positive": 0.6857142857142857,
+      "validation_geo": 0.06680839164956898,
+      "validation_positive": 0.75,
+      "validation_cumulative": 1.1728866864837126,
+      "holdout": {
+        "months": 249,
+        "geometric_monthly_return": 0.014478705568527594,
+        "cumulative_return": 34.85014483360627,
+        "positive_month_pct": 0.5983935742971888,
+        "months_ge_7pct": 17,
+        "max_drawdown_pct": -0.3277876742345227,
+        "final_capital_baht": 1075504.3450081882
+      },
+      "holdout_months_ge_7pct": 17,
+      "holdout_cost_stress": {
+        "0bps": {
+          "months": 249,
+          "geometric_monthly_return": 0.015947901216198046,
+          "cumulative_return": 50.40293686285523,
+          "positive_month_pct": 0.6184738955823293,
+          "months_ge_7pct": 18,
+          "max_drawdown_pct": -0.314565288194782,
+          "final_capital_baht": 1542088.1058856568
+        },
+        "20bps": {
+          "months": 249,
+          "geometric_monthly_return": 0.014478705568527594,
+          "cumulative_return": 34.85014483360627,
+          "positive_month_pct": 0.5983935742971888,
+          "months_ge_7pct": 17,
+          "max_drawdown_pct": -0.3277876742345227,
+          "final_capital_baht": 1075504.3450081882
+        },
+        "45bps": {
+          "months": 249,
+          "geometric_monthly_return": 0.01264209880471645,
+          "cumulative_return": 21.831720242006057,
+          "positive_month_pct": 0.5542168674698795,
+          "months_ge_7pct": 16,
+          "max_drawdown_pct": -0.34398521344652633,
+          "final_capital_baht": 684951.6072601817
+        }
+      },
+      "formula": {
+        "id": "G1654",
+        "kind": "SUM2",
+        "features": [
+          "VOL_10",
+          "DIST_MA60"
+        ],
+        "orientations": [
+          1,
+          0
+        ],
+        "weights": [
+          0.65,
+          0.35
+        ]
+      }
+    },
+    {
+      "fi": 1874,
+      "formula_id": "G1874",
+      "train_geo": 0.1326563641903724,
+      "train_positive": 0.7142857142857143,
+      "validation_geo": 0.06419140442366711,
+      "validation_positive": 0.8333333333333334,
+      "validation_cumulative": 1.109778980448385,
+      "holdout": {
+        "months": 249,
+        "geometric_monthly_return": 0.014080209161777324,
+        "cumulative_return": 31.509063934283922,
+        "positive_month_pct": 0.6144578313253012,
+        "months_ge_7pct": 19,
+        "max_drawdown_pct": -0.3237493983259818,
+        "final_capital_baht": 975271.9180285176
+      },
+      "holdout_months_ge_7pct": 19,
+      "holdout_cost_stress": {
+        "0bps": {
+          "months": 249,
+          "geometric_monthly_return": 0.015412883952491852,
+          "cumulative_return": 44.08423766071094,
+          "positive_month_pct": 0.6265060240963856,
+          "months_ge_7pct": 19,
+          "max_drawdown_pct": -0.3113693245163248,
+          "final_capital_baht": 1352527.1298213282
+        },
+        "20bps": {
+          "months": 249,
+          "geometric_monthly_return": 0.014080209161777324,
+          "cumulative_return": 31.509063934283922,
+          "positive_month_pct": 0.6144578313253012,
+          "months_ge_7pct": 19,
+          "max_drawdown_pct": -0.3237493983259818,
+          "final_capital_baht": 975271.9180285176
+        },
+        "45bps": {
+          "months": 249,
+          "geometric_monthly_return": 0.01241425454313605,
+          "cumulative_return": 20.587610363072553,
+          "positive_month_pct": 0.5783132530120482,
+          "months_ge_7pct": 17,
+          "max_drawdown_pct": -0.33893603692156815,
+          "final_capital_baht": 647628.3108921766
+        }
+      },
+      "formula": {
+        "id": "G1874",
+        "kind": "SUM2",
+        "features": [
+          "VOL_20",
+          "DIST_MA60"
+        ],
+        "orientations": [
+          1,
+          0
+        ],
+        "weights": [
+          0.65,
+          0.35
+        ]
+      }
+    },
+    {
+      "fi": 1872,
+      "formula_id": "G1872",
+      "train_geo": 0.15391946941095047,
+      "train_positive": 0.8571428571428571,
+      "validation_geo": 0.060952702863552144,
+      "validation_positive": 0.75,
+      "validation_cumulative": 1.0340062472515728,
+      "holdout": {
+        "months": 249,
+        "geometric_monthly_return": 0.014012933099327274,
+        "cumulative_return": 30.97643567076249,
+        "positive_month_pct": 0.6265060240963856,
+        "months_ge_7pct": 22,
+        "max_drawdown_pct": -0.2704934209630363,
+        "final_capital_baht": 959293.0701228747
+      },
+      "holdout_months_ge_7pct": 22,
+      "holdout_cost_stress": {
+        "0bps": {
+          "months": 249,
+          "geometric_monthly_return": 0.015521554722314201,
+          "cumulative_return": 45.301740705793286,
+          "positive_month_pct": 0.6385542168674698,
+          "months_ge_7pct": 22,
+          "max_drawdown_pct": -0.26060963842521734,
+          "final_capital_baht": 1389052.2211737987
+        },
+        "20bps": {
+          "months": 249,
+          "geometric_monthly_return": 0.014012933099327274,
+          "cumulative_return": 30.97643567076249,
+          "positive_month_pct": 0.6265060240963856,
+          "months_ge_7pct": 22,
+          "max_drawdown_pct": -0.2704934209630363,
+          "final_capital_baht": 959293.0701228747
+        },
+        "45bps": {
+          "months": 249,
+          "geometric_monthly_return": 0.012127072687588614,
+          "cumulative_return": 19.11524712555081,
+          "positive_month_pct": 0.6024096385542169,
+          "months_ge_7pct": 22,
+          "max_drawdown_pct": -0.28278448900845043,
+          "final_capital_baht": 603457.4137665243
+        }
+      },
+      "formula": {
+        "id": "G1872",
+        "kind": "SUM2",
+        "features": [
+          "VOL_20",
+          "DIST_MA60"
+        ],
+        "orientations": [
+          1,
+          0
+        ],
+        "weights": [
+          0.35,
+          0.65
+        ]
+      }
+    }
+  ],
+  "m1_benchmark": {
+    "formula_id": "G0000",
+    "train_geo": 0.03870453362457127,
+    "validation": {
+      "months": 12,
+      "geometric_monthly_return": 0.03381132007107013,
+      "cumulative_return": 0.49037446054720446,
+      "positive_month_pct": 0.5833333333333334,
+      "months_ge_7pct": 6,
+      "max_drawdown_pct": -0.17574789223630805,
+      "final_capital_baht": 44711.233816416134
+    },
+    "holdout": {
+      "months": 249,
+      "geometric_monthly_return": 0.00433883993102091,
+      "cumulative_return": 1.938896355627823,
+      "positive_month_pct": 0.5461847389558233,
+      "months_ge_7pct": 42,
+      "max_drawdown_pct": -0.5764356029692455,
+      "final_capital_baht": 88166.89066883469
+    },
+    "holdout_months_ge_7pct": 42,
+    "holdout_cost_stress": {
+      "0bps": {
+        "months": 249,
+        "geometric_monthly_return": 0.006116744269355934,
+        "cumulative_return": 3.5650529749377,
+        "positive_month_pct": 0.5823293172690763,
+        "months_ge_7pct": 46,
+        "max_drawdown_pct": -0.5530815956385202,
+        "final_capital_baht": 136951.589248131
+      },
+      "20bps": {
+        "months": 249,
+        "geometric_monthly_return": 0.00433883993102091,
+        "cumulative_return": 1.938896355627823,
+        "positive_month_pct": 0.5461847389558233,
+        "months_ge_7pct": 42,
+        "max_drawdown_pct": -0.5764356029692455,
+        "final_capital_baht": 88166.89066883469
+      },
+      "45bps": {
+        "months": 249,
+        "geometric_monthly_return": 0.002116382961073082,
+        "cumulative_return": 0.6928652334842438,
+        "positive_month_pct": 0.5341365461847389,
+        "months_ge_7pct": 39,
+        "max_drawdown_pct": -0.6144464992468587,
+        "final_capital_baht": 50785.957004527314
+      }
+    },
+    "formula": {
+      "id": "G0000",
+      "kind": "M1",
+      "features": [
+        "MOM_20"
+      ],
+      "orientations": [
+        1
+      ]
+    }
+  },
+  "research_warning": "This expansion uses Mendeley SET history and 20-trading-day forward returns. It is a discovery dataset, not an Apple-to-Apple replacement for the Supabase M1 925-universe benchmark. Any candidate must be revalidated on the canonical Supabase dataset before promotion."
+}
