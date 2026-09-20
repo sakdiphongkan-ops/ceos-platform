@@ -38,6 +38,12 @@ def main():
     df["month_end"]=pd.to_datetime(df.month_end).dt.to_period("M").dt.to_timestamp("M")
     df=df.sort_values(["month_end","symbol"]).drop_duplicates(["month_end","symbol"])
     df["adj_close"]=pd.to_numeric(df.adj_close,errors="coerce")
+    for f in FACTORS: df[f]=pd.to_numeric(df[f],errors="coerce")
+    factor_coverage={f:float(df[f].notna().mean()) for f in FACTORS}
+    active_factors=[f for f in FACTORS if factor_coverage[f] >= 0.20]
+    excluded_factors=[f for f in FACTORS if f not in active_factors]
+    if "mom1" not in active_factors or len(active_factors) < 2:
+        raise SystemExit(f"insufficient usable factors: {factor_coverage}")
     # Strict calendar-contiguous forward return: a missing month is NOT a 1M return.
     df["_next_month"]=df.groupby("symbol").month_end.shift(-1)
     df["_next_adj_close"]=df.groupby("symbol").adj_close.shift(-1)
@@ -74,7 +80,7 @@ def main():
         raw=rng.uniform(0.25,1.0,size=n)
         signs=rng.choice([-1.0,1.0],size=n)
         w=(raw*signs); w=w/np.sum(np.abs(w))
-        formulas.append({"id":f"F{i:04d}","terms":[(FACTORS[j],float(wi)) for j,wi in zip(inds,w)]})
+        formulas.append({"id":f"F{i:04d}","terms":[(active_factors[j],float(wi)) for j,wi in zip(inds,w)]})
     (out/"formula_catalog.json").write_text(json.dumps(formulas,indent=2),encoding="utf-8")
     # Candidate returns: each formula uses equal-weight top-K and a turnover-aware cost.
     candidates={}
@@ -152,6 +158,7 @@ def main():
       "status":"COMPLETED","engine":"luna-adaptive-tournament-v2",
       "dataset_sha256":hashlib.sha256(Path(args.input).read_bytes()).hexdigest(),
       "formula_count":len(formulas),"months_traded":len(r),
+      "factor_coverage":factor_coverage,"active_factors":active_factors,"excluded_factors":excluded_factors,
       "factor_coverage":factor_coverage,"active_factors":active_factors,
       "excluded_sparse_factors":[f for f in FACTORS if f not in active_factors],
       "geometric_monthly_return":adaptive_stats["geometric_monthly_return"],
