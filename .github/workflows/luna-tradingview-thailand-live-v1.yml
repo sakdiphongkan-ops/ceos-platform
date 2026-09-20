@@ -35,10 +35,18 @@ jobs:
           python scripts/research/luna_tradingview_thailand_screener_snapshot_v1.py \
             --output research/luna_tradingview_thailand_screener_snapshot_v1 \
             --start 0 --end 2000
+      - name: Build M1 x TradingView research overlay
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          python scripts/research/luna_tradingview_m1_overlay_v1.py             --snapshot research/luna_tradingview_thailand_screener_snapshot_v1/tradingview_thailand_screener_snapshot.csv             --output research/luna_tradingview_m1_overlay_v1
+
       - name: Validate
         run: |
           test -s research/luna_tradingview_thailand_screener_snapshot_v1/summary.json
           test -s research/luna_tradingview_thailand_screener_snapshot_v1/tradingview_thailand_screener_snapshot.csv
+          test -s research/luna_tradingview_m1_overlay_v1/summary.json
+          test -s research/luna_tradingview_m1_overlay_v1/m1_tradingview_overlay.csv
       - name: Save snapshot
         run: |
           mkdir -p research-results
@@ -58,5 +66,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: luna-tradingview-thailand-live-snapshot
-          path: research/luna_tradingview_thailand_screener_snapshot_v1/
+          path: |
+            research/luna_tradingview_thailand_screener_snapshot_v1/
+            research/luna_tradingview_m1_overlay_v1/
           retention-days: 14
