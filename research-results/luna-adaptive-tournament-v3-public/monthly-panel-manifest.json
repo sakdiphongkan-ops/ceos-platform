@@ -1,0 +1,9 @@
+{
+  "rows": 29066,
+  "symbols": 477,
+  "min_month": "2020-03-31",
+  "max_month": "2025-03-31",
+  "price_source": "adj_close",
+  "forward_return": "next calendar month-end only",
+  "point_in_time": "last daily decision observation within month"
+}
