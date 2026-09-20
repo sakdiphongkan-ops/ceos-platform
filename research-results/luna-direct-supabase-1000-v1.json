@@ -1,0 +1,149 @@
+{
+  "status": "COMPLETED",
+  "engine": "luna-direct-supabase-1000-v1",
+  "as_of": "2026-09-20",
+  "data": {
+    "table": "public.luna_research_monthly_price_factors",
+    "period": "2021-10-01_to_2026-08-01",
+    "ranked_rows": 50799,
+    "formulas": 1000,
+    "top_k": 20,
+    "cost_bps_one_way": 20
+  },
+  "adaptive_walk_forward": {
+    "months": 47,
+    "start": "2022-10-01",
+    "end": "2026-08-01",
+    "geometric_monthly_return": 0.008905394224042674,
+    "cumulative_return": 0.516948615993452,
+    "positive_month_pct": 0.5531914893617021,
+    "months_ge_7pct": 4,
+    "max_drawdown": -0.3206043076139742,
+    "min_monthly_return": -0.16110430319008362,
+    "max_monthly_return": 0.26338878516344044,
+    "selection_frequency": [
+      {
+        "formula_id": 393,
+        "selections": 20
+      },
+      {
+        "formula_id": 295,
+        "selections": 8
+      },
+      {
+        "formula_id": 568,
+        "selections": 8
+      },
+      {
+        "formula_id": 92,
+        "selections": 2
+      },
+      {
+        "formula_id": 165,
+        "selections": 2
+      },
+      {
+        "formula_id": 332,
+        "selections": 2
+      },
+      {
+        "formula_id": 357,
+        "selections": 2
+      },
+      {
+        "formula_id": 425,
+        "selections": 2
+      },
+      {
+        "formula_id": 643,
+        "selections": 1
+      }
+    ]
+  },
+  "m1_same_period_persisted_benchmark": {
+    "months": 47,
+    "start": "2022-10-01",
+    "end": "2026-08-31",
+    "geometric_monthly_return": 0.011602351410600084,
+    "cumulative_return": 0.7197369311558311,
+    "positive_month_pct": 0.5531914893617021,
+    "max_drawdown": -0.3707724343823976
+  },
+  "m1_recomputed_from_current_factor_table": {
+    "months": 59,
+    "geometric_monthly_return": 0.0043501179926382725,
+    "cumulative_return": 0.2918823375691752,
+    "positive_month_pct": 0.5084745762711864,
+    "average_turnover": 0.885593220338983,
+    "note": "Does not exactly reproduce the persisted production M1 because the current factor-table universe/definition differs from the legacy 925-symbol production implementation."
+  },
+  "frozen_holdout": {
+    "holdout_period": "2025-09-01_to_2026-08-01",
+    "candidate_pool": 25,
+    "train_selection_only": true,
+    "train_rank1": "F0568",
+    "train_rank1_holdout_geometric_monthly_return": 0.02625926906903191,
+    "best_holdout_geometric_monthly_return_among_top25": 0.05875026150403031,
+    "candidates_meeting_7pct_monthly_hurdle": 0,
+    "adaptive_actual_holdout_geometric_monthly_return": 0.03319772975089522,
+    "adaptive_actual_holdout_cumulative_return": 0.4797941929075418,
+    "adaptive_actual_holdout_positive_month_pct": 0.75,
+    "adaptive_actual_holdout_months_ge_7pct": 2,
+    "m1_holdout_geometric_monthly_return": 0.041392768561080234,
+    "m1_holdout_cumulative_return": 0.6269518169873102,
+    "m1_holdout_positive_month_pct": 0.75,
+    "m1_holdout_months_ge_7pct": 3
+  },
+  "holdout_cost_stress_bps": {
+    "20": {
+      "adaptive_geo_monthly": 0.03319772975089522,
+      "m1_geo_monthly": 0.041392768561080234
+    },
+    "40": {
+      "adaptive_geo_monthly": 0.03166167805987633,
+      "m1_geo_monthly": 0.03956434624753188
+    },
+    "60": {
+      "adaptive_geo_monthly": 0.030125571345861097,
+      "m1_geo_monthly": 0.0377358956940197
+    }
+  },
+  "top_full_period_descriptive": [
+    {
+      "formula_id": 518,
+      "geo_monthly": 0.022541768204463127,
+      "cumulative": 2.7254810141640853
+    },
+    {
+      "formula_id": 954,
+      "geo_monthly": 0.021246001021575794,
+      "cumulative": 2.4569394083374765
+    },
+    {
+      "formula_id": 326,
+      "geo_monthly": 0.020168902197759287,
+      "cumulative": 2.248274832627042
+    },
+    {
+      "formula_id": 298,
+      "geo_monthly": 0.02010742306485078,
+      "cumulative": 2.2367455670242196
+    },
+    {
+      "formula_id": 568,
+      "geo_monthly": 0.019571097159729014,
+      "cumulative": 2.137858958915928
+    }
+  ],
+  "hurdle": {
+    "target_geometric_monthly_return": 0.07,
+    "adaptive_walk_forward_pass": false,
+    "frozen_top25_holdout_pass": false,
+    "interpretation": "The first 1,000-formula expanded linear rank search does not meet the 7% geometric-monthly hurdle out of sample/holdout."
+  },
+  "next_engine": {
+    "name": "LUNA monthly expanded interaction search",
+    "scope": "new nonlinear rank transforms, pair interactions, reversal/momentum spreads, liquidity/volatility normalization, fresh deterministic formula family",
+    "objective": "search beyond the current 8-factor signed linear blend space while keeping train/OOS/holdout separation"
+  }
+}
