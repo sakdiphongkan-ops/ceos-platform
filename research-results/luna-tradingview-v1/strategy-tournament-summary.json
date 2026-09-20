@@ -1,7 +1,7 @@
 {
   "status": "COMPLETED",
   "engine": "luna-tradingview-strategy-tournament-v1",
-  "panel_sha256": "ec47fa7b3877f47199df0354d612da1cfb480b2d1930cb9d2e176bf9568716fa",
+  "panel_sha256": "e3479965f6ed42a2be557cd33f76375e48b731b82684ce04b4f47005581d8a78",
   "candidate_count": 35,
   "gate_candidates": 25,
   "rerank_candidates": 10,
