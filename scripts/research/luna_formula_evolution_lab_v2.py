@@ -332,7 +332,7 @@ def main():
             d=dict(a.terms)
             for f,w in b.terms:d[f]=0.5*d.get(f,0)+0.5*w
             t=normalize(d.items())
-            if t: children.append(Formula(fid(t), (a.id,b.id), t, "crossover"))
+            if t: children.append(Formula(fid(t), t, (a.id,b.id), "crossover"))
         population=list({f.id:f for f in parents+children}.values())
 
     # Freeze final candidates using only the final generation TRAIN+DEV score.
