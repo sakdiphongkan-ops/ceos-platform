@@ -69,6 +69,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add research-results/luna-theory-family-search-v1
           git diff --cached --quiet || git commit -m "research(luna): save theory family search result"
+          git pull --rebase origin master
           git push
 
       - name: Upload artifact
