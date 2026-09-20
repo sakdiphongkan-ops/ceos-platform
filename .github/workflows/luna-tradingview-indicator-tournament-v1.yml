@@ -204,7 +204,7 @@ jobs:
           lines.append("Machine-readable full candidate results are stored by the workflow.")
           Path("research-results-comment.md").write_text("\\n".join(lines),encoding="utf-8")
           PY
-          gh issue comment 2 --body-file research-results-comment.md
+          gh issue comment 2 --body-file research-results-comment.md || echo "Issue comment skipped: token lacks issue-comment permission; research artifacts will still be persisted."
 
       - name: Persist tournament results via GitHub Contents API
         env:
