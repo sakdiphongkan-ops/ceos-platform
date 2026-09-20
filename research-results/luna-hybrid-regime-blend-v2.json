@@ -1,0 +1,77 @@
+{
+  "status": "CANDIDATE",
+  "strategy_id": "LUNA-HYBRID-R2",
+  "source_dataset": "public.luna_research_monthly_price_factors",
+  "primary_config": {
+    "k": 20,
+    "cost_bps": 20,
+    "regime_scale": 0.5,
+    "rebalance": "monthly"
+  },
+  "formula": {
+    "base_reversal": "REV1 = 1-rank(mom1)",
+    "regime_z": "0.5*z(breadth1_vs_prior12m)+0.5*z(breadth6_vs_prior12m)",
+    "trend_score": "0.55*rank(high52_ratio)+0.30*rank(mom6)+0.15*(1-rank(vol20))",
+    "continuous_trend_weight": "sigmoid(regime_z/0.5)",
+    "regime_score": "alpha*trend_score+(1-alpha)*REV1",
+    "final_score": "0.50*REV1+0.50*regime_score"
+  },
+  "anti_lookahead": {
+    "current_month_ranks_only": true,
+    "regime_z_uses_prior_12_months_only": true,
+    "forward_return_requires_next_calendar_month": true,
+    "holdout_excluded_from_scale_selection": true
+  },
+  "scale_selection": {
+    "candidates": [
+      0.5,
+      0.75,
+      1,
+      1.5,
+      2
+    ],
+    "selection_metric": "DEV geometric monthly return",
+    "selected_scale": 0.5,
+    "selected_dev_geo_monthly": 0.029661594853567706
+  },
+  "metrics": {
+    "train_2021_10_to_2024_12": {
+      "months": 39,
+      "geo_monthly": -0.010919569769862952,
+      "cumulative": -0.3483224591621942,
+      "positive_month_pct": 0.4358974358974359
+    },
+    "dev_2025_01_to_2025_12": {
+      "months": 12,
+      "geo_monthly": 0.029661594853567706,
+      "cumulative": 0.42014985091805185,
+      "positive_month_pct": 0.5
+    },
+    "holdout_2026_01_to_2026_07": {
+      "months": 7,
+      "geo_monthly": 0.04524567115256759,
+      "cumulative": 0.36310290476696955,
+      "positive_month_pct": 0.8571428571428571,
+      "worst_month": -0.009552521354436148,
+      "best_month": 0.14920280639388006
+    }
+  },
+  "holdout_cost_stress": {
+    "0bps": 0.0472034586010051,
+    "20bps": 0.0452456711525677,
+    "40bps": 0.0432878789958544,
+    "60bps": 0.0413300821046663,
+    "80bps": 0.0393722804526091
+  },
+  "benchmark_comparison_holdout": {
+    "exact_persisted_m1_geo_monthly": 0.03229111521516031,
+    "exact_persisted_m1_cumulative": 0.24915211063756937,
+    "same_monthly_factor_m1_alias_geo_monthly": 0.02752548893678318,
+    "same_monthly_factor_m1_alias_cumulative": 0.20933946858363098
+  },
+  "notes": [
+    "Holdout is only 7 months, so this is not final validation.",
+    "R2 was selected on DEV only; the 2026 holdout was not used to choose the regime scale.",
+    "This candidate should next be tested with integer-share execution, slippage, longer unseen periods, and fresh parameter families."
+  ]
+}
