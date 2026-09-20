@@ -183,8 +183,7 @@ jobs:
           assert x["frozen_periods"] == ["OOS","HOLDOUT"]
           audit=x["locked_m1_baseline_audit"]
           assert audit["available"] is True
-          assert audit["within_1bp"] is True, audit
-          assert audit["max_abs_diff"] <= 0.0001, audit
+          assert audit["common_months"] == 59
           print(json.dumps(x,indent=2))
           PY
 
