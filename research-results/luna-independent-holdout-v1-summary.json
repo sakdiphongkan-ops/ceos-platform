@@ -9,7 +9,18 @@
   "top_n_frozen": 25,
   "k": 20,
   "cost_bps": 20.0,
-  "winner_by_holdout_return": {
+  "rank1_frozen_candidate_holdout": {
+    "training_rank": 1,
+    "formula_id": "F0387",
+    "training_geometric_monthly": 0.03991866716295922,
+    "training_positive_pct": 0.673469387755102,
+    "holdout_geometric_monthly": -0.004588141113295752,
+    "holdout_cumulative": -0.04932753635248788,
+    "holdout_positive_pct": 0.45454545454545453,
+    "holdout_max_drawdown_pct": -0.09875513505990963,
+    "holdout_avg_turnover": 0.4227272727272727
+  },
+  "highest_holdout_among_frozen_candidates_diagnostic": {
     "training_rank": 21,
     "formula_id": "F0070",
     "training_geometric_monthly": 0.03216382055448608,
@@ -23,5 +34,5 @@
   "m1_training_geometric_monthly": 0.017761678533522618,
   "m1_holdout_geometric_monthly": -0.028238612084083403,
   "m1_holdout_cumulative": -0.2702803748525969,
-  "selection_guard": "formula ranking uses training months only; holdout returns never influence selection"
+  "selection_guard": "formula ranking uses training months only; holdout returns never influence selection; highest_holdout field is diagnostic only and is not a selected strategy"
 }
