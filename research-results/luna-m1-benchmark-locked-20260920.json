@@ -1,0 +1,28 @@
+{
+  "strategy_version": "luna-m1s0k20rev-v1",
+  "strategy_id": "M1_S0_K20_REV",
+  "universe_size": 925,
+  "rebalance": "monthly",
+  "weighting": "equal",
+  "direction": "REV",
+  "lookback_months": 1,
+  "skip_months": 0,
+  "cost_bps_roundtrip": 20,
+  "period": [
+    "2021-10-31",
+    "2026-08-31"
+  ],
+  "months": 59,
+  "source_table": "public.luna_strategy_portfolio_monthly",
+  "locked_series_file": "research-results/luna-m1-benchmark-locked-20260920.csv",
+  "apple_to_apple_rule": "Future formula comparisons must compare their monthly net_return series to this locked M1 series; do not substitute the factor-table M1 proxy.",
+  "exact_stats": {
+    "geometric_monthly_return": 0.006556127881564541,
+    "cumulative_return": 0.4704214597467422,
+    "positive_month_pct": 0.5423728813559322,
+    "max_drawdown_pct": -0.4735760363437528,
+    "average_turnover": 0.9127118644067796,
+    "total_transaction_cost": 0.1077,
+    "final_equity_index": 1.4704214597467422
+  }
+}
