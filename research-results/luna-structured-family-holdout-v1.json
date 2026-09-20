@@ -1,97 +1,132 @@
 {
   "status": "COMPLETED",
-  "engine": "luna-structured-family-holdout-v1",
-  "dataset_rows": 51562,
+  "engine": "luna-structured-family-holdout-v2",
+  "rows": 51562,
   "months": 59,
-  "period": [
-    "2021-09-01",
-    "2026-07-01"
-  ],
   "candidates": 144,
   "split": {
-    "train": "2021-09 through 2023-12",
-    "validation": "2024-01 through 2024-12",
-    "holdout": "2025-01 through 2026-07"
+    "train": "2021-09..2023-12",
+    "validation": "2024-01..2024-12",
+    "holdout": "2025-01..2026-07"
   },
-  "selection_rule": "select by validation geometric monthly return at 20bps; holdout excluded from selection",
-  "top_validation_candidates": [
-    {
-      "family": "MOM12-LOWVOL-LOWAMT",
-      "k": 5,
-      "w": 0.5,
-      "train_geo": 0.03449964646115555,
-      "validation_geo": 0.009584217097830638,
-      "holdout_geo_20bps": -0.01754646131623039,
-      "holdout_geo_45bps": -0.01905060757139876,
-      "holdout_geo_60bps": -0.01995320936598788,
-      "holdout_positive_month_pct": 0.3684210526315789
-    },
-    {
-      "family": "MOM12-LOWVOL-LOWAMT",
-      "k": 5,
-      "w": 0.7,
-      "train_geo": 0.033971791611847824,
-      "validation_geo": 0.009581645588986998,
-      "holdout_geo_20bps": -0.029410220669880305,
-      "holdout_geo_45bps": -0.030779465575683673,
-      "holdout_geo_60bps": -0.031601150698413405,
-      "holdout_positive_month_pct": 0.2631578947368421
-    },
-    {
-      "family": "MOM12-LOWVOL-LOWAMT",
-      "k": 5,
-      "w": 0.8,
-      "train_geo": 0.03518387017849034,
-      "validation_geo": 0.00924523954875256,
-      "holdout_geo_20bps": 0.0055204564869062445,
-      "holdout_geo_45bps": 0.0042260047489226515,
-      "holdout_geo_60bps": 0.0034492709611222416,
-      "holdout_positive_month_pct": 0.42105263157894735
-    },
-    {
-      "family": "MOM12-MAXDD-LOWVOL",
-      "k": 5,
-      "w": 0.3,
-      "train_geo": 0.023783611260763893,
-      "validation_geo": 0.0052183575250686065,
-      "holdout_geo_20bps": 0.0020524730835893568,
-      "holdout_geo_45bps": 0.0006100181896069312,
-      "holdout_geo_60bps": -0.00025552176426657525,
-      "holdout_positive_month_pct": 0.631578947368421
-    },
-    {
-      "family": "MOM12-LOWVOL",
-      "k": 5,
-      "w": 0.8,
-      "train_geo": 0.022253209299423427,
-      "validation_geo": 0.0052183575250686065,
-      "holdout_geo_20bps": 0.001986859378459993,
-      "holdout_geo_45bps": 0.0005698729546470549,
-      "holdout_geo_60bps": -0.00028039124731138454,
-      "holdout_positive_month_pct": 0.631578947368421
-    },
-    {
-      "family": "MOM12-MAXDD-LOWVOL",
-      "k": 20,
-      "w": 0.8,
-      "train_geo": 0.012494708641109353,
-      "validation_geo": 0.0013967581967373466,
-      "holdout_geo_20bps": 0.008922928747692849,
-      "holdout_geo_45bps": 0.007435661377995562,
-      "holdout_geo_60bps": 0.006543287821364929,
-      "holdout_positive_month_pct": 0.6842105263157895
-    },
-    {
-      "family": "MOM12-MAXDD-LOWVOL",
-      "k": 20,
-      "w": 0.6,
-      "train_geo": 0.012329540096130742,
-      "validation_geo": 0.001023852944890742,
-      "holdout_geo_20bps": 0.01547414448720108,
-      "holdout_geo_45bps": 0.014040103892863032,
-      "holdout_geo_60bps": 0.013179672470601034,
-      "holdout_positive_month_pct": 0.7368421052631579
-    }
+  "selection": "validation geometric monthly return at 20bps; holdout excluded from selection",
+  "top_validation": [
+    [
+      "MOM12-LOWVOL-LOWAMT",
+      5,
+      0.5,
+      0.03385950458254072,
+      0.009117862042539837,
+      -0.018345115188904804,
+      -0.02084737681803983,
+      -0.0223487396802714,
+      0.3684210526315789
+    ],
+    [
+      "MOM12-LOWVOL-LOWAMT",
+      5,
+      0.7,
+      0.03318302430042985,
+      0.008648493507499744,
+      -0.030318429169087224,
+      -0.03282269780960834,
+      -0.03432527037626365,
+      0.2631578947368421
+    ],
+    [
+      "MOM12-LOWVOL-LOWAMT",
+      5,
+      0.8,
+      0.034277542132179484,
+      0.008245360791114598,
+      0.004545324494731995,
+      0.0020320214225773015,
+      0.0005240108161883583,
+      0.42105263157894735
+    ],
+    [
+      "MOM12-LOWVOL-LOWAMT",
+      5,
+      0.6,
+      0.03570516189284634,
+      0.006990875578736677,
+      -0.017019401793724853,
+      -0.0195217735573463,
+      -0.021023202797406437,
+      0.3157894736842105
+    ],
+    [
+      "MOM12-LOWVOL",
+      5,
+      0.4,
+      0.021613192734306175,
+      0.004918262508528448,
+      0.0011181059085905165,
+      -0.0013847003747570197,
+      -0.0028863912563092953,
+      0.5789473684210527
+    ],
+    [
+      "MOM12-MAXDD-LOWVOL",
+      5,
+      0.8,
+      0.024380533807900617,
+      0.004247518122958205,
+      -0.006837956102981213,
+      -0.009340546287562534,
+      -0.010842106993036116,
+      0.47368421052631576
+    ],
+    [
+      "MOM12-MAXDD-LOWVOL",
+      5,
+      0.6,
+      0.02138225533932747,
+      0.0032616888744620987,
+      0.0014102342498121256,
+      -0.001092512083817776,
+      -0.0025941668545038654,
+      0.5789473684210527
+    ],
+    [
+      "MOM12-MAXDD-LOWVOL",
+      5,
+      0.5,
+      0.02302393079641396,
+      0.0029934385031336053,
+      0.000010127215633870534,
+      -0.002493070110849205,
+      -0.00399499665511327,
+      0.5789473684210527
+    ],
+    [
+      "MOM12-LOWVOL",
+      20,
+      0.6,
+      0.011535886243235982,
+      0.0003689228136187772,
+      0.010280032177728105,
+      0.007779418775426539,
+      0.006279049277624793,
+      0.7368421052631579
+    ],
+    [
+      "MOM12-MAXDD-LOWVOL",
+      20,
+      0.7,
+      0.011492059679114375,
+      0.0002722329493625164,
+      0.013923793554490915,
+      0.011423245401599003,
+      0.009922915215523131,
+      0.6842105263157895
+    ]
   ],
-  "conclusion_guard": "The validation-selected candidates did not sustain performance on the holdout. No candidate in this 144-case pre-specified family sweep demonstrated >=7% geometric monthly return on the holdout."
+  "holdout_distribution": {
+    "max20bps": 0.023157183913906643,
+    "p95": 0.01486550326561753,
+    "count_ge7": 0
+  },
+  "normalization_note": "This replaces the first v1 analysis. v2 uses normalized family weights summing to 1; v1 had a weighting normalization error and must not be used.",
+  "conclusion_guard": "No validation-selected candidate in this 144-case family sweep reached the 7% geometric-monthly hurdle on the 2025-01..2026-07 holdout. The maximum holdout geometric monthly return observed across all 144 candidates was 2.316% at 20bps, but that maximum is post-hoc and is not a valid selection result."
 }
