@@ -10,6 +10,7 @@ on:
       - "scripts/research/download_mendeley_set.py"
       - "scripts/research/build_factor_dataset.py"
       - "scripts/research/filter_last_5y.py"
+      - "scripts/research/luna_holdout_audit_v2.py"
   workflow_dispatch:
 
 concurrency:
@@ -64,10 +65,18 @@ jobs:
           rm -rf research/luna_adaptive_tournament_v3_public
           python scripts/research/luna_adaptive_tournament_v3_public.py             --input data/set_2000_2025/monthly/factors.csv             --output research/luna_adaptive_tournament_v3_public             --formula-count 1000             --lookback-months 24             --min-history-months 12             --cost-bps 20             --k 20             --seed 20260920
 
+      - name: Run frozen 12-month holdout audit
+        run: |
+          rm -rf research/luna_holdout_audit_public
+          python scripts/research/luna_holdout_audit_v2.py --input data/set_2000_2025/monthly/factors.csv --catalog research/luna_adaptive_tournament_v3_public/formula_catalog.json --output research/luna_holdout_audit_public --holdout-months 12 --top-n 25 --k 20 --cost-bps 20 --benchmark-id M1_REV_K20
+
       - name: Validate
         run: |
           test -s research/luna_adaptive_tournament_v3_public/summary.json
           test -s research/luna_adaptive_tournament_v3_public/selection-ledger.csv
+          test -s research/luna_adaptive_tournament_v3_public/formula_catalog.json
+          test -s research/luna_holdout_audit_public/summary.json
+          test -s research/luna_holdout_audit_public/holdout_ranked.csv
           python - <<'PY'
           import json
           x=json.load(open("research/luna_adaptive_tournament_v3_public/summary.json"))
@@ -75,7 +84,10 @@ jobs:
           assert 36 <= x["months_traded"] <= 72
           assert x["leakage_guard"]
           assert x["data_contiguity_guard"]
-          print(json.dumps(x, indent=2))
+          h=json.load(open("research/luna_holdout_audit_public/summary.json"))
+          assert h["selection_guard"]
+          assert h["holdout_months"] == 12
+          print(json.dumps({"tournament":x,"holdout":h}, indent=2))
           PY
 
       - name: Save repository result
@@ -85,6 +97,8 @@ jobs:
           cp research/luna_adaptive_tournament_v3_public/selection-ledger.csv              research-results/luna-adaptive-tournament-v3-public/selection-ledger.csv
           cp research/luna_adaptive_tournament_v3_public/formula_catalog.json              research-results/luna-adaptive-tournament-v3-public/formula-catalog.json
           cp data/set_2000_2025/monthly/factors.manifest.json              research-results/luna-adaptive-tournament-v3-public/monthly-panel-manifest.json
+          cp research/luna_holdout_audit_public/summary.json research-results/luna-adaptive-tournament-v3-public/holdout-summary.json
+          cp research/luna_holdout_audit_public/holdout_ranked.csv research-results/luna-adaptive-tournament-v3-public/holdout-ranked.csv
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add research-results/
