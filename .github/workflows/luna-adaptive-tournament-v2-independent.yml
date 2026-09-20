@@ -51,6 +51,25 @@ jobs:
             --input data/luna_monthly_independent/monthly_price_factors_raw.csv \
             --output data/luna_monthly_independent/monthly_price_factors.csv
 
+          python - <<'PY'
+          import json, hashlib
+          from pathlib import Path
+          import pandas as pd
+          p=Path("data/luna_monthly_independent/monthly_price_factors.csv")
+          df=pd.read_csv(p, usecols=["month_end","symbol"])
+          manifest={
+              "rows": int(len(df)),
+              "symbols": int(df["symbol"].nunique()),
+              "min_month": str(pd.to_datetime(df["month_end"]).min().date()),
+              "max_month": str(pd.to_datetime(df["month_end"]).max().date()),
+              "dataset_sha256": hashlib.sha256(p.read_bytes()).hexdigest(),
+              "window": "strict trailing-5-calendar-years-monthly-v1"
+          }
+          Path("data/luna_monthly_independent/monthly_price_factors.manifest.json").write_text(
+              json.dumps(manifest, indent=2), encoding="utf-8"
+          )
+          PY
+
       - name: Run 1000-formula tournament
         run: |
           rm -rf research/luna_adaptive_tournament_v2_independent
