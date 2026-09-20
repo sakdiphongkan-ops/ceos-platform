@@ -1,65 +1,57 @@
 {
-  "status": "NO_INDICATOR_PROMOTION",
-  "decision_date": "2026-09-20",
-  "production_strategy": "luna-m1s0k20rev-v1",
-  "production_rule": "M1 monthly mean-reversion selector remains the production core; TradingView/indicator panel remains research-only.",
+  "status": "FINAL_RESEARCH_DECISION",
+  "date": "2026-09-20",
+  "control": {
+    "name": "LUNA_M1_S0_K20_REV",
+    "definition": "Select the 20 lowest completed-calendar-month raw-close returns at month-end; equal weight; monthly rebalance.",
+    "costs_bps_tested": [20, 40, 60]
+  },
   "tournament": {
     "candidate_count": 35,
-    "non_baseline_candidates": 34,
-    "costs_bps": [
-      20,
-      40,
-      60
-    ],
-    "periods": {
-      "full5y": [
-        "2021-10-31",
-        "2026-08-31"
-      ],
-      "train": [
-        "2022-10-31",
-        "2023-08-31"
-      ],
-      "dev": [
-        "2023-09-30",
-        "2024-08-31"
-      ],
-      "oos": [
-        "2024-09-30",
-        "2025-08-31"
-      ],
-      "holdout": [
-        "2025-09-30",
-        "2026-08-31"
-      ]
+    "gate_candidates": 25,
+    "rerank_candidates": 10,
+    "data_symbols": 924,
+    "daily_rows": 1034706,
+    "oos_period": "2024-09-30 to 2025-08-31",
+    "holdout_period": "2025-09-30 to 2026-08-31"
+  },
+  "control_performance_20bps": {
+    "full5y_geo_monthly": 0.006126651987518431,
+    "full5y_cumulative": 0.4338593589264996,
+    "full5y_positive_month_pct": 0.5423728813559322,
+    "full5y_max_drawdown": -0.4735760363437522,
+    "oos_geo_monthly": 0.01603583050720147,
+    "oos_positive_month_pct": 0.5,
+    "oos_max_drawdown": -0.2937060349147085,
+    "holdout_geo_monthly": 0.04077484038408902,
+    "holdout_positive_month_pct": 0.75,
+    "holdout_max_drawdown": -0.028903557371724453
+  },
+  "promotion_rule": {
+    "must_beat_control_on_oos": true,
+    "must_beat_control_on_holdout": true,
+    "must_remain_positive_at_all_costs": true,
+    "must_replicate": true
+  },
+  "decision": {
+    "promoted_indicator_formula": null,
+    "production_core": "M1_ONLY",
+    "indicator_role": "RESEARCH_ONLY",
+    "reason": "No tested indicator/gate/rerank candidate beat the same-data M1 control on both frozen OOS and HOLDOUT. The best robustness-ranked indicator candidates remained materially below the control return levels."
+  },
+  "notable_candidates": {
+    "RSI_DIV_TV_OSC": {
+      "oos_geo_monthly_20bps": 0.0002146162740713524,
+      "holdout_geo_monthly_20bps": 0.0009171846053478895
     },
-    "promotion_rule": "Beat the same-universe M1 control on both frozen OOS and HOLDOUT and remain positive at 20/40/60 bps.",
-    "promoted_candidates": [],
-    "positive_oos_and_holdout_but_below_control": [
-      "RSI2_PULLBACK",
-      "RSI_DIV_TV_OSC",
-      "ATRP_RISK_GATE",
-      "STRENGTH_NOT_DEEP",
-      "POOL50_VOLUME"
-    ]
+    "ATRP_RISK_GATE": {
+      "oos_geo_monthly_20bps": 0.008357339011615068,
+      "holdout_geo_monthly_20bps": 0.014838428427890338
+    },
+    "BB_REENTRY_RSI": {
+      "oos_geo_monthly_20bps": -0.003973726645852245,
+      "holdout_geo_monthly_20bps": 0.005010278106620963
+    }
   },
-  "control_20bps": {
-    "geo_monthly_oos": 0.02152270907951921,
-    "geo_monthly_holdout": 0.04225658580416742,
-    "cumulative_full5y": 0.6491169754638915,
-    "max_drawdown_full5y": -0.4461632524884207
-  },
-  "locked_production_audit": {
-    "common_months": 59,
-    "max_abs_diff": 0.031861473264168855,
-    "mean_abs_diff": 0.003236460532339336,
-    "within_1bp": false,
-    "note": "The research panel contains 924 symbols versus the locked production universe of 925 and has symbol-level data coverage differences. Candidate-vs-control decisions therefore use the same research-panel universe; production promotion requires an exact universe/data audit separately."
-  },
-  "operational_policy": {
-    "indicator_gate_enabled": false,
-    "indicator_rerank_enabled": false,
-    "indicator_panel_retained_for_research": true,
-    "next_step": "Keep M1 live; continue indicator research only when a candidate passes frozen OOS/HOLDOUT and stress-cost tests."
-  }
+  "production_action": "Do not add TradingView-derived indicators to the production selector. Keep the indicator engine and tournament available for future research only."
 }
