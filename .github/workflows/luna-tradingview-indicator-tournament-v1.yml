@@ -35,26 +35,42 @@ jobs:
           python - <<'PY'
           import requests
           from pathlib import Path
+          from concurrent.futures import ThreadPoolExecutor, as_completed
           import pandas as pd
 
           url = "https://wigzicwgcsrhdummrbjx.supabase.co/functions/v1/luna-research-export-v1"
-          page_size = 5000
+          page_size = 1000
+          workers = 20
           rows = []
-          offset = 0
 
-          while True:
+          def fetch_page(offset):
               r = requests.get(
                   url,
                   params={"scope": "luna5y", "offset": offset, "limit": page_size},
                   timeout=120,
               )
               r.raise_for_status()
-              page = r.json().get("data", [])
-              rows.extend(page)
-              print(f"exported={len(rows)} offset={offset}", flush=True)
-              if len(page) < page_size:
-                  break
-              offset += page_size
+              return offset, r.json().get("data", [])
+
+          next_offset = 0
+          done = False
+          while not done:
+              offsets = list(range(next_offset, next_offset + workers * page_size, page_size))
+              pages = {}
+              with ThreadPoolExecutor(max_workers=workers) as ex:
+                  futs = [ex.submit(fetch_page, off) for off in offsets]
+                  for fut in as_completed(futs):
+                      off, page = fut.result()
+                      pages[off] = page
+
+              for off in sorted(pages):
+                  page = pages[off]
+                  rows.extend(page)
+                  print(f"exported={len(rows)} offset={off}", flush=True)
+                  if len(page) < page_size:
+                      done = True
+                      break
+              next_offset += workers * page_size
 
           out = Path("data/luna_daily/daily_prices.csv")
           out.parent.mkdir(parents=True, exist_ok=True)
