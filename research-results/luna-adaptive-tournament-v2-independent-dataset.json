@@ -1,0 +1,8 @@
+{
+  "rows": 29066,
+  "symbols": 477,
+  "min_month": "2020-03-31",
+  "max_month": "2025-03-31",
+  "dataset_sha256": "bfe25b83b2af29f19d5043f622e8679e08b53eb7e327fa874f48909355e74da6",
+  "window": "strict trailing-5-calendar-years-monthly-v1"
+}
