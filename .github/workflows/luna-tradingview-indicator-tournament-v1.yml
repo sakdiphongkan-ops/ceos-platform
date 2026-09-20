@@ -128,6 +128,9 @@ jobs:
                   "--input",str(daily),
                   "--output",str(out)
               ])
+              meta=json.loads((out/"summary.json").read_text())
+              meta["cache_version"]=cache_version
+              (out/"summary.json").write_text(json.dumps(meta,indent=2),encoding="utf-8")
           else:
               print("reusing_validated_indicator_panel=true")
               x=pd.read_csv(cache_panel,parse_dates=["month_end"])
