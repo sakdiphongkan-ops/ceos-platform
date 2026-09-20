@@ -27,13 +27,17 @@ def perf(a):
       "max_monthly_return":float(a.max()),"max_drawdown_pct":float(dd.min()),
       "final_index":float(eq[-1])}
 
-def catalog(n,seed):
+def catalog(n,seed,available_factors):
     rng=np.random.default_rng(seed)
+    if "REV21" not in available_factors:
+        raise SystemExit("REV21 is required for the locked M1 benchmark")
+    search_factors=list(available_factors)
     x=[{"id":"M1_REV21_K20","terms":[["REV21",-1.0]]}]
     for i in range(1,n):
-        k=int(rng.integers(2,6)); ids=rng.choice(len(FACTORS),size=k,replace=False)
+        k=int(rng.integers(2,min(6,len(search_factors)+1)))
+        ids=rng.choice(len(search_factors),size=k,replace=False)
         w=rng.uniform(.2,1.0,size=k)*rng.choice([-1.,1.],size=k); w=w/np.sum(np.abs(w))
-        x.append({"id":f"F{i:04d}","terms":[(FACTORS[j],float(v)) for j,v in zip(ids,w)]})
+        x.append({"id":f"F{i:04d}","terms":[(search_factors[j],float(v)) for j,v in zip(ids,w)]})
     return x
 
 def main():
@@ -48,12 +52,15 @@ def main():
     d["month_end"]=pd.to_datetime(d.month_end);d["symbol"]=d.symbol.astype(str)
     for c in ["adj_close","fwd1",*FACTORS]: d[c]=pd.to_numeric(d[c],errors="coerce")
     d=d.sort_values(["month_end","symbol"]).drop_duplicates(["month_end","symbol"])
-    d=d.dropna(subset=FACTORS).reset_index(drop=True)
+    available_factors=[f for f in FACTORS if float(d[f].notna().mean()) >= 0.20]
+    if "REV21" not in available_factors:
+        raise SystemExit("REV21 coverage is below 20%; cannot establish M1 benchmark")
+    d=d.dropna(subset=["adj_close"]).reset_index(drop=True)
     months=sorted(d.month_end.unique().tolist())
     if len(months)<a.lookback_months+a.min_history_months+3: raise SystemExit("insufficient monthly history")
     rows={m:d.index[d.month_end.eq(m)].to_numpy() for m in months}
     ranks={f:d.groupby("month_end")[f].rank(pct=True,method="average").to_numpy() for f in FACTORS}
-    fs=catalog(a.formula_count,a.seed)
+    fs=catalog(a.formula_count,a.seed,available_factors)
     (out/"formula_catalog.json").write_text(json.dumps(fs,indent=2),encoding="utf-8")
     cand={}
     pos={f:i for i,f in enumerate(FACTORS)}
@@ -64,8 +71,11 @@ def main():
         for m in months:
             ix=rows[m]; sc=np.zeros(len(ix))
             for f,v in fml["terms"]: sc+=ranks[f][ix]*v
-            ordx=ix[np.argsort(-sc,kind="mergesort")[:a.k]]
-            ordx=ordx[d.loc[ordx,"fwd1"].notna().to_numpy()]
+            finite=np.isfinite(sc) & d.loc[ix,"fwd1"].notna().to_numpy()
+            valid_ix=ix[finite]
+            if len(valid_ix)==0: continue
+            valid_sc=sc[finite]
+            ordx=valid_ix[np.argsort(-valid_sc,kind="mergesort")[:a.k]]
             if len(ordx)==0:continue
             cur=set(d.loc[ordx,"symbol"].astype(str));gross=float(d.loc[ordx,"fwd1"].mean())
             overlap=len(cur&prev);turn=1.0 if not prev else 1.0-overlap/float(a.k)
@@ -95,6 +105,8 @@ def main():
     summary={"status":"COMPLETED","engine":"luna-adaptive-tournament-v3","dataset_sha256":hashlib.sha256(Path(a.input).read_bytes()).hexdigest(),
       "formula_count":len(fs),"seed":a.seed,"k":a.k,"cost_bps":a.cost_bps,"lookback_months":a.lookback_months,
       "min_history_months":a.min_history_months,"months_available":len(months),"months_traded":int(len(led)),
+      "available_factors":available_factors,
+      "factor_coverage":{f:float(d[f].notna().mean()) for f in FACTORS},
       "adaptive":adaptive,"benchmark_m1_rev21_k20":m1,
       "top_adaptive_selections":[{"formula_id":f,"count":n} for f,n in freq.most_common(20)],
       "m1_definition":"lowest REV21 cross-sectional rank, equal-weight K20, monthly rebalance",
