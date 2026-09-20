@@ -63,9 +63,9 @@ def stat(arr):
     peak=np.maximum.accumulate(eq)
     return {
         "months":int(len(x)),
-        "geo_monthly":float(np.exp(np.log1p(x).mean())-1),
+        "geo_period":float(np.exp(np.log1p(x).mean())-1),
         "cumulative":float(eq[-1]-1),
-        "positive_month_pct":float((x>0).mean()),
+        "positive_period_pct":float((x>0).mean()),
         "max_drawdown":float((1-eq/peak).max()),
         "worst_month":float(x.min()),
         "best_month":float(x.max()),
@@ -233,9 +233,11 @@ def batch_eval(panels,forms,avail,idx,start,end,k,horizon,cost_bps,anchor=0,retu
     result=[]
     for j,fm in enumerate(forms):
         s=stat(out[j])
+        s["geo_monthly"]=(1.0+s["geo_period"])**(1.0/horizon)-1.0 if s["geo_period"]>-1 else -1.0
+        s["positive_month_pct"]=s["positive_period_pct"]
         s["formula_id"]=fm.id
         s["avg_turnover"]=float(np.nanmean(turnovers[j])) if np.isfinite(turnovers[j]).any() else np.nan
-        s["months_ge_7pct"]=int(np.nansum(out[j]>=0.07))
+        s["months_ge_7pct"]=int(np.nansum(out[j]>=((1.07**horizon)-1.0)))
         if return_path:
             s["_path"]=out[j].copy()
         result.append(s)
