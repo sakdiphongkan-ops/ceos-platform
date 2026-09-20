@@ -74,6 +74,56 @@ jobs:
           print(json.dumps(x,indent=2))
           PY
 
+      - name: Persist tournament results via GitHub Contents API
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import base64, json, os
+          from pathlib import Path
+          import urllib.request
+          import urllib.error
+
+          root=Path("research/luna_tradingview_strategy_tournament_v1")
+          files={
+            "research-results/luna-tradingview-v1/strategy-tournament-summary.json":
+              (root/"summary.json").read_bytes(),
+            "research-results/luna-tradingview-v1/candidate-results.csv":
+              (root/"candidate_results.csv").read_bytes(),
+            "research-results/luna-tradingview-v1/robust-ranking.csv":
+              (root/"robust_ranking.csv").read_bytes(),
+            "research-results/luna-tradingview-v1/candidate-catalog.json":
+              (root/"candidate_catalog.json").read_bytes(),
+          }
+          for path,data in files.items():
+            api=f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/contents/{path}"
+            headers={
+              "Authorization":"Bearer "+os.environ["GH_TOKEN"],
+              "Accept":"application/vnd.github+json",
+              "X-GitHub-Api-Version":"2022-11-28",
+              "Content-Type":"application/json",
+              "User-Agent":"luna-actions"
+            }
+            sha=None
+            try:
+              req=urllib.request.Request(api,headers=headers)
+              with urllib.request.urlopen(req) as resp:
+                sha=json.load(resp)["sha"]
+            except urllib.error.HTTPError as e:
+              if e.code != 404:
+                raise
+            payload={
+              "message":"research(luna): persist TradingView tournament result",
+              "content":base64.b64encode(data).decode(),
+              "branch":"master"
+            }
+            if sha:
+              payload["sha"]=sha
+            req=urllib.request.Request(api,data=json.dumps(payload).encode(),headers=headers,method="PUT")
+            with urllib.request.urlopen(req) as resp:
+              print(path, resp.status)
+          PY
+
       - name: Save compact research results
         run: |
           mkdir -p research-results/luna-tradingview-v1
