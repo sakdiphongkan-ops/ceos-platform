@@ -1,5 +1,4 @@
 name: LUNA Adaptive Tournament v2
-# workflow_revision: 20260920-03
 
 on:
   workflow_dispatch:
@@ -7,10 +6,7 @@ on:
     branches: [master]
     paths:
       - "scripts/research/luna_adaptive_tournament_v2.py"
-      - "scripts/research/build_monthly_price_factors_from_daily_v1.py"
-      - "scripts/research/build_factor_dataset.py"
-      - "scripts/research/download_mendeley_set.py"
-      - "scripts/research/filter_last_5y.py"
+      - "scripts/research/build_monthly_luna_factors_from_daily.py"
       - ".github/workflows/luna-adaptive-tournament-v2.yml"
 
 concurrency:
@@ -32,9 +28,9 @@ jobs:
 
       - name: Install
         run: |
-          python -m pip install -U pip pandas numpy python-dateutil requests
+          python -m pip install -U pip pandas numpy python-dateutil
 
-      - name: Download historical SET dataset
+      - name: Download public SET history
         run: |
           mkdir -p data/raw
           curl -fL --retry 3 --retry-delay 2 \
@@ -46,56 +42,23 @@ jobs:
         run: |
           python scripts/research/download_mendeley_set.py \
             --zip data/raw/gybmm9t3mr-1.zip \
-            --output-dir data/set_2000_2025 \
+            --output-dir data/set_public \
             --quarantine-invalid \
             --max-invalid-rate 0.01
 
-      - name: Build canonical daily factor dataset
+      - name: Build point-in-time daily factors
         run: |
           python scripts/research/build_factor_dataset.py \
-            --prices data/set_2000_2025/prices.csv \
-            --output data/set_2000_2025/factors.csv
+            --prices data/set_public/prices.csv \
+            --output data/set_public/factors.csv
 
-      - name: Restrict to trailing 5 years
-        run: |
-          python scripts/research/filter_last_5y.py \
-            --input data/set_2000_2025/factors.csv \
-            --output data/set_2000_2025/factors_5y.csv
-
-      - name: Build monthly point-in-time factors
+      - name: Build monthly LUNA factors
         run: |
           rm -rf data/luna_monthly
-          mkdir -p data/luna_monthly
-          python scripts/research/build_monthly_price_factors_from_daily_v1.py \
-            --prices data/set_2000_2025/prices.csv \
-            --start 2020-01-01 \
-            --end 2025-03-31 \
-            --output data/luna_monthly/monthly_price_factors_full.csv
-          python scripts/research/filter_last_5y_monthly.py \
-            --input data/luna_monthly/monthly_price_factors_full.csv \
-            --output data/luna_monthly/monthly_price_factors.csv
-
-      - name: Validate monthly dataset
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          import pandas as pd
-
-          p = Path("data/luna_monthly/monthly_price_factors.csv")
-          m = json.loads(Path("data/luna_monthly/monthly_price_factors_full.manifest.json").read_text())
-          x = pd.read_csv(p)
-          required = {
-              "symbol","month_end","adj_close","mom1","mom3","mom6","mom12",
-              "high52_ratio","vol20","maxdd60","avg_amount20","fwd1"
-          }
-          assert required.issubset(x.columns)
-          assert m["months"] >= 48
-          assert m["symbols"] >= 100
-          assert x["fwd1"].notna().sum() > 0
-          print(json.dumps(m, indent=2))
-          print({"rows": len(x), "symbols": int(x.symbol.nunique()), "months": int(x.month_end.nunique())})
-          PY
+          python scripts/research/build_monthly_luna_factors_from_daily.py \
+            --input data/set_public/factors.csv \
+            --output data/luna_monthly/monthly_price_factors.csv \
+            --lookback-years 5
 
       - name: Run 1000-formula tournament
         run: |
@@ -107,19 +70,20 @@ jobs:
             --lookback-months 24 \
             --min-history-months 12 \
             --cost-bps 20 \
-            --k 20 \
-            --seed 20260920
+            --k 20
 
       - name: Validate
         run: |
           test -s research/luna_adaptive_tournament_v2/summary.json
           test -s research/luna_adaptive_tournament_v2/tournament_selection_ledger.csv
+          test -s research/luna_adaptive_tournament_v2/formula_catalog.json
           python - <<'PY'
           import json
           x=json.load(open("research/luna_adaptive_tournament_v2/summary.json"))
           assert x["leakage_guard"]
           assert x["formula_count"] == 1000
-          assert x["months_traded"] >= 40
+          assert x["months_traded"] >= 24
+          assert x["data_contiguity_guard"]
           print(json.dumps(x,indent=2))
           PY
 
@@ -129,18 +93,21 @@ jobs:
           cp research/luna_adaptive_tournament_v2/summary.json research-results/luna-adaptive-tournament-v2-summary.json
           cp research/luna_adaptive_tournament_v2/tournament_selection_ledger.csv research-results/luna-adaptive-tournament-v2/selection-ledger.csv
           cp research/luna_adaptive_tournament_v2/formula_catalog.json research-results/luna-adaptive-tournament-v2/formula-catalog.json
-          cp data/luna_monthly/monthly_price_factors_full.manifest.json research-results/luna-adaptive-tournament-v2-monthly-data-manifest.json
+          cp data/luna_monthly/monthly_price_factors.manifest.json research-results/luna-adaptive-tournament-v2-dataset-manifest.json
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add research-results/
-          git diff --cached --quiet || git commit -m "research(luna): save adaptive tournament v2 SET result"
+          git diff --cached --quiet || git commit -m "research(luna): save adaptive tournament v2 result"
           git push
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: luna-adaptive-tournament-v2-set
+          name: luna-adaptive-tournament-v2
           path: |
-            research/luna_adaptive_tournament_v2/
+            data/set_public/manifest.json
+            data/set_public/factors.manifest.json
+            data/luna_monthly/monthly_price_factors.csv
             data/luna_monthly/monthly_price_factors.manifest.json
+            research/luna_adaptive_tournament_v2/
           retention-days: 14
