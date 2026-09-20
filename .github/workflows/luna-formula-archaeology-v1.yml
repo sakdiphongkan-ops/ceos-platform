@@ -1,0 +1,55 @@
+name: LUNA Formula Archaeology v1
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - "scripts/research/luna_formula_archaeology_v1.py"
+      - "research-results/luna-adaptive-tournament-v2-independent/formula-catalog.json"
+      - "research-results/luna-adaptive-tournament-v2-independent/selection-ledger.csv"
+      - "research-results/luna-independent-holdout-v1-summary.json"
+
+concurrency:
+  group: luna-formula-archaeology-v1
+  cancel-in-progress: true
+
+jobs:
+  archaeology:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: python -m pip install -U pip pandas numpy
+      - name: Run formula archaeology
+        run: |
+          rm -rf research/luna_formula_archaeology_v1
+          python scripts/research/luna_formula_archaeology_v1.py             --catalog research-results/luna-adaptive-tournament-v2-independent/formula-catalog.json             --ledger research-results/luna-adaptive-tournament-v2-independent/selection-ledger.csv             --output research/luna_formula_archaeology_v1
+          test -s research/luna_formula_archaeology_v1/summary.json
+          test -s research/luna_formula_archaeology_v1/factor_contribution.csv
+          test -s research/luna_formula_archaeology_v1/factor_pair_cooccurrence.csv
+      - name: Save result
+        run: |
+          mkdir -p research-results/luna-formula-archaeology-v1
+          cp research/luna_formula_archaeology_v1/summary.json research-results/luna-formula-archaeology-v1/summary.json
+          cp research/luna_formula_archaeology_v1/recurring_formulas.csv research-results/luna-formula-archaeology-v1/recurring_formulas.csv
+          cp research/luna_formula_archaeology_v1/factor_contribution.csv research-results/luna-formula-archaeology-v1/factor_contribution.csv
+          cp research/luna_formula_archaeology_v1/factor_pair_cooccurrence.csv research-results/luna-formula-archaeology-v1/factor_pair_cooccurrence.csv
+          cp research/luna_formula_archaeology_v1/mechanism_clusters.csv research-results/luna-formula-archaeology-v1/mechanism_clusters.csv
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research-results/luna-formula-archaeology-v1
+          git diff --cached --quiet || git commit -m "research(luna): save formula archaeology result"
+          git push
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: luna-formula-archaeology-v1
+          path: research/luna_formula_archaeology_v1/
+          retention-days: 14
