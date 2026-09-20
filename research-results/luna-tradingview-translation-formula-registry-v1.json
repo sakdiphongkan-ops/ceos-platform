@@ -1,0 +1,79 @@
+{
+  "name": "LUNA TradingView Translation Formula Registry v1",
+  "status": "RESEARCH_ONLY",
+  "source_basis": [
+    "TradingView public Screener documentation",
+    "TradingView public Technical Ratings documentation",
+    "Live public Thailand screener snapshot captured by LUNA workflow"
+  ],
+  "architecture": "M1 remains the stock selector. TradingView-derived signals are candidate timing/context gates or additional ranking features; they are not stacked blindly onto production M1.",
+  "candidates": [
+    {
+      "code": "TV_OSC_BUY",
+      "formula": "Recommend.Other > 0.10",
+      "role": "oscillator confirmation"
+    },
+    {
+      "code": "TV_OSC_STRONG",
+      "formula": "Recommend.Other > 0.50",
+      "role": "strong oscillator confirmation"
+    },
+    {
+      "code": "TV_MA_BUY",
+      "formula": "Recommend.MA > 0.10",
+      "role": "trend confirmation"
+    },
+    {
+      "code": "TV_ALL_BUY",
+      "formula": "Recommend.All > 0.10",
+      "role": "overall technical confirmation"
+    },
+    {
+      "code": "TV_ALL_STRONG",
+      "formula": "Recommend.All > 0.50",
+      "role": "strong overall confirmation"
+    },
+    {
+      "code": "TV_REVERSAL",
+      "formula": "Recommend.Other > 0.10 AND Recommend.MA < 0.10",
+      "role": "early reversal hypothesis"
+    },
+    {
+      "code": "TV_REVERSAL_STRONG",
+      "formula": "Recommend.Other > 0.50 AND Recommend.MA < 0.00",
+      "role": "strong reversal hypothesis"
+    },
+    {
+      "code": "TV_MTF_DW",
+      "formula": "Recommend.All_1D > 0.10 AND Recommend.All_1W > 0.10",
+      "role": "multi-timeframe confirmation"
+    },
+    {
+      "code": "TV_MTF_WM",
+      "formula": "Recommend.All_1W > 0.10 AND Recommend.All_1M > 0.10",
+      "role": "higher-timeframe confirmation"
+    },
+    {
+      "code": "TV_MTF_FULL",
+      "formula": "Recommend.All_1D > 0.10 AND Recommend.All_1W > 0.10 AND Recommend.All_1M > 0.10",
+      "role": "full MTF confluence"
+    },
+    {
+      "code": "TV_OSC_MA_NEUTRAL",
+      "formula": "Recommend.Other > 0.10 AND abs(Recommend.MA) <= 0.10",
+      "role": "oscillator-led reversal"
+    },
+    {
+      "code": "TV_OSC_MA_NEGATIVE",
+      "formula": "Recommend.Other > 0.50 AND Recommend.MA < 0.00",
+      "role": "strong oscillator vs weak trend"
+    }
+  ],
+  "safeguards": [
+    "No promotion from live snapshot alone",
+    "Must beat locked M1 on frozen OOS and HOLDOUT",
+    "Must survive 20/40/60 bps stress",
+    "Must be replicated on fresh seeds / periods",
+    "No TradingView current values are used as historical labels"
+  ]
+}
