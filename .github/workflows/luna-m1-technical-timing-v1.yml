@@ -38,7 +38,7 @@ jobs:
 
       - name: Export daily SET prices
         env:
-          SUPABASE_SERVICE_ROLE_KEY: \${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           test -n "$SUPABASE_SERVICE_ROLE_KEY"
           mkdir -p data/luna_daily
