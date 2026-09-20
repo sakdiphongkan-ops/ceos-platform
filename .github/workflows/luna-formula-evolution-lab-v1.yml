@@ -1,0 +1,125 @@
+name: LUNA Formula Evolution Lab v1
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - "scripts/research/luna_formula_evolution_lab_v2.py"
+      - "scripts/research/build_factor_dataset.py"
+      - ".github/workflows/luna-formula-evolution-lab-v1.yml"
+
+concurrency:
+  group: luna-formula-evolution-lab
+  cancel-in-progress: true
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          python -m pip install -U pip
+          pip install pandas numpy python-dateutil
+
+      - name: Download SET history
+        run: |
+          mkdir -p data/raw
+          curl -fL --retry 3 --retry-delay 2 \
+            "https://data.mendeley.com/public-api/zip/gybmm9t3mr/download/1" \
+            -o data/raw/gybmm9t3mr-1.zip
+          test -s data/raw/gybmm9t3mr-1.zip
+
+      - name: Normalize SET history
+        run: |
+          rm -rf data/set_2000_2025
+          python scripts/research/download_mendeley_set.py \
+            --zip data/raw/gybmm9t3mr-1.zip \
+            --output-dir data/set_2000_2025 \
+            --quarantine-invalid \
+            --max-invalid-rate 0.01
+
+      - name: Build expanded point-in-time factors
+        run: |
+          rm -rf data/set_2000_2025/evolution_factors.csv
+          python scripts/research/build_factor_dataset.py \
+            --prices data/set_2000_2025/prices.csv \
+            --output data/set_2000_2025/evolution_factors.csv
+
+      - name: QA forward returns
+        run: |
+          mkdir -p research/evolution_qa
+          python scripts/research/qa_forward_returns.py \
+            --input data/set_2000_2025/evolution_factors.csv \
+            --output research/evolution_qa/forward_return_qa.json \
+            --extremes-output research/evolution_qa/forward_return_extremes.csv \
+            --warn-abs-return 0.20 \
+            --hard-invalid
+
+      - name: Run formula evolution
+        run: |
+          rm -rf research/luna_formula_evolution_v2
+          python scripts/research/luna_formula_evolution_lab_v2.py \
+            --input data/set_2000_2025/evolution_factors.csv \
+            --output research/luna_formula_evolution_v2 \
+            --generations 3 \
+            --initial-random 1000 \
+            --children 1200 \
+            --survivors 40 \
+            --finalists 80
+
+      - name: Validate
+        run: |
+          test -s research/luna_formula_evolution_v2/summary.json
+          test -s research/luna_formula_evolution_v2/evolution_ledger.csv
+          test -s research/luna_formula_evolution_v2/finalist_stability.csv
+          test -s research/luna_formula_evolution_v2/scenario_results.jsonl
+          python - <<'PY'
+          import json
+          p="research/luna_formula_evolution_v2/summary.json"
+          x=json.load(open(p))
+          assert x["selection_data"] == "TRAIN+DEV only"
+          assert x["blind_data"] == ["OOS","HOLDOUT"]
+          assert x["frozen_finalists"] > 0
+          print(json.dumps(x, indent=2))
+          PY
+
+      - name: Save compact repository result
+        run: |
+          mkdir -p research-results/luna-formula-evolution-v2
+          cp research/luna_formula_evolution_v2/summary.json \
+             research-results/luna-formula-evolution-v2-summary.json
+          cp research/luna_formula_evolution_v2/finalist_stability.csv \
+             research-results/luna-formula-evolution-v2/finalist-stability.csv
+          cp research/luna_formula_evolution_v2/scenario_results.jsonl \
+             research-results/luna-formula-evolution-v2/scenario-results.jsonl
+          cp research/luna_formula_evolution_v2/evolution_ledger.csv \
+             research-results/luna-formula-evolution-v2/evolution-ledger.csv
+          cp research/luna_formula_evolution_v2/formula_catalog.json \
+             research-results/luna-formula-evolution-v2/formula-catalog.json
+
+      - name: Commit result
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research-results/
+          git diff --cached --quiet || git commit -m "research(luna): save formula evolution lab v2 result"
+          git push
+
+      - name: Upload full artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: luna-formula-evolution-v2
+          path: |
+            research/luna_formula_evolution_v2/
+            research/evolution_qa/
+          retention-days: 14
