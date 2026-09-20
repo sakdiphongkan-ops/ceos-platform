@@ -25,8 +25,6 @@ FACTORS = [
     "REL_MOM","VOL_10","VOL_20","MAXDD_60","ATR_PCT",
     "ADV20","AMOUNT","RSI14","DIST_MA20","DIST_MA60",
     "BREAKOUT20","BREAKOUT55","SKEW_20","SKEW_60",
-    "QUALITY_SCORE","VALUE_QUALITY","MOM_BLEND","CONSERVATIVE_SCORE",
-    "SAFETY_SCORE","GROWTH_QUALITY","INV_QUALITY",
 ]
 
 @dataclass(frozen=True)
@@ -130,6 +128,8 @@ def main() -> None:
     df["symbol"] = df["symbol"].astype(str).str.upper().str.strip()
     df["adj_close"] = pd.to_numeric(df["adj_close"], errors="coerce")
     for f in FACTORS:
+        if f not in df.columns:
+            df[f] = np.nan
         df[f] = pd.to_numeric(df[f], errors="coerce")
 
     # Month-end snapshot = final trading observation present for that symbol/month.
@@ -153,8 +153,10 @@ def main() -> None:
 
     groups = []
     for month, g in snap.groupby("month", sort=True):
-        g = g.dropna(subset=["fwd1m"] + FACTORS).copy()
+        g = g.dropna(subset=["fwd1m", "MOM_20"]).copy()
         if len(g) >= args.k:
+            # Cross-sectional ranks are factor-specific; a formula can only use
+            # symbols where all of its own terms are present.
             groups.append((month, g))
     if len(groups) < args.lookback_months + args.holdout_months + 1:
         raise SystemExit("not enough contiguous monthly observations")
@@ -164,7 +166,7 @@ def main() -> None:
     for month, g in groups:
         ranks[month] = {
             f: g[f].rank(pct=True, method="average").to_numpy(float)
-            for f in FACTORS
+            for f in FACTORS if g[f].notna().any()
         }
 
     formulas = make_formulas(args.formula_count, args.seed)
@@ -183,9 +185,23 @@ def main() -> None:
         prev: set[str] = set()
         for month, g in groups:
             score = np.zeros(len(g), dtype=float)
+            valid = np.ones(len(g), dtype=bool)
             for f, w in formula.terms:
-                score += ranks[month][f] * w
-            order = np.argsort(-score, kind="mergesort")[:args.k]
+                if f not in ranks[month]:
+                    valid[:] = False
+                    break
+                r = ranks[month][f]
+                valid &= np.isfinite(r)
+                score += np.nan_to_num(r, nan=0.0) * w
+            eligible = np.flatnonzero(valid)
+            if len(eligible) < args.k:
+                rows.append({
+                    "month": str(month), "gross_return": 0.0,
+                    "turnover": 1.0 if not prev else 0.0,
+                    "net_return": 0.0,
+                })
+                continue
+            order = eligible[np.argsort(-score[eligible], kind="mergesort")[:args.k]]
             chosen = g.iloc[order]
             cur = set(chosen["symbol"])
             overlap = len(cur & prev)
