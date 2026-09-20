@@ -59,6 +59,22 @@ jobs:
             --input data/set_2000_2025/factors.csv \
             --output data/set_2000_2025/factors_5y.csv
 
+      - name: Run monthly adaptive 1000-formula search
+        run: |
+          rm -rf research/luna_monthly_adaptive_formula_v1
+          python scripts/research/luna_monthly_adaptive_formula_search_v1.py             --input data/set_2000_2025/factors_5y.csv             --output research/luna_monthly_adaptive_formula_v1             --formula-count 1000             --k 20             --lookback-months 24             --min-history-months 12             --holdout-months 12             --cost-bps 20             --seed 20260920
+          test -s research/luna_monthly_adaptive_formula_v1/summary.json
+          test -s research/luna_monthly_adaptive_formula_v1/adaptive_selection_ledger.csv
+          test -s research/luna_monthly_adaptive_formula_v1/frozen_holdout_ranked.csv
+
+      - name: Save monthly adaptive result
+        run: |
+          mkdir -p research-results/luna-monthly-adaptive-formula-v1
+          cp research/luna_monthly_adaptive_formula_v1/summary.json             research-results/luna-monthly-adaptive-formula-v1/summary.json
+          cp research/luna_monthly_adaptive_formula_v1/adaptive_selection_ledger.csv             research-results/luna-monthly-adaptive-formula-v1/adaptive_selection_ledger.csv
+          cp research/luna_monthly_adaptive_formula_v1/frozen_holdout_ranked.csv             research-results/luna-monthly-adaptive-formula-v1/frozen_holdout_ranked.csv
+          cp research/luna_monthly_adaptive_formula_v1/formula_catalog.json             research-results/luna-monthly-adaptive-formula-v1/formula_catalog.json
+
       - name: Run exactly 1000 deterministic hypotheses
         run: |
           rm -rf research/luna_1000_5y
