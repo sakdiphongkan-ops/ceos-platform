@@ -360,7 +360,7 @@ def main():
         "candidate_count":len(candidates),
         "gate_candidates":sum(c.kind!="RERANK" for c in candidates),
         "rerank_candidates":sum(c.kind=="RERANK" for c in candidates),
-        "selection_rule":"M1 bottom-K by 20-trading-day adjusted-close momentum for gate candidates; pool-50/100 second-stage rerank for evolution candidates.",
+        "selection_rule":"M1 bottom-K by completed calendar-month adjusted-close return at month-end for gate candidates; pool-50/100 second-stage rerank for evolution candidates.",
         "train_dev_only_selection":True,
         "frozen_periods":["OOS","HOLDOUT"],
         "locked_m1_baseline_audit":baseline_audit,
