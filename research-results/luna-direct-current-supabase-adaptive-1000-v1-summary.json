@@ -1,0 +1,240 @@
+{
+  "status": "COMPLETED",
+  "engine": "luna-direct-current-supabase-adaptive-1000-v1",
+  "as_of": "2026-09-20",
+  "dataset": {
+    "table": "public.luna_research_monthly_price_factors",
+    "rows": 51562,
+    "symbols": 924,
+    "months": 59,
+    "first_month_key": "2021-09-01",
+    "last_month_key": "2026-08-01",
+    "return_months": "2021-09-01 through 2026-07-01 (August has no next month)",
+    "month_key_semantics": "stored as month-start date; forward return uses next month-start"
+  },
+  "methodology": {
+    "formulas": 1000,
+    "seed": 20260920,
+    "formula_space": "1 locked M1 reversal proxy + 999 deterministic signed rank blends using 2-4 of 8 factors",
+    "factors": [
+      "mom1",
+      "mom3",
+      "mom6",
+      "mom12",
+      "high52_ratio",
+      "vol20",
+      "maxdd60",
+      "avg_amount20"
+    ],
+    "k": 20,
+    "lookback_months": 24,
+    "min_history_months": 12,
+    "cost_bps": 20,
+    "adaptive_selection": "trailing geometric net return, then positive-month percentage, prior months only",
+    "holdout": "final 12 return months excluded from formula ranking"
+  },
+  "adaptive": {
+    "months": 47,
+    "geometric_monthly_return": -0.004069283957711238,
+    "cumulative_return": -0.17440136955520258,
+    "positive_month_pct": 0.40425531914893614,
+    "months_ge_7pct": 5,
+    "min_monthly_return": -0.12603319812765895,
+    "max_monthly_return": 0.12122864170306535,
+    "max_drawdown_pct": -0.4406577339981188,
+    "final_baht": 24767.958913343922
+  },
+  "same_panel_m1_proxy": {
+    "months": 59,
+    "geometric_monthly_return": 0.0014391261108452902,
+    "cumulative_return": 0.08855094345448022,
+    "positive_month_pct": 0.4915254237288136,
+    "min_monthly_return": -0.17967704048232985,
+    "max_monthly_return": 0.29666901141099156,
+    "max_drawdown_pct": -0.43060920767905453
+  },
+  "production_m1_crosscheck": {
+    "strategy_version": "luna-m1s0k20rev-v1",
+    "full_period_geometric_monthly_return": 0.006556127881564541,
+    "full_period_cumulative_return": 0.4704214597467422,
+    "comparable_final_12_months": {
+      "start": "2025-08-31",
+      "end": "2026-07-31",
+      "geometric_monthly_return": 0.0322194752622972,
+      "cumulative_return": 0.463068249482506,
+      "positive_month_pct": 0.75
+    },
+    "note": "Same-panel proxy is not exact production M1; the research factor table uses month-start keys and a different stored construction."
+  },
+  "holdout_diagnostics": [
+    {
+      "rank": 1,
+      "id": "F0505",
+      "train_geo": 0.015634133337214307,
+      "hold_geo": -0.011537853308611012,
+      "hold_cum": -0.12999747887097202,
+      "hold_pos": 0.16666666666666666,
+      "hold_ge7": 0,
+      "terms": [
+        [
+          "mom12",
+          0.4779247526124885
+        ],
+        [
+          "avg_amount20",
+          -0.5220752473875114
+        ]
+      ]
+    },
+    {
+      "rank": 2,
+      "id": "F0286",
+      "train_geo": 0.0155479410624777,
+      "hold_geo": -0.01277757308775751,
+      "hold_cum": -0.14300132003512267,
+      "hold_pos": 0.08333333333333333,
+      "hold_ge7": 0,
+      "terms": [
+        [
+          "maxdd60",
+          0.1679590765865743
+        ],
+        [
+          "mom12",
+          0.3606771369257148
+        ],
+        [
+          "avg_amount20",
+          -0.4713637864877109
+        ]
+      ]
+    },
+    {
+      "rank": 3,
+      "id": "F0824",
+      "train_geo": 0.01554248563588323,
+      "hold_geo": -0.010935919205539602,
+      "hold_cum": -0.12361857944957955,
+      "hold_pos": 0.16666666666666666,
+      "hold_ge7": 0,
+      "terms": [
+        [
+          "mom12",
+          0.27180271032669995
+        ],
+        [
+          "avg_amount20",
+          -0.7281972896733001
+        ]
+      ]
+    },
+    {
+      "rank": 21,
+      "id": "F0004",
+      "train_geo": 0.01181968830061697,
+      "hold_geo": 0.03165167291693716,
+      "hold_cum": 0.45343977558957427,
+      "hold_pos": 0.75,
+      "hold_ge7": 3,
+      "terms": [
+        [
+          "mom6",
+          -0.261174065548896
+        ],
+        [
+          "avg_amount20",
+          -0.1328378041619197
+        ],
+        [
+          "maxdd60",
+          0.4041011133391568
+        ],
+        [
+          "high52_ratio",
+          -0.2018870169500275
+        ]
+      ]
+    },
+    {
+      "rank": 22,
+      "id": "F0925",
+      "train_geo": 0.010234591234457469,
+      "hold_geo": 0.03239920174277655,
+      "hold_cum": 0.46612811115032593,
+      "hold_pos": 0.6666666666666666,
+      "hold_ge7": 4,
+      "terms": [
+        [
+          "maxdd60",
+          0.3591173153033164
+        ],
+        [
+          "avg_amount20",
+          -0.1811407460885706
+        ],
+        [
+          "mom6",
+          -0.459741938608113
+        ]
+      ]
+    },
+    {
+      "rank": 23,
+      "id": "F0499",
+      "train_geo": 0.010030202204853511,
+      "hold_geo": 0.03239920174277655,
+      "hold_cum": 0.46612811115032593,
+      "hold_pos": 0.6666666666666666,
+      "hold_ge7": 4,
+      "terms": [
+        [
+          "avg_amount20",
+          -0.2802789792283199
+        ],
+        [
+          "mom6",
+          -0.7197210207716801
+        ]
+      ]
+    }
+  ],
+  "selection_frequency_top": [
+    [
+      "F0286",
+      7
+    ],
+    [
+      "F0925",
+      7
+    ],
+    [
+      "F0800",
+      5
+    ],
+    [
+      "F0289",
+      4
+    ],
+    [
+      "F0428",
+      3
+    ],
+    [
+      "F0862",
+      3
+    ],
+    [
+      "F0505",
+      3
+    ],
+    [
+      "F0043",
+      3
+    ],
+    [
+      "F0984",
+      3
+    ]
+  ],
+  "conclusion_guard": "No formula in this 1,000-formula current-Supabase adaptive search demonstrated the 7% geometric-monthly hurdle on the frozen final 12-month holdout. Strongest frozen candidates reached about 3.24%/month; adaptive strategy itself was negative over 47 realized months."
+}
