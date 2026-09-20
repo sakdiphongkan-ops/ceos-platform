@@ -1,0 +1,89 @@
+{
+  "version": "luna-m1-theory-registry-v1",
+  "purpose": "Evidence-backed hypothesis registry for improving M1 short-term reversal rather than random formula mining.",
+  "hypotheses": [
+    {
+      "id": "H1_SHORT_REVERSAL",
+      "mechanism": "One-month losers can partially reverse over the next month.",
+      "implication": "Retain M1's core recent-loss signal as the anchor.",
+      "sources": [
+        {
+          "title": "Short-Term Reversals and Longer-Term Momentum around the World: Theory and Evidence",
+          "year": 2025,
+          "url": "https://consensus.app/papers/shortterm-reversals-and-longerterm-momentum-around-the-jegadeesh-luo/678fd162ea345e6183d6fbf944b7856f/?utm_source=chatgpt"
+        },
+        {
+          "title": "Cross-Section of Stock Returns Around the World in the Early Twentieth Century",
+          "year": 2024,
+          "url": "https://academic.oup.com/raps/article/15/1/46/7879348"
+        }
+      ]
+    },
+    {
+      "id": "H2_LIQUIDITY_CONDITIONING",
+      "mechanism": "Short-term reversal returns are related to liquidity provision; volatility and liquidity conditions change the strength and persistence of reversals.",
+      "implication": "Test both a safety liquidity filter and a contrarian illiquidity-tilt, rather than assuming one direction.",
+      "sources": [
+        {
+          "title": "Reversals and the Returns to Liquidity Provision",
+          "year": 2023,
+          "url": "https://www.nber.org/papers/w30917"
+        },
+        {
+          "title": "Reversal returns and expected returns from liquidity provision: Evidence from emerging markets",
+          "year": 2020,
+          "url": "https://consensus.app/papers/reversal-returns-and-expected-returns-from-liquidity-butt-högholm/06d7e16c5b17545ba75ba3aa4c2c063a/?utm_source=chatgpt"
+        }
+      ]
+    },
+    {
+      "id": "H3_PTH_TURNOVER_INTERACTION",
+      "mechanism": "The reversal/momentum relation changes with turnover and the stock's position relative to its 52-week high.",
+      "implication": "Use 52-week-high distance as a conditioning variable instead of treating all M1 losers as equivalent.",
+      "sources": [
+        {
+          "title": "Short-term momentum and reversals, turnover, and a stock’s price-to-52-week-high ratio",
+          "year": 2024,
+          "url": "https://consensus.app/papers/shortterm-momentum-and-reversals-turnover-and-a-stock’s-chen-stivers/d7ced932f1a15739bfb80590d4bfa572/?utm_source=chatgpt"
+        }
+      ]
+    },
+    {
+      "id": "H4_VOLATILITY",
+      "mechanism": "Reversal strength can increase in volatile/liquidity-stressed states, while extreme volatility can also raise tail risk.",
+      "implication": "Test volatility as a signal conditioner and separately test exposure reduction in market-stress regimes.",
+      "sources": [
+        {
+          "title": "Reversals and the Returns to Liquidity Provision",
+          "year": 2023,
+          "url": "https://www.nber.org/papers/w30917"
+        },
+        {
+          "title": "Momentum Crashes",
+          "year": 2014,
+          "url": "https://www.nber.org/papers/w20439"
+        }
+      ]
+    },
+    {
+      "id": "H5_TREND_SAFETY",
+      "mechanism": "Very short-term reversal can coexist with longer-horizon momentum; the transition means a recent loser can either be a temporary dislocation or a persistent downtrend.",
+      "implication": "Test a medium-horizon trend floor to avoid automatically buying structural downtrends.",
+      "sources": [
+        {
+          "title": "Short-Term Reversals and Longer-Term Momentum around the World: Theory and Evidence",
+          "year": 2025,
+          "url": "https://consensus.app/papers/shortterm-reversals-and-longerterm-momentum-around-the-jegadeesh-luo/678fd162ea345e6183d6fbf944b7856f/?utm_source=chatgpt"
+        }
+      ]
+    }
+  ],
+  "design_rules": [
+    "No future return may influence the month being traded.",
+    "Forward monthly return requires the next calendar month to exist.",
+    "Candidate selection is frozen before OOS and HOLDOUT.",
+    "Costs are stress-tested at 20/40/60 bps per one-way turnover unit.",
+    "Regime exposure changes incur explicit turnover costs.",
+    "A positive OOS result alone is insufficient for promotion; blind HOLDOUT and robustness are mandatory."
+  ]
+}
