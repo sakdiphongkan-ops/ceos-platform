@@ -158,7 +158,6 @@ def main():
       "status":"COMPLETED","engine":"luna-adaptive-tournament-v2",
       "dataset_sha256":hashlib.sha256(Path(args.input).read_bytes()).hexdigest(),
       "formula_count":len(formulas),"months_traded":len(r),
-      "factor_coverage":factor_coverage,"active_factors":active_factors,"excluded_factors":excluded_factors,
       "factor_coverage":factor_coverage,"active_factors":active_factors,
       "excluded_sparse_factors":[f for f in FACTORS if f not in active_factors],
       "geometric_monthly_return":adaptive_stats["geometric_monthly_return"],
