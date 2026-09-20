@@ -1,65 +1,109 @@
 #!/usr/bin/env python3
-# Research panel builder: sparse factors are excluded factor-by-factor; no blanket dropna.\nfrom __future__ import annotations
-import argparse, hashlib, json
+"""Build the monthly factor panel used by LUNA Adaptive Tournament v2.
+
+The snapshot for each symbol/month is the last available trading day.
+All inputs are point-in-time daily factors. The downstream tournament computes
+the one-month forward return only when the next calendar month exists.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
 from pathlib import Path
+
 import numpy as np
 import pandas as pd
 
-FACTORS=[
-"REV21","MOM_5","MOM_10","MOM_20","MOM_60","MOM_120","VOL_10","VOL_20",
-"MAXDD_60","ADV20","RSI14","HIGH52_RATIO","DIST_MA20","DIST_MA60",
-"BREAKOUT20","BREAKOUT55","SKEW_20","SKEW_60","REL_MOM"
+FACTORS = [
+    "mom1", "mom3", "mom6", "mom12",
+    "high52_ratio", "vol20", "maxdd60", "avg_amount20",
 ]
 
-def main():
-    ap=argparse.ArgumentParser()
-    ap.add_argument("--input",required=True); ap.add_argument("--output",required=True)
-    a=ap.parse_args()
-    d=pd.read_csv(a.input)
-    need={"date","symbol","adj_close"}
-    miss=sorted(need-set(d.columns))
-    if miss: raise SystemExit(f"missing columns: {miss}")
-    d["date"]=pd.to_datetime(d["date"],errors="raise")
-    d["symbol"]=d["symbol"].astype(str).str.strip().str.upper()
-    d["adj_close"]=pd.to_numeric(d["adj_close"],errors="coerce")
-    d=d.dropna(subset=["date","symbol","adj_close"]).sort_values(["symbol","date"])
-    d=d.drop_duplicates(["symbol","date"],keep="last")
-    g=d.groupby("symbol",group_keys=False)
-    d["REV21"]=g["adj_close"].pct_change(21)
-    hi=g["adj_close"].rolling(252,min_periods=252).max().reset_index(level=0,drop=True)
-    d["HIGH52_RATIO"]=d["adj_close"]/hi-1.0
-    d["month_end"]=d["date"].dt.to_period("M").dt.to_timestamp("M")
-    ix=d.groupby(["symbol","month_end"])["date"].idxmax()
-    m=d.loc[ix].copy().sort_values(["symbol","month_end"]).reset_index(drop=True)
-    m["next_month_end"]=m.groupby("symbol")["month_end"].shift(-1)
-    m["next_adj_close"]=m.groupby("symbol")["adj_close"].shift(-1)
-    expected=m["month_end"]+pd.offsets.MonthEnd(1)
-    m["fwd1"]=np.where(m["next_month_end"].eq(expected),
-                       m["next_adj_close"]/m["adj_close"]-1.0,np.nan)
-    outcols=["symbol","month_end","date","adj_close","REV21"]+[
-        f for f in FACTORS if f!="REV21"
-    ]+["fwd1"]
-    for c in FACTORS:
-        if c not in m.columns: m[c]=np.nan
-        m[c]=pd.to_numeric(m[c],errors="coerce")
-    out=m[outcols].rename(columns={"date":"snapshot_date"})
-    # Do not blanket-drop sparse factors. Availability is tracked factor-by-factor
-    # and the tournament excludes unavailable factors from the formula catalog.
-    out=out.dropna(subset=["adj_close"]).sort_values(["month_end","symbol"]).reset_index(drop=True)
-    p=Path(a.output); p.parent.mkdir(parents=True,exist_ok=True); out.to_csv(p,index=False)
-    manifest={
-      "engine":"monthly-snapshot-builder-v1",
-      "input_sha256":hashlib.sha256(Path(a.input).read_bytes()).hexdigest(),
-      "output_sha256":hashlib.sha256(p.read_bytes()).hexdigest(),
-      "rows":int(len(out)),"symbols":int(out.symbol.nunique()),
-      "factor_coverage":{f:float(out[f].notna().mean()) for f in FACTORS},
-      "months":int(out.month_end.nunique()),
-      "min_month":str(out.month_end.min()) if len(out) else None,
-      "max_month":str(out.month_end.max()) if len(out) else None,
-      "rev21_definition":"adj_close(t)/adj_close(t-21 trading observations)-1",
-      "fwd1_definition":"next calendar month-end snapshot only; missing month => NaN"
-    }
-    Path(str(p)+".manifest.json").write_text(json.dumps(manifest,indent=2),encoding="utf-8")
-    print(json.dumps(manifest,indent=2))
+SOURCE_MAP = {
+    "mom1": "MOM_20",
+    "mom3": "MOM_60",
+    "mom6": "MOM_120",
+    "mom12": "MOM_252",
+    "vol20": "VOL_20",
+    "maxdd60": "MAXDD_60",
+    "avg_amount20": "AMOUNT",
+}
 
-if __name__=="__main__": main()
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--input", required=True)
+    ap.add_argument("--output", required=True)
+    args = ap.parse_args()
+
+    df = pd.read_csv(args.input)
+    required = {"date", "symbol", "adj_close", "DIST_HIGH_252", *SOURCE_MAP.values()}
+    missing = sorted(required - set(df.columns))
+    if missing:
+        raise SystemExit(f"missing columns: {missing}")
+
+    df["date"] = pd.to_datetime(df["date"], errors="raise")
+    df["symbol"] = df["symbol"].astype(str).str.strip().str.upper()
+    df["adj_close"] = pd.to_numeric(df["adj_close"], errors="coerce")
+    for c in SOURCE_MAP.values():
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+    df["DIST_HIGH_252"] = pd.to_numeric(df["DIST_HIGH_252"], errors="coerce")
+
+    df["month_end"] = df["date"].dt.to_period("M").dt.to_timestamp("M")
+    df = df.dropna(subset=["symbol", "adj_close"])
+    idx = df.groupby(["symbol", "month_end"])["date"].idxmax()
+    m = df.loc[idx].copy().sort_values(["month_end", "symbol"]).reset_index(drop=True)
+
+    out = pd.DataFrame({
+        "symbol": m["symbol"],
+        "month_end": m["month_end"],
+        "adj_close": m["adj_close"],
+    })
+    for dst, src in SOURCE_MAP.items():
+        out[dst] = m[src]
+    out["high52_ratio"] = 1.0 + m["DIST_HIGH_252"]
+
+    out = (
+        out.replace([np.inf, -np.inf], np.nan)
+        .sort_values(["month_end", "symbol"])
+        .reset_index(drop=True)
+    )
+
+    # Keep rows usable by every candidate formula so formula comparisons share
+    # exactly the same cross-sectional universe each month.
+    out = out.dropna(subset=FACTORS).reset_index(drop=True)
+
+    Path(args.output).parent.mkdir(parents=True, exist_ok=True)
+    out.to_csv(args.output, index=False)
+
+    manifest = {
+        "engine": "monthly-snapshot-builder-v2",
+        "input_sha256": hashlib.sha256(Path(args.input).read_bytes()).hexdigest(),
+        "output_sha256": hashlib.sha256(Path(args.output).read_bytes()).hexdigest(),
+        "rows": int(len(out)),
+        "symbols": int(out["symbol"].nunique()),
+        "months": int(out["month_end"].nunique()),
+        "min_month": str(out["month_end"].min()) if len(out) else None,
+        "max_month": str(out["month_end"].max()) if len(out) else None,
+        "factor_mapping": {
+            "mom1": "MOM_20",
+            "mom3": "MOM_60",
+            "mom6": "MOM_120",
+            "mom12": "MOM_252",
+            "high52_ratio": "1 + DIST_HIGH_252",
+            "vol20": "VOL_20",
+            "maxdd60": "MAXDD_60",
+            "avg_amount20": "AMOUNT",
+        },
+        "month_snapshot_rule": "last available trading day per symbol and calendar month",
+        "forward_return_rule": "computed downstream from adjacent calendar-month snapshots only",
+    }
+    Path(str(args.output) + ".manifest.json").write_text(
+        json.dumps(manifest, indent=2), encoding="utf-8"
+    )
+    print(json.dumps(manifest, indent=2))
+
+
+if __name__ == "__main__":
+    main()
