@@ -1,0 +1,48 @@
+{
+  "status": "COMPLETED",
+  "engine": "luna-v3-public-audit",
+  "snapshot_commit": "d675a4ee8344b58dd7bdd5acf1625ac35bdc86d6",
+  "tournament": {
+    "formulas": 1000,
+    "months_available": 60,
+    "months_traded": 48,
+    "cost_bps": 20,
+    "k": 20,
+    "lookback_months": 24,
+    "adaptive_geometric_monthly": -0.008106855482445163,
+    "adaptive_cumulative": -0.32342701196818846,
+    "adaptive_positive_month_pct": 0.4375,
+    "adaptive_months_ge_7pct": 2,
+    "adaptive_max_drawdown_pct": -0.41691447741773735,
+    "benchmark_m1_public_proxy_geometric_monthly": 0.0079447535660353,
+    "benchmark_m1_public_proxy_cumulative": 0.607695216184762,
+    "benchmark_m1_public_proxy_positive_month_pct": 0.5,
+    "benchmark_m1_public_proxy_max_drawdown_pct": -0.4878093152703704
+  },
+  "frozen_holdout": {
+    "training_months": 49,
+    "holdout_months": 12,
+    "training_end": "2024-03-31",
+    "holdout_start": "2024-04-30",
+    "frozen_candidates": 25,
+    "rank1_formula": "F0739",
+    "rank1_training_geometric_monthly": 0.03585251091481044,
+    "rank1_holdout_geometric_monthly": -0.016519781345448473,
+    "rank1_holdout_cumulative": -0.16742777177170987,
+    "rank1_holdout_positive_month_pct": 0.2727272727272727,
+    "benchmark_m1_holdout_geometric_monthly": -0.034507421079246064,
+    "benchmark_m1_holdout_cumulative": -0.3204235193225542
+  },
+  "hurdle_7pct": {
+    "target_geometric_monthly": 0.07,
+    "result": "NO_FROZEN_CANDIDATE_MET_THE_HURDLE_ON_HOLDOUT",
+    "note": "The training-selected rank-1 formula produced negative holdout geometric monthly return; all 25 frozen candidates had negative holdout geometric monthly returns."
+  },
+  "methodology_note": "The public M1 benchmark is a same-panel lowest-MOM_20 proxy on the public historical SET dataset; it is explicitly not an exact reproduction of the legacy 925-symbol M1. The exact persisted M1 in Supabase over its overlapping available period (2021-10 through 2025-03) had geometric monthly return -1.1688966% and cumulative return -38.97145%, so proxy and legacy benchmark must not be conflated.",
+  "next_research_gate": [
+    "expand the public panel with REV21, HIGH52_RATIO, MOM_252, and AVG_AMOUNT20",
+    "run fresh-seed replication rather than repeatedly tuning one seed",
+    "freeze finalists before any future holdout read",
+    "stress transaction costs at 0/20/40/60 bps"
+  ]
+}
