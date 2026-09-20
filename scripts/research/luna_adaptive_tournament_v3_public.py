@@ -49,7 +49,7 @@ def main():
     missing=sorted(req-set(df.columns))
     if missing: raise SystemExit(f"missing columns: {missing}")
     df["month_end"]=pd.to_datetime(df["month_end"])
-    for c in ["adj_close","fwd1",*FACTORS]:
+    for c in ["adj_close","fwd1",*ALL_FACTORS]:
         df[c]=pd.to_numeric(df[c],errors="coerce")
     df=df.sort_values(["month_end","symbol"]).drop_duplicates(["month_end","symbol"])
     months=sorted(df["month_end"].dropna().unique())
@@ -58,17 +58,18 @@ def main():
     if len(months)<40: raise SystemExit(f"only {len(months)} tradable months")
 
     coverage={f:float(df[f].notna().mean()) for f in ALL_FACTORS}
-    FACTORS=[f for f in ALL_FACTORS if coverage[f] >= 0.20]
-    excluded_sparse=[f for f in ALL_FACTORS if f not in FACTORS]
-    if len(FACTORS)<5:
-        raise SystemExit(f"too few usable factors after coverage filter: {FACTORS}")
+    active_factors=[f for f in ALL_FACTORS if coverage[f] >= 0.20]
+    excluded_sparse=[f for f in ALL_FACTORS if f not in active_factors]
+    if len(active_factors)<5:
+        raise SystemExit(f"too few usable factors after coverage filter: {active_factors}")
 
     # Percentile ranks within each month. Only rows with all active factors are scored.
-    ranks={f:df.groupby("month_end")[f].rank(pct=True,method="average") for f in FACTORS}
+    ranks={f:df.groupby("month_end")[f].rank(pct=True,method="average") for f in active_factors}
     ok=np.ones(len(df),dtype=bool)
-    for f in FACTORS: ok &= ranks[f].notna().to_numpy()
+    for f in active_factors: ok &= ranks[f].notna().to_numpy()
     df=df.loc[ok].reset_index(drop=True)
-    ranks_np={f:ranks[f].to_numpy()[ok] for f in FACTORS}
+    ranks_np={f:ranks[f].to_numpy()[ok] for f in active_factors}
+    FACTORS=active_factors
     y=df["fwd1"].to_numpy(dtype=float)
     sym=df["symbol"].to_numpy()
 
