@@ -6,6 +6,7 @@ on:
     branches: [master]
     paths:
       - "scripts/research/luna_formula_evolution_lab_v2.py"
+      - "scripts/research/luna_meta_ensemble_lab_v1.py"
       - "scripts/research/build_factor_dataset.py"
       - ".github/workflows/luna-formula-evolution-lab-v1.yml"
 
@@ -77,11 +78,22 @@ jobs:
             --survivors 40 \
             --finalists 80
 
+      - name: Run meta-ensemble mechanism lab
+        run: |
+          rm -rf research/luna_meta_ensemble_v1
+          python scripts/research/luna_meta_ensemble_lab_v1.py \
+            --input data/set_2000_2025/evolution_factors.csv \
+            --output research/luna_meta_ensemble_v1 \
+            --k 20 \
+            --cost-bps 20
+
       - name: Validate
         run: |
           test -s research/luna_formula_evolution_v2/summary.json
           test -s research/luna_formula_evolution_v2/evolution_ledger.csv
           test -s research/luna_formula_evolution_v2/finalist_stability.csv
+          test -s research/luna_meta_ensemble_v1/summary.json
+          test -s research/luna_meta_ensemble_v1/selected_by_origin.csv
           test -s research/luna_formula_evolution_v2/scenario_results.jsonl
           python - <<'PY'
           import json
@@ -106,6 +118,14 @@ jobs:
              research-results/luna-formula-evolution-v2/evolution-ledger.csv
           cp research/luna_formula_evolution_v2/formula_catalog.json \
              research-results/luna-formula-evolution-v2/formula-catalog.json
+          cp research/luna_meta_ensemble_v1/summary.json \
+             research-results/luna-formula-evolution-v2/meta-ensemble-summary.json
+          cp research/luna_meta_ensemble_v1/selected_by_origin.csv \
+             research-results/luna-formula-evolution-v2/meta-ensemble-selected.csv
+          cp research/luna_meta_ensemble_v1/selected_stress.csv \
+             research-results/luna-formula-evolution-v2/meta-ensemble-stress.csv
+          cp research/luna_meta_ensemble_v1/meta_ensemble_results.csv \
+             research-results/luna-formula-evolution-v2/meta-ensemble-results.csv
 
       - name: Commit result
         run: |
