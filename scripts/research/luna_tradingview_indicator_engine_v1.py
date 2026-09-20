@@ -211,6 +211,8 @@ def compute_tv_ratings(df: pd.DataFrame) -> pd.DataFrame:
     for n in [10, 20, 30, 50, 100, 200]:
         s = sma(p, n)
         e = ema(p, n)
+        x[f"SMA{n}"] = s
+        x[f"EMA{n}"] = e
         ma.extend([
             score_bool(s < p, s > p),
             score_bool(e < p, e > p)
@@ -219,13 +221,22 @@ def compute_tv_ratings(df: pd.DataFrame) -> pd.DataFrame:
     conv, base, span_a, span_b = ichimoku(x)
     h9 = hma(p, 9)
     vwma20 = (p * x["volume"]).rolling(20, min_periods=20).sum() / x["volume"].rolling(20, min_periods=20).sum()
+    x["HMA9"] = h9
+    x["VWMA20"] = vwma20
+    x["ICHIMOKU_CONV"] = conv
+    x["ICHIMOKU_BASE"] = base
+    x["ICHIMOKU_SPAN_A"] = span_a
+    x["ICHIMOKU_SPAN_B"] = span_b
+    x["ICHIMOKU_BULL"] = (
+        (span_a > span_b) & (base > span_a) & (conv > base) & (p > conv)
+    ).astype(int)
+    x["ICHIMOKU_BEAR"] = (
+        (span_a < span_b) & (base < span_a) & (conv < base) & (p < conv)
+    ).astype(int)
     ma.extend([
-        score_bool(h9 < p, h9 > p),
-        score_bool(vwma20 < p, vwma20 > p),
-        score_bool(
-            (span_a > span_b) & (base > span_a) & (conv > base) & (p > conv),
-            (span_a < span_b) & (base < span_a) & (conv < base) & (p < conv),
-        )
+        score_bool(x["HMA9"] < p, x["HMA9"] > p),
+        score_bool(x["VWMA20"] < p, x["VWMA20"] > p),
+        score_bool(x["ICHIMOKU_BULL"] == 1, x["ICHIMOKU_BEAR"] == 1),
     ])
     x["TV_MA_RATING"] = pd.concat(ma, axis=1).mean(axis=1)
 
@@ -287,9 +298,9 @@ def compute_tv_ratings(df: pd.DataFrame) -> pd.DataFrame:
     x["WPR14"] = wr
     osc.append(score_bool((wr < -80) & (wr > wr.shift(1)), (wr > -20) & (wr < wr.shift(1))))
 
-    e13 = ema(p, 13)
-    bull = x["high"] - e13
-    bear = x["low"] - e13
+    e50 = ema(p, 50)
+    bull = x["high"] - e50
+    bear = x["low"] - e50
     x["BULL_POWER"], x["BEAR_POWER"] = bull, bear
     osc.append(score_bool(
         (p > e13) & (bear < 0) & (bear > bear.shift(1)),
@@ -312,6 +323,8 @@ def compute_tv_ratings(df: pd.DataFrame) -> pd.DataFrame:
 def add_research_indicators(df: pd.DataFrame) -> pd.DataFrame:
     x = compute_tv_ratings(df)
     x["M1_MOM20_ADJ"] = x["adj_close"].pct_change(20)
+    sma60 = sma(x["close"], 60)
+    x["DIST_MA60"] = x["close"] / sma60.replace(0, np.nan) - 1.0
 
     for n in [2, 7, 9, 14, 21]:
         x[f"RSI{n}"] = rsi(x["close"], n)
