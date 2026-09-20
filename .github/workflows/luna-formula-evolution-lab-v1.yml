@@ -8,6 +8,7 @@ on:
       - "scripts/research/luna_formula_evolution_lab_v2.py"
       - "scripts/research/luna_meta_ensemble_lab_v1.py"
       - "scripts/research/build_factor_dataset.py"
+      - "scripts/research/build_monthly_factor_dataset.py"
       - ".github/workflows/luna-formula-evolution-lab-v1.yml"
 
 concurrency:
