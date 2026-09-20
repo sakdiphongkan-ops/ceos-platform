@@ -1,0 +1,130 @@
+name: LUNA Fresh Seed Replication v1
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["LUNA Adaptive Tournament v2"]
+    types: [completed]
+
+concurrency:
+  group: luna-fresh-seed-replication
+  cancel-in-progress: true
+
+jobs:
+  replicate:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'master')
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: python -m pip install -U pip pandas numpy python-dateutil
+
+      - name: Download public SET history
+        run: |
+          mkdir -p data/raw
+          curl -fL --retry 3 --retry-delay 2             "https://data.mendeley.com/public-api/zip/gybmm9t3mr/download/1"             -o data/raw/gybmm9t3mr-1.zip
+          test -s data/raw/gybmm9t3mr-1.zip
+
+      - name: Normalize SET history
+        run: |
+          python scripts/research/download_mendeley_set.py             --zip data/raw/gybmm9t3mr-1.zip             --output-dir data/set_public             --quarantine-invalid             --max-invalid-rate 0.01
+
+      - name: Build point-in-time daily factors
+        run: |
+          python scripts/research/build_factor_dataset.py             --prices data/set_public/prices.csv             --output data/set_public/factors.csv
+
+      - name: Build monthly LUNA factors
+        run: |
+          rm -rf data/luna_monthly
+          python scripts/research/build_monthly_luna_factors_from_daily.py             --input data/set_public/factors.csv             --output data/luna_monthly/monthly_price_factors.csv             --lookback-years 5
+
+      - name: Run five deterministic fresh seeds
+        run: |
+          rm -rf research/luna_fresh_seed_replication_v1
+          mkdir -p research/luna_fresh_seed_replication_v1
+          for seed in 20260920 20260921 20260922 20260923 20260924; do
+            mkdir -p "research/luna_fresh_seed_replication_v1/seed_$seed"
+            python scripts/research/luna_adaptive_tournament_v2.py               --input data/luna_monthly/monthly_price_factors.csv               --output "research/luna_fresh_seed_replication_v1/seed_$seed"               --formula-count 1000               --lookback-months 24               --min-history-months 12               --cost-bps 20               --k 20               --seed "$seed"
+          done
+
+      - name: Aggregate replication
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import pandas as pd
+
+          root = Path("research/luna_fresh_seed_replication_v1")
+          rows = []
+          formula_counts = {}
+          for p in sorted(root.glob("seed_*/summary.json")):
+              x = json.loads(p.read_text())
+              seed = p.parent.name.split("_",1)[1]
+              rows.append({
+                  "seed": int(seed),
+                  "months_traded": x["months_traded"],
+                  "adaptive_geo_monthly": x["geometric_monthly_return"],
+                  "adaptive_cumulative": x["cumulative_return"],
+                  "adaptive_positive_month_pct": x["positive_month_pct"],
+                  "adaptive_max_drawdown_pct": x["max_drawdown_pct"],
+                  "adaptive_months_ge_7pct": x["months_ge_7pct"],
+                  "m1_geo_monthly": x["benchmark_m1"]["geometric_monthly_return"],
+                  "m1_cumulative": x["benchmark_m1"]["cumulative_return"],
+                  "m1_max_drawdown_pct": x["benchmark_m1"]["max_drawdown_pct"],
+              })
+              ledger = pd.read_csv(p.parent / "tournament_selection_ledger.csv")
+              for fid, n in ledger["formula_id"].value_counts().items():
+                  formula_counts[fid] = formula_counts.get(fid, 0) + int(n)
+
+          Path("research-results/luna-fresh-seed-replication-v1-summary.json").write_text(
+              json.dumps({
+                  "status": "COMPLETED",
+                  "replications": rows,
+                  "seed_count": len(rows),
+                  "selection_frequency_across_seeds": dict(sorted(
+                      formula_counts.items(), key=lambda kv: (-kv[1], kv[0])
+                  )[:50]),
+                  "note": "Fresh deterministic seeds use the same data window, K20, 24-month selection lookback, 20 bps cost, and 1,000-formula search space. No seed is selected by holdout."
+              }, indent=2),
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Validate
+        run: |
+          test -s research-results/luna-fresh-seed-replication-v1-summary.json
+          python - <<'PY'
+          import json
+          x=json.load(open("research-results/luna-fresh-seed-replication-v1-summary.json"))
+          assert x["seed_count"] == 5
+          assert len(x["replications"]) == 5
+          print(json.dumps(x, indent=2))
+          PY
+
+      - name: Commit replication result
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research-results/luna-fresh-seed-replication-v1-summary.json
+          git diff --cached --quiet || git commit -m "research(luna): save fresh seed replication result"
+          git push
+
+      - name: Upload replication artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: luna-fresh-seed-replication-v1
+          path: research/luna_fresh_seed_replication_v1/
+          retention-days: 14
