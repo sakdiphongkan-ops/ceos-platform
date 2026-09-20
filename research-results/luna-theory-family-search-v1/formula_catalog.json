@@ -1,0 +1,1186 @@
+[
+  {
+    "formula_id": "TF_REV1",
+    "family": "REV1_CORE",
+    "terms": {
+      "MOM_20": -1.0
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_LV_0.25",
+    "family": "REV1_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "VOL_20": -0.25
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_0.25",
+    "family": "REV1_HIGH52",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 0.25
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_LIQ_0.25",
+    "family": "REV1_LIQUIDITY",
+    "terms": {
+      "MOM_20": -1.0,
+      "ADV20": 0.25
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_DD_0.25",
+    "family": "REV1_DRAWDOWN",
+    "terms": {
+      "MOM_20": -1.0,
+      "MAXDD_60": 0.25
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_LV_0.50",
+    "family": "REV1_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "VOL_20": -0.5
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_0.50",
+    "family": "REV1_HIGH52",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 0.5
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_LIQ_0.50",
+    "family": "REV1_LIQUIDITY",
+    "terms": {
+      "MOM_20": -1.0,
+      "ADV20": 0.5
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_DD_0.50",
+    "family": "REV1_DRAWDOWN",
+    "terms": {
+      "MOM_20": -1.0,
+      "MAXDD_60": 0.5
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_LV_0.75",
+    "family": "REV1_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "VOL_20": -0.75
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_0.75",
+    "family": "REV1_HIGH52",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 0.75
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_LIQ_0.75",
+    "family": "REV1_LIQUIDITY",
+    "terms": {
+      "MOM_20": -1.0,
+      "ADV20": 0.75
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_DD_0.75",
+    "family": "REV1_DRAWDOWN",
+    "terms": {
+      "MOM_20": -1.0,
+      "MAXDD_60": 0.75
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_LV_1.00",
+    "family": "REV1_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "VOL_20": -1.0
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_1.00",
+    "family": "REV1_HIGH52",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 1.0
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_LIQ_1.00",
+    "family": "REV1_LIQUIDITY",
+    "terms": {
+      "MOM_20": -1.0,
+      "ADV20": 1.0
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_DD_1.00",
+    "family": "REV1_DRAWDOWN",
+    "terms": {
+      "MOM_20": -1.0,
+      "MAXDD_60": 1.0
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_LV_0.25_0.25",
+    "family": "REV1_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 0.25,
+      "VOL_20": -0.25
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_DD_LV_0.25_0.25",
+    "family": "REV1_DRAWDOWN_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "MAXDD_60": 0.25,
+      "VOL_20": -0.25
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_LIQ_0.25_0.25",
+    "family": "REV1_HIGH52_LIQUIDITY",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 0.25,
+      "ADV20": 0.25
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_LV_0.25_0.50",
+    "family": "REV1_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 0.25,
+      "VOL_20": -0.5
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_DD_LV_0.25_0.50",
+    "family": "REV1_DRAWDOWN_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "MAXDD_60": 0.25,
+      "VOL_20": -0.5
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_LIQ_0.25_0.50",
+    "family": "REV1_HIGH52_LIQUIDITY",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 0.25,
+      "ADV20": 0.5
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_LV_0.25_0.75",
+    "family": "REV1_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 0.25,
+      "VOL_20": -0.75
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_DD_LV_0.25_0.75",
+    "family": "REV1_DRAWDOWN_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "MAXDD_60": 0.25,
+      "VOL_20": -0.75
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_LIQ_0.25_0.75",
+    "family": "REV1_HIGH52_LIQUIDITY",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 0.25,
+      "ADV20": 0.75
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_LV_0.25_1.00",
+    "family": "REV1_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 0.25,
+      "VOL_20": -1.0
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_DD_LV_0.25_1.00",
+    "family": "REV1_DRAWDOWN_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "MAXDD_60": 0.25,
+      "VOL_20": -1.0
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_LIQ_0.25_1.00",
+    "family": "REV1_HIGH52_LIQUIDITY",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 0.25,
+      "ADV20": 1.0
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_LV_0.50_0.25",
+    "family": "REV1_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 0.5,
+      "VOL_20": -0.25
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_DD_LV_0.50_0.25",
+    "family": "REV1_DRAWDOWN_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "MAXDD_60": 0.5,
+      "VOL_20": -0.25
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_LIQ_0.50_0.25",
+    "family": "REV1_HIGH52_LIQUIDITY",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 0.5,
+      "ADV20": 0.25
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_LV_0.50_0.50",
+    "family": "REV1_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 0.5,
+      "VOL_20": -0.5
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_DD_LV_0.50_0.50",
+    "family": "REV1_DRAWDOWN_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "MAXDD_60": 0.5,
+      "VOL_20": -0.5
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_LIQ_0.50_0.50",
+    "family": "REV1_HIGH52_LIQUIDITY",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 0.5,
+      "ADV20": 0.5
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_LV_0.50_0.75",
+    "family": "REV1_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 0.5,
+      "VOL_20": -0.75
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_DD_LV_0.50_0.75",
+    "family": "REV1_DRAWDOWN_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "MAXDD_60": 0.5,
+      "VOL_20": -0.75
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_LIQ_0.50_0.75",
+    "family": "REV1_HIGH52_LIQUIDITY",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 0.5,
+      "ADV20": 0.75
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_LV_0.50_1.00",
+    "family": "REV1_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 0.5,
+      "VOL_20": -1.0
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_DD_LV_0.50_1.00",
+    "family": "REV1_DRAWDOWN_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "MAXDD_60": 0.5,
+      "VOL_20": -1.0
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_LIQ_0.50_1.00",
+    "family": "REV1_HIGH52_LIQUIDITY",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 0.5,
+      "ADV20": 1.0
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_LV_0.75_0.25",
+    "family": "REV1_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 0.75,
+      "VOL_20": -0.25
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_DD_LV_0.75_0.25",
+    "family": "REV1_DRAWDOWN_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "MAXDD_60": 0.75,
+      "VOL_20": -0.25
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_LIQ_0.75_0.25",
+    "family": "REV1_HIGH52_LIQUIDITY",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 0.75,
+      "ADV20": 0.25
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_LV_0.75_0.50",
+    "family": "REV1_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 0.75,
+      "VOL_20": -0.5
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_DD_LV_0.75_0.50",
+    "family": "REV1_DRAWDOWN_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "MAXDD_60": 0.75,
+      "VOL_20": -0.5
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_LIQ_0.75_0.50",
+    "family": "REV1_HIGH52_LIQUIDITY",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 0.75,
+      "ADV20": 0.5
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_LV_0.75_0.75",
+    "family": "REV1_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 0.75,
+      "VOL_20": -0.75
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_DD_LV_0.75_0.75",
+    "family": "REV1_DRAWDOWN_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "MAXDD_60": 0.75,
+      "VOL_20": -0.75
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_LIQ_0.75_0.75",
+    "family": "REV1_HIGH52_LIQUIDITY",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 0.75,
+      "ADV20": 0.75
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_LV_0.75_1.00",
+    "family": "REV1_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 0.75,
+      "VOL_20": -1.0
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_DD_LV_0.75_1.00",
+    "family": "REV1_DRAWDOWN_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "MAXDD_60": 0.75,
+      "VOL_20": -1.0
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_LIQ_0.75_1.00",
+    "family": "REV1_HIGH52_LIQUIDITY",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 0.75,
+      "ADV20": 1.0
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_LV_1.00_0.25",
+    "family": "REV1_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 1.0,
+      "VOL_20": -0.25
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_DD_LV_1.00_0.25",
+    "family": "REV1_DRAWDOWN_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "MAXDD_60": 1.0,
+      "VOL_20": -0.25
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_LIQ_1.00_0.25",
+    "family": "REV1_HIGH52_LIQUIDITY",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 1.0,
+      "ADV20": 0.25
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_LV_1.00_0.50",
+    "family": "REV1_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 1.0,
+      "VOL_20": -0.5
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_DD_LV_1.00_0.50",
+    "family": "REV1_DRAWDOWN_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "MAXDD_60": 1.0,
+      "VOL_20": -0.5
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_LIQ_1.00_0.50",
+    "family": "REV1_HIGH52_LIQUIDITY",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 1.0,
+      "ADV20": 0.5
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_LV_1.00_0.75",
+    "family": "REV1_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 1.0,
+      "VOL_20": -0.75
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_DD_LV_1.00_0.75",
+    "family": "REV1_DRAWDOWN_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "MAXDD_60": 1.0,
+      "VOL_20": -0.75
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_LIQ_1.00_0.75",
+    "family": "REV1_HIGH52_LIQUIDITY",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 1.0,
+      "ADV20": 0.75
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_LV_1.00_1.00",
+    "family": "REV1_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 1.0,
+      "VOL_20": -1.0
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_DD_LV_1.00_1.00",
+    "family": "REV1_DRAWDOWN_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "MAXDD_60": 1.0,
+      "VOL_20": -1.0
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_H52_LIQ_1.00_1.00",
+    "family": "REV1_HIGH52_LIQUIDITY",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 1.0,
+      "ADV20": 1.0
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM6_H52_LV_0.25_0.25",
+    "family": "MOM6_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_60": 1.0,
+      "HIGH52_RATIO": 0.25,
+      "VOL_20": -0.25
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM12_H52_LV_0.25_0.25",
+    "family": "MOM12_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_120": 1.0,
+      "HIGH52_RATIO": 0.25,
+      "VOL_20": -0.25
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM6_DD_LV_0.25_0.25",
+    "family": "MOM6_DRAWDOWN_LOWVOL",
+    "terms": {
+      "MOM_60": 1.0,
+      "MAXDD_60": 0.25,
+      "VOL_20": -0.25
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM6_H52_LV_0.25_0.50",
+    "family": "MOM6_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_60": 1.0,
+      "HIGH52_RATIO": 0.25,
+      "VOL_20": -0.5
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM12_H52_LV_0.25_0.50",
+    "family": "MOM12_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_120": 1.0,
+      "HIGH52_RATIO": 0.25,
+      "VOL_20": -0.5
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM6_DD_LV_0.25_0.50",
+    "family": "MOM6_DRAWDOWN_LOWVOL",
+    "terms": {
+      "MOM_60": 1.0,
+      "MAXDD_60": 0.25,
+      "VOL_20": -0.5
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM6_H52_LV_0.25_0.75",
+    "family": "MOM6_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_60": 1.0,
+      "HIGH52_RATIO": 0.25,
+      "VOL_20": -0.75
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM12_H52_LV_0.25_0.75",
+    "family": "MOM12_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_120": 1.0,
+      "HIGH52_RATIO": 0.25,
+      "VOL_20": -0.75
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM6_DD_LV_0.25_0.75",
+    "family": "MOM6_DRAWDOWN_LOWVOL",
+    "terms": {
+      "MOM_60": 1.0,
+      "MAXDD_60": 0.25,
+      "VOL_20": -0.75
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM6_H52_LV_0.25_1.00",
+    "family": "MOM6_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_60": 1.0,
+      "HIGH52_RATIO": 0.25,
+      "VOL_20": -1.0
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM12_H52_LV_0.25_1.00",
+    "family": "MOM12_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_120": 1.0,
+      "HIGH52_RATIO": 0.25,
+      "VOL_20": -1.0
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM6_DD_LV_0.25_1.00",
+    "family": "MOM6_DRAWDOWN_LOWVOL",
+    "terms": {
+      "MOM_60": 1.0,
+      "MAXDD_60": 0.25,
+      "VOL_20": -1.0
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM6_H52_LV_0.50_0.25",
+    "family": "MOM6_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_60": 1.0,
+      "HIGH52_RATIO": 0.5,
+      "VOL_20": -0.25
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM12_H52_LV_0.50_0.25",
+    "family": "MOM12_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_120": 1.0,
+      "HIGH52_RATIO": 0.5,
+      "VOL_20": -0.25
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM6_DD_LV_0.50_0.25",
+    "family": "MOM6_DRAWDOWN_LOWVOL",
+    "terms": {
+      "MOM_60": 1.0,
+      "MAXDD_60": 0.5,
+      "VOL_20": -0.25
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM6_H52_LV_0.50_0.50",
+    "family": "MOM6_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_60": 1.0,
+      "HIGH52_RATIO": 0.5,
+      "VOL_20": -0.5
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM12_H52_LV_0.50_0.50",
+    "family": "MOM12_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_120": 1.0,
+      "HIGH52_RATIO": 0.5,
+      "VOL_20": -0.5
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM6_DD_LV_0.50_0.50",
+    "family": "MOM6_DRAWDOWN_LOWVOL",
+    "terms": {
+      "MOM_60": 1.0,
+      "MAXDD_60": 0.5,
+      "VOL_20": -0.5
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM6_H52_LV_0.50_0.75",
+    "family": "MOM6_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_60": 1.0,
+      "HIGH52_RATIO": 0.5,
+      "VOL_20": -0.75
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM12_H52_LV_0.50_0.75",
+    "family": "MOM12_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_120": 1.0,
+      "HIGH52_RATIO": 0.5,
+      "VOL_20": -0.75
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM6_DD_LV_0.50_0.75",
+    "family": "MOM6_DRAWDOWN_LOWVOL",
+    "terms": {
+      "MOM_60": 1.0,
+      "MAXDD_60": 0.5,
+      "VOL_20": -0.75
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM6_H52_LV_0.50_1.00",
+    "family": "MOM6_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_60": 1.0,
+      "HIGH52_RATIO": 0.5,
+      "VOL_20": -1.0
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM12_H52_LV_0.50_1.00",
+    "family": "MOM12_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_120": 1.0,
+      "HIGH52_RATIO": 0.5,
+      "VOL_20": -1.0
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM6_DD_LV_0.50_1.00",
+    "family": "MOM6_DRAWDOWN_LOWVOL",
+    "terms": {
+      "MOM_60": 1.0,
+      "MAXDD_60": 0.5,
+      "VOL_20": -1.0
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM6_H52_LV_0.75_0.25",
+    "family": "MOM6_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_60": 1.0,
+      "HIGH52_RATIO": 0.75,
+      "VOL_20": -0.25
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM12_H52_LV_0.75_0.25",
+    "family": "MOM12_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_120": 1.0,
+      "HIGH52_RATIO": 0.75,
+      "VOL_20": -0.25
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM6_DD_LV_0.75_0.25",
+    "family": "MOM6_DRAWDOWN_LOWVOL",
+    "terms": {
+      "MOM_60": 1.0,
+      "MAXDD_60": 0.75,
+      "VOL_20": -0.25
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM6_H52_LV_0.75_0.50",
+    "family": "MOM6_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_60": 1.0,
+      "HIGH52_RATIO": 0.75,
+      "VOL_20": -0.5
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM12_H52_LV_0.75_0.50",
+    "family": "MOM12_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_120": 1.0,
+      "HIGH52_RATIO": 0.75,
+      "VOL_20": -0.5
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM6_DD_LV_0.75_0.50",
+    "family": "MOM6_DRAWDOWN_LOWVOL",
+    "terms": {
+      "MOM_60": 1.0,
+      "MAXDD_60": 0.75,
+      "VOL_20": -0.5
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM6_H52_LV_0.75_0.75",
+    "family": "MOM6_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_60": 1.0,
+      "HIGH52_RATIO": 0.75,
+      "VOL_20": -0.75
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM12_H52_LV_0.75_0.75",
+    "family": "MOM12_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_120": 1.0,
+      "HIGH52_RATIO": 0.75,
+      "VOL_20": -0.75
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM6_DD_LV_0.75_0.75",
+    "family": "MOM6_DRAWDOWN_LOWVOL",
+    "terms": {
+      "MOM_60": 1.0,
+      "MAXDD_60": 0.75,
+      "VOL_20": -0.75
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM6_H52_LV_0.75_1.00",
+    "family": "MOM6_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_60": 1.0,
+      "HIGH52_RATIO": 0.75,
+      "VOL_20": -1.0
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM12_H52_LV_0.75_1.00",
+    "family": "MOM12_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_120": 1.0,
+      "HIGH52_RATIO": 0.75,
+      "VOL_20": -1.0
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM6_DD_LV_0.75_1.00",
+    "family": "MOM6_DRAWDOWN_LOWVOL",
+    "terms": {
+      "MOM_60": 1.0,
+      "MAXDD_60": 0.75,
+      "VOL_20": -1.0
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM6_H52_LV_1.00_0.25",
+    "family": "MOM6_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_60": 1.0,
+      "HIGH52_RATIO": 1.0,
+      "VOL_20": -0.25
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM12_H52_LV_1.00_0.25",
+    "family": "MOM12_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_120": 1.0,
+      "HIGH52_RATIO": 1.0,
+      "VOL_20": -0.25
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM6_DD_LV_1.00_0.25",
+    "family": "MOM6_DRAWDOWN_LOWVOL",
+    "terms": {
+      "MOM_60": 1.0,
+      "MAXDD_60": 1.0,
+      "VOL_20": -0.25
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM6_H52_LV_1.00_0.50",
+    "family": "MOM6_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_60": 1.0,
+      "HIGH52_RATIO": 1.0,
+      "VOL_20": -0.5
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM12_H52_LV_1.00_0.50",
+    "family": "MOM12_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_120": 1.0,
+      "HIGH52_RATIO": 1.0,
+      "VOL_20": -0.5
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM6_DD_LV_1.00_0.50",
+    "family": "MOM6_DRAWDOWN_LOWVOL",
+    "terms": {
+      "MOM_60": 1.0,
+      "MAXDD_60": 1.0,
+      "VOL_20": -0.5
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM6_H52_LV_1.00_0.75",
+    "family": "MOM6_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_60": 1.0,
+      "HIGH52_RATIO": 1.0,
+      "VOL_20": -0.75
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM12_H52_LV_1.00_0.75",
+    "family": "MOM12_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_120": 1.0,
+      "HIGH52_RATIO": 1.0,
+      "VOL_20": -0.75
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM6_DD_LV_1.00_0.75",
+    "family": "MOM6_DRAWDOWN_LOWVOL",
+    "terms": {
+      "MOM_60": 1.0,
+      "MAXDD_60": 1.0,
+      "VOL_20": -0.75
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM6_H52_LV_1.00_1.00",
+    "family": "MOM6_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_60": 1.0,
+      "HIGH52_RATIO": 1.0,
+      "VOL_20": -1.0
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM12_H52_LV_1.00_1.00",
+    "family": "MOM12_HIGH52_LOWVOL",
+    "terms": {
+      "MOM_120": 1.0,
+      "HIGH52_RATIO": 1.0,
+      "VOL_20": -1.0
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_MOM6_DD_LV_1.00_1.00",
+    "family": "MOM6_DRAWDOWN_LOWVOL",
+    "terms": {
+      "MOM_60": 1.0,
+      "MAXDD_60": 1.0,
+      "VOL_20": -1.0
+    },
+    "interaction": "linear"
+  },
+  {
+    "formula_id": "TF_REV1_X_LV_0.25",
+    "family": "REV1_X_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "VOL_20": -0.25
+    },
+    "interaction": "reversal_x_lowvol_rank_gate"
+  },
+  {
+    "formula_id": "TF_REV1_X_H52_0.25",
+    "family": "REV1_X_HIGH52",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 0.25
+    },
+    "interaction": "reversal_x_high52_rank_gate"
+  },
+  {
+    "formula_id": "TF_REV1_X_LV_0.50",
+    "family": "REV1_X_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "VOL_20": -0.5
+    },
+    "interaction": "reversal_x_lowvol_rank_gate"
+  },
+  {
+    "formula_id": "TF_REV1_X_H52_0.50",
+    "family": "REV1_X_HIGH52",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 0.5
+    },
+    "interaction": "reversal_x_high52_rank_gate"
+  },
+  {
+    "formula_id": "TF_REV1_X_LV_0.75",
+    "family": "REV1_X_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "VOL_20": -0.75
+    },
+    "interaction": "reversal_x_lowvol_rank_gate"
+  },
+  {
+    "formula_id": "TF_REV1_X_H52_0.75",
+    "family": "REV1_X_HIGH52",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 0.75
+    },
+    "interaction": "reversal_x_high52_rank_gate"
+  },
+  {
+    "formula_id": "TF_REV1_X_LV_1.00",
+    "family": "REV1_X_LOWVOL",
+    "terms": {
+      "MOM_20": -1.0,
+      "VOL_20": -1.0
+    },
+    "interaction": "reversal_x_lowvol_rank_gate"
+  },
+  {
+    "formula_id": "TF_REV1_X_H52_1.00",
+    "family": "REV1_X_HIGH52",
+    "terms": {
+      "MOM_20": -1.0,
+      "HIGH52_RATIO": 1.0
+    },
+    "interaction": "reversal_x_high52_rank_gate"
+  }
+]
