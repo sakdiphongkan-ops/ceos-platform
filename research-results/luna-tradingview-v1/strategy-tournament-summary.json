@@ -1,11 +1,11 @@
 {
   "status": "COMPLETED",
   "engine": "luna-tradingview-strategy-tournament-v1",
-  "panel_sha256": "bc1962babf8c3d7f99f8132a40f43f1cf2e56ee810a1955c36007c8bab68d18a",
+  "panel_sha256": "34f63de0badd0fb7ff5edec4a718667d4875cecc5ae17782b6c2ae4f0c1bf897",
   "candidate_count": 35,
   "gate_candidates": 25,
   "rerank_candidates": 10,
-  "selection_rule": "M1 bottom-K by 20-trading-day adjusted-close momentum for gate candidates; pool-50/100 second-stage rerank for evolution candidates.",
+  "selection_rule": "M1 bottom-K by completed calendar-month adjusted-close return at month-end for gate candidates; pool-50/100 second-stage rerank for evolution candidates.",
   "train_dev_only_selection": true,
   "frozen_periods": [
     "OOS",
