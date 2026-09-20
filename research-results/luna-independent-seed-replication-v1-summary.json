@@ -1,0 +1,57 @@
+{
+  "status": "COMPLETED",
+  "seed_count": 5,
+  "seed_metrics": [
+    {
+      "seed": 20260920,
+      "months": 48,
+      "geometric_monthly_return": 0.0015598115562143189,
+      "cumulative_return": 0.077682199169536,
+      "positive_month_pct": 0.3958333333333333,
+      "months_ge_7pct": 3,
+      "max_drawdown_pct": -0.3039667014296611
+    },
+    {
+      "seed": 20260921,
+      "months": 48,
+      "geometric_monthly_return": -0.002927763879911671,
+      "cumulative_return": -0.13128380222057034,
+      "positive_month_pct": 0.4166666666666667,
+      "months_ge_7pct": 2,
+      "max_drawdown_pct": -0.22026625981357018
+    },
+    {
+      "seed": 20260922,
+      "months": 48,
+      "geometric_monthly_return": -0.006724529442710403,
+      "cumulative_return": -0.2766539685613397,
+      "positive_month_pct": 0.375,
+      "months_ge_7pct": 1,
+      "max_drawdown_pct": -0.3960250765383829
+    },
+    {
+      "seed": 20260923,
+      "months": 48,
+      "geometric_monthly_return": 0.003775011228677405,
+      "cumulative_return": 0.19824667030758825,
+      "positive_month_pct": 0.4791666666666667,
+      "months_ge_7pct": 3,
+      "max_drawdown_pct": -0.1426868409596459
+    },
+    {
+      "seed": 20260924,
+      "months": 48,
+      "geometric_monthly_return": 0.003269611607649381,
+      "cumulative_return": 0.16962752849460494,
+      "positive_month_pct": 0.3958333333333333,
+      "months_ge_7pct": 4,
+      "max_drawdown_pct": -0.2969604685672176
+    }
+  ],
+  "geometric_monthly_mean": -0.00020957178601619387,
+  "geometric_monthly_median": 0.0015598115562143189,
+  "geometric_monthly_min": -0.006724529442710403,
+  "geometric_monthly_max": 0.003775011228677405,
+  "seeds_ge_7pct": 0,
+  "note": "Fresh formula catalogs for each seed. This is a replication/stability diagnostic, not an additional selection pass."
+}
