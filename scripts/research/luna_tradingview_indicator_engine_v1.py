@@ -10,7 +10,7 @@ Important:
 - This is a translation from public TradingView documentation, not TradingView
   proprietary source code.
 - M1 selection remains independent: bottom K by 20-day adjusted-close momentum.
-- All calculations are causal and use only data available on/before the bar.
+- All calculations are causal and use only data available on/before the bar.\n# M1 production alignment: selection score uses completed-month CLOSE return.
 """
 
 from __future__ import annotations
