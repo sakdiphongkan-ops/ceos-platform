@@ -1,0 +1,28 @@
+{
+  "engine": "luna-m1-rsi-advanced-timing-v1",
+  "status": "RESEARCH_TRACK_ADDED",
+  "source": {
+    "publisher": "Yuanta Securities (Thailand)",
+    "title": "RSI คืออะไร? วิธีใช้ RSI หาจุดซื้อขายหุ้นแม่นยำ",
+    "url": "https://www.yuanta.co.th/blog/research/RSI/",
+    "published": "2026-06-20"
+  },
+  "hypotheses": [
+    {"id":"RSI14","idea":"RSI(14) standard momentum indicator"},
+    {"id":"RSI7","idea":"Shorter RSI(7) may react faster but can create more false signals"},
+    {"id":"RSI9","idea":"Shorter RSI(9) may react faster but can create more false signals"},
+    {"id":"RSI21","idea":"Longer RSI(21) may reduce noise"},
+    {"id":"RSI50","idea":"RSI above 50 as positive momentum regime; tested with MACD > signal confirmation"},
+    {"id":"RSI15","idea":"Super-oversold RSI <= 15 with improving slope"},
+    {"id":"RSI_DIV_PROXY","idea":"Bullish-divergence proxy: negative 20-day price momentum while 20-day RSI change is positive"},
+    {"id":"OVERSOLD_TURNING","idea":"RSI crossing above 30 while negative MACD histogram is improving"}
+  ],
+  "design": {
+    "selection": "M1 bottom-20 by 20-day momentum at month-end",
+    "technical_layer": "technical gate only; blocked names stay cash",
+    "costs_bps": [20,40,60],
+    "selection_data": "TRAIN+DEV",
+    "frozen_data": ["OOS","HOLDOUT"],
+    "promotion": "Both OOS and HOLDOUT must improve versus M1 and remain positive at 20/40/60 bps"
+  }
+}
