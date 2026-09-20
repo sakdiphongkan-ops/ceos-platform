@@ -135,12 +135,14 @@ jobs:
           assert x["candidate_count"] >= 30
           assert x["train_dev_only_selection"] is True
           assert x["frozen_periods"] == ["OOS","HOLDOUT"]
+          audit=x["locked_m1_baseline_audit"]
+          assert audit["available"] is True
+          assert audit["within_1bp"] is True, audit
+          assert audit["max_abs_diff"] <= 0.0001, audit
           print(json.dumps(x,indent=2))
           PY
 
       - name: Publish audit summary to GitHub issue
-        continue-on-error: true
-        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -205,7 +207,7 @@ jobs:
           lines.append("Machine-readable full candidate results are stored by the workflow.")
           Path("research-results-comment.md").write_text("\\n".join(lines),encoding="utf-8")
           PY
-          gh issue comment 2 --body-file research-results-comment.md || echo "Issue comment skipped: token lacks issue-comment permission; research artifacts will still be persisted."
+          gh issue comment 2 --body-file research-results-comment.md || true || echo "Issue comment skipped: token lacks issue-comment permission; research artifacts will still be persisted."
 
       - name: Persist tournament results via GitHub Contents API
         env:
