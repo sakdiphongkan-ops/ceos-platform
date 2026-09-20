@@ -1,4 +1,5 @@
 name: LUNA Adaptive Tournament v2
+# workflow_revision: 20260920-02
 
 on:
   workflow_dispatch:
