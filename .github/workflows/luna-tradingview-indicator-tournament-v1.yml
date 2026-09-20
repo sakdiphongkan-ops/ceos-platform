@@ -134,11 +134,13 @@ jobs:
               raw=pd.read_csv(daily,parse_dates=["date"])
               raw=raw.sort_values(["symbol","date"]).copy()
 
-              # Locked production M1 was verified directly against production
-              # selection_score: raw close return over 21 trading sessions.
-              raw["M1_MOM20_ADJ"]=raw.groupby("symbol")["close"].pct_change(21)
+              # Locked production M1 selection_score: completed calendar-month
+              # raw-close return from the prior month-end to the current month-end.
               raw["month_end"]=raw["date"].dt.to_period("M").dt.to_timestamp("M")
-              m1=raw.groupby(["symbol","month_end"],as_index=False).tail(1)[["symbol","month_end","M1_MOM20_ADJ"]]
+              month_px=raw.groupby(["symbol","month_end"],as_index=False).tail(1)[["symbol","month_end","close"]]
+              month_px=month_px.sort_values(["symbol","month_end"])
+              month_px["M1_MOM20_ADJ"]=month_px.groupby("symbol")["close"].pct_change()
+              m1=month_px[["symbol","month_end","M1_MOM20_ADJ"]]
 
               # Add September month-end rows so August gets the same forward
               # return horizon as production; indicator values are irrelevant for
@@ -158,7 +160,7 @@ jobs:
 
               meta=json.loads(cache_summary.read_text())
               meta["status"]="COMPLETED"
-              meta["monthly_m1_definition"]="raw close 21-trading-day momentum at each month's last available trading day; verified against locked production selection_score"
+              meta["monthly_m1_definition"]="completed calendar-month raw-close return from prior month-end to current month-end; verified against locked production selection_score"
               meta["forward_data_through"]="2026-09-18"
               meta["monthly_rows"]=int(len(x))
               meta["symbols"]=int(x["symbol"].nunique())
