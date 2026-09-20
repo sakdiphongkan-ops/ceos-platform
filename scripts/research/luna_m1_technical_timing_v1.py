@@ -315,11 +315,19 @@ def main():
     refdf = result[result.bps == ref].set_index("candidate")
     stressdf = result[result.bps == stress].set_index("candidate")
     ranking = pd.DataFrame(index=refdf.index)
-    ranking["train_dev_geo"] = (
-        (refdf["TRAIN_geo_monthly"] + refdf["DEV_geo_monthly"]) / 2
+    n_train = refdf["TRAIN_months"].astype(float).replace(0, np.nan)
+    n_dev = refdf["DEV_months"].astype(float).replace(0, np.nan)
+    ranking["train_dev_geo"] = np.expm1(
+        (
+            n_train * np.log1p(refdf["TRAIN_geo_monthly"].clip(lower=-0.999999))
+            + n_dev * np.log1p(refdf["DEV_geo_monthly"].clip(lower=-0.999999))
+        ) / (n_train + n_dev)
     )
-    ranking["stress_train_dev_geo"] = stressdf["TRAIN_geo_monthly"].combine(
-        stressdf["DEV_geo_monthly"], lambda a,b: (a+b)/2
+    ranking["stress_train_dev_geo"] = np.expm1(
+        (
+            n_train * np.log1p(stressdf["TRAIN_geo_monthly"].clip(lower=-0.999999))
+            + n_dev * np.log1p(stressdf["DEV_geo_monthly"].clip(lower=-0.999999))
+        ) / (n_train + n_dev)
     )
     ranking["min_geo"] = ranking[["train_dev_geo","stress_train_dev_geo"]].min(axis=1)
     ranking["dev_drawdown"] = refdf["DEV_max_drawdown_pct"]
