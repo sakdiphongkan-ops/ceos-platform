@@ -291,6 +291,7 @@ def main():
                  "avg_active_names":float(rr["active_names"].mean()),
                  "avg_turnover":float(rr["turnover"].mean())}
             for label,start,end in [
+                ("FULL5Y","2021-10-31","2026-08-31"),
                 ("TRAIN","2022-10-31","2023-08-31"),
                 ("DEV","2023-09-30","2024-08-31"),
                 ("OOS","2024-09-30","2025-08-31"),
