@@ -4,6 +4,10 @@ on:
   workflow_run:
     workflows: ["LUNA Independent Holdout Audit v1"]
     types: [completed]
+  push:
+    branches: [master]
+    paths:
+      - ".github/workflows/luna-independent-seed-replication-v1.yml"
   workflow_dispatch:
 
 concurrency:
