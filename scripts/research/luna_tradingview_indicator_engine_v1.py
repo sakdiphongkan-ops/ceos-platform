@@ -480,7 +480,9 @@ def monthly_snapshot(df: pd.DataFrame) -> pd.DataFrame:
     # Compute it from month-end adjusted closes so the tournament baseline is
     # apple-to-apple with luna-m1s0k20rev-v1.
     monthly["M1_MONTH_RETURN_ADJ"] = monthly.groupby("symbol")["adj_close"].pct_change()
-    monthly["M1_MOM20_ADJ"] = monthly["M1_MONTH_RETURN_ADJ"]
+    # Production M1 formation at month t uses the previous completed month return
+    # (t-1) as the mean-reversion score, then holds into t+1.
+    monthly["M1_MOM20_ADJ"] = monthly.groupby("symbol")["M1_MONTH_RETURN_ADJ"].shift(1)
     return monthly.reset_index(drop=True)
 
 
