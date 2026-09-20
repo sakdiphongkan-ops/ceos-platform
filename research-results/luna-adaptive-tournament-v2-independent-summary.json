@@ -24,6 +24,7 @@
     "maxdd60",
     "avg_amount20"
   ],
+  "excluded_factors": [],
   "excluded_sparse_factors": [],
   "geometric_monthly_return": 0.0015598115562143189,
   "cumulative_return": 0.077682199169536,
