@@ -132,27 +132,33 @@ jobs:
               print("reusing_validated_indicator_panel=true")
               x=pd.read_csv(cache_panel,parse_dates=["month_end"])
               raw=pd.read_csv(daily,parse_dates=["date"])
-              raw=raw[raw["date"]>="2026-09-01"].sort_values(["symbol","date"])
-              sep=raw.groupby("symbol",as_index=False).tail(1).copy()
-              sep["month_end"]=pd.Timestamp("2026-09-30")
-              keep_cols=["symbol","date","open","high","low","close","volume","adj_close","month_end"]
-              sep=sep[[c for c in keep_cols if c in sep.columns]]
+              raw=raw.sort_values(["symbol","date"]).copy()
 
-              # Add September month-end rows only for forward-return computation.
-              # Indicator values are not needed for August formation decisions.
+              # Locked production M1 was verified directly against production
+              # selection_score: raw close return over 21 trading sessions.
+              raw["M1_MOM20_ADJ"]=raw.groupby("symbol")["close"].pct_change(21)
+              raw["month_end"]=raw["date"].dt.to_period("M").dt.to_timestamp("M")
+              m1=raw.groupby(["symbol","month_end"],as_index=False).tail(1)[["symbol","month_end","M1_MOM20_ADJ"]]
+
+              # Add September month-end rows so August gets the same forward
+              # return horizon as production; indicator values are irrelevant for
+              # the September formation row.
+              sep=raw[raw["date"]>="2026-09-01"].groupby("symbol",as_index=False).tail(1).copy()
+              sep["month_end"]=pd.Timestamp("2026-09-30")
+              sep=sep[["symbol","date","open","high","low","close","volume","adj_close","month_end"]]
               for col in x.columns:
                   if col not in sep.columns:
                       sep[col]=pd.NA
               sep=sep[x.columns]
+
+              x=x.drop(columns=["M1_MOM20_ADJ"],errors="ignore").merge(m1,on=["symbol","month_end"],how="left")
               x=pd.concat([x,sep],ignore_index=True)
               x=x.sort_values(["symbol","month_end"]).drop_duplicates(["symbol","month_end"],keep="last")
-              x["M1_MONTH_RETURN_ADJ"]=x.groupby("symbol")["adj_close"].pct_change()
-              x["M1_MOM20_ADJ"]=x.groupby("symbol")["M1_MONTH_RETURN_ADJ"].shift(1)
               x.to_csv(out/"monthly_indicator_panel.csv",index=False)
 
               meta=json.loads(cache_summary.read_text())
               meta["status"]="COMPLETED"
-              meta["monthly_m1_definition"]="completed calendar-month adjusted-close return at month-end; aligned to locked production M1"
+              meta["monthly_m1_definition"]="raw close 21-trading-day momentum at each month's last available trading day; verified against locked production selection_score"
               meta["forward_data_through"]="2026-09-18"
               meta["monthly_rows"]=int(len(x))
               meta["symbols"]=int(x["symbol"].nunique())
