@@ -80,13 +80,12 @@ def main() -> None:
 
     # Strict next-calendar-month forward return.
     next_close = m[["symbol", "month_end", "adj_close"]].copy()
+    # Map the *next* month's close back onto the current month.
     next_close["month_end"] = (
-        next_close["month_end"] + pd.offsets.MonthEnd(1)
+        next_close["month_end"] - pd.offsets.MonthEnd(1)
     )
     next_close = next_close.rename(columns={"adj_close": "next_adj_close"})
     m = m.merge(next_close, on=["symbol", "month_end"], how="left")
-    # The shifted merge above intentionally joins the same symbol to the
-    # following month's month-end because next_close's month_end was advanced.
     m["fwd1"] = m["next_adj_close"] / m["adj_close"] - 1.0
     m.loc[~np.isfinite(m["fwd1"]), "fwd1"] = np.nan
     m = m.drop(columns=["next_adj_close"])
