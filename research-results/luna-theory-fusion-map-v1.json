@@ -1,0 +1,76 @@
+{
+  "version": "1.0",
+  "purpose": "Public theory map used to seed LUNA formula evolution. No proprietary or undisclosed investment-firm formula is inferred.",
+  "public_theories": [
+    {
+      "family": "AQR Quality Minus Junk",
+      "mechanism": "Quality combines profitability, growth, safety and payout. LUNA currently uses price/risk/liquidity proxies when PIT fundamentals are unavailable.",
+      "implementation_now": ["VOL_20", "MAXDD_60", "AMOUNT", "MOM_120", "DIST_HIGH_252"],
+      "status": "proxy_only",
+      "sources": ["https://www.aqr.com/Insights/Research/Working-Paper/Quality-Minus-Junk"]
+    },
+    {
+      "family": "Fama-French 5 factors",
+      "mechanism": "Size, value, profitability and investment are added to the market factor. Fundamental inputs must be point-in-time.",
+      "implementation_now": ["momentum/reversal/risk proxies only"],
+      "status": "fundamental_inputs_missing",
+      "sources": ["https://mba.tuck.dartmouth.edu/pages/Faculty/ken.french/Data_Library/f-f_5_factors_2x3.html"]
+    },
+    {
+      "family": "Value and Momentum Everywhere",
+      "mechanism": "Value and momentum have historically shown broad premia and negative correlation, motivating diversification between mechanisms.",
+      "implementation_now": ["MOM_60", "MOM_120", "MOM_20 reversal proxy"],
+      "status": "value_input_missing",
+      "sources": ["https://www.aqr.com/Insights/Datasets/Value-and-Momentum-Everywhere-Factors-Monthly"]
+    },
+    {
+      "family": "Jegadeesh-Titman momentum",
+      "mechanism": "Cross-sectional winners over roughly 3-12 month formation windows can continue to outperform; LUNA tests multiple horizons and cost/anchor stress.",
+      "implementation_now": ["MOM_60", "MOM_120", "MOM_252"],
+      "status": "active",
+      "sources": ["https://academic.oup.com/rfs/article-abstract/15/1/143/1619967"]
+    },
+    {
+      "family": "Short-term reversal",
+      "mechanism": "Recent losers can exhibit reversal, motivating 1-4 month reversal seeds and multi-horizon blends.",
+      "implementation_now": ["MOM_20", "MOM_40", "MOM_60", "MOM_80"],
+      "status": "active",
+      "sources": ["https://link.springer.com/article/10.1007/s11408-022-00417-8"]
+    },
+    {
+      "family": "AQR Betting Against Beta",
+      "mechanism": "Low-beta/low-risk exposure is tested as a separate defensive mechanism.",
+      "implementation_now": ["BETA when benchmark data exists", "VOL_20", "MAXDD_60"],
+      "status": "proxy_until_beta_available",
+      "sources": ["https://www.aqr.com/Insights/Datasets"]
+    },
+    {
+      "family": "Gross profitability / Novy-Marx",
+      "mechanism": "Gross profits-to-assets is a profitability signal and interacts with value.",
+      "implementation_now": [],
+      "status": "blocked_until_PIT_fundamentals",
+      "sources": ["https://www.nber.org/papers/w15940"]
+    },
+    {
+      "family": "Piotroski F-Score",
+      "mechanism": "Nine accounting signals combine profitability, leverage/liquidity and operating efficiency.",
+      "implementation_now": [],
+      "status": "blocked_until_PIT_fundamentals",
+      "sources": ["https://link.springer.com/article/10.1057/s41260-020-00157-2"]
+    },
+    {
+      "family": "PEAD / SUE",
+      "mechanism": "Post-earnings drift can be modeled from standardized earnings surprises and their history; requires announcement-aligned fundamental/estimate data.",
+      "implementation_now": [],
+      "status": "blocked_until_PIT_fundamentals",
+      "sources": ["https://www.philadelphiafed.org/the-economy/banking-and-financial-markets/pead-txt-post-earnings-announcement-drift-using-text"]
+    }
+  ],
+  "research_policy": {
+    "selection": "TRAIN+DEV only",
+    "validation": "OOS and final holdout frozen before promotion",
+    "cost_stress_bps": [0,20,45,60],
+    "monthly_hurdle": 0.07,
+    "guard": "7% geometric monthly is a research hurdle, not a guarantee or promotion rule"
+  }
+}
