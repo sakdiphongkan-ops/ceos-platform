@@ -1,12 +1,12 @@
 {
   "status": "COMPLETED",
   "engine": "luna-structured-interaction-2000-v1",
-  "dataset_sha256": "e8ed4835dd633d839b432d14fa3ec683868bf4c2d5f60eecacc9746ee5a7a425",
-  "rows_monthly": 112163,
-  "months": 296,
+  "dataset_sha256": "db1f61cfc3d795a63c7619914d12941986491d9ffb103ed7794a18d34c65d986",
+  "rows_monthly": 27928,
+  "months": 59,
   "period": [
-    "1983-08-31 00:00:00",
-    "2008-03-31 00:00:00"
+    "2020-03-31 00:00:00",
+    "2025-01-31 00:00:00"
   ],
   "formula_count": 2000,
   "k": 20,
@@ -32,25 +32,25 @@
     "SKEW_60"
   ],
   "factor_coverage": {
-    "MOM_5": 0.9912811998274997,
-    "MOM_10": 0.9902426866186823,
-    "MOM_20": 0.9881656602010476,
-    "MOM_60": 0.9798609805534655,
-    "MOM_120": 0.9674797618400142,
+    "MOM_5": 0.9995039173125896,
+    "MOM_10": 0.999486510902505,
+    "MOM_20": 0.9994516980823358,
+    "MOM_60": 0.9993124468016592,
+    "MOM_120": 0.998966059240976,
     "REL_MOM": 0.0,
-    "VOL_10": 0.9902426866186823,
-    "VOL_20": 0.9881656602010476,
-    "MAXDD_60": 0.980065257172272,
-    "ATR_PCT": 0.9973444039555148,
-    "ADV20": 0.9961187442426754,
-    "AMOUNT": 0.9961187442426754,
-    "RSI14": 0.9902131371706789,
-    "DIST_MA20": 0.9883733628428111,
-    "DIST_MA60": 0.980065257172272,
-    "BREAKOUT20": 0.9881656602010476,
-    "BREAKOUT55": 0.9808960677393259,
-    "SKEW_20": 0.9710222695774728,
-    "SKEW_60": 0.9651504944821759,
+    "VOL_10": 0.999486510902505,
+    "VOL_20": 0.9994516980823358,
+    "MAXDD_60": 0.9993159280836761,
+    "ATR_PCT": 0.99997737166689,
+    "ADV20": 0.9999669278208393,
+    "AMOUNT": 0.9999669278208393,
+    "RSI14": 0.9994725857744373,
+    "DIST_MA20": 0.9994551793643527,
+    "DIST_MA60": 0.9993159280836761,
+    "BREAKOUT20": 0.9994516980823358,
+    "BREAKOUT55": 0.9993298532117437,
+    "SKEW_20": 0.9847780943810368,
+    "SKEW_60": 0.9867206497464757,
     "QUALITY_SCORE": 0.0,
     "VALUE_QUALITY": 0.0,
     "MOM_BLEND": 0.0,
@@ -84,254 +84,126 @@
   "holdout_candidates_ge_7pct": 0,
   "top10_holdout": [
     {
-      "fi": 1752,
-      "formula_id": "G1752",
-      "train_geo": 0.1239782584395357,
-      "train_positive": 0.6857142857142857,
-      "validation_geo": 0.08162991513234075,
-      "validation_positive": 0.9166666666666666,
-      "validation_cumulative": 1.5641550515324703,
+      "fi": 1996,
+      "formula_id": "G1996",
+      "train_geo": 0.04721509063317786,
+      "train_positive": 0.7428571428571429,
+      "validation_geo": 0.03775812051523619,
+      "validation_positive": 0.5833333333333334,
+      "validation_cumulative": 0.560104484792338,
       "holdout": {
-        "months": 249,
-        "geometric_monthly_return": 0.022256094532093984,
-        "cumulative_return": 239.08631131032556,
-        "positive_month_pct": 0.6305220883534136,
-        "months_ge_7pct": 19,
-        "max_drawdown_pct": -0.37640005747076866,
-        "final_capital_baht": 7202589.339309767
+        "months": 12,
+        "geometric_monthly_return": -0.01825777271827711,
+        "cumulative_return": -0.19837794327215252,
+        "positive_month_pct": 0.25,
+        "months_ge_7pct": 1,
+        "max_drawdown_pct": -0.17360609191232912,
+        "final_capital_baht": 24048.661701835423
       },
-      "holdout_months_ge_7pct": 19,
+      "holdout_months_ge_7pct": 1,
       "holdout_cost_stress": {
         "0bps": {
-          "months": 249,
-          "geometric_monthly_return": 0.02327423470815515,
-          "cumulative_return": 306.6222351030988,
-          "positive_month_pct": 0.6385542168674698,
-          "months_ge_7pct": 23,
-          "max_drawdown_pct": -0.36483518514360347,
-          "final_capital_baht": 9228667.053092964
+          "months": 12,
+          "geometric_monthly_return": -0.017368026238129275,
+          "cumulative_return": -0.18961629843142114,
+          "positive_month_pct": 0.25,
+          "months_ge_7pct": 1,
+          "max_drawdown_pct": -0.1654340491790084,
+          "final_capital_baht": 24311.511047057367
         },
         "20bps": {
-          "months": 249,
-          "geometric_monthly_return": 0.022256094532093984,
-          "cumulative_return": 239.08631131032556,
-          "positive_month_pct": 0.6305220883534136,
-          "months_ge_7pct": 19,
-          "max_drawdown_pct": -0.37640005747076866,
-          "final_capital_baht": 7202589.339309767
+          "months": 12,
+          "geometric_monthly_return": -0.01825777271827711,
+          "cumulative_return": -0.19837794327215252,
+          "positive_month_pct": 0.25,
+          "months_ge_7pct": 1,
+          "max_drawdown_pct": -0.17360609191232912,
+          "final_capital_baht": 24048.661701835423
         },
         "45bps": {
-          "months": 249,
-          "geometric_monthly_return": 0.020983327738303137,
-          "cumulative_return": 175.05319896941924,
-          "positive_month_pct": 0.5983935742971888,
-          "months_ge_7pct": 19,
-          "max_drawdown_pct": -0.3905801620318988,
-          "final_capital_baht": 5281595.969082577
+          "months": 12,
+          "geometric_monthly_return": -0.019370008953935258,
+          "cumulative_return": -0.20920838442008471,
+          "positive_month_pct": 0.25,
+          "months_ge_7pct": 1,
+          "max_drawdown_pct": -0.18371933518907146,
+          "final_capital_baht": 23723.748467397458
         }
       },
       "formula": {
-        "id": "G1752",
+        "id": "G1996",
         "kind": "SUM2",
         "features": [
-          "VOL_20",
-          "MAXDD_60"
+          "MAXDD_60",
+          "ADV20"
         ],
         "orientations": [
           1,
-          0
+          1
         ],
         "weights": [
-          0.35,
-          0.65
+          0.2,
+          0.8
         ]
       }
     },
     {
-      "fi": 1753,
-      "formula_id": "G1753",
-      "train_geo": 0.1266221123079474,
-      "train_positive": 0.7142857142857143,
-      "validation_geo": 0.0808675074092684,
-      "validation_positive": 0.9166666666666666,
-      "validation_cumulative": 1.542550206578591,
-      "holdout": {
-        "months": 249,
-        "geometric_monthly_return": 0.021280076466910325,
-        "cumulative_return": 188.26488322130513,
-        "positive_month_pct": 0.6184738955823293,
-        "months_ge_7pct": 17,
-        "max_drawdown_pct": -0.3747940229510067,
-        "final_capital_baht": 5677946.496639154
-      },
-      "holdout_months_ge_7pct": 17,
-      "holdout_cost_stress": {
-        "0bps": {
-          "months": 249,
-          "geometric_monthly_return": 0.022250100407015472,
-          "cumulative_return": 238.73602988706935,
-          "positive_month_pct": 0.6224899598393574,
-          "months_ge_7pct": 17,
-          "max_drawdown_pct": -0.36359807585953796,
-          "final_capital_baht": 7192080.896612081
-        },
-        "20bps": {
-          "months": 249,
-          "geometric_monthly_return": 0.021280076466910325,
-          "cumulative_return": 188.26488322130513,
-          "positive_month_pct": 0.6184738955823293,
-          "months_ge_7pct": 17,
-          "max_drawdown_pct": -0.3747940229510067,
-          "final_capital_baht": 5677946.496639154
-        },
-        "45bps": {
-          "months": 249,
-          "geometric_monthly_return": 0.020067467223153335,
-          "cumulative_return": 139.79762727556684,
-          "positive_month_pct": 0.6024096385542169,
-          "months_ge_7pct": 17,
-          "max_drawdown_pct": -0.3901382121653375,
-          "final_capital_baht": 4223928.8182670055
-        }
-      },
-      "formula": {
-        "id": "G1753",
-        "kind": "SUM2",
-        "features": [
-          "VOL_20",
-          "MAXDD_60"
-        ],
-        "orientations": [
-          1,
-          0
-        ],
-        "weights": [
-          0.5,
-          0.5
-        ]
-      }
-    },
-    {
-      "fi": 1913,
-      "formula_id": "G1913",
-      "train_geo": 0.12778581955347934,
+      "fi": 1209,
+      "formula_id": "G1209",
+      "train_geo": 0.046664341608677384,
       "train_positive": 0.7714285714285715,
-      "validation_geo": 0.07966460030334299,
-      "validation_positive": 0.9166666666666666,
-      "validation_cumulative": 1.5088017571041559,
+      "validation_geo": 0.011184705299194242,
+      "validation_positive": 0.3333333333333333,
+      "validation_cumulative": 0.14278861389307473,
       "holdout": {
-        "months": 249,
-        "geometric_monthly_return": 0.021698822722184374,
-        "cumulative_return": 208.604376176351,
-        "positive_month_pct": 0.6224899598393574,
-        "months_ge_7pct": 17,
-        "max_drawdown_pct": -0.36565300466573925,
-        "final_capital_baht": 6288131.28529053
+        "months": 12,
+        "geometric_monthly_return": -0.019850652800196045,
+        "cumulative_return": -0.21384702901855268,
+        "positive_month_pct": 0.3333333333333333,
+        "months_ge_7pct": 0,
+        "max_drawdown_pct": -0.24471232821697442,
+        "final_capital_baht": 23584.58912944342
       },
-      "holdout_months_ge_7pct": 17,
+      "holdout_months_ge_7pct": 0,
       "holdout_cost_stress": {
         "0bps": {
-          "months": 249,
-          "geometric_monthly_return": 0.022680142595502994,
-          "cumulative_return": 265.2048770205285,
-          "positive_month_pct": 0.6265060240963856,
-          "months_ge_7pct": 17,
-          "max_drawdown_pct": -0.3538722055672737,
-          "final_capital_baht": 7986146.310615855
+          "months": 12,
+          "geometric_monthly_return": -0.018140714931009105,
+          "cumulative_return": -0.19723021634843396,
+          "positive_month_pct": 0.4166666666666667,
+          "months_ge_7pct": 0,
+          "max_drawdown_pct": -0.2313881848237037,
+          "final_capital_baht": 24083.09350954698
         },
         "20bps": {
-          "months": 249,
-          "geometric_monthly_return": 0.021698822722184374,
-          "cumulative_return": 208.604376176351,
-          "positive_month_pct": 0.6224899598393574,
-          "months_ge_7pct": 17,
-          "max_drawdown_pct": -0.36565300466573936,
-          "final_capital_baht": 6288131.28529053
+          "months": 12,
+          "geometric_monthly_return": -0.019850652800196045,
+          "cumulative_return": -0.21384702901855268,
+          "positive_month_pct": 0.3333333333333333,
+          "months_ge_7pct": 0,
+          "max_drawdown_pct": -0.24471232821697442,
+          "final_capital_baht": 23584.58912944342
         },
         "45bps": {
-          "months": 249,
-          "geometric_monthly_return": 0.020472088202242222,
-          "cumulative_return": 154.4109030367671,
-          "positive_month_pct": 0.6024096385542169,
-          "months_ge_7pct": 17,
-          "max_drawdown_pct": -0.38313632573448664,
-          "final_capital_baht": 4662327.091103014
+          "months": 12,
+          "geometric_monthly_return": -0.02198809643717403,
+          "cumulative_return": -0.2341747376272817,
+          "positive_month_pct": 0.3333333333333333,
+          "months_ge_7pct": 0,
+          "max_drawdown_pct": -0.2610751876983075,
+          "final_capital_baht": 22974.757871181548
         }
       },
       "formula": {
-        "id": "G1913",
+        "id": "G1209",
         "kind": "SUM2",
         "features": [
-          "VOL_20",
-          "BREAKOUT55"
+          "MOM_60",
+          "SKEW_20"
         ],
         "orientations": [
-          1,
-          0
-        ],
-        "weights": [
-          0.5,
-          0.5
-        ]
-      }
-    },
-    {
-      "fi": 1914,
-      "formula_id": "G1914",
-      "train_geo": 0.1290959472207447,
-      "train_positive": 0.7714285714285715,
-      "validation_geo": 0.07945041154277388,
-      "validation_positive": 0.9166666666666666,
-      "validation_cumulative": 1.5028357798049905,
-      "holdout": {
-        "months": 249,
-        "geometric_monthly_return": 0.02160089251881292,
-        "cumulative_return": 203.66079426944955,
-        "positive_month_pct": 0.6104417670682731,
-        "months_ge_7pct": 16,
-        "max_drawdown_pct": -0.33920346410909163,
-        "final_capital_baht": 6139823.828083486
-      },
-      "holdout_months_ge_7pct": 16,
-      "holdout_cost_stress": {
-        "0bps": {
-          "months": 249,
-          "geometric_monthly_return": 0.022548475231505494,
-          "cumulative_return": 256.8056667007945,
-          "positive_month_pct": 0.6265060240963856,
-          "months_ge_7pct": 16,
-          "max_drawdown_pct": -0.32915819318712536,
-          "final_capital_baht": 7734170.0010238355
-        },
-        "20bps": {
-          "months": 249,
-          "geometric_monthly_return": 0.02160089251881292,
-          "cumulative_return": 203.66079426944955,
-          "positive_month_pct": 0.6104417670682731,
-          "months_ge_7pct": 16,
-          "max_drawdown_pct": -0.33920346410909163,
-          "final_capital_baht": 6139823.828083486
-        },
-        "45bps": {
-          "months": 249,
-          "geometric_monthly_return": 0.020416339095522762,
-          "cumulative_return": 152.31109844508583,
-          "positive_month_pct": 0.5863453815261044,
-          "months_ge_7pct": 16,
-          "max_drawdown_pct": -0.351807618950049,
-          "final_capital_baht": 4599332.953352575
-        }
-      },
-      "formula": {
-        "id": "G1914",
-        "kind": "SUM2",
-        "features": [
-          "VOL_20",
-          "BREAKOUT55"
-        ],
-        "orientations": [
-          1,
-          0
+          0,
+          1
         ],
         "weights": [
           0.65,
@@ -340,189 +212,125 @@
       }
     },
     {
-      "fi": 1873,
-      "formula_id": "G1873",
-      "train_geo": 0.143917058542254,
-      "train_positive": 0.8,
-      "validation_geo": 0.07483718712927057,
-      "validation_positive": 0.8333333333333334,
-      "validation_cumulative": 1.3774544472410817,
+      "fi": 1999,
+      "formula_id": "G1999",
+      "train_geo": 0.042116123507523806,
+      "train_positive": 0.6,
+      "validation_geo": 0.010191936190333095,
+      "validation_positive": 0.5833333333333334,
+      "validation_cumulative": 0.12939736320567796,
       "holdout": {
-        "months": 249,
-        "geometric_monthly_return": 0.01576373481685489,
-        "cumulative_return": 48.13411661231765,
-        "positive_month_pct": 0.6385542168674698,
-        "months_ge_7pct": 21,
-        "max_drawdown_pct": -0.2619330950628146,
-        "final_capital_baht": 1474023.4983695294
+        "months": 12,
+        "geometric_monthly_return": -0.009318490026210102,
+        "cumulative_return": -0.10626515816276128,
+        "positive_month_pct": 0.25,
+        "months_ge_7pct": 2,
+        "max_drawdown_pct": -0.2532045537092993,
+        "final_capital_baht": 26812.045255117162
       },
-      "holdout_months_ge_7pct": 21,
+      "holdout_months_ge_7pct": 2,
       "holdout_cost_stress": {
         "0bps": {
-          "months": 249,
-          "geometric_monthly_return": 0.01722883688221155,
-          "cumulative_return": 69.34725448100036,
-          "positive_month_pct": 0.6586345381526104,
-          "months_ge_7pct": 21,
-          "max_drawdown_pct": -0.2519068231324073,
-          "final_capital_baht": 2110417.634430011
+          "months": 12,
+          "geometric_monthly_return": -0.008296992539392645,
+          "cumulative_return": -0.09514380635526243,
+          "positive_month_pct": 0.25,
+          "months_ge_7pct": 2,
+          "max_drawdown_pct": -0.24974200762343735,
+          "final_capital_baht": 27145.68580934213
         },
         "20bps": {
-          "months": 249,
-          "geometric_monthly_return": 0.01576373481685489,
-          "cumulative_return": 48.13411661231765,
-          "positive_month_pct": 0.6385542168674698,
-          "months_ge_7pct": 21,
-          "max_drawdown_pct": -0.2619330950628145,
-          "final_capital_baht": 1474023.4983695294
+          "months": 12,
+          "geometric_monthly_return": -0.009318490026210102,
+          "cumulative_return": -0.10626515816276128,
+          "positive_month_pct": 0.25,
+          "months_ge_7pct": 2,
+          "max_drawdown_pct": -0.2532045537092993,
+          "final_capital_baht": 26812.045255117162
         },
         "45bps": {
-          "months": 249,
-          "geometric_monthly_return": 0.013932266038477081,
-          "cumulative_return": 30.349237218939912,
-          "positive_month_pct": 0.6024096385542169,
-          "months_ge_7pct": 21,
-          "max_drawdown_pct": -0.2742961228255799,
-          "final_capital_baht": 940477.1165681974
+          "months": 12,
+          "geometric_monthly_return": -0.010595417947382058,
+          "cumulative_return": -0.11999121506432031,
+          "positive_month_pct": 0.25,
+          "months_ge_7pct": 2,
+          "max_drawdown_pct": -0.2575158824431646,
+          "final_capital_baht": 26400.26354807039
         }
       },
       "formula": {
-        "id": "G1873",
+        "id": "G1999",
         "kind": "SUM2",
         "features": [
-          "VOL_20",
-          "DIST_MA60"
+          "MAXDD_60",
+          "ADV20"
         ],
         "orientations": [
           1,
-          0
-        ],
-        "weights": [
-          0.5,
-          0.5
-        ]
-      }
-    },
-    {
-      "fi": 1008,
-      "formula_id": "G1008",
-      "train_geo": 0.1480029301083643,
-      "train_positive": 0.8285714285714286,
-      "validation_geo": 0.07040256490286123,
-      "validation_positive": 0.8333333333333334,
-      "validation_cumulative": 1.2623807300080263,
-      "holdout": {
-        "months": 249,
-        "geometric_monthly_return": 0.014207788238793428,
-        "cumulative_return": 32.54349927470472,
-        "positive_month_pct": 0.6184738955823293,
-        "months_ge_7pct": 21,
-        "max_drawdown_pct": -0.2557942382861327,
-        "final_capital_baht": 1006304.9782411417
-      },
-      "holdout_months_ge_7pct": 21,
-      "holdout_cost_stress": {
-        "0bps": {
-          "months": 249,
-          "geometric_monthly_return": 0.015663899649361435,
-          "cumulative_return": 46.94618623756597,
-          "positive_month_pct": 0.6546184738955824,
-          "months_ge_7pct": 22,
-          "max_drawdown_pct": -0.2455145655380756,
-          "final_capital_baht": 1438385.5871269791
-        },
-        "20bps": {
-          "months": 249,
-          "geometric_monthly_return": 0.014207788238793428,
-          "cumulative_return": 32.54349927470472,
-          "positive_month_pct": 0.6184738955823293,
-          "months_ge_7pct": 21,
-          "max_drawdown_pct": -0.2557942382861327,
-          "final_capital_baht": 1006304.9782411417
-        },
-        "45bps": {
-          "months": 249,
-          "geometric_monthly_return": 0.012387570943405368,
-          "cumulative_return": 20.446398401453397,
-          "positive_month_pct": 0.5863453815261044,
-          "months_ge_7pct": 19,
-          "max_drawdown_pct": -0.26993697059025734,
-          "final_capital_baht": 643391.9520436019
-        }
-      },
-      "formula": {
-        "id": "G1008",
-        "kind": "SUM2",
-        "features": [
-          "MOM_60",
-          "VOL_20"
-        ],
-        "orientations": [
-          0,
           1
         ],
         "weights": [
-          0.5,
-          0.5
+          0.65,
+          0.35
         ]
       }
     },
     {
-      "fi": 1007,
-      "formula_id": "G1007",
-      "train_geo": 0.1419266897182081,
-      "train_positive": 0.8285714285714286,
-      "validation_geo": 0.0688660612535541,
-      "validation_positive": 0.9166666666666666,
-      "validation_cumulative": 1.2237166626240086,
+      "fi": 1997,
+      "formula_id": "G1997",
+      "train_geo": 0.04184396878349217,
+      "train_positive": 0.6857142857142857,
+      "validation_geo": 0.00557089171161107,
+      "validation_positive": 0.5833333333333334,
+      "validation_cumulative": 0.06893751683034366,
       "holdout": {
-        "months": 249,
-        "geometric_monthly_return": 0.01657022506777217,
-        "cumulative_return": 58.869954130384315,
-        "positive_month_pct": 0.5943775100401606,
-        "months_ge_7pct": 17,
-        "max_drawdown_pct": -0.29849250013058204,
-        "final_capital_baht": 1796098.6239115295
+        "months": 12,
+        "geometric_monthly_return": -0.007490090091462953,
+        "cumulative_return": -0.08626929106506631,
+        "positive_month_pct": 0.25,
+        "months_ge_7pct": 2,
+        "max_drawdown_pct": -0.14991129696959427,
+        "final_capital_baht": 27411.921268048012
       },
-      "holdout_months_ge_7pct": 17,
+      "holdout_months_ge_7pct": 2,
       "holdout_cost_stress": {
         "0bps": {
-          "months": 249,
-          "geometric_monthly_return": 0.01793220584255728,
-          "cumulative_return": 82.5593198784048,
-          "positive_month_pct": 0.6184738955823293,
-          "months_ge_7pct": 19,
-          "max_drawdown_pct": -0.28623981618786154,
-          "final_capital_baht": 2506779.596352144
+          "months": 12,
+          "geometric_monthly_return": -0.006432275753531336,
+          "cumulative_return": -0.07451432365308353,
+          "positive_month_pct": 0.3333333333333333,
+          "months_ge_7pct": 2,
+          "max_drawdown_pct": -0.146001480716489,
+          "final_capital_baht": 27764.570290407493
         },
         "20bps": {
-          "months": 249,
-          "geometric_monthly_return": 0.01657022506777217,
-          "cumulative_return": 58.869954130384315,
-          "positive_month_pct": 0.5943775100401606,
-          "months_ge_7pct": 17,
-          "max_drawdown_pct": -0.29849250013058204,
-          "final_capital_baht": 1796098.6239115295
+          "months": 12,
+          "geometric_monthly_return": -0.007490090091462953,
+          "cumulative_return": -0.08626929106506631,
+          "positive_month_pct": 0.25,
+          "months_ge_7pct": 2,
+          "max_drawdown_pct": -0.14991129696959427,
+          "final_capital_baht": 27411.921268048012
         },
         "45bps": {
-          "months": 249,
-          "geometric_monthly_return": 0.0148676392269953,
-          "cumulative_return": 38.44043750799395,
-          "positive_month_pct": 0.5863453815261044,
-          "months_ge_7pct": 16,
-          "max_drawdown_pct": -0.3143783551072822,
-          "final_capital_baht": 1183213.1252398184
+          "months": 12,
+          "geometric_monthly_return": -0.008812391876057313,
+          "cumulative_return": -0.10077087247468175,
+          "positive_month_pct": 0.25,
+          "months_ge_7pct": 2,
+          "max_drawdown_pct": -0.1547797925655272,
+          "final_capital_baht": 26976.873825759547
         }
       },
       "formula": {
-        "id": "G1007",
+        "id": "G1997",
         "kind": "SUM2",
         "features": [
-          "MOM_60",
-          "VOL_20"
+          "MAXDD_60",
+          "ADV20"
         ],
         "orientations": [
-          0,
+          1,
           1
         ],
         "weights": [
@@ -532,62 +340,62 @@
       }
     },
     {
-      "fi": 1654,
-      "formula_id": "G1654",
-      "train_geo": 0.12466454888000711,
-      "train_positive": 0.6857142857142857,
-      "validation_geo": 0.06680839164956898,
-      "validation_positive": 0.75,
-      "validation_cumulative": 1.1728866864837126,
+      "fi": 1949,
+      "formula_id": "G1949",
+      "train_geo": 0.04794867496617239,
+      "train_positive": 0.8285714285714286,
+      "validation_geo": 0.004126053183533429,
+      "validation_positive": 0.5833333333333334,
+      "validation_cumulative": 0.05065184091052566,
       "holdout": {
-        "months": 249,
-        "geometric_monthly_return": 0.014478705568527594,
-        "cumulative_return": 34.85014483360627,
-        "positive_month_pct": 0.5983935742971888,
-        "months_ge_7pct": 17,
-        "max_drawdown_pct": -0.3277876742345227,
-        "final_capital_baht": 1075504.3450081882
+        "months": 12,
+        "geometric_monthly_return": -0.013758023761654692,
+        "cumulative_return": -0.15315915790070234,
+        "positive_month_pct": 0.3333333333333333,
+        "months_ge_7pct": 3,
+        "max_drawdown_pct": -0.3052445862996014,
+        "final_capital_baht": 25405.22526297893
       },
-      "holdout_months_ge_7pct": 17,
+      "holdout_months_ge_7pct": 3,
       "holdout_cost_stress": {
         "0bps": {
-          "months": 249,
-          "geometric_monthly_return": 0.015947901216198046,
-          "cumulative_return": 50.40293686285523,
-          "positive_month_pct": 0.6184738955823293,
-          "months_ge_7pct": 18,
-          "max_drawdown_pct": -0.314565288194782,
-          "final_capital_baht": 1542088.1058856568
+          "months": 12,
+          "geometric_monthly_return": -0.012256507465609356,
+          "cumulative_return": -0.13755754797842035,
+          "positive_month_pct": 0.3333333333333333,
+          "months_ge_7pct": 3,
+          "max_drawdown_pct": -0.3007421256795699,
+          "final_capital_baht": 25873.27356064739
         },
         "20bps": {
-          "months": 249,
-          "geometric_monthly_return": 0.014478705568527594,
-          "cumulative_return": 34.85014483360627,
-          "positive_month_pct": 0.5983935742971888,
-          "months_ge_7pct": 17,
-          "max_drawdown_pct": -0.3277876742345227,
-          "final_capital_baht": 1075504.3450081882
+          "months": 12,
+          "geometric_monthly_return": -0.013758023761654692,
+          "cumulative_return": -0.15315915790070234,
+          "positive_month_pct": 0.3333333333333333,
+          "months_ge_7pct": 3,
+          "max_drawdown_pct": -0.3052445862996014,
+          "final_capital_baht": 25405.22526297893
         },
         "45bps": {
-          "months": 249,
-          "geometric_monthly_return": 0.01264209880471645,
-          "cumulative_return": 21.831720242006057,
-          "positive_month_pct": 0.5542168674698795,
-          "months_ge_7pct": 16,
-          "max_drawdown_pct": -0.34398521344652633,
-          "final_capital_baht": 684951.6072601817
+          "months": 12,
+          "geometric_monthly_return": -0.015634995950908004,
+          "cumulative_return": -0.1722980388015366,
+          "positive_month_pct": 0.3333333333333333,
+          "months_ge_7pct": 3,
+          "max_drawdown_pct": -0.3108422017813891,
+          "final_capital_baht": 24831.058835953903
         }
       },
       "formula": {
-        "id": "G1654",
+        "id": "G1949",
         "kind": "SUM2",
         "features": [
-          "VOL_10",
-          "DIST_MA60"
+          "VOL_20",
+          "SKEW_60"
         ],
         "orientations": [
-          1,
-          0
+          0,
+          1
         ],
         "weights": [
           0.65,
@@ -596,126 +404,318 @@
       }
     },
     {
-      "fi": 1874,
-      "formula_id": "G1874",
-      "train_geo": 0.1326563641903724,
+      "fi": 1180,
+      "formula_id": "G1180",
+      "train_geo": 0.04207218212518682,
       "train_positive": 0.7142857142857143,
-      "validation_geo": 0.06419140442366711,
-      "validation_positive": 0.8333333333333334,
-      "validation_cumulative": 1.109778980448385,
+      "validation_geo": 0.003973813928350722,
+      "validation_positive": 0.5833333333333334,
+      "validation_cumulative": 0.04874191565527197,
       "holdout": {
-        "months": 249,
-        "geometric_monthly_return": 0.014080209161777324,
-        "cumulative_return": 31.509063934283922,
-        "positive_month_pct": 0.6144578313253012,
-        "months_ge_7pct": 19,
-        "max_drawdown_pct": -0.3237493983259818,
-        "final_capital_baht": 975271.9180285176
+        "months": 12,
+        "geometric_monthly_return": -0.02419289032233063,
+        "cumulative_return": -0.25463716143805926,
+        "positive_month_pct": 0.3333333333333333,
+        "months_ge_7pct": 3,
+        "max_drawdown_pct": -0.35688020945559784,
+        "final_capital_baht": 22360.88515685822
       },
-      "holdout_months_ge_7pct": 19,
+      "holdout_months_ge_7pct": 3,
       "holdout_cost_stress": {
         "0bps": {
-          "months": 249,
-          "geometric_monthly_return": 0.015412883952491852,
-          "cumulative_return": 44.08423766071094,
-          "positive_month_pct": 0.6265060240963856,
-          "months_ge_7pct": 19,
-          "max_drawdown_pct": -0.3113693245163248,
-          "final_capital_baht": 1352527.1298213282
+          "months": 12,
+          "geometric_monthly_return": -0.02292595250480467,
+          "cumulative_return": -0.2429409850235852,
+          "positive_month_pct": 0.3333333333333333,
+          "months_ge_7pct": 3,
+          "max_drawdown_pct": -0.35277804389913925,
+          "final_capital_baht": 22711.770449292446
         },
         "20bps": {
-          "months": 249,
-          "geometric_monthly_return": 0.014080209161777324,
-          "cumulative_return": 31.509063934283922,
-          "positive_month_pct": 0.6144578313253012,
-          "months_ge_7pct": 19,
-          "max_drawdown_pct": -0.3237493983259818,
-          "final_capital_baht": 975271.9180285176
+          "months": 12,
+          "geometric_monthly_return": -0.02419289032233063,
+          "cumulative_return": -0.25463716143805926,
+          "positive_month_pct": 0.3333333333333333,
+          "months_ge_7pct": 3,
+          "max_drawdown_pct": -0.35688020945559784,
+          "final_capital_baht": 22360.88515685822
         },
         "45bps": {
-          "months": 249,
-          "geometric_monthly_return": 0.01241425454313605,
-          "cumulative_return": 20.587610363072553,
-          "positive_month_pct": 0.5783132530120482,
-          "months_ge_7pct": 17,
-          "max_drawdown_pct": -0.33893603692156815,
-          "final_capital_baht": 647628.3108921766
+          "months": 12,
+          "geometric_monthly_return": -0.025776670463469986,
+          "cumulative_return": -0.2690253703605898,
+          "positive_month_pct": 0.3333333333333333,
+          "months_ge_7pct": 3,
+          "max_drawdown_pct": -0.361980484725133,
+          "final_capital_baht": 21929.238889182307
         }
       },
       "formula": {
-        "id": "G1874",
+        "id": "G1180",
         "kind": "SUM2",
         "features": [
-          "VOL_20",
-          "DIST_MA60"
+          "MOM_60",
+          "BREAKOUT20"
         ],
         "orientations": [
           1,
-          0
+          1
         ],
         "weights": [
-          0.65,
-          0.35
+          0.8,
+          0.19999999999999996
         ]
       }
     },
     {
-      "fi": 1872,
-      "formula_id": "G1872",
-      "train_geo": 0.15391946941095047,
-      "train_positive": 0.8571428571428571,
-      "validation_geo": 0.060952702863552144,
-      "validation_positive": 0.75,
-      "validation_cumulative": 1.0340062472515728,
+      "fi": 546,
+      "formula_id": "G0546",
+      "train_geo": 0.04397023709101977,
+      "train_positive": 0.6285714285714286,
+      "validation_geo": 0.0036690134921812945,
+      "validation_positive": 0.5833333333333334,
+      "validation_cumulative": 0.044927587720153817,
       "holdout": {
-        "months": 249,
-        "geometric_monthly_return": 0.014012933099327274,
-        "cumulative_return": 30.97643567076249,
-        "positive_month_pct": 0.6265060240963856,
-        "months_ge_7pct": 22,
-        "max_drawdown_pct": -0.2704934209630363,
-        "final_capital_baht": 959293.0701228747
+        "months": 12,
+        "geometric_monthly_return": -0.02519574859932261,
+        "cumulative_return": -0.26377768778322364,
+        "positive_month_pct": 0.3333333333333333,
+        "months_ge_7pct": 2,
+        "max_drawdown_pct": -0.30468978730240615,
+        "final_capital_baht": 22086.66936650329
       },
-      "holdout_months_ge_7pct": 22,
+      "holdout_months_ge_7pct": 2,
       "holdout_cost_stress": {
         "0bps": {
-          "months": 249,
-          "geometric_monthly_return": 0.015521554722314201,
-          "cumulative_return": 45.301740705793286,
-          "positive_month_pct": 0.6385542168674698,
-          "months_ge_7pct": 22,
-          "max_drawdown_pct": -0.26060963842521734,
-          "final_capital_baht": 1389052.2211737987
+          "months": 12,
+          "geometric_monthly_return": -0.023397505447772637,
+          "cumulative_return": -0.24731380399375846,
+          "positive_month_pct": 0.3333333333333333,
+          "months_ge_7pct": 2,
+          "max_drawdown_pct": -0.2990347256526297,
+          "final_capital_baht": 22580.585880187245
         },
         "20bps": {
-          "months": 249,
-          "geometric_monthly_return": 0.014012933099327274,
-          "cumulative_return": 30.97643567076249,
-          "positive_month_pct": 0.6265060240963856,
-          "months_ge_7pct": 22,
-          "max_drawdown_pct": -0.2704934209630363,
-          "final_capital_baht": 959293.0701228747
+          "months": 12,
+          "geometric_monthly_return": -0.02519574859932261,
+          "cumulative_return": -0.26377768778322364,
+          "positive_month_pct": 0.3333333333333333,
+          "months_ge_7pct": 2,
+          "max_drawdown_pct": -0.30468978730240615,
+          "final_capital_baht": 22086.66936650329
         },
         "45bps": {
-          "months": 249,
-          "geometric_monthly_return": 0.012127072687588614,
-          "cumulative_return": 19.11524712555081,
-          "positive_month_pct": 0.6024096385542169,
-          "months_ge_7pct": 22,
-          "max_drawdown_pct": -0.28278448900845043,
-          "final_capital_baht": 603457.4137665243
+          "months": 12,
+          "geometric_monthly_return": -0.027443617503447926,
+          "cumulative_return": -0.28389375754993085,
+          "positive_month_pct": 0.3333333333333333,
+          "months_ge_7pct": 2,
+          "max_drawdown_pct": -0.31171055656032143,
+          "final_capital_baht": 21483.187273502073
         }
       },
       "formula": {
-        "id": "G1872",
+        "id": "G0546",
         "kind": "SUM2",
         "features": [
-          "VOL_20",
+          "MOM_10",
+          "DIST_MA20"
+        ],
+        "orientations": [
+          0,
+          1
+        ],
+        "weights": [
+          0.2,
+          0.8
+        ]
+      }
+    },
+    {
+      "fi": 1416,
+      "formula_id": "G1416",
+      "train_geo": 0.04229285645411007,
+      "train_positive": 0.6571428571428571,
+      "validation_geo": 0.0036683748381012293,
+      "validation_positive": 0.5833333333333334,
+      "validation_cumulative": 0.04491960885553614,
+      "holdout": {
+        "months": 12,
+        "geometric_monthly_return": -0.014796475289368893,
+        "cumulative_return": -0.16379745872261564,
+        "positive_month_pct": 0.3333333333333333,
+        "months_ge_7pct": 3,
+        "max_drawdown_pct": -0.2940269705213535,
+        "final_capital_baht": 25086.07623832153
+      },
+      "holdout_months_ge_7pct": 3,
+      "holdout_cost_stress": {
+        "0bps": {
+          "months": 12,
+          "geometric_monthly_return": -0.013661414179749642,
+          "cumulative_return": -0.1521631707006218,
+          "positive_month_pct": 0.3333333333333333,
+          "months_ge_7pct": 3,
+          "max_drawdown_pct": -0.2899417837846813,
+          "final_capital_baht": 25435.104878981347
+        },
+        "20bps": {
+          "months": 12,
+          "geometric_monthly_return": -0.014796475289368893,
+          "cumulative_return": -0.16379745872261564,
+          "positive_month_pct": 0.3333333333333333,
+          "months_ge_7pct": 3,
+          "max_drawdown_pct": -0.2940269705213535,
+          "final_capital_baht": 25086.07623832153
+        },
+        "45bps": {
+          "months": 12,
+          "geometric_monthly_return": -0.0162154205117635,
+          "cumulative_return": -0.1781356732603112,
+          "positive_month_pct": 0.3333333333333333,
+          "months_ge_7pct": 3,
+          "max_drawdown_pct": -0.2991086684915796,
+          "final_capital_baht": 24655.929802190665
+        }
+      },
+      "formula": {
+        "id": "G1416",
+        "kind": "SUM2",
+        "features": [
+          "MOM_120",
           "DIST_MA60"
         ],
         "orientations": [
           1,
-          0
+          1
+        ],
+        "weights": [
+          0.2,
+          0.8
+        ]
+      }
+    },
+    {
+      "fi": 1490,
+      "formula_id": "G1490",
+      "train_geo": 0.04316392622784071,
+      "train_positive": 0.7428571428571429,
+      "validation_geo": 0.0034903329284368123,
+      "validation_positive": 0.5,
+      "validation_cumulative": 0.04269746355503612,
+      "holdout": {
+        "months": 12,
+        "geometric_monthly_return": -0.018877092335807477,
+        "cumulative_return": -0.20442524996055333,
+        "positive_month_pct": 0.4166666666666667,
+        "months_ge_7pct": 0,
+        "max_drawdown_pct": -0.24152653423129944,
+        "final_capital_baht": 23867.2425011834
+      },
+      "holdout_months_ge_7pct": 0,
+      "holdout_cost_stress": {
+        "0bps": {
+          "months": 12,
+          "geometric_monthly_return": -0.017697131065305793,
+          "cumulative_return": -0.1928672871358289,
+          "positive_month_pct": 0.4166666666666667,
+          "months_ge_7pct": 0,
+          "max_drawdown_pct": -0.2332317887798232,
+          "final_capital_baht": 24213.981385925134
+        },
+        "20bps": {
+          "months": 12,
+          "geometric_monthly_return": -0.018877092335807477,
+          "cumulative_return": -0.20442524996055333,
+          "positive_month_pct": 0.4166666666666667,
+          "months_ge_7pct": 0,
+          "max_drawdown_pct": -0.24152653423129944,
+          "final_capital_baht": 23867.2425011834
+        },
+        "45bps": {
+          "months": 12,
+          "geometric_monthly_return": -0.02035210288691991,
+          "cumulative_return": -0.21865987645512086,
+          "positive_month_pct": 0.3333333333333333,
+          "months_ge_7pct": 0,
+          "max_drawdown_pct": -0.2517832514967949,
+          "final_capital_baht": 23440.203706346376
+        }
+      },
+      "formula": {
+        "id": "G1490",
+        "kind": "SUM2",
+        "features": [
+          "MOM_120",
+          "SKEW_60"
+        ],
+        "orientations": [
+          0,
+          1
+        ],
+        "weights": [
+          0.8,
+          0.19999999999999996
+        ]
+      }
+    },
+    {
+      "fi": 1947,
+      "formula_id": "G1947",
+      "train_geo": 0.04298606696599738,
+      "train_positive": 0.8285714285714286,
+      "validation_geo": 0.0023071099609657253,
+      "validation_positive": 0.5833333333333334,
+      "validation_cumulative": 0.028039337168792366,
+      "holdout": {
+        "months": 12,
+        "geometric_monthly_return": -0.019744425719127157,
+        "cumulative_return": -0.2128239947291396,
+        "positive_month_pct": 0.3333333333333333,
+        "months_ge_7pct": 1,
+        "max_drawdown_pct": -0.26302783762812865,
+        "final_capital_baht": 23615.280158125814
+      },
+      "holdout_months_ge_7pct": 1,
+      "holdout_cost_stress": {
+        "0bps": {
+          "months": 12,
+          "geometric_monthly_return": -0.01832092885534431,
+          "cumulative_return": -0.19899655099244207,
+          "positive_month_pct": 0.3333333333333333,
+          "months_ge_7pct": 1,
+          "max_drawdown_pct": -0.2582476891529184,
+          "final_capital_baht": 24030.10347022674
+        },
+        "20bps": {
+          "months": 12,
+          "geometric_monthly_return": -0.019744425719127157,
+          "cumulative_return": -0.2128239947291396,
+          "positive_month_pct": 0.3333333333333333,
+          "months_ge_7pct": 1,
+          "max_drawdown_pct": -0.26302783762812865,
+          "final_capital_baht": 23615.280158125814
+        },
+        "45bps": {
+          "months": 12,
+          "geometric_monthly_return": -0.02152390795026793,
+          "cumulative_return": -0.2298015796157452,
+          "positive_month_pct": 0.3333333333333333,
+          "months_ge_7pct": 1,
+          "max_drawdown_pct": -0.26897054047492586,
+          "final_capital_baht": 23105.952611527642
+        }
+      },
+      "formula": {
+        "id": "G1947",
+        "kind": "SUM2",
+        "features": [
+          "VOL_20",
+          "SKEW_60"
+        ],
+        "orientations": [
+          0,
+          1
         ],
         "weights": [
           0.35,
@@ -726,53 +726,53 @@
   ],
   "m1_benchmark": {
     "formula_id": "G0000",
-    "train_geo": 0.03870453362457127,
+    "train_geo": 0.027738960919157396,
     "validation": {
       "months": 12,
-      "geometric_monthly_return": 0.03381132007107013,
-      "cumulative_return": 0.49037446054720446,
+      "geometric_monthly_return": -0.005844362606690412,
+      "cumulative_return": -0.06792136238826263,
       "positive_month_pct": 0.5833333333333334,
-      "months_ge_7pct": 6,
-      "max_drawdown_pct": -0.17574789223630805,
-      "final_capital_baht": 44711.233816416134
+      "months_ge_7pct": 3,
+      "max_drawdown_pct": -0.18941173386390753,
+      "final_capital_baht": 27962.35912835212
     },
     "holdout": {
-      "months": 249,
-      "geometric_monthly_return": 0.00433883993102091,
-      "cumulative_return": 1.938896355627823,
-      "positive_month_pct": 0.5461847389558233,
-      "months_ge_7pct": 42,
-      "max_drawdown_pct": -0.5764356029692455,
-      "final_capital_baht": 88166.89066883469
+      "months": 12,
+      "geometric_monthly_return": -0.03610504620367316,
+      "cumulative_return": -0.3567845319370543,
+      "positive_month_pct": 0.25,
+      "months_ge_7pct": 2,
+      "max_drawdown_pct": -0.37848016835214615,
+      "final_capital_baht": 19296.464041888372
     },
-    "holdout_months_ge_7pct": 42,
+    "holdout_months_ge_7pct": 2,
     "holdout_cost_stress": {
       "0bps": {
-        "months": 249,
-        "geometric_monthly_return": 0.006116744269355934,
-        "cumulative_return": 3.5650529749377,
-        "positive_month_pct": 0.5823293172690763,
-        "months_ge_7pct": 46,
-        "max_drawdown_pct": -0.5530815956385202,
-        "final_capital_baht": 136951.589248131
+        "months": 12,
+        "geometric_monthly_return": -0.03440157848260561,
+        "cumulative_return": -0.34301029281426276,
+        "positive_month_pct": 0.25,
+        "months_ge_7pct": 2,
+        "max_drawdown_pct": -0.36627276680068566,
+        "final_capital_baht": 19709.69121557212
       },
       "20bps": {
-        "months": 249,
-        "geometric_monthly_return": 0.00433883993102091,
-        "cumulative_return": 1.938896355627823,
-        "positive_month_pct": 0.5461847389558233,
-        "months_ge_7pct": 42,
-        "max_drawdown_pct": -0.5764356029692455,
-        "final_capital_baht": 88166.89066883469
+        "months": 12,
+        "geometric_monthly_return": -0.03610504620367316,
+        "cumulative_return": -0.3567845319370543,
+        "positive_month_pct": 0.25,
+        "months_ge_7pct": 2,
+        "max_drawdown_pct": -0.37848016835214615,
+        "final_capital_baht": 19296.464041888372
       },
       "45bps": {
-        "months": 249,
-        "geometric_monthly_return": 0.002116382961073082,
-        "cumulative_return": 0.6928652334842438,
-        "positive_month_pct": 0.5341365461847389,
-        "months_ge_7pct": 39,
-        "max_drawdown_pct": -0.6144464992468587,
-        "final_capital_baht": 50785.957004527314
+        "months": 12,
+        "geometric_monthly_return": -0.038234462262054736,
+        "cumulative_return": -0.37363059710041124,
+        "positive_month_pct": 0.25,
+        "months_ge_7pct": 2,
+        "max_drawdown_pct": -0.3934392880577112,
+        "final_capital_baht": 18791.082086987662
       }
     },
     "formula": {
