@@ -1,0 +1,91 @@
+{
+  "status": "CANDIDATE",
+  "strategy_id": "LUNA-HYBRID-R1",
+  "source_dataset": "public.luna_research_monthly_price_factors",
+  "primary_config": {
+    "k": 20,
+    "cost_bps": 20,
+    "rebalance": "monthly"
+  },
+  "formula": {
+    "reversal": "1-rank(mom1)",
+    "regime_z": "0.5*z(breadth1_vs_prior12m)+0.5*z(breadth6_vs_prior12m)",
+    "regime_thresholds": {
+      "on": 0.5,
+      "off": -0.5
+    },
+    "regime_on": "0.55*rank(high52_ratio)+0.30*rank(mom6)+0.15*(1-rank(vol20))",
+    "regime_off": "1-rank(mom1)",
+    "regime_neutral": "0.50*(1-rank(mom1))+0.30*rank(high52_ratio)+0.20*(1-rank(vol20))",
+    "final": "0.50*reversal + 0.50*regime_score"
+  },
+  "anti_lookahead": {
+    "current_month_ranks_only": true,
+    "regime_uses_prior_12_months_only": true,
+    "forward_return_requires_next_calendar_month": true,
+    "holdout_excluded_from_parameter_selection": true
+  },
+  "metrics": {
+    "full_2021_10_to_2026_07": {
+      "months": 58,
+      "geo_monthly": 0.010290425064951496,
+      "cumulative": 0.8108469555994388,
+      "positive_month_pct": 0.5517241379310345,
+      "worst_month": -0.17967704048232983,
+      "best_month": 0.2965690114109916,
+      "max_drawdown": -0.3363364018191052
+    },
+    "train_2021_10_to_2024_12": {
+      "months": 39,
+      "geo_monthly": -0.005858618911451649,
+      "cumulative": -0.2047971740069779,
+      "positive_month_pct": 0.41025641025641024
+    },
+    "dev_2025_01_to_2025_12": {
+      "months": 12,
+      "geo_monthly": 0.04632979996182191,
+      "cumulative": 0.7219602934268285,
+      "positive_month_pct": 0.75
+    },
+    "holdout_2026_01_to_2026_07": {
+      "months": 7,
+      "geo_monthly": 0.04073485570330396,
+      "cumulative": 0.32245438094992307,
+      "positive_month_pct": 1,
+      "worst_month": 0.005712841148307803,
+      "best_month": 0.0980578694095779
+    }
+  },
+  "holdout_cost_stress": {
+    "0bps": 0.04269167465825518,
+    "10bps": 0.04171326568831791,
+    "20bps": 0.04073485570330396,
+    "30bps": 0.03975644470034381,
+    "40bps": 0.03877803267655716,
+    "60bps": 0.0368212055549285,
+    "80bps": 0.03486437431515672
+  },
+  "benchmarks": {
+    "exact_persisted_m1_holdout": {
+      "months": 7,
+      "geo_monthly": 0.03229111521516031,
+      "cumulative": 0.24915211063756937,
+      "positive_month_pct": 0.7142857142857143
+    },
+    "same_monthly_factor_m1_alias_holdout": {
+      "months": 7,
+      "geo_monthly": 0.02752548893678318,
+      "cumulative": 0.20933946858363098,
+      "positive_month_pct": 0.8571428571428571
+    }
+  },
+  "status_notes": [
+    "The 7-month holdout is encouraging but too short for validation by itself.",
+    "A fine weight sweep around 0.50 showed materially different holdout results; 0.50 is retained as a simple structural blend, not a holdout-optimized weight.",
+    "Integer-share, slippage, turnover, and longer future holdout validation are still required before any production/paper promotion."
+  ],
+  "commits": {
+    "engine": "2472d9f25e30740d450e06f40b2627b0af3cc111",
+    "research_record": "42e4e1f053097ae3108821400396f6143b507251"
+  }
+}
