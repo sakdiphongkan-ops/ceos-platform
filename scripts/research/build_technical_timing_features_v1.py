@@ -117,8 +117,10 @@ def make_features(p: pd.DataFrame) -> pd.DataFrame:
 
     p["DIST_MA20"] = p[price] / ma20 - 1
     p["DIST_MA60"] = p[price] / p["EMA60"] - 1
-    p["BREAKOUT20"] = p[price] / g[price].shift(1).transform(lambda x: x.rolling(20, min_periods=20).max()) - 1
-    p["BREAKOUT55"] = p[price] / g[price].shift(1).transform(lambda x: x.rolling(55, min_periods=55).max()) - 1
+    prior_high20 = g[price].transform(lambda x: x.shift(1).rolling(20, min_periods=20).max())
+    prior_high55 = g[price].transform(lambda x: x.shift(1).rolling(55, min_periods=55).max())
+    p["BREAKOUT20"] = p[price] / prior_high20 - 1
+    p["BREAKOUT55"] = p[price] / prior_high55 - 1
 
     # Simple, reproducible reversal candles — features, not standalone trading rules.
     body = (p["close"] - p["open"]).abs()
@@ -151,11 +153,15 @@ def make_features(p: pd.DataFrame) -> pd.DataFrame:
         (p["RSI14"] > 30) &
         (p.groupby("symbol")["RSI14"].shift(1) <= 30)
     ).astype(int)
+    p["MACD_CROSS_UP_5D"] = p.groupby("symbol")["MACD_CROSS_UP"].transform(lambda x: x.rolling(5, min_periods=1).max())
+    p["STOCH_CROSS_UP_5D"] = p.groupby("symbol")["STOCH_CROSS_UP"].transform(lambda x: x.rolling(5, min_periods=1).max())
+    p["RSI_RECOVERY30_5D"] = p.groupby("symbol")["RSI_RECOVERY30"].transform(lambda x: x.rolling(5, min_periods=1).max())
+    p["BULL_REVERSAL_5D"] = p.groupby("symbol")["BULL_REVERSAL_ANY"].transform(lambda x: x.rolling(5, min_periods=1).max())
     p["TECH_BULL_COUNT"] = (
         (p["RSI_SLOPE3"] > 0).astype(int) +
         (p["MACD_HIST_SLOPE3"] > 0).astype(int) +
         (p["STOCH_K"] > p["STOCH_D"]).astype(int) +
-        (p["BB_PCTB20"].diff() > 0).astype(int) +
+        (p.groupby("symbol")["BB_PCTB20"].diff() > 0).astype(int) +
         p["BULL_REVERSAL_ANY"]
     )
 
@@ -187,12 +193,12 @@ def make_features(p: pd.DataFrame) -> pd.DataFrame:
 
     keep = [
         "date","symbol","month","adj_close","open","high","low","close","volume","amount",
-        "MOM_20","MOM_60","RSI14","RSI_SLOPE3","RSI_RECOVERY30",
-        "EMA20","EMA50","EMA60","MACD","MACD_SIGNAL","MACD_HIST","MACD_HIST_SLOPE3","MACD_CROSS_UP",
-        "STOCH_K","STOCH_D","STOCH_CROSS_UP","ATR14","ATR_PCT","PLUS_DI14","MINUS_DI14","ADX14",
+        "MOM_20","MOM_60","RSI14","RSI_SLOPE3","RSI_RECOVERY30","RSI_RECOVERY30_5D",
+        "EMA20","EMA50","EMA60","MACD","MACD_SIGNAL","MACD_HIST","MACD_HIST_SLOPE3","MACD_CROSS_UP","MACD_CROSS_UP_5D",
+        "STOCH_K","STOCH_D","STOCH_CROSS_UP","STOCH_CROSS_UP_5D","ATR14","ATR_PCT","PLUS_DI14","MINUS_DI14","ADX14",
         "BB_PCTB20","BB_BANDWIDTH20","OBV","OBV_EMA20","OBV_SLOPE20",
         "DIST_MA20","DIST_MA60","BREAKOUT20","BREAKOUT55",
-        "CANDLE_DOJI","CANDLE_HAMMER","CANDLE_BULL_ENGULF","BULL_REVERSAL_ANY",
+        "CANDLE_DOJI","CANDLE_HAMMER","CANDLE_BULL_ENGULF","BULL_REVERSAL_ANY","BULL_REVERSAL_5D",
         "SUPPORT_DISTANCE20","RESISTANCE_DISTANCE20","TECH_BULL_COUNT","fwd_month"
     ]
     out = m_end[[c for c in keep if c in m_end.columns]].replace([np.inf,-np.inf], np.nan)
