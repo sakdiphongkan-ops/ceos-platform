@@ -30,9 +30,9 @@ def main() -> None:
     ap.add_argument("--page-size", type=int, default=1000)
     args = ap.parse_args()
 
-    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    key = os.getenv("SUPABASE_API_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
     if not args.url or not key:
-        raise SystemExit("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required")
+        raise SystemExit("SUPABASE_URL and SUPABASE_API_KEY (or SUPABASE_SERVICE_ROLE_KEY) are required")
 
     url = args.url.rstrip("/") + "/rest/v1/" + args.table
     rows = []
