@@ -17,8 +17,12 @@ FACTORS = [
 
 COMPONENTS = {
     "REV1": {"mom1": -1.0},
+    "REV2": {"mom2": -1.0},
     "REV3": {"mom3": -1.0},
+    "REV4": {"mom4": -1.0},
     "REV6": {"mom6": -1.0},
+    "REV1_REV2_MIX": {"mom1": -0.55, "mom2": -0.45},
+    "REV2_REV4_MIX": {"mom2": -0.55, "mom4": -0.45},
     "MOM6": {"mom6": 1.0},
     "MOM12": {"mom12": 1.0},
     "HIGH52": {"high52_ratio": 1.0},
