@@ -1,0 +1,62 @@
+name: LUNA TradingView Thailand Live Screener Snapshot v1
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "15 1 * * 1-5"
+  push:
+    branches: [master]
+    paths:
+      - "scripts/research/luna_tradingview_thailand_screener_snapshot_v1.py"
+      - ".github/workflows/luna-tradingview-thailand-live-v1.yml"
+
+concurrency:
+  group: luna-tradingview-thailand-live-v1
+  cancel-in-progress: true
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas requests
+      - name: Pull TradingView Thailand screener
+        run: |
+          rm -rf research/luna_tradingview_thailand_screener_snapshot_v1
+          python scripts/research/luna_tradingview_thailand_screener_snapshot_v1.py \
+            --output research/luna_tradingview_thailand_screener_snapshot_v1 \
+            --start 0 --end 2000
+      - name: Validate
+        run: |
+          test -s research/luna_tradingview_thailand_screener_snapshot_v1/summary.json
+          test -s research/luna_tradingview_thailand_screener_snapshot_v1/tradingview_thailand_screener_snapshot.csv
+      - name: Save snapshot
+        run: |
+          mkdir -p research-results
+          cp research/luna_tradingview_thailand_screener_snapshot_v1/summary.json \
+             research-results/luna-tradingview-thailand-live-summary.json
+          cp research/luna_tradingview_thailand_screener_snapshot_v1/tradingview_thailand_screener_snapshot.csv \
+             research-results/luna-tradingview-thailand-live-snapshot.csv
+          cp research/luna_tradingview_thailand_screener_snapshot_v1/tradingview_thailand_screener_raw.json \
+             research-results/luna-tradingview-thailand-live-raw.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research-results/
+          git diff --cached --quiet || git commit -m "research(luna): capture TradingView Thailand screener snapshot"
+          git pull --rebase origin master
+          git push
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: luna-tradingview-thailand-live-snapshot
+          path: research/luna_tradingview_thailand_screener_snapshot_v1/
+          retention-days: 14
