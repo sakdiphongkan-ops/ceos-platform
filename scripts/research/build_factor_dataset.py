@@ -22,7 +22,7 @@ FUND_COLS = {
 }
 
 OUT_COLS = [
-    "date","symbol","market","decision_ts","available_at",
+    "date","symbol","market","decision_ts","available_at","adj_close",
     "PE","PBV","EV_EBITDA","FCF_YIELD","EARNINGS_YIELD","DIV_YIELD",
     "ROE","ROA","ROIC","GPM","NPM","CFO_MARGIN","REV_G","EPS_G","NI_G","FCF_G",
     "MOM_5","MOM_10","MOM_20","MOM_60","MOM_120","REL_MOM",
