@@ -56,6 +56,10 @@ jobs:
              research-results/luna-tradingview-thailand-live-snapshot.csv
           cp research/luna_tradingview_thailand_screener_snapshot_v1/tradingview_thailand_screener_raw.json \
              research-results/luna-tradingview-thailand-live-raw.json
+          cp research/luna_tradingview_m1_overlay_v1/summary.json \
+             research-results/luna-tradingview-m1-overlay-summary.json
+          cp research/luna_tradingview_m1_overlay_v1/m1_tradingview_overlay.csv \
+             research-results/luna-tradingview-m1-overlay.csv
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add research-results/
