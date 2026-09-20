@@ -1,0 +1,351 @@
+{
+  "status": "COMPLETED",
+  "engine": "luna-formula-archaeology-v1",
+  "catalog_formula_count": 1000,
+  "selection_events": 48,
+  "distinct_selected_formulas": 10,
+  "top_recurring_formulas": [
+    {
+      "formula_id": "F0387",
+      "selected_months": 12,
+      "selection_share": 0.25,
+      "formula_terms": "avg_amount20:-0.2378;mom12:+0.4998;mom6:+0.2624",
+      "term_count": 3,
+      "cosine_to_m1": 0.0
+    },
+    {
+      "formula_id": "F0913",
+      "selected_months": 7,
+      "selection_share": 0.14583333333333334,
+      "formula_terms": "high52_ratio:-0.3790;maxdd60:-0.2459;mom6:+0.2351;vol20:+0.1400",
+      "term_count": 4,
+      "cosine_to_m1": 0.0
+    },
+    {
+      "formula_id": "F0024",
+      "selected_months": 7,
+      "selection_share": 0.14583333333333334,
+      "formula_terms": "avg_amount20:-0.2834;mom12:+0.3716;mom6:+0.1616;vol20:-0.1833",
+      "term_count": 4,
+      "cosine_to_m1": 0.0
+    },
+    {
+      "formula_id": "F0170",
+      "selected_months": 7,
+      "selection_share": 0.14583333333333334,
+      "formula_terms": "avg_amount20:-0.5479;mom3:-0.2206;mom6:+0.2316",
+      "term_count": 3,
+      "cosine_to_m1": 0.0
+    },
+    {
+      "formula_id": "F0866",
+      "selected_months": 5,
+      "selection_share": 0.10416666666666667,
+      "formula_terms": "avg_amount20:-0.3008;high52_ratio:-0.1213;mom1:+0.1444;mom12:+0.4335",
+      "term_count": 4,
+      "cosine_to_m1": -0.2577533778137196
+    },
+    {
+      "formula_id": "F0741",
+      "selected_months": 3,
+      "selection_share": 0.0625,
+      "formula_terms": "high52_ratio:-0.1756;mom12:-0.6124;vol20:+0.2120",
+      "term_count": 3,
+      "cosine_to_m1": 0.0
+    },
+    {
+      "formula_id": "F0704",
+      "selected_months": 3,
+      "selection_share": 0.0625,
+      "formula_terms": "maxdd60:-0.2576;mom12:-0.7424",
+      "term_count": 2,
+      "cosine_to_m1": 0.0
+    },
+    {
+      "formula_id": "F0048",
+      "selected_months": 2,
+      "selection_share": 0.041666666666666664,
+      "formula_terms": "avg_amount20:-0.3282;mom3:-0.6718",
+      "term_count": 2,
+      "cosine_to_m1": 0.0
+    },
+    {
+      "formula_id": "F0037",
+      "selected_months": 1,
+      "selection_share": 0.020833333333333332,
+      "formula_terms": "avg_amount20:-0.1936;maxdd60:+0.1382;mom12:-0.2658;mom3:-0.4024",
+      "term_count": 4,
+      "cosine_to_m1": 0.0
+    },
+    {
+      "formula_id": "F0691",
+      "selected_months": 1,
+      "selection_share": 0.020833333333333332,
+      "formula_terms": "mom1:+0.4783;mom12:+0.5217",
+      "term_count": 2,
+      "cosine_to_m1": -0.6757186080106428
+    }
+  ],
+  "factor_contribution": [
+    {
+      "factor": "avg_amount20",
+      "family": "liquidity",
+      "selected_formula_occurrence_months": 34,
+      "selection_event_coverage": 0.7083333333333334,
+      "mean_signed_weight_when_present": -0.3243131350469707,
+      "median_signed_weight_when_present": -0.2834387210590017,
+      "mean_abs_weight_when_present": 0.3243131350469707
+    },
+    {
+      "factor": "mom6",
+      "family": "medium_momentum_reversal",
+      "selected_formula_occurrence_months": 33,
+      "selection_event_coverage": 0.6875,
+      "mean_signed_weight_when_present": 0.22871612523749982,
+      "median_signed_weight_when_present": 0.23514732890775322,
+      "mean_abs_weight_when_present": 0.22871612523749982
+    },
+    {
+      "factor": "mom12",
+      "family": "long_momentum_reversal",
+      "selected_formula_occurrence_months": 32,
+      "selection_event_coverage": 0.6666666666666666,
+      "mean_signed_weight_when_present": 0.21743219393636143,
+      "median_signed_weight_when_present": 0.43353589913443735,
+      "mean_abs_weight_when_present": 0.48806224497833495
+    },
+    {
+      "factor": "vol20",
+      "family": "volatility",
+      "selected_formula_occurrence_months": 17,
+      "selection_event_coverage": 0.3541666666666667,
+      "mean_signed_weight_when_present": 0.019555903845449037,
+      "median_signed_weight_when_present": 0.13995337834682903,
+      "mean_abs_weight_when_present": 0.17053085461016526
+    },
+    {
+      "factor": "high52_ratio",
+      "family": "52w_position",
+      "selected_formula_occurrence_months": 15,
+      "selection_event_coverage": 0.3125,
+      "mean_signed_weight_when_present": -0.25239573213581323,
+      "median_signed_weight_when_present": -0.17558524000905584,
+      "mean_abs_weight_when_present": 0.25239573213581323
+    },
+    {
+      "factor": "maxdd60",
+      "family": "drawdown_risk",
+      "selected_formula_occurrence_months": 11,
+      "selection_event_coverage": 0.22916666666666666,
+      "mean_signed_weight_when_present": -0.21419086544493826,
+      "median_signed_weight_when_present": -0.24591465840620536,
+      "mean_abs_weight_when_present": 0.2393150729034594
+    },
+    {
+      "factor": "mom3",
+      "family": "short_reversal",
+      "selected_formula_occurrence_months": 10,
+      "selection_event_coverage": 0.20833333333333334,
+      "mean_signed_weight_when_present": -0.32898959663397276,
+      "median_signed_weight_when_present": -0.220556822759276,
+      "mean_abs_weight_when_present": 0.32898959663397276
+    },
+    {
+      "factor": "mom1",
+      "family": "short_reversal",
+      "selected_formula_occurrence_months": 6,
+      "selection_event_coverage": 0.125,
+      "mean_signed_weight_when_present": 0.20006785959516535,
+      "median_signed_weight_when_present": 0.14443007586518655,
+      "mean_abs_weight_when_present": 0.20006785959516535
+    }
+  ],
+  "top_factor_pairs": [
+    {
+      "factor_a": "avg_amount20",
+      "factor_b": "mom6",
+      "pair_selection_months": 26,
+      "pair_event_coverage": 0.5416666666666666,
+      "family_a": "liquidity",
+      "family_b": "medium_momentum_reversal"
+    },
+    {
+      "factor_a": "avg_amount20",
+      "factor_b": "mom12",
+      "pair_selection_months": 25,
+      "pair_event_coverage": 0.5208333333333334,
+      "family_a": "liquidity",
+      "family_b": "long_momentum_reversal"
+    },
+    {
+      "factor_a": "mom12",
+      "factor_b": "mom6",
+      "pair_selection_months": 19,
+      "pair_event_coverage": 0.3958333333333333,
+      "family_a": "long_momentum_reversal",
+      "family_b": "medium_momentum_reversal"
+    },
+    {
+      "factor_a": "mom6",
+      "factor_b": "vol20",
+      "pair_selection_months": 14,
+      "pair_event_coverage": 0.2916666666666667,
+      "family_a": "medium_momentum_reversal",
+      "family_b": "volatility"
+    },
+    {
+      "factor_a": "high52_ratio",
+      "factor_b": "vol20",
+      "pair_selection_months": 10,
+      "pair_event_coverage": 0.20833333333333334,
+      "family_a": "52w_position",
+      "family_b": "volatility"
+    },
+    {
+      "factor_a": "mom12",
+      "factor_b": "vol20",
+      "pair_selection_months": 10,
+      "pair_event_coverage": 0.20833333333333334,
+      "family_a": "long_momentum_reversal",
+      "family_b": "volatility"
+    },
+    {
+      "factor_a": "avg_amount20",
+      "factor_b": "mom3",
+      "pair_selection_months": 10,
+      "pair_event_coverage": 0.20833333333333334,
+      "family_a": "liquidity",
+      "family_b": "short_reversal"
+    },
+    {
+      "factor_a": "high52_ratio",
+      "factor_b": "mom12",
+      "pair_selection_months": 8,
+      "pair_event_coverage": 0.16666666666666666,
+      "family_a": "52w_position",
+      "family_b": "long_momentum_reversal"
+    },
+    {
+      "factor_a": "high52_ratio",
+      "factor_b": "maxdd60",
+      "pair_selection_months": 7,
+      "pair_event_coverage": 0.14583333333333334,
+      "family_a": "52w_position",
+      "family_b": "drawdown_risk"
+    },
+    {
+      "factor_a": "high52_ratio",
+      "factor_b": "mom6",
+      "pair_selection_months": 7,
+      "pair_event_coverage": 0.14583333333333334,
+      "family_a": "52w_position",
+      "family_b": "medium_momentum_reversal"
+    },
+    {
+      "factor_a": "maxdd60",
+      "factor_b": "mom6",
+      "pair_selection_months": 7,
+      "pair_event_coverage": 0.14583333333333334,
+      "family_a": "drawdown_risk",
+      "family_b": "medium_momentum_reversal"
+    },
+    {
+      "factor_a": "maxdd60",
+      "factor_b": "vol20",
+      "pair_selection_months": 7,
+      "pair_event_coverage": 0.14583333333333334,
+      "family_a": "drawdown_risk",
+      "family_b": "volatility"
+    },
+    {
+      "factor_a": "avg_amount20",
+      "factor_b": "vol20",
+      "pair_selection_months": 7,
+      "pair_event_coverage": 0.14583333333333334,
+      "family_a": "liquidity",
+      "family_b": "volatility"
+    },
+    {
+      "factor_a": "mom3",
+      "factor_b": "mom6",
+      "pair_selection_months": 7,
+      "pair_event_coverage": 0.14583333333333334,
+      "family_a": "short_reversal",
+      "family_b": "medium_momentum_reversal"
+    },
+    {
+      "factor_a": "mom1",
+      "factor_b": "mom12",
+      "pair_selection_months": 6,
+      "pair_event_coverage": 0.125,
+      "family_a": "short_reversal",
+      "family_b": "long_momentum_reversal"
+    },
+    {
+      "factor_a": "avg_amount20",
+      "factor_b": "high52_ratio",
+      "pair_selection_months": 5,
+      "pair_event_coverage": 0.10416666666666667,
+      "family_a": "liquidity",
+      "family_b": "52w_position"
+    },
+    {
+      "factor_a": "avg_amount20",
+      "factor_b": "mom1",
+      "pair_selection_months": 5,
+      "pair_event_coverage": 0.10416666666666667,
+      "family_a": "liquidity",
+      "family_b": "short_reversal"
+    },
+    {
+      "factor_a": "high52_ratio",
+      "factor_b": "mom1",
+      "pair_selection_months": 5,
+      "pair_event_coverage": 0.10416666666666667,
+      "family_a": "52w_position",
+      "family_b": "short_reversal"
+    },
+    {
+      "factor_a": "maxdd60",
+      "factor_b": "mom12",
+      "pair_selection_months": 4,
+      "pair_event_coverage": 0.08333333333333333,
+      "family_a": "drawdown_risk",
+      "family_b": "long_momentum_reversal"
+    },
+    {
+      "factor_a": "avg_amount20",
+      "factor_b": "maxdd60",
+      "pair_selection_months": 1,
+      "pair_event_coverage": 0.020833333333333332,
+      "family_a": "liquidity",
+      "family_b": "drawdown_risk"
+    }
+  ],
+  "mechanism_clusters": [
+    {
+      "mechanism_cluster": "mixed/other",
+      "distinct_formulas": 5,
+      "selected_months": 26,
+      "selection_event_coverage": 0.5416666666666666
+    },
+    {
+      "mechanism_cluster": "medium/long momentum + 52w-position",
+      "distinct_formulas": 2,
+      "selected_months": 12,
+      "selection_event_coverage": 0.25
+    },
+    {
+      "mechanism_cluster": "reversal + liquidity",
+      "distinct_formulas": 3,
+      "selected_months": 10,
+      "selection_event_coverage": 0.20833333333333334
+    }
+  ],
+  "holdout_diagnostic": null,
+  "guards": {
+    "descriptive_only": true,
+    "no_holdout_selection": true,
+    "selection_frequency_comes_from_walk_forward_ledger": true
+  }
+}
