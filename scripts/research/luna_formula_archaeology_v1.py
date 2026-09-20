@@ -11,6 +11,7 @@ Inputs:
   - optional frozen_holdout_ranked.csv
 
 Outputs:
+  - report is descriptive only; no candidate promotion occurs here.
   - summary.json
   - recurring_formulas.csv
   - factor_contribution.csv
