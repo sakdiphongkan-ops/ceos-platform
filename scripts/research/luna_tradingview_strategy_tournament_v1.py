@@ -219,7 +219,9 @@ def score_rerank(g: pd.DataFrame, rule: str) -> pd.Series:
 
 
 def select_month(g: pd.DataFrame, c: Candidate) -> pd.DataFrame:
-    x=g.dropna(subset=["M1_MOM20_ADJ","fwd_month"]).copy()
+    # Selection must use formation-date information only. Do not filter on
+    # fwd_month because that is future information and would introduce look-ahead.
+    x=g.dropna(subset=["M1_MOM20_ADJ"]).copy()
     if len(x)<20:
         return x.iloc[0:0]
     pool=x.sort_values(["M1_MOM20_ADJ","symbol"],ascending=[True,True]).head(c.pool)
@@ -252,7 +254,7 @@ def evaluate(df: pd.DataFrame,c: Candidate,bps: float) -> pd.DataFrame:
                 entered=pick[pick["gate"]].copy()
                 entered["w"]=1/20.0
                 current={s:1/20.0 for s in entered["symbol"]}
-                gross=float(np.nansum(entered["w"]*entered["fwd_month"]))
+                gross=float(np.nansum(entered["w"]*entered["fwd_month"].fillna(0.0)))
         syms=set(prev)|set(current)
         turnover=0.5*sum(abs(current.get(s,0)-prev.get(s,0)) for s in syms)
         net=gross-turnover*bps/10000.0
