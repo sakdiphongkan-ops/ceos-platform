@@ -1,10 +1,10 @@
 {
   "status": "COMPLETED",
   "engine": "luna-tradingview-indicator-engine-v1",
-  "data_sha256": "9dc53d84f5e3c779bab890af5ecb5e40b723f2eb9d431d7039b4cb031315a9aa",
+  "data_sha256": "bd4fd0dec9d359944935a30cd017614ac53a83415330807b6a932aea614d5c61",
   "symbols": 925,
-  "daily_rows": 1034706,
-  "monthly_rows": 52487,
+  "daily_rows": 1046727,
+  "monthly_rows": 52485,
   "tv_technical_rating_constituents": 26,
   "tv_ma_constituents": 15,
   "tv_oscillator_constituents": 11,
@@ -27,6 +27,5 @@
     "Bull/Bear Power uptrend/downtrend uses price-vs-EMA50, matching the Bull/Bear Power anchor used by the research translation.",
     "These two proxy definitions are recorded hypotheses, not claims of byte-identical proprietary implementation."
   ],
-  "monthly_m1_definition": "completed calendar-month raw-close return from prior month-end to current month-end; verified against locked production selection_score",
-  "forward_data_through": "2026-09-18"
+  "cache_version": "20260920-null-traded-v3"
 }
