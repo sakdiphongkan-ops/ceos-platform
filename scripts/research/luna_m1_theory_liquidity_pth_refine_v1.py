@@ -32,6 +32,7 @@ class Candidate:
     style: str
     amount_floor: float
     pth_focus: bool
+    transform: str = "LINEAR"
     k: int = 20
 
 
@@ -67,7 +68,7 @@ def perf(x: np.ndarray) -> dict:
 
 
 def make_candidates(k: int) -> list[Candidate]:
-    out = [Candidate("M1_REV_K20", 1.0, 0.0, 0.0, False, "SAFE", 0.0, False, k)]
+    out = [Candidate("M1_REV_K20", 1.0, 0.0, 0.0, False, "SAFE", 0.0, False, "LINEAR", k)]
     idx = 0
     # Focused refinement around the promising contrarian-liquidity/PTH region.
     for liq_w in (0.10, 0.15, 0.20, 0.25, 0.30):
@@ -85,6 +86,7 @@ def make_candidates(k: int) -> list[Candidate]:
                         "CONTRARIAN",
                         0.0,
                         transform == "PTH_CONVEX",
+                        transform,
                         k
                     ))
     return out
@@ -139,6 +141,10 @@ def load_and_prepare(path: str):
 def candidate_returns(prep, c: Candidate):
     df, months, groups, rev, pth, r_lq, fwd, symbols = prep
     liq = r_lq if c.style == "SAFE" else 1.0 - r_lq
+    if c.transform == "CONTRA_CONVEX":
+        liq = np.power(np.clip(liq, 0.0, 1.0), 1.5)
+    if c.transform == "PTH_CONVEX":
+        pth = np.power(np.clip(pth, 0.0, 1.0), 1.5)
     score = c.rev_w * rev + c.liq_w * liq + c.pth_w * pth
     if c.interaction:
         score = score + 0.25 * rev * liq
@@ -273,6 +279,7 @@ def main():
         "k": int(args.k),
         "costs_bps": costs,
         "selection": "TRAIN+DEV only; OOS/HOLDOUT frozen",
+        "search_scope": "contrarian liquidity + 52-week-high focused weight refinement; linear and convex transforms",
         "selected_candidate": chosen20,
         "m1_baseline": m1,
         "delta_selected_vs_m1": {
