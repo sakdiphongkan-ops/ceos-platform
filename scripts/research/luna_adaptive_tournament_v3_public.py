@@ -116,6 +116,8 @@ def main():
         if len(prior)<args.min_history_months: continue
         eligible=[]
         for fid,fr in returns.items():
+            if m not in fr.index:
+                continue
             h=fr.reindex(prior).dropna()
             if len(h)<args.min_history_months: continue
             eligible.append((geo(h),float((h>0).mean()),fid))
