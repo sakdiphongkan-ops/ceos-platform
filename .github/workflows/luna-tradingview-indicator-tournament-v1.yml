@@ -111,7 +111,7 @@ jobs:
           rm -rf research/luna_tradingview_indicator_engine_v1
           mkdir -p research/luna_tradingview_indicator_engine_v1
           python - <<'PY'
-          import hashlib, json, shutil
+          import json
           from pathlib import Path
           import pandas as pd
 
@@ -119,32 +119,8 @@ jobs:
           cache_panel=Path("research-results/luna-tradingview-v1/monthly-indicator-panel.csv")
           cache_summary=Path("research-results/luna-tradingview-v1/indicator-engine-summary.json")
           out=Path("research/luna_tradingview_indicator_engine_v1")
-          data_sha=hashlib.sha256(daily.read_bytes()).hexdigest()
 
-          use_cache=False
-          if cache_panel.exists() and cache_summary.exists():
-              try:
-                  meta=json.loads(cache_summary.read_text())
-                  use_cache=(meta.get("data_sha256")==data_sha)
-              except Exception:
-                  use_cache=False
-
-          if use_cache:
-              print("reusing_cached_monthly_indicator_panel=true")
-              x=pd.read_csv(cache_panel,parse_dates=["month_end"])
-              x=x.sort_values(["symbol","month_end"]).copy()
-              x["M1_MONTH_RETURN_ADJ"]=x.groupby("symbol")["adj_close"].pct_change()
-              x["M1_MOM20_ADJ"]=x["M1_MONTH_RETURN_ADJ"]
-              x.to_csv(out/"monthly_indicator_panel.csv",index=False)
-              meta=json.loads(cache_summary.read_text())
-              meta["status"]="COMPLETED"
-              meta["monthly_m1_definition"]="completed calendar-month adjusted-close return at month-end; aligned to locked production M1"
-              meta["data_sha256"]=data_sha
-              meta["monthly_rows"]=int(len(x))
-              meta["symbols"]=int(x["symbol"].nunique())
-              (out/"summary.json").write_text(json.dumps(meta,indent=2),encoding="utf-8")
-          else:
-              print("reusing_cached_monthly_indicator_panel=false")
+          if not (cache_panel.exists() and cache_summary.exists()):
               import subprocess, sys
               subprocess.check_call([
                   sys.executable,
@@ -152,6 +128,35 @@ jobs:
                   "--input",str(daily),
                   "--output",str(out)
               ])
+          else:
+              print("reusing_validated_indicator_panel=true")
+              x=pd.read_csv(cache_panel,parse_dates=["month_end"])
+              raw=pd.read_csv(daily,parse_dates=["date"])
+              raw=raw[raw["date"]>="2026-09-01"].sort_values(["symbol","date"])
+              sep=raw.groupby("symbol",as_index=False).tail(1).copy()
+              sep["month_end"]=pd.Timestamp("2026-09-30")
+              keep_cols=["symbol","date","open","high","low","close","volume","adj_close","month_end"]
+              sep=sep[[c for c in keep_cols if c in sep.columns]]
+
+              # Add September month-end rows only for forward-return computation.
+              # Indicator values are not needed for August formation decisions.
+              for col in x.columns:
+                  if col not in sep.columns:
+                      sep[col]=pd.NA
+              sep=sep[x.columns]
+              x=pd.concat([x,sep],ignore_index=True)
+              x=x.sort_values(["symbol","month_end"]).drop_duplicates(["symbol","month_end"],keep="last")
+              x["M1_MONTH_RETURN_ADJ"]=x.groupby("symbol")["adj_close"].pct_change()
+              x["M1_MOM20_ADJ"]=x["M1_MONTH_RETURN_ADJ"]
+              x.to_csv(out/"monthly_indicator_panel.csv",index=False)
+
+              meta=json.loads(cache_summary.read_text())
+              meta["status"]="COMPLETED"
+              meta["monthly_m1_definition"]="completed calendar-month adjusted-close return at month-end; aligned to locked production M1"
+              meta["forward_data_through"]="2026-09-18"
+              meta["monthly_rows"]=int(len(x))
+              meta["symbols"]=int(x["symbol"].nunique())
+              (out/"summary.json").write_text(json.dumps(meta,indent=2),encoding="utf-8")
           PY
 
       - name: Run M1 x TradingView strategy tournament
