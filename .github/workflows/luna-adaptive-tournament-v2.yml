@@ -1,5 +1,5 @@
 name: LUNA Adaptive Tournament v2
-# workflow_revision: 20260920-02
+# workflow_revision: 20260920-03
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ on:
     branches: [master]
     paths:
       - "scripts/research/luna_adaptive_tournament_v2.py"
-      - "scripts/research/build_monthly_price_factors_from_daily.py"
+      - "scripts/research/build_monthly_price_factors_from_daily_v1.py"
       - "scripts/research/build_factor_dataset.py"
       - "scripts/research/download_mendeley_set.py"
       - "scripts/research/filter_last_5y.py"
@@ -66,8 +66,13 @@ jobs:
         run: |
           rm -rf data/luna_monthly
           mkdir -p data/luna_monthly
-          python scripts/research/build_monthly_price_factors_from_daily.py \
-            --input data/set_2000_2025/factors_5y.csv \
+          python scripts/research/build_monthly_price_factors_from_daily_v1.py \
+            --prices data/set_2000_2025/prices.csv \
+            --start 2020-01-01 \
+            --end 2025-03-31 \
+            --output data/luna_monthly/monthly_price_factors_full.csv
+          python scripts/research/filter_last_5y_monthly.py \
+            --input data/luna_monthly/monthly_price_factors_full.csv \
             --output data/luna_monthly/monthly_price_factors.csv
 
       - name: Validate monthly dataset
