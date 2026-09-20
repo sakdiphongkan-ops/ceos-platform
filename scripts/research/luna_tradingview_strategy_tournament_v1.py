@@ -3,7 +3,7 @@
 
 Uses the LUNA TradingView-derived indicator panel as a research feature set.
 The locked M1 selector remains the control:
-  bottom-K by completed calendar-month adjusted-close return at month-end.
+  bottom-K by completed calendar-month CLOSE return at month-end.
 
 Candidate groups:
 - TradingView Technical Ratings
