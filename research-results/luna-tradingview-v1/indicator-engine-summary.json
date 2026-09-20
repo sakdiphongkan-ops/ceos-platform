@@ -1,0 +1,30 @@
+{
+  "status": "COMPLETED",
+  "engine": "luna-tradingview-indicator-engine-v1",
+  "data_sha256": "9dc53d84f5e3c779bab890af5ecb5e40b723f2eb9d431d7039b4cb031315a9aa",
+  "symbols": 924,
+  "daily_rows": 1034706,
+  "monthly_rows": 51562,
+  "tv_technical_rating_constituents": 26,
+  "tv_ma_constituents": 15,
+  "tv_oscillator_constituents": 11,
+  "research_extensions": [
+    "RSI2/7/9/14/21",
+    "ATR14/ATRP14",
+    "Bollinger %B/bandwidth",
+    "Bollinger squeeze/release",
+    "Supertrend 10x3, 7x2, 14x3",
+    "VWMA20",
+    "anchored week/month VWAP",
+    "OBV slope/z-score",
+    "Donchian 20/55/252",
+    "RSI bullish divergence proxy",
+    "Hammer/Bullish Engulfing"
+  ],
+  "tv_translation_notes": [
+    "TradingView public documented rules are implemented where published.",
+    "Stoch RSI trend state uses a causal price-vs-EMA50 proxy.",
+    "Bull/Bear Power uptrend/downtrend uses price-vs-EMA50, matching the Bull/Bear Power anchor used by the research translation.",
+    "These two proxy definitions are recorded hypotheses, not claims of byte-identical proprietary implementation."
+  ]
+}
