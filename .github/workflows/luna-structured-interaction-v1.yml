@@ -1,0 +1,86 @@
+name: LUNA Structured Interaction Search v1
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - "scripts/research/luna_structured_interaction_search_v1.py"
+      - ".github/workflows/luna-structured-interaction-v1.yml"
+
+concurrency:
+  group: luna-structured-interaction-v1
+  cancel-in-progress: true
+
+jobs:
+  search:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy python-dateutil
+
+      - name: Download historical SET dataset
+        run: |
+          mkdir -p data/raw
+          curl -fL --retry 3 --retry-delay 2             "https://data.mendeley.com/public-api/zip/gybmm9t3mr/download/1"             -o data/raw/gybmm9t3mr-1.zip
+          test -s data/raw/gybmm9t3mr-1.zip
+
+      - name: Normalize SET history
+        run: |
+          python scripts/research/download_mendeley_set.py             --zip data/raw/gybmm9t3mr-1.zip             --output-dir data/set_2000_2025             --quarantine-invalid             --max-invalid-rate 0.01
+
+      - name: Build point-in-time factor dataset
+        run: |
+          python scripts/research/build_factor_dataset.py             --prices data/set_2000_2025/prices.csv             --output data/set_2000_2025/factors.csv
+
+      - name: Run 2,000 structured hypotheses
+        run: |
+          rm -rf research/luna_structured_interaction_v1
+          python scripts/research/luna_structured_interaction_search_v1.py             --input data/set_2000_2025/factors.csv             --output research/luna_structured_interaction_v1             --formula-count 2000             --k 20             --cost-bps 20             --train-months 35             --validation-months 12             --holdout-months 12
+
+      - name: Validate
+        run: |
+          test -s research/luna_structured_interaction_v1/summary.json
+          python - <<'PY'
+          import json
+          x=json.load(open("research/luna_structured_interaction_v1/summary.json"))
+          assert x["status"] == "COMPLETED"
+          assert x["formula_count"] == 2000
+          assert x["holdout_candidates_ge_7pct"] >= 0
+          print(json.dumps({
+              "status": x["status"],
+              "formula_count": x["formula_count"],
+              "holdout_candidates_ge_7pct": x["holdout_candidates_ge_7pct"],
+              "m1_holdout": x["m1_benchmark"]["holdout"],
+          }, indent=2))
+          PY
+
+      - name: Save compact result
+        run: |
+          mkdir -p research-results/luna-structured-interaction-v1
+          cp research/luna_structured_interaction_v1/summary.json             research-results/luna-structured-interaction-v1-summary.json
+          cp research/luna_structured_interaction_v1/formula_catalog.json             research-results/luna-structured-interaction-v1/formula-catalog.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research-results/
+          git diff --cached --quiet || git commit -m "research(luna): save structured interaction search v1 result"
+          git push
+
+      - name: Upload full artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: luna-structured-interaction-v1
+          path: research/luna_structured_interaction_v1/
+          retention-days: 14
