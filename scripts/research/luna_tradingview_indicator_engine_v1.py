@@ -329,7 +329,8 @@ def compute_tv_ratings(df: pd.DataFrame) -> pd.DataFrame:
 
 def add_research_indicators(df: pd.DataFrame) -> pd.DataFrame:
     x = compute_tv_ratings(df)
-    x["M1_MOM20_ADJ"] = x["adj_close"].pct_change(20)
+    # Locked production M1 selector: raw close return over 21 trading sessions.
+    x["M1_MOM20_ADJ"] = x["close"].pct_change(21)
     sma60 = sma(x["close"], 60)
     x["DIST_MA60"] = x["close"] / sma60.replace(0, np.nan) - 1.0
 
