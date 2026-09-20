@@ -16,13 +16,15 @@ import numpy as np
 import pandas as pd
 
 FACTORS = [
-    "mom1", "mom3", "mom6", "mom12",
+    "mom1", "mom2", "mom3", "mom4", "mom6", "mom12",
     "high52_ratio", "vol20", "maxdd60", "avg_amount20",
 ]
 
 SOURCE_MAP = {
     "mom1": "MOM_20",
+    "mom2": "MOM_40",
     "mom3": "MOM_60",
+    "mom4": "MOM_80",
     "mom6": "MOM_120",
     "mom12": "MOM_252",
     "vol20": "VOL_20",
@@ -88,7 +90,9 @@ def main() -> None:
         "max_month": str(out["month_end"].max()) if len(out) else None,
         "factor_mapping": {
             "mom1": "MOM_20",
+            "mom2": "MOM_40",
             "mom3": "MOM_60",
+            "mom4": "MOM_80",
             "mom6": "MOM_120",
             "mom12": "MOM_252",
             "high52_ratio": "1 + DIST_HIGH_252",
