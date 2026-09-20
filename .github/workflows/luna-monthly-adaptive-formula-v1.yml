@@ -1,4 +1,5 @@
 name: LUNA Monthly Adaptive Formula Search v1
+run-name: LUNA monthly adaptive formula / ${{ github.sha }}
 
 on:
   workflow_dispatch:
