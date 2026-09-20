@@ -74,6 +74,73 @@ jobs:
           print(json.dumps(x,indent=2))
           PY
 
+      - name: Publish audit summary to GitHub issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          from pathlib import Path
+
+          p=Path("research/luna_tradingview_strategy_tournament_v1/candidate_results.csv")
+          x=pd.read_csv(p)
+          ref=x[(x["candidate"]=="BASELINE")&(x["bps"]==20)].iloc[0]
+          rows=x[x["bps"]==20].copy()
+
+          rows["d_FULL5Y_geo"]=rows["FULL5Y_geo_monthly"]-ref["FULL5Y_geo_monthly"]
+          rows["d_OOS_geo"]=rows["OOS_geo_monthly"]-ref["OOS_geo_monthly"]
+          rows["d_HO_geo"]=rows["HOLDOUT_geo_monthly"]-ref["HOLDOUT_geo_monthly"]
+
+          strict=rows[
+              (rows["candidate"]!="BASELINE")&
+              (rows["FULL5Y_geo_monthly"]>ref["FULL5Y_geo_monthly"])&
+              (rows["OOS_geo_monthly"]>ref["OOS_geo_monthly"])&
+              (rows["HOLDOUT_geo_monthly"]>ref["HOLDOUT_geo_monthly"])&
+              (rows["OOS_max_drawdown_pct"]>=ref["OOS_max_drawdown_pct"])&
+              (rows["HOLDOUT_max_drawdown_pct"]>=ref["HOLDOUT_max_drawdown_pct"])&
+              (rows["OOS_positive_month_pct"]>=ref["OOS_positive_month_pct"])&
+              (rows["HOLDOUT_positive_month_pct"]>=ref["HOLDOUT_positive_month_pct"])
+          ]["candidate"].tolist()
+
+          stress=x[(x["bps"].isin([40,60])) & (x["candidate"].isin(strict))]
+          stress_ok=(
+              stress.groupby("candidate")
+              .apply(lambda g: (g["OOS_geo_monthly"]>0).all() and (g["HOLDOUT_geo_monthly"]>0).all(),
+                     include_groups=False)
+              .to_dict()
+          )
+          strict=[c for c in strict if stress_ok.get(c,False)]
+
+          top=rows.sort_values(["d_HO_geo","d_OOS_geo"],ascending=False).head(15)
+          lines=[]
+          lines.append("# LUNA TradingView 35-formula tournament — latest audit")
+          lines.append("")
+          lines.append("Control: locked M1_S0_K20_REV at 20bps round-trip.")
+          lines.append("FULL5Y: 2021-10-31 to 2026-08-31. OOS: 2024-09-30 to 2025-08-31. HOLDOUT: 2025-09-30 to 2026-08-31.")
+          lines.append("")
+          lines.append("## Locked M1 @20bps")
+          lines.append(f"- FULL5Y geo/month: {ref['FULL5Y_geo_monthly']:.4%}; cumulative: {ref['FULL5Y_cumulative']:.2%}; max DD: {ref['FULL5Y_max_drawdown_pct']:.2%}; positive months: {ref['FULL5Y_positive_month_pct']:.1%}")
+          lines.append(f"- OOS geo/month: {ref['OOS_geo_monthly']:.4%}; max DD: {ref['OOS_max_drawdown_pct']:.2%}; positive months: {ref['OOS_positive_month_pct']:.1%}")
+          lines.append(f"- HOLDOUT geo/month: {ref['HOLDOUT_geo_monthly']:.4%}; max DD: {ref['HOLDOUT_max_drawdown_pct']:.2%}; positive months: {ref['HOLDOUT_positive_month_pct']:.1%}")
+          lines.append("")
+          lines.append(f"## Strict survivors after 20/40/60bps stress: {len(strict)}")
+          lines.append(", ".join(strict) if strict else "None")
+          lines.append("")
+          lines.append("## Top 15 by HOLDOUT/OOS delta vs M1 @20bps")
+          lines.append("| Candidate | FULL5Y geo | d5Y | OOS geo | dOOS | OOS DD | HOLDOUT geo | dHO | HO DD |")
+          lines.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|")
+          for _,r0 in top.iterrows():
+              lines.append(
+                  f"| {r0['candidate']} | {r0['FULL5Y_geo_monthly']:.3%} | {r0['d_FULL5Y_geo']:+.3%} | "
+                  f"{r0['OOS_geo_monthly']:.3%} | {r0['d_OOS_geo']:+.3%} | {r0['OOS_max_drawdown_pct']:.2%} | "
+                  f"{r0['HOLDOUT_geo_monthly']:.3%} | {r0['d_HO_geo']:+.3%} | {r0['HOLDOUT_max_drawdown_pct']:.2%} |"
+              )
+          lines.append("")
+          lines.append("Machine-readable full candidate results are stored by the workflow.")
+          Path("research-results-comment.md").write_text("\\n".join(lines),encoding="utf-8")
+          PY
+          gh issue comment 2 --body-file research-results-comment.md
+
       - name: Persist tournament results via GitHub Contents API
         env:
           GH_TOKEN: ${{ github.token }}
