@@ -6,6 +6,7 @@ short-term reversal, 52-week position, volatility, drawdown quality,
 liquidity, medium/long momentum.
 
 Protocol:
+  - validation ranks candidates; OOS and holdout are never used for selection.
   development -> validation selection -> frozen OOS -> frozen holdout.
 Holdout never participates in formula or weight selection.
 
