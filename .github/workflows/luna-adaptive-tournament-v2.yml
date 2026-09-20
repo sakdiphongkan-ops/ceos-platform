@@ -83,7 +83,7 @@ jobs:
           import pandas as pd
 
           p = Path("data/luna_monthly/monthly_price_factors.csv")
-          m = json.loads(Path("data/luna_monthly/monthly_price_factors.manifest.json").read_text())
+          m = json.loads(Path("data/luna_monthly/monthly_price_factors_full.manifest.json").read_text())
           x = pd.read_csv(p)
           required = {
               "symbol","month_end","adj_close","mom1","mom3","mom6","mom12",
@@ -129,7 +129,7 @@ jobs:
           cp research/luna_adaptive_tournament_v2/summary.json research-results/luna-adaptive-tournament-v2-summary.json
           cp research/luna_adaptive_tournament_v2/tournament_selection_ledger.csv research-results/luna-adaptive-tournament-v2/selection-ledger.csv
           cp research/luna_adaptive_tournament_v2/formula_catalog.json research-results/luna-adaptive-tournament-v2/formula-catalog.json
-          cp data/luna_monthly/monthly_price_factors.manifest.json research-results/luna-adaptive-tournament-v2-monthly-data-manifest.json
+          cp data/luna_monthly/monthly_price_factors_full.manifest.json research-results/luna-adaptive-tournament-v2-monthly-data-manifest.json
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add research-results/
