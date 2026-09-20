@@ -8,6 +8,7 @@ on:
     paths:
       - "scripts/research/build_monthly_factor_dataset.py"
       - "scripts/research/luna_adaptive_tournament_v3.py"
+      - "scripts/research/luna_holdout_audit_v2.py"
       - ".github/workflows/luna-adaptive-tournament-v3.yml"
 
 concurrency:
@@ -55,20 +56,29 @@ jobs:
         run: |
           rm -rf research/luna_adaptive_tournament_v3
           python scripts/research/luna_adaptive_tournament_v3.py             --input data/set_2000_2025/monthly_factors_5y.csv             --output research/luna_adaptive_tournament_v3             --formula-count 1000 --seed 20260920             --lookback-months 24 --min-history-months 12             --cost-bps 20 --k 20
+      - name: Run frozen 12-month holdout audit
+        run: |
+          rm -rf research/luna_holdout_audit_v2
+          python scripts/research/luna_holdout_audit_v2.py             --input data/set_2000_2025/monthly_factors_5y.csv             --catalog research/luna_adaptive_tournament_v3/formula_catalog.json             --output research/luna_holdout_audit_v2             --holdout-months 12 --top-n 25 --k 20 --cost-bps 20             --benchmark-id M1_REV21_K20
       - name: Validate
         run: |
           test -s research/luna_adaptive_tournament_v3/summary.json
           test -s research/luna_adaptive_tournament_v3/tournament_selection_ledger.csv
           test -s research/luna_adaptive_tournament_v3/formula_catalog.json
+          test -s research/luna_holdout_audit_v2/summary.json
+          test -s research/luna_holdout_audit_v2/holdout_ranked.csv
           python - <<'PY'
           import json
           x=json.load(open("research/luna_adaptive_tournament_v3/summary.json"))
+          h=json.load(open("research/luna_holdout_audit_v2/summary.json"))
           assert x["status"]=="COMPLETED"
           assert x["formula_count"]==1000
           assert x["months_traded"]>=24
           assert x["leakage_guard"]
           assert x["benchmark_m1_rev21_k20"]
-          print(json.dumps(x,indent=2))
+          assert h["selection_guard"]
+          assert h["holdout_months"]==12
+          print(json.dumps({"tournament":x,"holdout":h},indent=2))
           PY
       - name: Save results
         run: |
@@ -77,6 +87,8 @@ jobs:
           cp research/luna_adaptive_tournament_v3/tournament_selection_ledger.csv research-results/luna-adaptive-tournament-v3/selection-ledger.csv
           cp research/luna_adaptive_tournament_v3/formula_catalog.json research-results/luna-adaptive-tournament-v3/formula-catalog.json
           cp research/luna_adaptive_tournament_v3/full_period_formula_stats.csv research-results/luna-adaptive-tournament-v3/full-period-formula-stats.csv
+          cp research/luna_holdout_audit_v2/summary.json research-results/luna-adaptive-tournament-v3/holdout-summary.json
+          cp research/luna_holdout_audit_v2/holdout_ranked.csv research-results/luna-adaptive-tournament-v3/holdout-ranked.csv
       - name: Commit results
         run: |
           git config user.name "github-actions[bot]"
@@ -93,4 +105,5 @@ jobs:
             data/set_2000_2025/factors.manifest.json
             data/set_2000_2025/monthly_factors_5y.csv.manifest.json
             research/luna_adaptive_tournament_v3/
+            research/luna_holdout_audit_v2/
           retention-days: 14
