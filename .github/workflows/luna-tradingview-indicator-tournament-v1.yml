@@ -42,7 +42,7 @@ jobs:
           workers = 4
           temp = Path("data/luna_daily/monthly")
           temp.mkdir(parents=True, exist_ok=True)
-          months = pd.date_range("2021-09-01", "2026-08-01", freq="MS")
+          months = pd.date_range("2021-09-01", "2026-09-01", freq="MS")
 
           def fetch_month(start):
               start_s = start.strftime("%Y-%m-%d")
@@ -95,7 +95,7 @@ jobs:
               chunk.to_csv(out, mode="a", header=header, index=False)
 
           df = pd.read_csv(out, parse_dates=["date"])
-          df = df[(df["date"] >= "2021-09-01") & (df["date"] <= "2026-08-31")].copy()
+          df = df[(df["date"] >= "2021-09-01") & (df["date"] <= "2026-09-18")].copy()
           df = df.sort_values(["symbol","date"]).drop_duplicates(["symbol","date"])
           df.to_csv(out, index=False)
           summary = {"rows": len(df), "symbols": df["symbol"].nunique(), "start": str(df["date"].min().date()), "end": str(df["date"].max().date())}
@@ -103,7 +103,7 @@ jobs:
           assert summary["rows"] > 1000000, summary
           assert summary["symbols"] >= 924, summary
           assert summary["start"] == "2021-09-20", summary
-          assert summary["end"] in {"2026-08-29","2026-08-31"}, summary
+          assert summary["end"] == "2026-09-18", summary
           PY
 
       - name: Build TradingView-derived indicator panel
