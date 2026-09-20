@@ -1,0 +1,134 @@
+{
+  "status": "COMPLETED",
+  "engine": "luna-direct-supabase-freshseed-v2",
+  "dataset_rows": 51562,
+  "eligible_months": 59,
+  "period": [
+    "2021-09-01",
+    "2026-07-01"
+  ],
+  "formula_count": 1000,
+  "k": 20,
+  "cost_bps": 20,
+  "lookback_months": 24,
+  "min_history_months": 12,
+  "adaptive": {
+    "months": 47,
+    "geo_monthly": -0.007708356071383649,
+    "cumulative": -0.30489773020647193,
+    "positive_month_pct": 0.3191489361702128,
+    "max_drawdown_pct": -0.46293406384961155,
+    "final_baht": 20853.068093805843,
+    "months_ge_7pct": 5
+  },
+  "direct_m1_alias": {
+    "months": 59,
+    "geo_monthly": 0.0014391261108452902,
+    "cumulative": 0.08855094345448022,
+    "positive_month_pct": 0.4915254237288136,
+    "max_drawdown_pct": -0.43060920767905453,
+    "final_baht": 32656.528303634404
+  },
+  "top_adaptive_selections": [
+    [
+      "F0197",
+      11
+    ],
+    [
+      "F0492",
+      7
+    ],
+    [
+      "F0811",
+      5
+    ],
+    [
+      "F0621",
+      4
+    ],
+    [
+      "F0270",
+      3
+    ],
+    [
+      "F0884",
+      3
+    ],
+    [
+      "F0899",
+      3
+    ],
+    [
+      "F0373",
+      2
+    ],
+    [
+      "F0129",
+      2
+    ],
+    [
+      "F0045",
+      2
+    ],
+    [
+      "F0142",
+      1
+    ],
+    [
+      "F0241",
+      1
+    ],
+    [
+      "F0731",
+      1
+    ],
+    [
+      "F0116",
+      1
+    ],
+    [
+      "F0011",
+      1
+    ]
+  ],
+  "top_full_period_formulas": [
+    [
+      "F0324",
+      0.010479297848875913,
+      0.8497702945114525,
+      -0.08120158572166425
+    ],
+    [
+      "F0410",
+      0.010363563395088482,
+      0.8373118650891964,
+      -0.0804833543866692
+    ],
+    [
+      "F0120",
+      0.010330645088425294,
+      0.833783411382016,
+      -0.08006462526609304
+    ],
+    [
+      "F0306",
+      0.01026983313863572,
+      0.8272825996065469,
+      -0.06874993235293658
+    ],
+    [
+      "F0218",
+      0.010253521301154311,
+      0.8255427172099614,
+      -0.09809584788217929
+    ]
+  ],
+  "formula_terms_top_pattern": [
+    "F0324: +MOM12 / -VOL20",
+    "F0410: +MOM12 / +MAXDD60 / -VOL20",
+    "F0120: +MOM12 / +MAXDD60 / -VOL20",
+    "F0306: +MOM12 / +MAXDD60 / -VOL20",
+    "F0218: +MOM12 / +MAXDD60 / -VOL20"
+  ],
+  "important_caveat": "The direct M1 alias is conceptually bottom-MOM1 K20 on this monthly factor table, but it is NOT an exact reproduction of the legacy 925-symbol M1 universe; the persisted production M1 benchmark must remain the official benchmark."
+}
