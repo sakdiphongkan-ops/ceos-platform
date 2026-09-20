@@ -1,0 +1,62 @@
+{
+  "status": "COMPLETED",
+  "engine": "luna-adaptive-replication-v4",
+  "seeds": [
+    20260920,
+    20260921,
+    20260922
+  ],
+  "runs": [
+    {
+      "seed": 20260920,
+      "adaptive_geo_monthly": 0.007133096992435064,
+      "adaptive_cumulative": 0.4065969633562536,
+      "adaptive_max_drawdown": -0.21138471261538372,
+      "adaptive_positive_month_pct": 0.4791666666666667,
+      "adaptive_months_ge_7pct": 5,
+      "m1_geo_monthly": 0.0073932361440448525,
+      "m1_cumulative": 0.5557572555368311,
+      "rank1_formula": "F0634",
+      "rank1_holdout_geo_monthly": -0.013847380604900653,
+      "rank1_holdout_cumulative": -0.14220115166667446,
+      "m1_holdout_geo_monthly": -0.02823861208408336,
+      "m1_holdout_cumulative": -0.2702803748525969
+    },
+    {
+      "seed": 20260921,
+      "adaptive_geo_monthly": -0.007273939379085756,
+      "adaptive_cumulative": -0.2956114281869022,
+      "adaptive_max_drawdown": -0.46203114216439534,
+      "adaptive_positive_month_pct": 0.4375,
+      "adaptive_months_ge_7pct": 2,
+      "m1_geo_monthly": 0.0073932361440448525,
+      "m1_cumulative": 0.5557572555368311,
+      "rank1_formula": "F0270",
+      "rank1_holdout_geo_monthly": -0.02493935719666641,
+      "rank1_holdout_cumulative": -0.24256059173444589,
+      "m1_holdout_geo_monthly": -0.02823861208408336,
+      "m1_holdout_cumulative": -0.2702803748525969
+    },
+    {
+      "seed": 20260922,
+      "adaptive_geo_monthly": 0.010623625188008228,
+      "adaptive_cumulative": 0.6607085813495235,
+      "adaptive_max_drawdown": -0.23063258827126598,
+      "adaptive_positive_month_pct": 0.5,
+      "adaptive_months_ge_7pct": 5,
+      "m1_geo_monthly": 0.0073932361440448525,
+      "m1_cumulative": 0.5557572555368311,
+      "rank1_formula": "F0026",
+      "rank1_holdout_geo_monthly": -0.008077469336434088,
+      "rank1_holdout_cumulative": -0.0853492286297991,
+      "m1_holdout_geo_monthly": -0.02823861208408336,
+      "m1_holdout_cumulative": -0.2702803748525969
+    }
+  ],
+  "replication_gate": {
+    "holdout_required": true,
+    "target_geometric_monthly": 0.07,
+    "formula_must_be_positive_holdout_in_all_seeds": true
+  },
+  "note": "Fresh seed replication is descriptive robustness evidence; no holdout result is used to select a formula."
+}
