@@ -422,6 +422,10 @@ def load(path: str) -> pd.DataFrame:
     for c in need-{"date","symbol"}:
         df[c]=pd.to_numeric(df[c],errors="coerce")
     df["symbol"]=df["symbol"].astype(str).str.upper().str.strip()
+    # Null rows are non-trading placeholders, not actual bars. Keep only real
+    # OHLCV observations so rolling indicators and monthly snapshots are not
+    # contaminated by suspended/illiquid placeholder rows.
+    df=df.dropna(subset=["open","high","low","close","volume"])
     df=df.sort_values(["symbol","date"]).drop_duplicates(["symbol","date"]).reset_index(drop=True)
     # Use adjusted price for return/momentum computations while indicators use OHLCV.
     return df
@@ -468,7 +472,9 @@ def add_mtf_ratings(daily: pd.DataFrame, raw: pd.DataFrame) -> pd.DataFrame:
     return z
 
 def monthly_snapshot(df: pd.DataFrame) -> pd.DataFrame:
-    out=df.copy()
+    # Use the last actual traded observation within each calendar month.
+    # Production M1 uses the last traded close, not a calendar-end NULL row.
+    out=df.dropna(subset=["close"]).copy()
     out["month_end"]=out["date"].dt.to_period("M").dt.to_timestamp("M")
     monthly=(
         out.sort_values(["symbol","date"])
