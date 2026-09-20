@@ -66,10 +66,10 @@ jobs:
       - name: Run intramonth entry timing tournament
         run: |
           rm -rf research/luna_m1_intramonth_entry_timing_v1
-          python scripts/research/luna_m1_intramonth_entry_timing_v1.py \\
-            --input data/luna_daily/daily_prices.csv \\
-            --output research/luna_m1_intramonth_entry_timing_v1 \\
-            --k 20 \\
+          python scripts/research/luna_m1_intramonth_entry_timing_v1.py \
+            --input data/luna_daily/daily_prices.csv \
+            --output research/luna_m1_intramonth_entry_timing_v1 \
+            --k 20 \
             --costs 20,40,60
 
       - name: Validate
