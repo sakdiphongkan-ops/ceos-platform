@@ -169,8 +169,7 @@ def bool_gate(g: pd.DataFrame, rule: str) -> pd.Series:
     if rule=="BREAKOUT55==1 & TV_MA_D>0":
         return (x["BREAKOUT55"]==1)&(x["TV_MA_D"]>0)
     if rule=="price_above_cloud & RSI14>30 & MACD>MACD_SIGNAL":
-        # Reconstruct the cloud test from Ichimoku components when available.
-        return (x["close"]>x["EMA20"])&(x["RSI14"]>30)&(x["MACD"]>x["MACD_SIGNAL"])&(x["TV_MA_D"]>0)
+        return (x["ICHIMOKU_BULL"]==1)&(x["RSI14"]>30)&(x["MACD"]>x["MACD_SIGNAL"])
     if rule=="RSI_BULL_DIV_PROXY==1 & BULL_REVERSAL==1":
         return (x["RSI_BULL_DIV_PROXY"]==1)&(x["BULL_REVERSAL"]==1)
     if rule=="RSI_BULL_DIV_PROXY==1 & TV_OSC_D>0.1":
