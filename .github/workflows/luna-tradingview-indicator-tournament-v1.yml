@@ -101,7 +101,7 @@ jobs:
           summary = {"rows": len(df), "symbols": df["symbol"].nunique(), "start": str(df["date"].min().date()), "end": str(df["date"].max().date())}
           print(summary)
           assert summary["rows"] > 1000000, summary
-          assert summary["symbols"] >= 924, summary
+          assert summary["symbols"] >= 925, summary
           assert summary["start"] == "2021-09-20", summary
           assert summary["end"] == "2026-09-18", summary
           PY
