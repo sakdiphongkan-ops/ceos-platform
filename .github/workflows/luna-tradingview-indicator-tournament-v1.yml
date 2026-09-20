@@ -147,7 +147,7 @@ jobs:
               x=pd.concat([x,sep],ignore_index=True)
               x=x.sort_values(["symbol","month_end"]).drop_duplicates(["symbol","month_end"],keep="last")
               x["M1_MONTH_RETURN_ADJ"]=x.groupby("symbol")["adj_close"].pct_change()
-              x["M1_MOM20_ADJ"]=x["M1_MONTH_RETURN_ADJ"]
+              x["M1_MOM20_ADJ"]=x.groupby("symbol")["M1_MONTH_RETURN_ADJ"].shift(1)
               x.to_csv(out/"monthly_indicator_panel.csv",index=False)
 
               meta=json.loads(cache_summary.read_text())
