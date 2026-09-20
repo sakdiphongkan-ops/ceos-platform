@@ -25,7 +25,7 @@ OUT_COLS = [
     "date","symbol","market","decision_ts","available_at","adj_close",
     "PE","PBV","EV_EBITDA","FCF_YIELD","EARNINGS_YIELD","DIV_YIELD",
     "ROE","ROA","ROIC","GPM","NPM","CFO_MARGIN","REV_G","EPS_G","NI_G","FCF_G",
-    "MOM_5","MOM_10","MOM_20","MOM_40","MOM_60","MOM_120","MOM_252","REL_MOM",
+    "MOM_5","MOM_10","MOM_20","MOM_40","MOM_60","MOM_80","MOM_120","MOM_252","REL_MOM",
     "VOL_10","VOL_20","BETA","MAXDD_60","ATR_PCT","ADV20","TURNOVER","AMOUNT",
     "ASSET_G","CAPEX_G","INVESTMENT_RATE","DIV_G","PAYOUT","BUYBACK","DE",
     "NET_DEBT_EBITDA","INTEREST_COVER","CURRENT_RATIO","RSI14",
@@ -103,7 +103,7 @@ def main() -> None:
 
     g = p.groupby("symbol", group_keys=False)
     ret = g[px].pct_change()
-    for n in [5,10,20,40,60,120,252]:
+    for n in [5,10,20,40,60,80,120,252]:
         p[f"MOM_{n}"] = g[px].pct_change(n)
     p["VOL_10"] = ret.groupby(p["symbol"]).rolling(10, min_periods=10).std().reset_index(level=0, drop=True)
     p["VOL_20"] = ret.groupby(p["symbol"]).rolling(20, min_periods=20).std().reset_index(level=0, drop=True)
