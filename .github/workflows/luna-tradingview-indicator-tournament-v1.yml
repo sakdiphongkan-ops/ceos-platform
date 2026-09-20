@@ -41,45 +41,45 @@ jobs:
           url = "https://wigzicwgcsrhdummrbjx.supabase.co/functions/v1/luna-research-export-v1"
           page_size = 1000
           workers = 4
-          rows = []
+          batch_count = 47
 
-          def fetch_page(offset):
+          def fetch_page(batch, offset):
               last = None
               for attempt in range(5):
                   try:
                       r = requests.get(
                           url,
-                          params={"scope": "luna5y", "offset": offset, "limit": page_size},
+                          params={"scope": "luna5y", "batch": batch, "offset": offset, "limit": page_size},
                           timeout=120,
                       )
                       if r.status_code >= 500:
-                          last = RuntimeError(f"server {r.status_code}")
+                          last = RuntimeError(f"server {r.status_code}: {r.text[:200]}")
                           continue
                       r.raise_for_status()
-                      return offset, r.json().get("data", [])
+                      return r.json().get("data", [])
                   except Exception as exc:
                       last = exc
               raise last
 
-          next_offset = 0
-          done = False
-          while not done:
-              offsets = list(range(next_offset, next_offset + workers * page_size, page_size))
-              pages = {}
-              with ThreadPoolExecutor(max_workers=workers) as ex:
-                  futs = [ex.submit(fetch_page, off) for off in offsets]
-                  for fut in as_completed(futs):
-                      off, page = fut.result()
-                      pages[off] = page
-
-              for off in sorted(pages):
-                  page = pages[off]
-                  rows.extend(page)
-                  print(f"exported={len(rows)} offset={off}", flush=True)
+          def fetch_batch(batch):
+              out = []
+              offset = 0
+              while True:
+                  page = fetch_page(batch, offset)
+                  out.extend(page)
+                  print(f"batch={batch} offset={offset} rows={len(page)}", flush=True)
                   if len(page) < page_size:
-                      done = True
                       break
-              next_offset += workers * page_size
+                  offset += page_size
+              return batch, out
+
+          rows = []
+          with ThreadPoolExecutor(max_workers=workers) as ex:
+              futs = [ex.submit(fetch_batch, b) for b in range(batch_count)]
+              for fut in as_completed(futs):
+                  batch, batch_rows = fut.result()
+                  rows.extend(batch_rows)
+                  print(f"completed_batch={batch} total_rows={len(rows)}", flush=True)
 
           out = Path("data/luna_daily/daily_prices.csv")
           out.parent.mkdir(parents=True, exist_ok=True)
@@ -91,7 +91,12 @@ jobs:
           df = df[(df["date"] >= "2021-09-01") & (df["date"] <= "2026-08-31")].copy()
           df = df.sort_values(["symbol","date"]).drop_duplicates(["symbol","date"])
           df.to_csv(out, index=False)
-          print({"rows": len(df), "symbols": df["symbol"].nunique(), "start": str(df["date"].min().date()), "end": str(df["date"].max().date())})
+          summary = {"rows": len(df), "symbols": df["symbol"].nunique(), "start": str(df["date"].min().date()), "end": str(df["date"].max().date())}
+          print(summary)
+          assert summary["symbols"] == 925, summary
+          assert summary["rows"] > 1000000, summary
+          assert summary["start"] == "2021-09-20", summary
+          assert summary["end"] == "2026-08-29" or summary["end"] == "2026-08-31", summary
           PY
 
       - name: Build TradingView-derived indicator panel
