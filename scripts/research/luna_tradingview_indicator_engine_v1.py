@@ -310,8 +310,8 @@ def compute_tv_ratings(df: pd.DataFrame) -> pd.DataFrame:
     bear = x["low"] - e50
     x["BULL_POWER"], x["BEAR_POWER"] = bull, bear
     osc.append(score_bool(
-        (p > e13) & (bear < 0) & (bear > bear.shift(1)),
-        (p < e13) & (bull > 0) & (bull < bull.shift(1)),
+        (p > e50) & (bear < 0) & (bear > bear.shift(1)),
+        (p < e50) & (bull > 0) & (bull < bull.shift(1)),
     ))
 
     uo = ultimate_oscillator(x)
