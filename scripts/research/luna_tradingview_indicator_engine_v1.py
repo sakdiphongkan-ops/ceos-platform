@@ -515,7 +515,7 @@ def main():
         "tv_translation_notes":[
             "TradingView public documented rules are implemented where published.",
             "Stoch RSI trend state uses a causal price-vs-EMA50 proxy.",
-            "Bull/Bear Power uptrend/downtrend uses price-vs-EMA13 proxy.",
+            "Bull/Bear Power uptrend/downtrend uses price-vs-EMA50, matching the Bull/Bear Power anchor used by the research translation.",
             "These two proxy definitions are recorded hypotheses, not claims of byte-identical proprietary implementation."
         ]
     }
