@@ -1,7 +1,7 @@
 {
   "status": "COMPLETED",
   "engine": "luna-tradingview-strategy-tournament-v1",
-  "panel_sha256": "34f63de0badd0fb7ff5edec4a718667d4875cecc5ae17782b6c2ae4f0c1bf897",
+  "panel_sha256": "ec47fa7b3877f47199df0354d612da1cfb480b2d1930cb9d2e176bf9568716fa",
   "candidate_count": 35,
   "gate_candidates": 25,
   "rerank_candidates": 10,
@@ -14,8 +14,8 @@
   "locked_m1_baseline_audit": {
     "available": true,
     "common_months": 59,
-    "max_abs_diff": 0.2691726134482985,
-    "mean_abs_diff": 0.05776455211252316,
+    "max_abs_diff": 0.017857147038591092,
+    "mean_abs_diff": 0.0004215645553741654,
     "within_1bp": false
   },
   "costs_bps": [
