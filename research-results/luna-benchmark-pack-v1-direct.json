@@ -1,0 +1,290 @@
+{
+  "status": "COMPLETED",
+  "engine": "luna-benchmark-pack-v1-direct-supabase",
+  "dataset": {
+    "rows": 51562,
+    "period": [
+      "2021-09-01",
+      "2026-08-01"
+    ]
+  },
+  "standardized_panel": {
+    "rebalance": "monthly",
+    "K": 20,
+    "cost_bps": [
+      0,
+      20,
+      50
+    ],
+    "forward_return_guard": "next calendar month only",
+    "universe": "dynamic available symbols in public.luna_research_monthly_price_factors",
+    "note": "M1 exact production series is retained separately because the monthly factor proxy does not exactly reproduce the legacy 21-trading-day construction."
+  },
+  "historical_leaders": [
+    {
+      "id": "M1_REV_K20",
+      "provenance": "Locked M1 family"
+    },
+    {
+      "id": "M2_REV_K20",
+      "provenance": "Previous M2 2-month reversal candidate"
+    },
+    {
+      "id": "S13_HIGHAMT_K20",
+      "provenance": "Historical S13_HIGHAMT_K5_H3 leader, standardized K20/1M"
+    },
+    {
+      "id": "S14_LOWAMT_K20",
+      "provenance": "Historical S14_LOWAMT_K5_H6 screen leader, standardized K20/1M"
+    },
+    {
+      "id": "S46_MOM6_HIGH52_LOWVOL_K20",
+      "provenance": "Historical S46_MOM6_HIGH52_LOWVOL_K10_H6 leader; reconstructed equal percentile-rank blend"
+    },
+    {
+      "id": "S48_MOM12_HIGH52_LOWVOL_K20",
+      "provenance": "Historical S48_MOM12_HIGH52_LOWVOL_K10_H6 leader; reconstructed equal percentile-rank blend"
+    },
+    {
+      "id": "HIGH52_K20",
+      "provenance": "Historical HIGH52 family, standardized K20/1M"
+    }
+  ],
+  "results": [
+    [
+      "M1_REV_K20",
+      0,
+      0.003215663923310963,
+      0.20854816947537613,
+      0.5423728813559322,
+      10,
+      -0.4114273861218243
+    ],
+    [
+      "M1_REV_K20",
+      20,
+      0.0014391261108452902,
+      0.08855094345448045,
+      0.4915254237288136,
+      10,
+      -0.4306092076790544
+    ],
+    [
+      "M1_REV_K20",
+      50,
+      -0.00122577292185444,
+      -0.06980865153572957,
+      0.4915254237288136,
+      10,
+      -0.45827910276929795
+    ],
+    [
+      "M2_REV_K20",
+      0,
+      0.006448519589832502,
+      0.4611754194419162,
+      0.5423728813559322,
+      17,
+      -0.36986036641987285
+    ],
+    [
+      "M2_REV_K20",
+      20,
+      0.005073717895891505,
+      0.34796022814153393,
+      0.5423728813559322,
+      17,
+      -0.3925630926964304
+    ],
+    [
+      "M2_REV_K20",
+      50,
+      0.003011333604731714,
+      0.19411068141025956,
+      0.5254237288135594,
+      17,
+      -0.4345553968434326
+    ],
+    [
+      "S13_HIGHAMT_K20",
+      0,
+      0.003165832513138067,
+      0.20501145990774927,
+      0.4915254237288136,
+      4,
+      -0.283120134092147
+    ],
+    [
+      "S13_HIGHAMT_K20",
+      20,
+      0.002702921778086953,
+      0.17263957150817077,
+      0.4915254237288136,
+      4,
+      -0.2977284122859637
+    ],
+    [
+      "S13_HIGHAMT_K20",
+      50,
+      0.0020084208460489084,
+      0.1256695264481762,
+      0.4915254237288136,
+      4,
+      -0.3190987420921483
+    ],
+    [
+      "S14_LOWAMT_K20",
+      0,
+      0.0020217788743166487,
+      0.12655525739479945,
+      0.4067796610169492,
+      3,
+      -0.3946696683167743
+    ],
+    [
+      "S14_LOWAMT_K20",
+      20,
+      0.0012769708364945842,
+      0.07820025005851794,
+      0.3898305084745763,
+      3,
+      -0.41036150868856924
+    ],
+    [
+      "S14_LOWAMT_K20",
+      50,
+      0.00015961758685900662,
+      0.00946116259638119,
+      0.3728813559322034,
+      3,
+      -0.43628865185556176
+    ],
+    [
+      "S46_MOM6_HIGH52_LOWVOL_K20",
+      0,
+      0.005880124276862464,
+      0.41327728833069455,
+      0.5084745762711864,
+      2,
+      -0.22194736761159561
+    ],
+    [
+      "S46_MOM6_HIGH52_LOWVOL_K20",
+      20,
+      0.004697472328069274,
+      0.31850951655126125,
+      0.5084745762711864,
+      2,
+      -0.24804539216406263
+    ],
+    [
+      "S46_MOM6_HIGH52_LOWVOL_K20",
+      50,
+      0.002923390519540714,
+      0.18794915080369745,
+      0.4745762711864407,
+      1,
+      -0.28693440705521966
+    ],
+    [
+      "S48_MOM12_HIGH52_LOWVOL_K20",
+      0,
+      0.007752652018458317,
+      0.5771864368429482,
+      0.5932203389830508,
+      3,
+      -0.15789171539196978
+    ],
+    [
+      "S48_MOM12_HIGH52_LOWVOL_K20",
+      20,
+      0.006710930546242944,
+      0.48382355155092016,
+      0.559322033898305,
+      2,
+      -0.1814287557859815
+    ],
+    [
+      "S48_MOM12_HIGH52_LOWVOL_K20",
+      50,
+      0.005148223583694156,
+      0.35386841933676916,
+      0.5254237288135594,
+      2,
+      -0.22507332292230442
+    ],
+    [
+      "HIGH52_K20",
+      0,
+      0.0023245828241549304,
+      0.1468180845946383,
+      0.4915254237288136,
+      3,
+      -0.27769283001678446
+    ],
+    [
+      "HIGH52_K20",
+      20,
+      0.0007833337614842062,
+      0.04728238040498711,
+      0.4745762711864407,
+      3,
+      -0.31712968051976353
+    ],
+    [
+      "HIGH52_K20",
+      50,
+      -0.0015286695221510271,
+      -0.08630687069122134,
+      0.4406779661016949,
+      2,
+      -0.3723905522960995
+    ]
+  ],
+  "result_columns": [
+    "candidate_id",
+    "cost_bps",
+    "geometric_monthly_return",
+    "cumulative_return",
+    "positive_month_pct",
+    "months_ge_7pct",
+    "max_drawdown_pct"
+  ],
+  "persisted_exact_m1": {
+    "strategy_version": "luna-m1s0k20rev-v1",
+    "months": 59,
+    "period": [
+      "2021-10-31",
+      "2026-08-31"
+    ],
+    "geometric_monthly_return": 0.006556127881564541,
+    "cumulative_return": 0.4704214597467422,
+    "positive_month_pct": 0.5423728813559322,
+    "min_monthly_return": -0.18410469861537182,
+    "max_monthly_return": 0.27299531804639127,
+    "average_turnover": 0.9127118644067796,
+    "total_transaction_cost": 0.1077,
+    "max_drawdown": -0.4735760363437528
+  },
+  "historical_native_screen_results": {
+    "S14_LOWAMT_K5_H6": {
+      "oos_avg_net_pct": 8.949
+    },
+    "S13_HIGHAMT_K5_H3": {
+      "oos_avg_net_pct": 8.089
+    },
+    "S46_MOM6_HIGH52_LOWVOL_K10_H6": {
+      "oos_avg_net_pct": 15.525
+    },
+    "S48_MOM12_HIGH52_LOWVOL_K10_H6": {
+      "oos_avg_net_pct": 15.56
+    }
+  },
+  "hurdle": {
+    "target_geometric_monthly_return": 0.07,
+    "equivalent_annual_cagr": 1.2521915889608248,
+    "candidates_reaching_target_at_20bps": 0,
+    "note": "The equivalent annual CAGR of a 7% geometric monthly return is (1.07^12)-1, approximately 125.2%."
+  },
+  "methodology_warning": "Historical leaders were reconstructed from documented descriptions where exact coefficient tables were unavailable; standardized results must not be treated as exact reproductions of their native historical configurations."
+}
