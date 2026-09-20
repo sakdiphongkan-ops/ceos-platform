@@ -105,18 +105,20 @@ def main():
     m1=next(f for f in formulas if f["id"]=="M1_REV_K20")
     m1tr=evaluate(df,m1,train_months,args.k,args.cost_bps).net_return.dropna()
     m1ho=evaluate(df,m1,holdout_months,args.k,args.cost_bps).net_return.dropna()
-    winner=result.iloc[0].to_dict() if len(result) else None
+    highest_holdout_diagnostic=result.iloc[0].to_dict() if len(result) else None
+    rank1_holdout=next((x for x in rows if x["training_rank"]==1), None)
     summary={
         "status":"COMPLETED","engine":"luna-holdout-audit-v1",
         "total_months":len(months),"training_months":len(train_months),
         "holdout_months":len(holdout_months),
         "training_end":str(train_months[-1]),"holdout_start":str(holdout_months[0]),
         "top_n_frozen":args.top_n,"k":args.k,"cost_bps":args.cost_bps,
-        "winner_by_holdout_return":winner,
+        "rank1_frozen_candidate_holdout":rank1_holdout,
+        "highest_holdout_among_frozen_candidates_diagnostic":highest_holdout_diagnostic,
         "m1_training_geometric_monthly":geo(m1tr),
         "m1_holdout_geometric_monthly":geo(m1ho),
         "m1_holdout_cumulative":float(np.prod(1+m1ho)-1) if len(m1ho) else -1,
-        "selection_guard":"formula ranking uses training months only; holdout returns never influence selection"
+        "selection_guard":"formula ranking uses training months only; holdout returns never influence selection; highest_holdout field is diagnostic only and is not a selected strategy"
     }
     (out/"summary.json").write_text(json.dumps(summary,indent=2,default=str),encoding="utf-8")
     print(json.dumps(summary,indent=2,default=str))
