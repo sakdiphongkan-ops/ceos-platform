@@ -1,0 +1,38 @@
+{
+  "status": "COMPLETED",
+  "engine": "luna-reversal-liquidity-finegrid-v2",
+  "candidate_count": 84,
+  "train_months": 48,
+  "holdout_months": 12,
+  "selection_rule": "min(25th-percentile rolling-12M geometric return at 20/60bps), training only",
+  "top": {
+    "id": "RL006",
+    "weights": {
+      "low_mom1": 0.35,
+      "low_mom3": 0.07,
+      "low_mom6": 0.28,
+      "low_amount20": 0.3
+    },
+    "train_geo_monthly": 0.012337629648115245,
+    "train_q25_20bps": 0.0033864762491702116,
+    "train_q25_60bps": 0.0002990086720568996,
+    "holdout_geo_20bps": 0.05455653371012881,
+    "holdout_geo_60bps": 0.05140183077969507,
+    "holdout_cumulative_20bps": 0.8916396191648808,
+    "holdout_positive_month_pct": 0.8333333333333334,
+    "holdout_months_ge_7pct": 5,
+    "holdout_max_drawdown_20bps": -0.02098282636155535
+  },
+  "next": {
+    "id": "RL029",
+    "weights": {
+      "low_mom1": 0.48,
+      "low_mom3": 0.08,
+      "low_mom6": 0.24,
+      "low_amount20": 0.2
+    },
+    "holdout_geo_20bps": 0.050419952631587606,
+    "holdout_geo_60bps": 0.04719379725279893
+  },
+  "ge7_holdout_count": 0
+}
