@@ -109,9 +109,50 @@ jobs:
       - name: Build TradingView-derived indicator panel
         run: |
           rm -rf research/luna_tradingview_indicator_engine_v1
-          python scripts/research/luna_tradingview_indicator_engine_v1.py \
-            --input data/luna_daily/daily_prices.csv \
-            --output research/luna_tradingview_indicator_engine_v1
+          mkdir -p research/luna_tradingview_indicator_engine_v1
+          python - <<'PY'
+          import hashlib, json, shutil
+          from pathlib import Path
+          import pandas as pd
+
+          daily=Path("data/luna_daily/daily_prices.csv")
+          cache_panel=Path("research-results/luna-tradingview-v1/monthly-indicator-panel.csv")
+          cache_summary=Path("research-results/luna-tradingview-v1/indicator-engine-summary.json")
+          out=Path("research/luna_tradingview_indicator_engine_v1")
+          data_sha=hashlib.sha256(daily.read_bytes()).hexdigest()
+
+          use_cache=False
+          if cache_panel.exists() and cache_summary.exists():
+              try:
+                  meta=json.loads(cache_summary.read_text())
+                  use_cache=(meta.get("data_sha256")==data_sha)
+              except Exception:
+                  use_cache=False
+
+          if use_cache:
+              print("reusing_cached_monthly_indicator_panel=true")
+              x=pd.read_csv(cache_panel,parse_dates=["month_end"])
+              x=x.sort_values(["symbol","month_end"]).copy()
+              x["M1_MONTH_RETURN_ADJ"]=x.groupby("symbol")["adj_close"].pct_change()
+              x["M1_MOM20_ADJ"]=x["M1_MONTH_RETURN_ADJ"]
+              x.to_csv(out/"monthly_indicator_panel.csv",index=False)
+              meta=json.loads(cache_summary.read_text())
+              meta["status"]="COMPLETED"
+              meta["monthly_m1_definition"]="completed calendar-month adjusted-close return at month-end; aligned to locked production M1"
+              meta["data_sha256"]=data_sha
+              meta["monthly_rows"]=int(len(x))
+              meta["symbols"]=int(x["symbol"].nunique())
+              (out/"summary.json").write_text(json.dumps(meta,indent=2),encoding="utf-8")
+          else:
+              print("reusing_cached_monthly_indicator_panel=false")
+              import subprocess, sys
+              subprocess.check_call([
+                  sys.executable,
+                  "scripts/research/luna_tradingview_indicator_engine_v1.py",
+                  "--input",str(daily),
+                  "--output",str(out)
+              ])
+          PY
 
       - name: Run M1 x TradingView strategy tournament
         run: |
