@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -198,20 +199,22 @@ def rank_feature(g: pd.DataFrame, col: str, ascending: bool=True) -> pd.Series:
 
 
 def score_rerank(g: pd.DataFrame, rule: str) -> pd.Series:
-    # rank(X) = high X is better; rank(-X) = low X is better.
-    parts=[p.strip() for p in rule.split("+")]
+    # Parse rank terms without splitting on the '-' inside rank(-FEATURE)
+    # or in subtraction expressions such as rank(A)-rank(B).
+    terms=re.findall(r"([+-]?)\\s*rank\\(([^)]+)\\)",rule)
+    if not terms:
+        raise ValueError(f"invalid rerank rule: {rule}")
     score=pd.Series(0.0,index=g.index)
-    for p in parts:
-        if not p.startswith("rank("):
-            continue
-        inside=p[5:-1].strip()
+    for outer,inside in terms:
+        inside=inside.strip()
+        sign=-1.0 if outer=="-" else 1.0
         if inside.startswith("-"):
-            col=inside[1:]
+            col=inside[1:].strip()
             asc=True
         else:
             col=inside
             asc=False
-        score=score+rank_feature(g,col,ascending=asc)
+        score=score+sign*rank_feature(g,col,ascending=asc)
     return score
 
 
