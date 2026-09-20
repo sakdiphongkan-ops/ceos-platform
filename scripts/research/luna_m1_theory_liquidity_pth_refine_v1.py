@@ -85,7 +85,7 @@ def make_candidates(k: int) -> list[Candidate]:
                         interaction,
                         "CONTRARIAN",
                         0.0,
-                        transform == "PTH_CONVEX",
+                        False,
                         transform,
                         k
                     ))
