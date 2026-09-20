@@ -43,13 +43,16 @@ def main():
         if c not in m.columns: m[c]=np.nan
         m[c]=pd.to_numeric(m[c],errors="coerce")
     out=m[outcols].rename(columns={"date":"snapshot_date"})
-    out=out.dropna(subset=FACTORS).sort_values(["month_end","symbol"]).reset_index(drop=True)
+    # Do not blanket-drop sparse factors. Availability is tracked factor-by-factor
+    # and the tournament excludes unavailable factors from the formula catalog.
+    out=out.dropna(subset=["adj_close"]).sort_values(["month_end","symbol"]).reset_index(drop=True)
     p=Path(a.output); p.parent.mkdir(parents=True,exist_ok=True); out.to_csv(p,index=False)
     manifest={
       "engine":"monthly-snapshot-builder-v1",
       "input_sha256":hashlib.sha256(Path(a.input).read_bytes()).hexdigest(),
       "output_sha256":hashlib.sha256(p.read_bytes()).hexdigest(),
       "rows":int(len(out)),"symbols":int(out.symbol.nunique()),
+      "factor_coverage":{f:float(out[f].notna().mean()) for f in FACTORS},
       "months":int(out.month_end.nunique()),
       "min_month":str(out.month_end.min()) if len(out) else None,
       "max_month":str(out.month_end.max()) if len(out) else None,
