@@ -73,7 +73,7 @@ def main():
     month_idx={m:i for i,m in enumerate(months)}
     # Deterministic 1,000 formulas: 1 benchmark + 999 seeded rank blends.
     rng=np.random.default_rng(args.seed)
-    formulas=[{"id":"M1_REV_K20","terms":[("mom1",-1.0)]}]
+    formulas=[{"id":"M1_REV_K20_ALIAS","terms":[("mom1",-1.0)]}]
     for i in range(1,args.formula_count):
         n=int(rng.integers(2,min(5,len(active_factors)+1)))
         inds=rng.choice(len(active_factors),size=n,replace=False)
@@ -151,7 +151,7 @@ def main():
             "trough_baht":float(eq[k])
         }
 
-    benchmark_stats=perf_stats(candidates["M1_REV_K20"].net_return)
+    benchmark_stats=perf_stats(candidates["M1_REV_K20_ALIAS"].net_return)
     adaptive_stats=perf_stats(r)
 
     summary={
@@ -171,13 +171,14 @@ def main():
       "max_drawdown_baht":adaptive_stats["max_drawdown_baht"],
       "peak_baht":adaptive_stats["peak_baht"],
       "trough_baht":adaptive_stats["trough_baht"],
-      "benchmark_m1":benchmark_stats,
+      "benchmark_m1_alias":benchmark_stats,
       "average_turnover":float(ledger.turnover.mean()) if len(ledger) else 0,
       "total_transaction_cost":float(ledger.transaction_cost.sum()) if len(ledger) else 0,
       "lookback_months":args.lookback_months,"min_history_months":args.min_history_months,
       "cost_bps_per_one_way_turnover":args.cost_bps,
-      "benchmark_included":"M1_REV_K20",
+      "benchmark_included":"M1_REV_K20_ALIAS",
       "data_contiguity_guard":"forward return is used only when the next observation is exactly the next calendar month",
+      "benchmark_warning":"M1_REV_K20_ALIAS is a factor-table proxy and is NOT the exact production M1 benchmark; use research-results/luna-m1-benchmark-locked-20260920.csv for Apple-to-Apple comparisons",
       "initial_capital_baht":30000,
       "leakage_guard":"month t selection uses only strictly prior months; t return is never in selection history"
     }
