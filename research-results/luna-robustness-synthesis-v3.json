@@ -1,0 +1,59 @@
+{
+  "status": "COMPLETED",
+  "engine": "luna-robustness-synthesis-v3",
+  "as_of": "2026-09-20",
+  "current_supabase_direct_1000": {
+    "source": "public.luna_research_monthly_price_factors",
+    "formulas": 1000,
+    "months_available": 59,
+    "adaptive_months": 47,
+    "adaptive_geometric_monthly_return": -0.004069283957711238,
+    "adaptive_cumulative_return": -0.17440136955520258,
+    "adaptive_positive_month_pct": 0.40425531914893614,
+    "adaptive_max_drawdown_pct": -0.4406577339981188,
+    "frozen_holdout_months": 12,
+    "frozen_top25_best_holdout_geometric_monthly_return": 0.03239920174277655,
+    "frozen_top25_best_holdout_cumulative_return": 0.46612811115032593,
+    "frozen_top25_best_holdout_months_ge_7pct": 4,
+    "note": "Fresh computation through connected Supabase; no GitHub Actions secret required."
+  },
+  "public_5y_structured_2000": {
+    "source": "Mendeley SET historical dataset",
+    "formulas": 2000,
+    "months": 59,
+    "train_months": 35,
+    "validation_months": 12,
+    "holdout_months": 12,
+    "holdout_candidates_ge_7pct": 0,
+    "best_holdout_geometric_monthly_return": -0.007490090091462953,
+    "best_holdout_cumulative_return": -0.08626929106506631,
+    "m1_holdout_geometric_monthly_return": -0.03610504620367316,
+    "note": "Discovery dataset ends 2025-03; not Apple-to-Apple with current 2026 Supabase production data."
+  },
+  "independent_seed_replication": {
+    "seeds": 5,
+    "mean_geometric_monthly_return": -0.00020957178601619387,
+    "min": -0.006724529442710403,
+    "max": 0.003775011228677405,
+    "seeds_ge_7pct_hurdle": 0
+  },
+  "persisted_130_variant_screen": {
+    "candidates": 130,
+    "positive_across_test_recent_oos_at_20_40_60bps": 8,
+    "reached_7pct_monthly_test_at_20bps": 0,
+    "reached_7pct_monthly_recent_oos_at_20bps": 0
+  },
+  "exact_production_m1": {
+    "full_period_geometric_monthly_return": 0.006556127881564541,
+    "full_period_cumulative_return": 0.4704214597467422,
+    "comparable_final_12m": {
+      "start": "2025-08-31",
+      "end": "2026-07-31",
+      "geometric_monthly_return": 0.0322194752622972,
+      "cumulative_return": 0.463068249482506,
+      "positive_month_pct": 0.75
+    }
+  },
+  "conclusion_guard": "Across the completed current-Supabase 1,000-formula adaptive search, 5Y structured 2,000-formula public search, five fresh-seed replications, and the persisted 130-variant robustness screen, the 7% geometric-monthly hurdle has not been demonstrated robustly out-of-sample. No strategy is promoted.",
+  "next_research_gate": "Move to smaller, structured interaction searches on the current Supabase panel, regime-conditional selection, and multi-seed frozen holdout replication rather than increasing random-formula count alone."
+}
