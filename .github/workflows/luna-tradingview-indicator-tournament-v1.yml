@@ -31,16 +31,43 @@ jobs:
           pip install pandas numpy pyarrow requests
 
       - name: Export daily SET prices
-        env:
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          test -n "$SUPABASE_SERVICE_ROLE_KEY"
-          mkdir -p data/luna_daily
-          python scripts/research/export_supabase_daily_prices.py \
-            --output data/luna_daily/daily_prices.csv \
-            --start 2021-09-01 \
-            --end 2026-08-31 \
-            --page-size 5000
+          python - <<'PY'
+          import requests
+          from pathlib import Path
+          import pandas as pd
+
+          url = "https://wigzicwgcsrhdummrbjx.supabase.co/functions/v1/luna-research-export-v1"
+          page_size = 5000
+          rows = []
+          offset = 0
+
+          while True:
+              r = requests.get(
+                  url,
+                  params={"scope": "luna5y", "offset": offset, "limit": page_size},
+                  timeout=120,
+              )
+              r.raise_for_status()
+              page = r.json().get("data", [])
+              rows.extend(page)
+              print(f"exported={len(rows)} offset={offset}", flush=True)
+              if len(page) < page_size:
+                  break
+              offset += page_size
+
+          out = Path("data/luna_daily/daily_prices.csv")
+          out.parent.mkdir(parents=True, exist_ok=True)
+          df = pd.DataFrame(rows, columns=["date","symbol","market","open","high","low","close","adj_close","volume","amount","available_at"])
+          df["date"] = pd.to_datetime(df["date"])
+          for c in ["open","high","low","close","adj_close","volume","amount"]:
+              df[c] = pd.to_numeric(df[c], errors="coerce")
+          df["available_at"] = pd.to_datetime(df["available_at"], utc=True, errors="coerce")
+          df = df[(df["date"] >= "2021-09-01") & (df["date"] <= "2026-08-31")].copy()
+          df = df.sort_values(["symbol","date"]).drop_duplicates(["symbol","date"])
+          df.to_csv(out, index=False)
+          print({"rows": len(df), "symbols": df["symbol"].nunique(), "start": str(df["date"].min().date()), "end": str(df["date"].max().date())})
+          PY
 
       - name: Build TradingView-derived indicator panel
         run: |
