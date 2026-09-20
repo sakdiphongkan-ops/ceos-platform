@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 
 FEATURES = [
-    "MOM_5","MOM_10","MOM_20","MOM_40","MOM_60","MOM_120","MOM_252",
+    "MOM_5","MOM_10","MOM_20","MOM_40","MOM_60","MOM_80","MOM_120","MOM_252",
     "REL_MOM","VOL_10","VOL_20","BETA","MAXDD_60","ATR_PCT","ADV20",
     "AMOUNT","ILLIQ_20","RSI14","DIST_MA20","DIST_MA60","DIST_HIGH_252",
     "BREAKOUT20","BREAKOUT55","SKEW_20","SKEW_60","PE","PBV","EV_EBITDA",
@@ -66,8 +66,8 @@ def stat(arr):
     x=np.asarray(arr,dtype=float)
     x=x[np.isfinite(x)]
     if len(x)==0:
-        return {"months":0,"geo_monthly":-1.0,"cumulative":-1.0,
-                "positive_month_pct":0.0,"max_drawdown":1.0,
+        return {"months":0,"geo_period":-1.0,"geo_monthly":-1.0,"cumulative":-1.0,
+                "positive_period_pct":0.0,"positive_month_pct":0.0,"max_drawdown":1.0,
                 "worst_month":None,"best_month":None}
     eq=np.cumprod(1+x)
     peak=np.maximum.accumulate(eq)
@@ -139,9 +139,10 @@ def monthly_panel(csv, features):
 def seeds(avail):
     specs=[
         ("M1_REV1", [("MOM_20",-1)],"legacy M1-style reversal"),
-        ("M2_REV2", [("MOM_40",-1)],"2M reversal"),
-        ("REV3", [("MOM_60",-1)],"3M reversal"),
-        ("REV6", [("MOM_120",-1)],"6M reversal"),
+        ("M2_REV2", [("MOM_40",-1)],"legacy L2 reversal"),
+        ("REV3", [("MOM_60",-1)],"legacy L3 reversal"),
+        ("REV4", [("MOM_80",-1)],"legacy L4 reversal"),
+        ("REV6", [("MOM_120",-1)],"legacy L6 reversal"),
         ("MOM6", [("MOM_120",1)],"6M momentum"),
         ("MOM12",[("MOM_252",1)],"12M momentum"),
         ("HIGH52",[("DIST_HIGH_252",-1)],"near 52W high"),
@@ -149,6 +150,11 @@ def seeds(avail):
         ("HIGHAMT",[("AMOUNT",1)],"high liquidity"),
         ("LOWILLIQ",[("ILLIQ_20",-1)],"low illiquidity"),
         ("REV1_LOWVOL",[("MOM_20",-0.65),("VOL_20",-0.35)],"reversal + low volatility"),
+        ("QMJ_PROXY",[("MOM_120",0.20),("DIST_HIGH_252",0.20),("VOL_20",-0.25),("MAXDD_60",0.20),("AMOUNT",0.15)],"AQR QMJ-inspired observable price/risk proxy; true profitability/growth/payout inputs are queued separately"),
+        ("BAB_PROXY",[("BETA",-0.60),("VOL_20",-0.20),("MAXDD_60",0.20)],"AQR BAB-inspired low-beta/low-risk family; only activates when PIT benchmark beta exists"),
+        ("VME_PROXY",[("MOM_120",0.35),("MOM_60",0.20),("MOM_20",-0.25),("VOL_20",-0.20)],"value-momentum diversification proxy; true value inputs require PIT fundamentals"),
+        ("TREND_BREAKOUT",[("MOM_60",0.30),("MOM_120",0.20),("DIST_HIGH_252",0.25),("BREAKOUT55",0.15),("VOL_20",-0.10)],"trend/52W-high/breakout family"),
+        ("REV_MULTI_HORIZON",[("MOM_20",-0.25),("MOM_40",-0.20),("MOM_60",-0.20),("MOM_80",-0.15),("MOM_120",-0.10),("VOL_20",-0.10)],"multi-horizon reversal fusion"),
         ("REV1_HIGH52",[("MOM_20",-0.65),("DIST_HIGH_252",-0.35)],"reversal + 52W high"),
         ("REV1_HIGHVOL",[("MOM_20",-0.65),("VOL_20",0.35)],"reversal + high volatility"),
         ("MOM6_HIGH52_LOWVOL",[("MOM_120",0.45),("DIST_HIGH_252",-0.25),("VOL_20",-0.30)],"legacy S46-like"),
@@ -448,7 +454,9 @@ def main():
         "target_hurdle_monthly":0.07,
         "research_queue":missing,
         "notes":[
-            "Legacy LUNA seeds are co-evolved with newly generated factor blends.",
+            "Persisted legacy variant family is represented by L1/L2/L3/L4/L6 reversal seeds; K=5/10/20/50 is stress-tested separately.",
+        "Theory-derived seeds include observable proxies for QMJ, BAB, Value+Momentum, trend/breakout and multi-horizon reversal; proprietary formulas are not inferred.",
+        "True QMJ/value/profitability/PEAD/Piotroski/BAB inputs are only activated when point-in-time fundamentals/benchmark beta are available.",
             "OOS/HOLDOUT are never used to generate mutations or select finalists.",
             "Cost stress uses 0/20/45/60 bps per one-way turnover model.",
             "Anchor sensitivity is tested for 2M and 3M holding horizons.",
