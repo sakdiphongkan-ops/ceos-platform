@@ -311,6 +311,7 @@ def compute_tv_ratings(df: pd.DataFrame) -> pd.DataFrame:
 
 def add_research_indicators(df: pd.DataFrame) -> pd.DataFrame:
     x = compute_tv_ratings(df)
+    x["M1_MOM20_ADJ"] = x["adj_close"].pct_change(20)
 
     for n in [2, 7, 9, 14, 21]:
         x[f"RSI{n}"] = rsi(x["close"], n)
