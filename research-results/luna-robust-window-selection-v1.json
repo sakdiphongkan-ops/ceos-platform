@@ -1,0 +1,24 @@
+{
+  "status": "COMPLETED",
+  "engine": "luna-robust-window-selection-v1",
+  "dataset": "public.luna_research_monthly_price_factors",
+  "formula_count": 771,
+  "train_months": 48,
+  "holdout_months": 12,
+  "selection_rule": "Rank by 25th-percentile rolling-12M geometric return, with simultaneous 20/60bps robustness, training only.",
+  "rank1_frozen": {
+    "id": "G0219",
+    "formula": "80% LOW mom3 + 20% LOW avg_amount20",
+    "train_geo": 0.012498933327861339,
+    "train_q25_20bps": 0.003086306540938999,
+    "train_q25_60bps": 0.0005302415680004113,
+    "train_positive_rolling_window_fraction_20bps": 0.8378378378378378,
+    "train_positive_rolling_window_fraction_60bps": 0.7567567567567568,
+    "holdout_geo_20bps": 0.03685245860362496,
+    "holdout_geo_60bps": 0.03442247298754264,
+    "holdout_cumulative_20bps": 0.5438444532207962,
+    "holdout_max_drawdown_20bps": -0.05310214448318895
+  },
+  "robust_7pct_holdout_count": 0,
+  "conclusion": "Choosing for stability instead of headline training return did not produce a 7% holdout strategy; G0219 remained positive but below the hurdle."
+}
