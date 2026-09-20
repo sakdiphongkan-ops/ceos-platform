@@ -1,0 +1,83 @@
+{
+  "status": "COMPLETED",
+  "engine": "luna-structured-supabase-771-v1",
+  "dataset": {
+    "table": "public.luna_research_monthly_price_factors",
+    "rows": 52485,
+    "symbols": 925,
+    "months": 61,
+    "usable_return_months": 60,
+    "period": [
+      "2021-09-01",
+      "2026-08-01"
+    ]
+  },
+  "factors_used": [
+    "mom1",
+    "mom3",
+    "mom6",
+    "mom12",
+    "high52_ratio",
+    "vol20",
+    "avg_amount20"
+  ],
+  "excluded_factor": {
+    "factor": "maxdd60",
+    "reason": "100% null in canonical Supabase table"
+  },
+  "formulas": 771,
+  "split": {
+    "train_months": 48,
+    "holdout_months": 12
+  },
+  "cost_bps": [
+    20,
+    60
+  ],
+  "adaptive": {
+    "geo_monthly": 0.001145230553984522,
+    "cumulative": 0.056476815633015764,
+    "positive_month_pct": 0.5,
+    "max_drawdown_pct": -0.3841074948168631
+  },
+  "m1_proxy": {
+    "full_geo_monthly": 0.004202648363708095,
+    "full_cumulative": 0.28612074603506343,
+    "holdout_geo_monthly": 0.01816635873740302,
+    "holdout_cumulative": 0.2411518553591121
+  },
+  "candidates": [
+    {
+      "id": "G0118",
+      "formula": "65% LOW mom1 + 35% LOW avg_amount20",
+      "holdout_geo_20bps": 0.055374872648907836,
+      "holdout_geo_60bps": 0.051999143479822374,
+      "holdout_cumulative_20bps": 0.9093300093233619,
+      "holdout_positive_month_pct": 0.9166666666666666,
+      "holdout_months_ge_7pct": 6,
+      "max_drawdown_20bps": -0.019182686276744798
+    },
+    {
+      "id": "G0119",
+      "formula": "80% LOW mom1 + 20% LOW avg_amount20",
+      "holdout_geo_20bps": 0.049020035159918374,
+      "holdout_geo_60bps": 0.04549827085907787,
+      "holdout_cumulative_20bps": 0.7758463786397511,
+      "holdout_positive_month_pct": 0.8333333333333334,
+      "holdout_months_ge_7pct": 3,
+      "max_drawdown_20bps": -0.004263573712793178
+    },
+    {
+      "id": "G0219",
+      "formula": "80% LOW mom3 + 20% LOW avg_amount20",
+      "holdout_geo_20bps": 0.03685245860362496,
+      "holdout_geo_60bps": 0.03442247298754264,
+      "holdout_cumulative_20bps": 0.5438444532207962,
+      "holdout_positive_month_pct": 0.6666666666666666,
+      "max_drawdown_20bps": -0.05310214448318895
+    }
+  ],
+  "robust_7pct_holdout_count": 0,
+  "cost_stable_positive_count": 15,
+  "conclusion": "The current Supabase structured search found materially stronger recent holdout candidates than the random adaptive search, but none reached the 7% geometric-monthly hurdle on the frozen 12-month holdout."
+}
