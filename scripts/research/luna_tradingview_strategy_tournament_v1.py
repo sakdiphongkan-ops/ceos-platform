@@ -238,7 +238,13 @@ def select_month(g: pd.DataFrame, c: Candidate) -> pd.DataFrame:
 def evaluate(df: pd.DataFrame,c: Candidate,bps: float) -> pd.DataFrame:
     rows=[]
     prev={}
-    for month,g in df.groupby("month_end",sort=True):
+    # Evaluate only formation months for which a subsequent monthly return exists.
+    # Keep all symbols in those formation months so selection itself stays causal.
+    valid_months=(
+        df.groupby("month_end")["fwd_month"]
+          .apply(lambda s: bool(s.notna().any()))
+    )
+    for month,g in df[df["month_end"].map(valid_months).fillna(False)].groupby("month_end",sort=True):
         pick=select_month(g,c)
         if c.kind=="RERANK":
             entered=pick.copy()
