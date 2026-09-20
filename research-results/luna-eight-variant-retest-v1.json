@@ -1,0 +1,310 @@
+{
+  "status": "COMPLETED",
+  "engine": "luna-eight-variant-exact-retest-v1",
+  "dataset": "public.luna_research_monthly_price_factors",
+  "period_note": "Returns are available only through the last month with an exact next-calendar-month observation; the last 12 available portfolio months are used as the frozen holdout.",
+  "rules": {
+    "signal": "Exact frozen legacy variant definitions from luna_formula_tournament_v2: lookback L, skip S, REV selects lowest signal values.",
+    "portfolio": "Equal-weight K names; monthly rebalance.",
+    "forward_return": "next calendar month only; missing next month => no return.",
+    "transaction_cost": "turnover * bps / 10000; first portfolio turnover = 1.",
+    "costs_tested_bps": [
+      20,
+      45,
+      60
+    ],
+    "hurdle_geometric_monthly": 0.07,
+    "hurdle_annualized_equivalent": 1.2521915889608248,
+    "holdout": "last 12 available portfolio-return observations, frozen and not used for selection"
+  },
+  "variants": [
+    {
+      "code": "L1_S0_REV_K20",
+      "definition": "1M reversal, no skip, bottom 20",
+      "full20": {
+        "months": 58,
+        "geo": 0.006182013,
+        "cum": 0.4296833706,
+        "cagr": 0.0767592044,
+        "pos": 0.5344827586,
+        "ge7": 11,
+        "maxdd": -0.4461632525,
+        "turn": 0.9215517241,
+        "tcost": 0.1069
+      },
+      "holdout20": {
+        "months": 12,
+        "start": "2025-08-01",
+        "end": "2026-07-01",
+        "geo": 0.0362363146,
+        "cum": 0.532871308,
+        "cagr": 0.532871308,
+        "pos": 0.75,
+        "ge7": 3,
+        "maxdd": -0.0289035574,
+        "turn": 0.9125,
+        "tcost": 0.0219
+      },
+      "holdout45": {
+        "geo": 0.033952327,
+        "cum": 0.4928156511
+      },
+      "holdout60": {
+        "geo": 0.0325819164,
+        "cum": 0.4692448589
+      }
+    },
+    {
+      "code": "L2_S0_REV_K20",
+      "definition": "2M reversal, no skip, bottom 20",
+      "full20": {
+        "months": 57,
+        "geo": 0.0054603689,
+        "cum": 0.3639629055,
+        "cagr": 0.0675285194,
+        "pos": 0.5614035088,
+        "ge7": 17,
+        "maxdd": -0.3925630927,
+        "turn": 0.6684210526,
+        "tcost": 0.0762
+      },
+      "holdout20": {
+        "months": 12,
+        "start": "2025-08-01",
+        "end": "2026-07-01",
+        "geo": 0.0268117155,
+        "cum": 0.3736933052,
+        "cagr": 0.3736933052,
+        "pos": 0.8333333333,
+        "ge7": 4,
+        "maxdd": -0.1519460529,
+        "turn": 0.6333333333,
+        "tcost": 0.0152
+      },
+      "holdout45": {
+        "geo": 0.0252195265,
+        "cum": 0.3483493526
+      },
+      "holdout60": {
+        "geo": 0.0242641661,
+        "cum": 0.3333487255
+      }
+    },
+    {
+      "code": "L4_S0_REV_K20",
+      "definition": "4M reversal, no skip, bottom 20",
+      "full20": {
+        "months": 55,
+        "geo": 0.003125758,
+        "cum": 0.1872605161,
+        "cagr": 0.0381607067,
+        "pos": 0.5272727273,
+        "ge7": 12,
+        "maxdd": -0.4362006314,
+        "turn": 0.5072727273,
+        "tcost": 0.0558
+      },
+      "holdout20": {
+        "months": 12,
+        "start": "2025-08-01",
+        "end": "2026-07-01",
+        "geo": 0.0188498824,
+        "cum": 0.2511874976,
+        "cagr": 0.2511874976,
+        "pos": 0.5833333333,
+        "ge7": 2,
+        "maxdd": -0.0844972026,
+        "turn": 0.4916666667,
+        "tcost": 0.0118
+      },
+      "holdout45": {
+        "geo": 0.0176163908,
+        "cum": 0.2331307363
+      },
+      "holdout60": {
+        "geo": 0.0168762595,
+        "cum": 0.222411138
+      }
+    },
+    {
+      "code": "L3_S0_REV_K10",
+      "definition": "3M reversal, no skip, bottom 10",
+      "full20": {
+        "months": 56,
+        "geo": -0.0001470519,
+        "cum": -0.0082016958,
+        "cagr": -0.0017631969,
+        "pos": 0.5,
+        "ge7": 15,
+        "maxdd": -0.4794167538,
+        "turn": 0.5767857143,
+        "tcost": 0.0646
+      },
+      "holdout20": {
+        "months": 12,
+        "start": "2025-08-01",
+        "end": "2026-07-01",
+        "geo": -0.0014674533,
+        "cum": -0.0174680063,
+        "cagr": -0.0174680063,
+        "pos": 0.5833333333,
+        "ge7": 3,
+        "maxdd": -0.2479129355,
+        "turn": 0.5333333333,
+        "tcost": 0.0128
+      },
+      "holdout45": {
+        "geo": -0.0028246193,
+        "cum": -0.0333737786
+      },
+      "holdout60": {
+        "geo": -0.003639027,
+        "cum": -0.0428048333
+      }
+    },
+    {
+      "code": "L3_S0_REV_K50",
+      "definition": "3M reversal, no skip, bottom 50",
+      "full20": {
+        "months": 56,
+        "geo": 0.0019256943,
+        "cum": 0.1137527653,
+        "cagr": 0.0233546574,
+        "pos": 0.5178571429,
+        "ge7": 9,
+        "maxdd": -0.363470606,
+        "turn": 0.5346428571,
+        "tcost": 0.05988
+      },
+      "holdout20": {
+        "months": 12,
+        "start": "2025-08-01",
+        "end": "2026-07-01",
+        "geo": 0.0141690082,
+        "cum": 0.1839245289,
+        "cagr": 0.1839245289,
+        "pos": 0.75,
+        "ge7": 1,
+        "maxdd": -0.1450901116,
+        "turn": 0.53,
+        "tcost": 0.01272
+      },
+      "holdout45": {
+        "geo": 0.012842008,
+        "cum": 0.1654683037
+      },
+      "holdout60": {
+        "geo": 0.0120457917,
+        "cum": 0.1545213276
+      }
+    },
+    {
+      "code": "L2_S1_REV_K5",
+      "definition": "2M lookback, 1M skip, bottom 5",
+      "full20": {
+        "months": 57,
+        "geo": -0.0131134783,
+        "cum": -0.5287716527,
+        "cagr": -0.1464939337,
+        "pos": 0.4210526316,
+        "ge7": 13,
+        "maxdd": -0.730598671,
+        "turn": 0.9473684211,
+        "tcost": 0.108
+      },
+      "holdout20": {
+        "months": 12,
+        "start": "2025-08-01",
+        "end": "2026-07-01",
+        "geo": -0.0228779017,
+        "cum": -0.242494094,
+        "cagr": -0.242494094,
+        "pos": 0.4166666667,
+        "ge7": 3,
+        "maxdd": -0.5427562441,
+        "turn": 0.8666666667,
+        "tcost": 0.0208
+      },
+      "holdout45": {
+        "geo": -0.0250769916,
+        "cum": -0.2627006698
+      },
+      "holdout60": {
+        "geo": -0.0263965606,
+        "cum": -0.2745872355
+      }
+    },
+    {
+      "code": "L6_S0_REV_K20",
+      "definition": "6M reversal, no skip, bottom 20",
+      "full20": {
+        "months": 53,
+        "geo": -0.0067425688,
+        "cum": -0.3013227244,
+        "cagr": -0.0779767429,
+        "pos": 0.4905660377,
+        "ge7": 13,
+        "maxdd": -0.5483341998,
+        "turn": 0.3952830189,
+        "tcost": 0.0419
+      },
+      "holdout20": {
+        "months": 12,
+        "start": "2025-08-01",
+        "end": "2026-07-01",
+        "geo": 0.0068567918,
+        "cum": 0.0854565595,
+        "cagr": 0.0854565595,
+        "pos": 0.5833333333,
+        "ge7": 1,
+        "maxdd": -0.1333023217,
+        "turn": 0.3791666667,
+        "tcost": 0.0091
+      },
+      "holdout45": {
+        "geo": 0.0059052978,
+        "cum": 0.0732110748
+      },
+      "holdout60": {
+        "geo": 0.0053343868,
+        "cum": 0.0659245149
+      }
+    },
+    {
+      "code": "L1_S0_REV_K50",
+      "definition": "1M reversal, no skip, bottom 50",
+      "full20": {
+        "months": 58,
+        "geo": -0.0012366365,
+        "cum": -0.0692544094,
+        "cagr": -0.0147391214,
+        "pos": 0.5172413793,
+        "ge7": 8,
+        "maxdd": -0.4875077381,
+        "turn": 0.8744827586,
+        "tcost": 0.10144
+      },
+      "holdout20": {
+        "months": 12,
+        "start": "2025-08-01",
+        "end": "2026-07-01",
+        "geo": 0.0187432854,
+        "cum": 0.2496175377,
+        "cagr": 0.2496175377,
+        "pos": 0.75,
+        "ge7": 0,
+        "maxdd": -0.0691285256,
+        "turn": 0.8683333333,
+        "tcost": 0.02084
+      },
+      "holdout45": {
+        "geo": 0.0165719343,
+        "cum": 0.2180283176
+      },
+      "holdout60": {
+        "geo": 0.0152691165,
+        "cum": 0.1994277895
+      }
+    }
+  ]
+}
