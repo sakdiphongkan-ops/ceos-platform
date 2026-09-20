@@ -47,15 +47,11 @@ jobs:
         run: |
           python scripts/research/build_factor_dataset.py             --prices data/set_2000_2025/prices.csv             --output data/set_2000_2025/factors.csv
 
-      - name: Restrict to trailing 5 years
-        run: |
-          python scripts/research/filter_last_5y.py             --input data/set_2000_2025/factors.csv             --output data/set_2000_2025/factors_5y.csv
-
       - name: Build monthly point-in-time factors
         run: |
           rm -rf data/luna_monthly
           mkdir -p data/luna_monthly
-          python scripts/research/build_monthly_price_factors_from_daily.py             --input data/set_2000_2025/factors_5y.csv             --output data/luna_monthly/monthly_price_factors.csv
+          python scripts/research/build_monthly_luna_factors_from_daily.py             --input data/set_2000_2025/factors.csv             --output data/luna_monthly/monthly_price_factors.csv             --lookback-years 5
           test -s data/luna_monthly/monthly_price_factors.csv
 
       - name: Run frozen holdout audit
