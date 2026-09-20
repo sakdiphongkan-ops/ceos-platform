@@ -319,7 +319,7 @@ def main():
          nd*np.log1p(b["DEV_geo_monthly"].clip(lower=-0.999999)))/(nt+nd)
     )
     ranking["min_geo"]=ranking[["train_dev_geo","stress_train_dev_geo"]].min(axis=1)
-    ranking["dev_dd"]=a["DEV_max_drawdown_pct"]
+    ranking["dev_dd"]=pd.to_numeric(a["DEV_max_drawdown_pct"],errors="coerce")
     ranking["robust_score"]=ranking["min_geo"]-0.25*ranking["dev_dd"].abs()
     ranking["candidate"]=ranking.index
     ranking=ranking.sort_values(["robust_score","train_dev_geo"],ascending=[False,False])
