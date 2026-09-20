@@ -80,7 +80,10 @@ def build_candidates() -> list[Candidate]:
         ("BB_RSI_MACD_ADX","STRATEGY","close<BB_LOWER20 & RSI14<35 & MACD>MACD_SIGNAL & ADX14>20"),
         ("BB_REENTRY_RSI","STRATEGY","BB_REENTRY_UP==1 & RSI14<50"),
         ("SQUEEZE_RELEASE_MOM","STRATEGY","SQUEEZE_RELEASE==1 & MACD_HIST>0 & close>EMA20"),
+        ("SQUEEZE_KC15_MOM","STRATEGY","SQUEEZE_KC_RELEASE_15==1 & MACD_HIST>0 & close>EMA20"),
+        ("SQUEEZE_KC20_TV","STRATEGY","SQUEEZE_KC_RELEASE_20==1 & TV_ALL_D>0.1"),
         ("DONCHIAN55_TV","STRATEGY","BREAKOUT55==1 & TV_MA_D>0"),
+        ("DONCHIAN55_ADX","STRATEGY","BREAKOUT55==1 & ADX14>20 & TV_MA_D>0"),
         ("ICHIMOKU_RSI_MACD","STRATEGY","price_above_cloud & RSI14>30 & MACD>MACD_SIGNAL"),
         ("RSI_DIV_HAMMER","REVERSAL","RSI_BULL_DIV_PROXY==1 & BULL_REVERSAL==1"),
         ("RSI_DIV_TV_OSC","REVERSAL","RSI_BULL_DIV_PROXY==1 & TV_OSC_D>0.1"),
@@ -166,8 +169,14 @@ def bool_gate(g: pd.DataFrame, rule: str) -> pd.Series:
         return (x["BB_REENTRY_UP"]==1)&(x["RSI14"]<50)
     if rule=="SQUEEZE_RELEASE==1 & MACD_HIST>0 & close>EMA20":
         return (x["SQUEEZE_RELEASE"]==1)&(x["MACD_HIST"]>0)&(x["close"]>x["EMA20"])
+    if rule=="SQUEEZE_KC_RELEASE_15==1 & MACD_HIST>0 & close>EMA20":
+        return (x["SQUEEZE_KC_RELEASE_15"]==1)&(x["MACD_HIST"]>0)&(x["close"]>x["EMA20"])
+    if rule=="SQUEEZE_KC_RELEASE_20==1 & TV_ALL_D>0.1":
+        return (x["SQUEEZE_KC_RELEASE_20"]==1)&(x["TV_ALL_D"]>0.1)
     if rule=="BREAKOUT55==1 & TV_MA_D>0":
         return (x["BREAKOUT55"]==1)&(x["TV_MA_D"]>0)
+    if rule=="BREAKOUT55==1 & ADX14>20 & TV_MA_D>0":
+        return (x["BREAKOUT55"]==1)&(x["ADX14"]>20)&(x["TV_MA_D"]>0)
     if rule=="price_above_cloud & RSI14>30 & MACD>MACD_SIGNAL":
         return (x["ICHIMOKU_BULL"]==1)&(x["RSI14"]>30)&(x["MACD"]>x["MACD_SIGNAL"])
     if rule=="RSI_BULL_DIV_PROXY==1 & BULL_REVERSAL==1":
