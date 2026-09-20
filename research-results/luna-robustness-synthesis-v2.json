@@ -1,0 +1,61 @@
+{
+  "status": "COMPLETED",
+  "engine": "luna-robustness-synthesis-v2",
+  "as_of": "2026-09-20",
+  "primary_public_monthly_tournament": {
+    "engine": "luna-adaptive-tournament-v3-public",
+    "formulas": 1000,
+    "months_available": 60,
+    "months_traded": 48,
+    "adaptive_geometric_monthly_return": -0.008106855482445163,
+    "adaptive_cumulative_return": -0.32342701196818846,
+    "adaptive_positive_month_pct": 0.4375,
+    "adaptive_max_drawdown_pct": -0.41691447741773735,
+    "benchmark_m1_proxy_geometric_monthly_return": 0.0079447535660353,
+    "benchmark_m1_proxy_cumulative_return": 0.607695216184762,
+    "benchmark_m1_proxy_max_drawdown_pct": -0.4878093152703704,
+    "note": "M1 in this public panel is a same-panel MOM_20 reversal proxy, not an exact legacy 925-symbol reproduction."
+  },
+  "independent_seed_replication": {
+    "seeds": 5,
+    "geometric_monthly_returns": [
+      0.0015598115562143189,
+      -0.002927763879911671,
+      -0.006724529442710403,
+      0.003775011228677405,
+      0.003269611607649381
+    ],
+    "mean": -0.00020957178601619387,
+    "median": 0.0015598115562143189,
+    "min": -0.006724529442710403,
+    "max": 0.003775011228677405,
+    "seeds_ge_7pct_hurdle": 0,
+    "note": "Fresh formula catalogs per seed; replication diagnostic only."
+  },
+  "independent_frozen_holdout": {
+    "training_months": 49,
+    "holdout_months": 12,
+    "frozen_top_n": 25,
+    "top_frozen_candidate_training_rank": 21,
+    "top_frozen_candidate_holdout_geometric_monthly_return": 0.0005884107267062344,
+    "top_frozen_candidate_holdout_cumulative_return": 0.006491594142866486,
+    "top_frozen_candidate_holdout_positive_month_pct": 0.2727272727272727,
+    "m1_holdout_geometric_monthly_return": -0.028238612084083403,
+    "m1_holdout_cumulative_return": -0.2702803748525969,
+    "selection_guard": "holdout excluded from ranking"
+  },
+  "persisted_130_variant_robustness_screen": {
+    "candidates_total": 130,
+    "candidates_positive_across_test_and_recent_oos_at_20_40_60bps": 8,
+    "candidates_reaching_7pct_geometric_monthly_in_test_at_20bps": 0,
+    "candidates_reaching_7pct_geometric_monthly_in_recent_oos_at_20bps": 0
+  },
+  "current_runs": {
+    "luna_1000_5y_run_id": 35484687898,
+    "luna_1000_5y_status": "in_progress",
+    "luna_adaptive_tournament_v2_run_id": 35484723094,
+    "luna_adaptive_tournament_v2_status": "pending",
+    "note": "Do not interpret these pending runs as completed."
+  },
+  "conclusion_guard": "No formula is promoted to production/paper based on the current evidence. The 7% geometric-monthly hurdle has not been demonstrated robustly out-of-sample across independent seeds/holdout."
+}
