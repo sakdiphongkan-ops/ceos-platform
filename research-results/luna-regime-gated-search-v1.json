@@ -1,0 +1,28 @@
+{
+  "status": "COMPLETED",
+  "engine": "luna-regime-gated-search-v1",
+  "candidate_count": 66,
+  "train_months": 48,
+  "holdout_months": 12,
+  "regime": "monthly breadth = fraction of valid stocks with positive mom1",
+  "selection_rule": "Rank by minimum 25th-percentile rolling-12M geometric return at 20/60bps, training only.",
+  "top_frozen": {
+    "id": "G0299_BREADTH_HIGH_045",
+    "formula": "G0299 = 80% LOW mom6 + 20% LOW avg_amount20; trade only when breadth >=45%",
+    "train_geo": 0.02134674385723412,
+    "train_robust_score": 0.012302909669000162,
+    "holdout_geo_20bps": 0.01933556356777766,
+    "holdout_geo_60bps": 0.016259833631286247,
+    "holdout_cumulative_20bps": 0.2583635176089234,
+    "holdout_positive_month_pct": 0.4166666666666667
+  },
+  "notable": {
+    "id": "G0118_BREADTH_HIGH_045",
+    "holdout_geo_20bps": 0.045834670136984945,
+    "holdout_geo_60bps": 0.042127016640781,
+    "holdout_cumulative_20bps": 0.7122075932215237,
+    "holdout_max_drawdown_20bps": -0.003996000000000111
+  },
+  "robust_7pct_holdout_count": 0,
+  "conclusion": "Breadth gating improved training robustness but reduced the recent holdout return relative to ungated G0118/G0119; no gated candidate met 7% on holdout."
+}
