@@ -1,0 +1,159 @@
+{
+  "version": "1.0",
+  "purpose": "Research map for LUNA factor evolution; availability must be proven in point-in-time data before testing.",
+  "thailand_factor_library": {
+    "categories": [
+      "Fama-French",
+      "q-factors",
+      "Behavioral",
+      "QMJ",
+      "Low-Risk",
+      "Momentum",
+      "Value",
+      "Profitability",
+      "Investment",
+      "Quality",
+      "Trading/Liquidity"
+    ],
+    "source": "SET Thailand Factor Library / CMDF / SETSMART",
+    "source_url": "https://www.set.or.th/th/education-research/research/database/factor-library/overview"
+  },
+  "public_research_map": [
+    {
+      "family": "Reversal",
+      "observable_now": [
+        "MOM_5",
+        "MOM_10",
+        "MOM_20",
+        "MOM_40",
+        "MOM_60",
+        "MOM_120"
+      ],
+      "priority": "high"
+    },
+    {
+      "family": "Momentum",
+      "observable_now": [
+        "MOM_20",
+        "MOM_60",
+        "MOM_120",
+        "MOM_252",
+        "REL_MOM"
+      ],
+      "priority": "high"
+    },
+    {
+      "family": "52-week-high / trend",
+      "observable_now": [
+        "DIST_HIGH_252",
+        "BREAKOUT20",
+        "BREAKOUT55"
+      ],
+      "priority": "high"
+    },
+    {
+      "family": "Low-risk",
+      "observable_now": [
+        "VOL_10",
+        "VOL_20",
+        "BETA",
+        "ATR_PCT",
+        "MAXDD_60"
+      ],
+      "priority": "high"
+    },
+    {
+      "family": "Liquidity / trading",
+      "observable_now": [
+        "AMOUNT",
+        "ADV20",
+        "ILLIQ_20",
+        "TURNOVER"
+      ],
+      "priority": "high"
+    },
+    {
+      "family": "Quality",
+      "observable_if_pit_fundamentals": [
+        "ROE",
+        "ROIC",
+        "CFO_MARGIN",
+        "NPM",
+        "INTEREST_COVER",
+        "CURRENT_RATIO",
+        "DE"
+      ],
+      "priority": "high"
+    },
+    {
+      "family": "Value",
+      "observable_if_pit_fundamentals": [
+        "PE",
+        "PBV",
+        "FCF_YIELD",
+        "EARNINGS_YIELD",
+        "DIV_YIELD"
+      ],
+      "priority": "high"
+    },
+    {
+      "family": "Profitability",
+      "observable_if_pit_fundamentals": [
+        "ROE",
+        "ROIC",
+        "GPM",
+        "NPM",
+        "CFO_MARGIN"
+      ],
+      "priority": "high"
+    },
+    {
+      "family": "Investment",
+      "observable_if_pit_fundamentals": [
+        "ASSET_G",
+        "CAPEX_G",
+        "INVESTMENT_RATE"
+      ],
+      "priority": "medium"
+    },
+    {
+      "family": "Behavioral PEAD/SUE",
+      "observable_if_pit_fundamentals": [
+        "announcement_dates",
+        "earnings_surprise",
+        "SUE"
+      ],
+      "priority": "high"
+    },
+    {
+      "family": "Factor momentum",
+      "observable_with_factor_history": [
+        "factor_return_time_series",
+        "12M_factor_momentum"
+      ],
+      "priority": "medium"
+    },
+    {
+      "family": "Regime conditioning",
+      "observable_now": [
+        "MOM_20",
+        "VOL_20"
+      ],
+      "priority": "high"
+    },
+    {
+      "family": "Ensemble / rank aggregation",
+      "observable_now": [
+        "all_available_rank_features"
+      ],
+      "priority": "high"
+    }
+  ],
+  "guardrails": [
+    "Do not infer undisclosed proprietary formulas; only test public mechanisms or formulas whose required inputs are available.",
+    "Holdout is never used for evolution or formula selection.",
+    "Every candidate records its parent/lineage and exact factor weights.",
+    "Cost, rebalance anchor and holding horizon are stress dimensions, not post-hoc filters.",
+    "A 7% geometric monthly return is a research hurdle, not a guarantee or promotion rule."
+  ]
+}
