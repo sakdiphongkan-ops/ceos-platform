@@ -133,6 +133,7 @@ def main() -> None:
         df[f] = pd.to_numeric(df[f], errors="coerce")
 
     # Month-end snapshot = final trading observation present for that symbol/month.
+    # Triggered from the default branch so GitHub Actions can run the research without secrets.
     df["month"] = df["date"].dt.to_period("M")
     snap = (
         df.sort_values(["symbol","date"])
