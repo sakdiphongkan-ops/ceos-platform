@@ -1,0 +1,61 @@
+{
+  "status": "INTERIM_COMPLETED",
+  "engine": "luna-m1-liquidity-pth-weight-refinement-v1",
+  "as_of": "2026-09-20",
+  "benchmark_window": {
+    "train_dev": "2022-10-31_to_2024-08-31",
+    "oos": "2024-09-30_to_2025-08-31",
+    "holdout": "2025-09-30_to_2026-08-31",
+    "k": 20,
+    "costs_bps": [
+      20,
+      40,
+      60
+    ]
+  },
+  "candidate": {
+    "name": "W75_15_10",
+    "formula": "0.75*REV + 0.15*CONTRARIAN_ILLIQUIDITY + 0.10*BELOW_52W_HIGH"
+  },
+  "m1": {
+    "cost20": {
+      "train_dev_geo": 0.0012930460250870966,
+      "oos_geo": 0.015951882953266713,
+      "holdout_geo": 0.031132804414247664
+    },
+    "cost40": {
+      "train_dev_geo": -0.0005088394010228976,
+      "oos_geo": 0.014222664658945465,
+      "holdout_geo": 0.02940823654457169
+    },
+    "cost60": {
+      "train_dev_geo": -0.002310788186242835,
+      "oos_geo": 0.012493394769834973,
+      "holdout_geo": 0.02768363568148768
+    }
+  },
+  "candidate_cost_stress": {
+    "cost20": {
+      "train_dev_geo": 0.01625587587674744,
+      "oos_geo": 0.016406926409728163,
+      "holdout_geo": 0.05741230054588877
+    },
+    "cost40": {
+      "train_dev_geo": 0.014552332821768635,
+      "oos_geo": 0.0146856022092256,
+      "holdout_geo": 0.05569465939332469
+    },
+    "cost60": {
+      "train_dev_geo": 0.012848721064123223,
+      "oos_geo": 0.012964237874244494,
+      "holdout_geo": 0.05397699389835761
+    }
+  },
+  "interpretation": [
+    "The candidate improves HOLDOUT versus M1 across 20/40/60 bps in this fixed hypothesis test.",
+    "The OOS improvement is small at 20 bps and disappears directionally under higher cost stress.",
+    "TRAIN+DEV improvement is materially larger than OOS improvement, so overfitting/regime sensitivity remains possible.",
+    "This is still a fixed-hypothesis interim test, not a frozen-selection promotion result."
+  ],
+  "next_step": "Use the focused 91-candidate refinement with TRAIN+DEV-only selection, then compare the frozen selected candidate against M1 on untouched OOS/HOLDOUT."
+}
