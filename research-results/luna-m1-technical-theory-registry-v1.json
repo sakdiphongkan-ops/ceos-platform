@@ -1,0 +1,60 @@
+{
+  "version": "luna-m1-technical-theory-registry-v1",
+  "purpose": "Financial/technical-analysis hypothesis registry for timing overlays on locked M1 stock selection.",
+  "evidence": [
+    {
+      "family": "MACD",
+      "mechanism": "Trend/momentum transition; bullish histogram slope or crossover may indicate that a short-term selloff is stabilizing.",
+      "thailand_evidence": "A SET-focused study found several MACD-based strategies outperformed buy-and-hold over 2007-2015, but the strategy with additional filters also had the highest average loss; results therefore need risk/cost validation.",
+      "source": "https://so02.tci-thaijo.org/index.php/JGBR/article/view/183212"
+    },
+    {
+      "family": "RSI",
+      "mechanism": "Mean-reversion / momentum-state oscillator; oversold recovery can be used as an entry-timing confirmation rather than a standalone selection rule.",
+      "southeast_asia_evidence": "A 2000-2013 study across Southeast Asian markets tested RSI, Stochastic, MACD, DMI and OBV and reported stronger technical-rule performance in Thailand than Singapore.",
+      "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC4583561/"
+    },
+    {
+      "family": "Stochastic",
+      "mechanism": "Position within recent high-low range; a recovery from a low range with %K crossing %D can confirm short-term reversal.",
+      "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC4583561/"
+    },
+    {
+      "family": "OBV",
+      "mechanism": "Price/volume confirmation; improving volume flow may confirm that a reversal is being accumulated rather than only price noise.",
+      "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC4583561/"
+    },
+    {
+      "family": "Moving averages",
+      "mechanism": "Trend-state filter and market timing overlay; can reduce exposure during persistent downtrends.",
+      "evidence": "A study of moving-average rules reports risk-adjusted returns after transaction costs across multiple equity universes, while noting volatility and transaction costs as key drivers.",
+      "source": "https://onlinelibrary.wiley.com/doi/full/10.1111/irfi.12052"
+    },
+    {
+      "family": "Candlestick/chart patterns",
+      "mechanism": "Local price-action reversal context, e.g. hammer/bullish engulfing near support.",
+      "caution": "SET50 candlestick research found most bullish/bearish patterns were not reliably predictive and filtering with RSI/Stochastic/MFI generally did not improve profitability or prediction accuracy. Therefore patterns are treated as weak features, not standalone rules.",
+      "source": "https://journals.sagepub.com/doi/abs/10.1177/2158244017736799"
+    },
+    {
+      "family": "Breakout/support-resistance",
+      "mechanism": "Price location relative to recent ranges can distinguish temporary dislocation from structural breakdown or renewed trend.",
+      "southeast_asia_evidence": "Research on moving-average and trading-range breakout rules found stronger predictive power in Thailand and other Southeast Asian emerging markets, with short-term variants often stronger than long-term variants.",
+      "source": "https://www.sciencedirect.com/science/article/pii/S1059056012000767"
+    }
+  ],
+  "design_rules": [
+    "M1 stock selection remains locked: choose recent one-month losers first, top K=20.",
+    "Technical indicators only gate or scale exposure after M1 selection, so selection alpha and timing alpha are separable.",
+    "All technical features use only data available by the month-end decision date.",
+    "No OOS or HOLDOUT return is used in candidate selection.",
+    "Costs are stressed at 20/40/60 bps.",
+    "Cash is a real zero-return allocation when a timing gate blocks a selected name.",
+    "Candlestick/chart patterns are never accepted as a standalone promoted rule without independent OOS/HOLDOUT support."
+  ],
+  "next_phase": [
+    "Phase 1: month-end technical confirmation gate.",
+    "Phase 2: intramonth daily entry timing after a monthly M1 selection.",
+    "Phase 3: intramonth exit/stop logic using MACD/RSI/volatility, tested separately."
+  ]
+}
