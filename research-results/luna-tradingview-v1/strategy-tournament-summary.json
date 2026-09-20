@@ -1,0 +1,27 @@
+{
+  "status": "COMPLETED",
+  "engine": "luna-tradingview-strategy-tournament-v1",
+  "panel_sha256": "d20d66c4afdbe084e71555871f919e581f8bfd2e3af64d18eeda067fbc6462a2",
+  "candidate_count": 35,
+  "gate_candidates": 25,
+  "rerank_candidates": 10,
+  "selection_rule": "M1 bottom-K by 20-trading-day adjusted-close momentum for gate candidates; pool-50/100 second-stage rerank for evolution candidates.",
+  "train_dev_only_selection": true,
+  "frozen_periods": [
+    "OOS",
+    "HOLDOUT"
+  ],
+  "locked_m1_baseline_audit": {
+    "available": true,
+    "common_months": 59,
+    "max_abs_diff": 0.182697984792151,
+    "mean_abs_diff": 0.01963235821611674,
+    "within_1bp": false
+  },
+  "costs_bps": [
+    20.0,
+    40.0,
+    60.0
+  ],
+  "promotion_rule": "Candidate must beat locked M1 on both frozen OOS and HOLDOUT and remain positive at 20/40/60 bps; then replicate on fresh seeds/periods."
+}
