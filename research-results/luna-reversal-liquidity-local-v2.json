@@ -1,0 +1,32 @@
+{
+  "status": "COMPLETED",
+  "engine": "luna-reversal-liquidity-local-v2",
+  "candidate_count": 71,
+  "train_months": 48,
+  "holdout_months": 12,
+  "selection_rule": "min(25th-percentile rolling-12M geometric return at 20/60bps), training only",
+  "top": {
+    "id": "L001",
+    "weights": {
+      "low_mom1": 0.4,
+      "low_mom3": 0.05,
+      "low_mom6": 0.3,
+      "low_amount20": 0.25
+    },
+    "train_geo_monthly": 0.01162249486154332,
+    "holdout_geo_20bps": 0.038093545434293885,
+    "holdout_geo_60bps": 0.03493045311552323
+  },
+  "notable": {
+    "id": "L027",
+    "weights": {
+      "low_mom1": 0.4,
+      "low_mom3": 0,
+      "low_mom6": 0.3,
+      "low_amount20": 0.3
+    },
+    "holdout_geo_20bps": 0.04704496628793642,
+    "holdout_geo_60bps": 0.04385543159095828
+  },
+  "ge7_holdout_count": 0
+}
