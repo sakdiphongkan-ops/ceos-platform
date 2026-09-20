@@ -292,7 +292,7 @@ def main() -> None:
         "adaptive": adaptive_perf,
         "benchmark_m1": benchmark_perf,
         "cost_stress": stress,
-        "frozen_holdout_top25": holdout_rows,
+        "frozen_holdout_top25": hold_rows,
         "adaptive_selection_frequency_top25": selection_counts,
         "hurdle_7pct": {
             "target_geometric_monthly": 0.07,
