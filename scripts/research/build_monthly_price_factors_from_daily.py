@@ -31,7 +31,7 @@ def main() -> None:
     args = ap.parse_args()
 
     df = pd.read_csv(args.input)
-    required = {"date", "symbol", "adj_close", "MOM_20", "VOL_20", "MAXDD_60", "AMOUNT"}
+    required = {"date", "symbol", "adj_close", "MOM_20", "MOM_60", "MOM_120", "VOL_20", "MAXDD_60", "AMOUNT"}
     missing = sorted(required - set(df.columns))
     if missing:
         raise SystemExit(f"missing columns: {missing}")
@@ -107,7 +107,7 @@ def main() -> None:
             "mom1": "MOM_20 from last trading observation of each symbol-month",
             "mom3": "MOM_60 from last trading observation of each symbol-month",
             "mom6": "MOM_120 from last trading observation of each symbol-month",
-            "mom12": "MOM_252 is not available in v1; retained as NaN",
+            "mom12": "MOM_252 from last trading observation is not calculated by the daily builder v1; retained as NaN",
             "high52_ratio": "adj_close / rolling 252-trading-day high",
             "vol20": "VOL_20 from last trading observation",
             "maxdd60": "MAXDD_60 from last trading observation",
