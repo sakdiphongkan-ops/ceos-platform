@@ -45,10 +45,14 @@ jobs:
         run: |
           python scripts/research/build_factor_dataset.py             --prices data/set_2000_2025/prices.csv             --output data/set_2000_2025/factors.csv
 
+      - name: Restrict to trailing 5 years
+        run: |
+          python scripts/research/filter_last_5y.py             --input data/set_2000_2025/factors.csv             --output data/set_2000_2025/factors_5y.csv
+
       - name: Run 2,000 structured hypotheses
         run: |
           rm -rf research/luna_structured_interaction_v1
-          python scripts/research/luna_structured_interaction_search_v1.py             --input data/set_2000_2025/factors.csv             --output research/luna_structured_interaction_v1             --formula-count 2000             --k 20             --cost-bps 20             --train-months 35             --validation-months 12             --holdout-months 12
+          python scripts/research/luna_structured_interaction_search_v1.py             --input data/set_2000_2025/factors_5y.csv             --output research/luna_structured_interaction_v1             --formula-count 2000             --k 20             --cost-bps 20             --train-months 35             --validation-months 12             --holdout-months 12
 
       - name: Validate
         run: |
