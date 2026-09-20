@@ -35,6 +35,16 @@ class Formula:
     parents: tuple[str,...] = ()
     note: str = ""
 
+    def __post_init__(self):
+        # Canonicalize term containers at the boundary so every formula is
+        # guaranteed to contain exactly (factor, weight) pairs.
+        clean=[]
+        for term in self.terms:
+            if not isinstance(term,(tuple,list)) or len(term) < 2:
+                raise ValueError(f"invalid formula term: {term!r}")
+            clean.append((str(term[0]), float(term[1])))
+        object.__setattr__(self, "terms", normalize(clean))
+
 def hid(s: str) -> int:
     return int(hashlib.sha256(s.encode()).hexdigest()[:16], 16)
 
@@ -194,8 +204,11 @@ def mutate(parent,avail,i,tag):
 def weight_matrix(forms,avail,idx):
     w=np.zeros((len(avail),len(forms)),dtype=np.float32)
     for j,fm in enumerate(forms):
-        for f,v in fm.terms:
-            w[idx[f],j]=v
+        for term in fm.terms:
+            f,v=term[0],term[1]
+            if f not in idx:
+                continue
+            w[idx[f],j]=float(v)
     return w
 
 def batch_eval(panels,forms,avail,idx,start,end,k,horizon,cost_bps,anchor=0,return_path=False):
