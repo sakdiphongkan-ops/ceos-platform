@@ -469,12 +469,19 @@ def add_mtf_ratings(daily: pd.DataFrame, raw: pd.DataFrame) -> pd.DataFrame:
 def monthly_snapshot(df: pd.DataFrame) -> pd.DataFrame:
     out=df.copy()
     out["month_end"]=out["date"].dt.to_period("M").dt.to_timestamp("M")
-    return (
+    monthly=(
         out.sort_values(["symbol","date"])
            .groupby(["symbol","month_end"],as_index=False)
            .tail(1)
            .reset_index(drop=True)
+           .sort_values(["symbol","month_end"])
     )
+    # Locked production M1 is the completed calendar-month return at month-end.
+    # Compute it from month-end adjusted closes so the tournament baseline is
+    # apple-to-apple with luna-m1s0k20rev-v1.
+    monthly["M1_MONTH_RETURN_ADJ"] = monthly.groupby("symbol")["adj_close"].pct_change()
+    monthly["M1_MOM20_ADJ"] = monthly["M1_MONTH_RETURN_ADJ"]
+    return monthly.reset_index(drop=True)
 
 
 def main():
