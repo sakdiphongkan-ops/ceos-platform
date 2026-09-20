@@ -190,19 +190,19 @@ def rank_feature(g: pd.DataFrame, col: str, ascending: bool=True) -> pd.Series:
 
 
 def score_rerank(g: pd.DataFrame, rule: str) -> pd.Series:
-    # Rule parser kept explicit to make formulas fully auditable.
+    # rank(X) = high X is better; rank(-X) = low X is better.
     parts=[p.strip() for p in rule.split("+")]
     score=pd.Series(0.0,index=g.index)
     for p in parts:
-        p=p.strip()
         if not p.startswith("rank("):
             continue
-        inside=p[5:-1]
-        asc=True
-        col=inside
-        if col.startswith("-"):
+        inside=p[5:-1].strip()
+        if inside.startswith("-"):
+            col=inside[1:]
+            asc=True
+        else:
+            col=inside
             asc=False
-            col=col[1:]
         score=score+rank_feature(g,col,ascending=asc)
     return score
 
