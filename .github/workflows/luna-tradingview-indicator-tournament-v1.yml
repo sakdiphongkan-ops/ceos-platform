@@ -111,17 +111,27 @@ jobs:
           rm -rf research/luna_tradingview_indicator_engine_v1
           mkdir -p research/luna_tradingview_indicator_engine_v1
           python - <<'PY'
-          import json
+          import hashlib, json
           from pathlib import Path
           import pandas as pd
+          import subprocess, sys
 
           daily=Path("data/luna_daily/daily_prices.csv")
           cache_panel=Path("research-results/luna-tradingview-v1/monthly-indicator-panel.csv")
           cache_summary=Path("research-results/luna-tradingview-v1/indicator-engine-summary.json")
           out=Path("research/luna_tradingview_indicator_engine_v1")
+          cache_version="20260920-null-traded-v3"
 
-          if not (cache_panel.exists() and cache_summary.exists()):
-              import subprocess, sys
+          use_cache=False
+          if cache_panel.exists() and cache_summary.exists():
+              try:
+                  meta=json.loads(cache_summary.read_text())
+                  use_cache=meta.get("cache_version")==cache_version
+              except Exception:
+                  use_cache=False
+
+          if not use_cache:
+              print("reusing_validated_indicator_panel=false")
               subprocess.check_call([
                   sys.executable,
                   "scripts/research/luna_tradingview_indicator_engine_v1.py",
@@ -130,40 +140,47 @@ jobs:
               ])
               meta=json.loads((out/"summary.json").read_text())
               meta["cache_version"]=cache_version
+              meta["data_sha256"]=hashlib.sha256(daily.read_bytes()).hexdigest()
               (out/"summary.json").write_text(json.dumps(meta,indent=2),encoding="utf-8")
           else:
               print("reusing_validated_indicator_panel=true")
               x=pd.read_csv(cache_panel,parse_dates=["month_end"])
               raw=pd.read_csv(daily,parse_dates=["date"])
-              raw=raw.sort_values(["symbol","date"]).copy()
+              raw=raw.dropna(subset=["open","high","low","close","volume"]).copy()
+              raw=raw.sort_values(["symbol","date"])
 
-              # Locked production M1 selection_score: completed calendar-month
-              # raw-close return from the prior month-end to the current month-end.
+              # Production M1 selection_score = last traded raw-close in the
+              # current month divided by last traded raw-close in the prior month.
               raw["month_end"]=raw["date"].dt.to_period("M").dt.to_timestamp("M")
-              month_px=raw.groupby(["symbol","month_end"],as_index=False).tail(1)[["symbol","month_end","close"]]
-              month_px=month_px.sort_values(["symbol","month_end"])
+              month_px=(
+                  raw.groupby(["symbol","month_end"],as_index=False)
+                     .tail(1)[["symbol","month_end","close"]]
+                     .sort_values(["symbol","month_end"])
+              )
               month_px["M1_MOM20_ADJ"]=month_px.groupby("symbol")["close"].pct_change()
               m1=month_px[["symbol","month_end","M1_MOM20_ADJ"]]
 
-              # Add September month-end rows so August gets the same forward
-              # return horizon as production; indicator values are irrelevant for
-              # the September formation row.
+              # Append September observations only to supply August's forward horizon.
               sep=raw[raw["date"]>="2026-09-01"].groupby("symbol",as_index=False).tail(1).copy()
-              sep["month_end"]=pd.Timestamp("2026-09-30")
-              sep=sep[["symbol","date","open","high","low","close","volume","adj_close","month_end"]]
-              for col in x.columns:
-                  if col not in sep.columns:
-                      sep[col]=pd.NA
-              sep=sep[x.columns]
+              if not sep.empty:
+                  sep["month_end"]=pd.Timestamp("2026-09-30")
+                  sep=sep[["symbol","date","open","high","low","close","volume","adj_close","month_end"]]
+                  for col in x.columns:
+                      if col not in sep.columns:
+                          sep[col]=pd.NA
+                  sep=sep[x.columns]
+                  x=x.drop(columns=["M1_MOM20_ADJ"],errors="ignore")
+                  x=x.merge(m1,on=["symbol","month_end"],how="left")
+                  x=pd.concat([x,sep],ignore_index=True)
+                  x=x.sort_values(["symbol","month_end"]).drop_duplicates(["symbol","month_end"],keep="last")
+              else:
+                  x=x.drop(columns=["M1_MOM20_ADJ"],errors="ignore").merge(m1,on=["symbol","month_end"],how="left")
 
-              x=x.drop(columns=["M1_MOM20_ADJ"],errors="ignore").merge(m1,on=["symbol","month_end"],how="left")
-              x=pd.concat([x,sep],ignore_index=True)
-              x=x.sort_values(["symbol","month_end"]).drop_duplicates(["symbol","month_end"],keep="last")
               x.to_csv(out/"monthly_indicator_panel.csv",index=False)
-
               meta=json.loads(cache_summary.read_text())
               meta["status"]="COMPLETED"
-              meta["monthly_m1_definition"]="completed calendar-month raw-close return from prior month-end to current month-end; verified against locked production selection_score"
+              meta["cache_version"]=cache_version
+              meta["monthly_m1_definition"]="last-traded raw-close monthly return; no NULL-bar placeholders"
               meta["forward_data_through"]="2026-09-18"
               meta["monthly_rows"]=int(len(x))
               meta["symbols"]=int(x["symbol"].nunique())
