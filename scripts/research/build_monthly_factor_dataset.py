@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from __future__ import annotations
+# Research panel builder: sparse factors are excluded factor-by-factor; no blanket dropna.\nfrom __future__ import annotations
 import argparse, hashlib, json
 from pathlib import Path
 import numpy as np
