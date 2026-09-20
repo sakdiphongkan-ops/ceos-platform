@@ -140,6 +140,13 @@ def bb(df: pd.DataFrame, n=20, mult=2.0):
     bandwidth = (upper - lower) / mid.replace(0, np.nan)
     return mid, upper, lower, pctb, bandwidth
 
+def keltner(df: pd.DataFrame, n=20, atr_n=14, mult=1.5):
+    basis=ema(df["close"],n)
+    a=atr(df,atr_n)
+    upper=basis+mult*a
+    lower=basis-mult*a
+    return basis,upper,lower
+
 
 def ichimoku(df: pd.DataFrame):
     h9 = df["high"].rolling(9, min_periods=9).max()
@@ -344,7 +351,19 @@ def add_research_indicators(df: pd.DataFrame) -> pd.DataFrame:
     # Squeeze proxy: Bollinger width below its rolling 120-day 20th percentile.
     bwq = bandwidth.rolling(120, min_periods=60).quantile(0.2)
     x["SQUEEZE_ON"] = (bandwidth < bwq).astype(int)
-    x["SQUEEZE_RELEASE"] = (x["SQUEEZE_ON"].shift(1).fillna(0) == 1).astype(int) & (bandwidth > bwq).astype(int)
+    x["SQUEEZE_RELEASE"] = ((x["SQUEEZE_ON"].shift(1).fillna(0) == 1) & (bandwidth > bwq)).astype(int)
+
+    for kmult in [1.5,2.0]:
+        _, kcu, kcl = keltner(x,20,14,kmult)
+        tag=str(kmult).replace(".","")
+        x[f"KC_UPPER20_{tag}"]=kcu
+        x[f"KC_LOWER20_{tag}"]=kcl
+        # True squeeze: both Bollinger envelopes sit inside Keltner envelopes.
+        x[f"SQUEEZE_KC_{tag}"]=((upper<kcu)&(lower>kcl)).astype(int)
+        x[f"SQUEEZE_KC_RELEASE_{tag}"]=(
+            (x[f"SQUEEZE_KC_{tag}"].shift(1).fillna(0)==1)
+            & ((upper>=kcu)|(lower<=kcl))
+        ).astype(int)
 
     for n, fac in [(10,3.0),(7,2.0),(14,3.0)]:
         st, direc = supertrend(x, n, fac)
