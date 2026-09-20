@@ -1,0 +1,134 @@
+name: LUNA Adaptive Tournament v2 - Public Research Route
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - "scripts/research/luna_adaptive_tournament_v2.py"
+      - "scripts/research/luna_holdout_audit_v1.py"
+      - "scripts/research/build_monthly_factor_dataset.py"
+      - "scripts/research/filter_last_5y.py"
+      - "scripts/research/download_mendeley_set.py"
+      - "scripts/research/build_factor_dataset.py"
+      - ".github/workflows/luna-adaptive-tournament-v2-public.yml"
+
+concurrency:
+  group: luna-adaptive-tournament-v2-public
+  cancel-in-progress: true
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          python -m pip install -U pip pandas numpy python-dateutil requests
+
+      - name: Download historical SET dataset
+        run: |
+          mkdir -p data/raw
+          curl -fL --retry 3 --retry-delay 2             "https://data.mendeley.com/public-api/zip/gybmm9t3mr/download/1"             -o data/raw/gybmm9t3mr-1.zip
+          test -s data/raw/gybmm9t3mr-1.zip
+
+      - name: Normalize source
+        run: |
+          rm -rf data/set_2000_2025
+          python scripts/research/download_mendeley_set.py             --zip data/raw/gybmm9t3mr-1.zip             --output-dir data/set_2000_2025             --quarantine-invalid             --max-invalid-rate 0.01
+
+      - name: Build daily factor dataset
+        run: |
+          python scripts/research/build_factor_dataset.py             --prices data/set_2000_2025/prices.csv             --output data/set_2000_2025/factors.csv
+
+      - name: QA forward returns
+        run: |
+          python scripts/research/qa_forward_returns.py             --input data/set_2000_2025/factors.csv             --output research-results/luna-public-return-qa.json             --extremes-output research-results/luna-public-return-extremes.csv             --warn-abs-return 0.20
+
+      - name: Restrict research window
+        run: |
+          python scripts/research/filter_last_5y.py             --input data/set_2000_2025/factors.csv             --output data/set_2000_2025/factors_5y.csv
+
+      - name: Build monthly LUNA v2 panel
+        run: |
+          python scripts/research/build_monthly_factor_dataset.py             --input data/set_2000_2025/factors_5y.csv             --output data/set_2000_2025/monthly_factors_v2.csv
+          test -s data/set_2000_2025/monthly_factors_v2.csv
+          cat data/set_2000_2025/monthly_factors_v2.csv.manifest.json
+
+      - name: Run 1000-formula adaptive tournament
+        run: |
+          rm -rf research/luna_adaptive_tournament_v2_public
+          python scripts/research/luna_adaptive_tournament_v2.py             --input data/set_2000_2025/monthly_factors_v2.csv             --output research/luna_adaptive_tournament_v2_public             --formula-count 1000             --lookback-months 24             --min-history-months 12             --cost-bps 20             --k 20
+
+      - name: Validate tournament
+        run: |
+          test -s research/luna_adaptive_tournament_v2_public/summary.json
+          test -s research/luna_adaptive_tournament_v2_public/tournament_selection_ledger.csv
+          test -s research/luna_adaptive_tournament_v2_public/formula_catalog.json
+          python - <<'PY'
+          import json
+          p="research/luna_adaptive_tournament_v2_public/summary.json"
+          x=json.load(open(p))
+          assert x["status"] == "COMPLETED"
+          assert x["formula_count"] == 1000
+          assert x["months_traded"] >= 24
+          assert "benchmark_m1" in x
+          print(json.dumps(x, indent=2))
+          PY
+
+      - name: Run frozen 12-month holdout audit
+        run: |
+          rm -rf research/luna_holdout_audit_v1_public
+          python scripts/research/luna_holdout_audit_v1.py             --input data/set_2000_2025/monthly_factors_v2.csv             --catalog research/luna_adaptive_tournament_v2_public/formula_catalog.json             --output research/luna_holdout_audit_v1_public             --holdout-months 12             --top-n 25             --k 20             --cost-bps 20
+
+      - name: Validate holdout
+        run: |
+          test -s research/luna_holdout_audit_v1_public/summary.json
+          test -s research/luna_holdout_audit_v1_public/holdout_ranked.csv
+          python - <<'PY'
+          import json
+          x=json.load(open("research/luna_holdout_audit_v1_public/summary.json"))
+          assert x["status"] == "COMPLETED"
+          assert x["selection_guard"]
+          print(json.dumps(x, indent=2))
+          PY
+
+      - name: Save compact results
+        run: |
+          mkdir -p research-results/luna-adaptive-tournament-v2-public research-results/luna-holdout-audit-v1-public
+          cp research/luna_adaptive_tournament_v2_public/summary.json             research-results/luna-adaptive-tournament-v2-public-summary.json
+          cp research/luna_adaptive_tournament_v2_public/tournament_selection_ledger.csv             research-results/luna-adaptive-tournament-v2-public/selection-ledger.csv
+          cp research/luna_adaptive_tournament_v2_public/formula_catalog.json             research-results/luna-adaptive-tournament-v2-public/formula-catalog.json
+          cp research/luna_holdout_audit_v1_public/summary.json             research-results/luna-holdout-audit-v1-public-summary.json
+          cp research/luna_holdout_audit_v1_public/holdout_ranked.csv             research-results/luna-holdout-audit-v1-public/holdout-ranked.csv
+          cp data/set_2000_2025/monthly_factors_v2.csv.manifest.json             research-results/luna-monthly-factor-panel-v2-manifest.json
+
+      - name: Commit research results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research-results/
+          git diff --cached --quiet || git commit -m "research(luna): save public adaptive tournament and holdout"
+          git push
+
+      - name: Upload full artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: luna-adaptive-tournament-v2-public
+          path: |
+            data/set_2000_2025/manifest.json
+            data/set_2000_2025/factors.manifest.json
+            data/set_2000_2025/monthly_factors_v2.csv.manifest.json
+            research-results/luna-public-return-qa.json
+            research-results/luna-public-return-extremes.csv
+            research/luna_adaptive_tournament_v2_public/
+            research/luna_holdout_audit_v1_public/
+          retention-days: 14
