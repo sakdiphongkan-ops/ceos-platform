@@ -99,7 +99,7 @@ def main() -> None:
         "lookback_years": args.lookback_years,
         "m1_anchor": "21 trading-day adjusted-close reversal at month-end",
         "monthly_factor_definitions": {
-            "mom1": "252-row-free? No: 21 trading-day adjusted-close return",
+            "mom1": "21 trading-day adjusted-close return",
             "mom3": "63 trading-day adjusted-close return",
             "mom6": "126 trading-day adjusted-close return",
             "mom12": "252 trading-day adjusted-close return",
