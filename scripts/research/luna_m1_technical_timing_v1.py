@@ -113,9 +113,10 @@ def make_candidates(k: int) -> list[Candidate]:
     for mode in ["NOT_DEEP", "EMA50", "ADX_LOW"]:
         idx += 1
         out.append(Candidate(f"T{idx:03d}_TREND_{mode}", "TREND", 1, 0, "NONE", "NONE", "NONE", False, mode, "NONE", k))
-    for mode in ["SUPPORT", "NO_BREAKDOWN", "BREAKOUT20", "REVERSAL_PATTERN"]:
+    for mode in ["SUPPORT", "NO_BREAKDOWN", "BREAKOUT20", "REVERSAL_PATTERN", "OBV_CONFIRM", "OBV_DIVERGENCE"]:
         idx += 1
-        out.append(Candidate(f"T{idx:03d}_PATTERN_{mode}", "PATTERN", 1, 0, "NONE", "NONE", "NONE", False, "NONE", mode, k))
+        family = "OBV" if mode.startswith("OBV_") else "PATTERN"
+        out.append(Candidate(f"T{idx:03d}_{family}_{mode}", family, 1, 0, "NONE", "NONE", "NONE", False, "NONE", mode, k))
 
     # Predefined ensembles: one theory at a time, then controlled combinations.
     combos = []
@@ -216,6 +217,10 @@ def signal_frame(x: pd.DataFrame, c: Candidate) -> pd.DataFrame:
             sigs.append(y["BREAKOUT20"] > -0.05)
         elif c.pattern_mode == "BREAKOUT20":
             sigs.append(y["BREAKOUT20"] > 0)
+        elif c.pattern_mode == "OBV_CONFIRM":
+            sigs.append(y["OBV_SLOPE20"] > 0)
+        elif c.pattern_mode == "OBV_DIVERGENCE":
+            sigs.append((y["OBV_SLOPE20"] > 0) & (y["MOM_20"] < 0))
         else:
             sigs.append(y["BULL_REVERSAL_5D"] >= 1)
 
