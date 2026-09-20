@@ -393,6 +393,46 @@ def load(path: str) -> pd.DataFrame:
     return df
 
 
+def resample_ohlcv(df: pd.DataFrame, rule: str) -> pd.DataFrame:
+    z=(
+        df.set_index("date")
+          .sort_index()
+          .resample(rule, label="right", closed="right")
+          .agg(
+              open=("open","first"),
+              high=("high","max"),
+              low=("low","min"),
+              close=("close","last"),
+              adj_close=("adj_close","last"),
+              volume=("volume","sum")
+          )
+          .dropna(subset=["close"])
+          .reset_index()
+    )
+    return z
+
+def add_mtf_ratings(daily: pd.DataFrame, raw: pd.DataFrame) -> pd.DataFrame:
+    z=daily.sort_values("date").copy()
+    for label, rule in [("W","W-FRI"),("M","ME")]:
+        rs=compute_tv_ratings(resample_ohlcv(raw,rule))
+        rs=rs[["date","TV_MA_RATING","TV_OSC_RATING","TV_ALL_RATING"]].sort_values("date")
+        rs=rs.rename(columns={
+            "TV_MA_RATING":f"TV_MA_{label}",
+            "TV_OSC_RATING":f"TV_OSC_{label}",
+            "TV_ALL_RATING":f"TV_ALL_{label}"
+        })
+        z=pd.merge_asof(z,rs,on="date",direction="backward")
+    z["TV_MA_D"]=z["TV_MA_RATING"]
+    z["TV_OSC_D"]=z["TV_OSC_RATING"]
+    z["TV_ALL_D"]=z["TV_ALL_RATING"]
+    z["TV_MTF_ALL_POSITIVE"]=(
+        (z["TV_ALL_D"]>0.1)&(z["TV_ALL_W"]>0.1)&(z["TV_ALL_M"]>0.1)
+    ).astype(int)
+    z["TV_MTF_OSC_POSITIVE"]=(
+        (z["TV_OSC_D"]>0.1)&(z["TV_OSC_W"]>0.1)&(z["TV_OSC_M"]>0.1)
+    ).astype(int)
+    return z
+
 def monthly_snapshot(df: pd.DataFrame) -> pd.DataFrame:
     out=df.copy()
     out["month_end"]=out["date"].dt.to_period("M").dt.to_timestamp("M")
@@ -415,6 +455,7 @@ def main():
     parts=[]
     for symbol,g in df.groupby("symbol",sort=False):
         z=add_research_indicators(g.copy())
+        z=add_mtf_ratings(z,g.copy())
         parts.append(z)
     daily=pd.concat(parts,ignore_index=True)
     daily.to_parquet(out/"daily_indicators.parquet",index=False)
