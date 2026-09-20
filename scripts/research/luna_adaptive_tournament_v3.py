@@ -73,7 +73,7 @@ def main():
         cand[fml["id"]]=pd.DataFrame(rr,columns=["month_end","gross_return","net_return","turnover","cost"]).set_index("month_end")
     ledger=[];freq=Counter()
     for m in months:
-        prior=months[max(0,len([x for x in months if x<m])-a.lookback_months):]
+        prior=[x for x in months if x<m][-a.lookback_months:]
         if len(prior)<a.min_history_months:continue
         el=[]
         for fid,fr in cand.items():
