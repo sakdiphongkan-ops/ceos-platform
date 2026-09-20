@@ -122,6 +122,24 @@ def load(path: str) -> pd.DataFrame:
     )
     p["MACD_HIST_SLOPE3"] = p.groupby("symbol")["MACD"].diff(3) - p.groupby("symbol")["MACD_SIGNAL"].diff(3)
 
+    # ADX(14) as a causal regime-strength proxy for testing mean-reversion
+    # in weaker-trend environments.
+    up_move = p.groupby("symbol")["high"].diff()
+    down_move = -p.groupby("symbol")["low"].diff()
+    plus_dm = up_move.where((up_move > down_move) & (up_move > 0), 0.0)
+    minus_dm = down_move.where((down_move > up_move) & (down_move > 0), 0.0)
+    prev_close = p.groupby("symbol")["close"].shift(1)
+    tr = pd.concat([
+        p["high"] - p["low"],
+        (p["high"] - prev_close).abs(),
+        (p["low"] - prev_close).abs(),
+    ], axis=1).max(axis=1)
+    tr14 = tr.groupby(p["symbol"]).transform(lambda x: x.rolling(14, min_periods=14).sum())
+    p["PLUS_DI14"] = 100 * plus_dm.groupby(p["symbol"]).transform(lambda x: x.rolling(14, min_periods=14).sum()) / tr14.replace(0, np.nan)
+    p["MINUS_DI14"] = 100 * minus_dm.groupby(p["symbol"]).transform(lambda x: x.rolling(14, min_periods=14).sum()) / tr14.replace(0, np.nan)
+    dx = 100 * (p["PLUS_DI14"] - p["MINUS_DI14"]).abs() / (p["PLUS_DI14"] + p["MINUS_DI14"]).replace(0, np.nan)
+    p["ADX14"] = dx.groupby(p["symbol"]).transform(lambda x: x.rolling(14, min_periods=14).mean())
+
     p["month"] = p["date"].dt.to_period("M").dt.to_timestamp("M")
     return p.replace([np.inf,-np.inf], np.nan)
 
@@ -153,7 +171,14 @@ def build_candidates() -> list[dict]:
             out.append({
                 "code":f"T{idx:03d}_{div_mode}_{conf}_D{days}",
                 "mode":div_mode, "lookback":lookback,
-                "confirm":conf, "confirm_days":days,
+                "confirm":conf, "confirm_days":days, "adx_max":None,
+            })
+        for adx in [20,25,30]:
+            idx += 1
+            out.append({
+                "code":f"T{idx:03d}_{div_mode}_HAMMER_ADX{adx}_D10",
+                "mode":div_mode, "lookback":lookback,
+                "confirm":"HAMMER", "confirm_days":10, "adx_max":adx,
             })
     return out
 
@@ -201,6 +226,9 @@ def trade_map(
                 if not later:
                     continue
                 conf_sub = sub[sub["date"].isin(later)]
+                if candidate.get("adx_max") is not None:
+                    conf_sub = conf_sub[conf_sub["ADX14"] <= candidate["adx_max"]]
+
                 if candidate["confirm"] == "NONE":
                     hit = conf_sub.head(1)
                 elif candidate["confirm"] == "HAMMER":
@@ -344,6 +372,7 @@ def main():
             "HOLDOUT_cumulative":float(chosen_ref["HOLDOUT_cumulative"]-base_ref["HOLDOUT_cumulative"]),
         },
         "promotion_rule":"Require improvement in frozen OOS and HOLDOUT plus positive 20/40/60 bps stress before promotion.",
+        "regime_hypothesis":"Also tests ADX<=20/25/30 to isolate weaker-trend environments for mean-reversion."
     }
     (out/"summary.json").write_text(json.dumps(summary,indent=2,default=str),encoding="utf-8")
     (out/"candidate_catalog.json").write_text(json.dumps(candidates,indent=2),encoding="utf-8")
