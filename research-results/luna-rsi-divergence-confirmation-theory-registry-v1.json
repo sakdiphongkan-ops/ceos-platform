@@ -1,0 +1,24 @@
+{
+  "engine": "luna-m1-rsi-divergence-confirmation-v1",
+  "source": {
+    "publisher": "SET Investnow",
+    "title": "จับจังหวะการกลับตัวของหุ้นด้วย RSI",
+    "author": "พงศ์พัฒน์ ค้ำชู, CMT, CAIA, CISA",
+    "date": "2024-12-19",
+    "url": "https://www.setinvestnow.com/th/knowledge/article/612-tsi-rsi-for-stock-reversal-trading"
+  },
+  "evidence_to_test": [
+    "Bullish RSI divergence: price makes a lower low while RSI makes a higher low",
+    "Use a bullish reversal candlestick as confirmation rather than treating divergence as an automatic entry",
+    "Test mean-reversion in weaker-trend regimes using ADX as a regime proxy",
+    "Next-day entry after confirmation to avoid same-bar look-ahead"
+  ],
+  "luna_translation": {
+    "selection": "M1 bottom-20 by 20-day momentum at month-end",
+    "divergence": "causal rolling-window proxy; no future bars",
+    "confirmation": "Hammer or Bullish Engulfing within 5/10 trading days",
+    "regime": "ADX <= 20/25/30 candidates",
+    "cost_stress_bps": [20,40,60],
+    "freeze_rule": "TRAIN+DEV selection; OOS/HOLDOUT frozen"
+  }
+}
