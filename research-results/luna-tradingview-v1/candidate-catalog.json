@@ -1,0 +1,212 @@
+[
+  {
+    "code": "BASELINE",
+    "kind": "BASE",
+    "pool": 20,
+    "rule": "M1_BASE"
+  },
+  {
+    "code": "TV_ALL_BUY",
+    "kind": "TV",
+    "pool": 20,
+    "rule": "TV_ALL_D>0.1"
+  },
+  {
+    "code": "TV_ALL_STRONG",
+    "kind": "TV",
+    "pool": 20,
+    "rule": "TV_ALL_D>0.5"
+  },
+  {
+    "code": "TV_OSC_BUY",
+    "kind": "TV",
+    "pool": 20,
+    "rule": "TV_OSC_D>0.1"
+  },
+  {
+    "code": "TV_OSC_STRONG",
+    "kind": "TV",
+    "pool": 20,
+    "rule": "TV_OSC_D>0.5"
+  },
+  {
+    "code": "TV_MA_BUY",
+    "kind": "TV",
+    "pool": 20,
+    "rule": "TV_MA_D>0.1"
+  },
+  {
+    "code": "TV_REVERSAL",
+    "kind": "TV",
+    "pool": 20,
+    "rule": "TV_OSC_D>0.1 & TV_MA_D<0.1"
+  },
+  {
+    "code": "TV_REVERSAL_STRONG",
+    "kind": "TV",
+    "pool": 20,
+    "rule": "TV_OSC_D>0.5 & TV_MA_D<0"
+  },
+  {
+    "code": "TV_MTF_ALL",
+    "kind": "TV",
+    "pool": 20,
+    "rule": "TV_ALL_D>0.1 & TV_ALL_W>0.1 & TV_ALL_M>0.1"
+  },
+  {
+    "code": "TV_MTF_OSC",
+    "kind": "TV",
+    "pool": 20,
+    "rule": "TV_OSC_D>0.1 & TV_OSC_W>0.1 & TV_OSC_M>0.1"
+  },
+  {
+    "code": "SUPER_RSI_TREND",
+    "kind": "STRATEGY",
+    "pool": 20,
+    "rule": "ST10X30_DIR==1 & RSI14<70 & close>SMA200"
+  },
+  {
+    "code": "RSI2_PULLBACK",
+    "kind": "STRATEGY",
+    "pool": 20,
+    "rule": "RSI2<5 & close>SMA200 & WPR14<-90"
+  },
+  {
+    "code": "BB_RSI_MACD_ADX",
+    "kind": "STRATEGY",
+    "pool": 20,
+    "rule": "close<BB_LOWER20 & RSI14<35 & MACD>MACD_SIGNAL & ADX14>20"
+  },
+  {
+    "code": "BB_REENTRY_RSI",
+    "kind": "STRATEGY",
+    "pool": 20,
+    "rule": "BB_REENTRY_UP==1 & RSI14<50"
+  },
+  {
+    "code": "SQUEEZE_RELEASE_MOM",
+    "kind": "STRATEGY",
+    "pool": 20,
+    "rule": "SQUEEZE_RELEASE==1 & MACD_HIST>0 & close>EMA20"
+  },
+  {
+    "code": "SQUEEZE_KC15_MOM",
+    "kind": "STRATEGY",
+    "pool": 20,
+    "rule": "SQUEEZE_KC_RELEASE_15==1 & MACD_HIST>0 & close>EMA20"
+  },
+  {
+    "code": "SQUEEZE_KC20_TV",
+    "kind": "STRATEGY",
+    "pool": 20,
+    "rule": "SQUEEZE_KC_RELEASE_20==1 & TV_ALL_D>0.1"
+  },
+  {
+    "code": "DONCHIAN55_TV",
+    "kind": "STRATEGY",
+    "pool": 20,
+    "rule": "BREAKOUT55==1 & TV_MA_D>0"
+  },
+  {
+    "code": "DONCHIAN55_ADX",
+    "kind": "STRATEGY",
+    "pool": 20,
+    "rule": "BREAKOUT55==1 & ADX14>20 & TV_MA_D>0"
+  },
+  {
+    "code": "ICHIMOKU_RSI_MACD",
+    "kind": "STRATEGY",
+    "pool": 20,
+    "rule": "price_above_cloud & RSI14>30 & MACD>MACD_SIGNAL"
+  },
+  {
+    "code": "RSI_DIV_HAMMER",
+    "kind": "REVERSAL",
+    "pool": 20,
+    "rule": "RSI_BULL_DIV_PROXY==1 & BULL_REVERSAL==1"
+  },
+  {
+    "code": "RSI_DIV_TV_OSC",
+    "kind": "REVERSAL",
+    "pool": 20,
+    "rule": "RSI_BULL_DIV_PROXY==1 & TV_OSC_D>0.1"
+  },
+  {
+    "code": "OBV_TV_CONFIRM",
+    "kind": "VOLUME",
+    "pool": 20,
+    "rule": "OBV_SLOPE20>0 & TV_ALL_D>0.1"
+  },
+  {
+    "code": "ATRP_RISK_GATE",
+    "kind": "RISK",
+    "pool": 20,
+    "rule": "ATRP14_RANK60<0.8"
+  },
+  {
+    "code": "STRENGTH_NOT_DEEP",
+    "kind": "RISK",
+    "pool": 20,
+    "rule": "DIST_MA60>-0.2 & ADX14<35"
+  },
+  {
+    "code": "POOL50_TVALL",
+    "kind": "RERANK",
+    "pool": 50,
+    "rule": "rank(-M1_MOM20_ADJ)+rank(TV_ALL_D)"
+  },
+  {
+    "code": "POOL50_TVOSC",
+    "kind": "RERANK",
+    "pool": 50,
+    "rule": "rank(-M1_MOM20_ADJ)+rank(TV_OSC_D)"
+  },
+  {
+    "code": "POOL50_REVERSAL",
+    "kind": "RERANK",
+    "pool": 50,
+    "rule": "rank(-M1_MOM20_ADJ)+rank(TV_OSC_D)-rank(TV_MA_D)"
+  },
+  {
+    "code": "POOL50_MTF",
+    "kind": "RERANK",
+    "pool": 50,
+    "rule": "rank(-M1_MOM20_ADJ)+rank(TV_ALL_D)+rank(TV_ALL_W)+rank(TV_ALL_M)"
+  },
+  {
+    "code": "POOL50_ST",
+    "kind": "RERANK",
+    "pool": 50,
+    "rule": "rank(-M1_MOM20_ADJ)+rank(ST10X30_DIR)"
+  },
+  {
+    "code": "POOL50_SQUEEZE",
+    "kind": "RERANK",
+    "pool": 50,
+    "rule": "rank(-M1_MOM20_ADJ)+rank(SQUEEZE_RELEASE)+rank(MACD_HIST)"
+  },
+  {
+    "code": "POOL50_RSI_DIV",
+    "kind": "RERANK",
+    "pool": 50,
+    "rule": "rank(-M1_MOM20_ADJ)+rank(RSI_BULL_DIV_PROXY)+rank(TV_OSC_D)"
+  },
+  {
+    "code": "POOL50_VOLUME",
+    "kind": "RERANK",
+    "pool": 50,
+    "rule": "rank(-M1_MOM20_ADJ)+rank(OBV_Z20)+rank(TV_MA_D)"
+  },
+  {
+    "code": "POOL100_TVALL",
+    "kind": "RERANK",
+    "pool": 100,
+    "rule": "rank(-M1_MOM20_ADJ)+rank(TV_ALL_D)"
+  },
+  {
+    "code": "POOL100_MTF",
+    "kind": "RERANK",
+    "pool": 100,
+    "rule": "rank(-M1_MOM20_ADJ)+rank(TV_ALL_D)+rank(TV_ALL_W)+rank(TV_ALL_M)"
+  }
+]
