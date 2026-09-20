@@ -1,0 +1,58 @@
+{
+  "status": "COMPLETED_RESEARCH_SAVE_STEP_FAILED",
+  "engine": "luna-adaptive-tournament-v2",
+  "workflow_run_id": 35477527290,
+  "workflow_sha": "c837c3f315943d1ac5993a7be3cf82f289923888",
+  "dataset_sha256": "bfe25b83b2af29f19d5043f622e8679e08b53eb7e327fa874f48909355e74da6",
+  "formula_count": 1000,
+  "months_traded": 48,
+  "active_factors": [
+    "mom1",
+    "mom3",
+    "mom6",
+    "mom12",
+    "high52_ratio",
+    "vol20",
+    "maxdd60",
+    "avg_amount20"
+  ],
+  "geometric_monthly_return": 0.0015598115562143189,
+  "cumulative_return": 0.077682199169536,
+  "positive_month_pct": 0.3958333333333333,
+  "months_ge_7pct": 3,
+  "min_monthly_return": -0.10250549133289448,
+  "max_monthly_return": 0.43731618695753266,
+  "max_drawdown_pct": -0.3039667014296611,
+  "average_turnover": 0.465625,
+  "total_transaction_cost": 0.044700000000000004,
+  "cost_bps": 20,
+  "lookback_months": 24,
+  "min_history_months": 12,
+  "benchmark_m1_same_panel": {
+    "geometric_monthly_return": 0.009178451795070375,
+    "cumulative_return": 0.7301275727922387,
+    "positive_month_pct": 0.5,
+    "min_monthly_return": -0.1587483970686575,
+    "max_monthly_return": 0.4461663927662334,
+    "max_drawdown_pct": -0.4422350692342679
+  },
+  "exact_persisted_m1_external_check": {
+    "strategy_version": "luna-m1s0k20rev-v1",
+    "months": 59,
+    "period": "2021-10-31 to 2026-08-31",
+    "geometric_monthly_return": 0.006556127881564541,
+    "cumulative_return": 0.4704214597467422,
+    "positive_month_pct": 0.5423728813559322,
+    "max_drawdown_pct": -0.4735760363437528
+  },
+  "guards": {
+    "data_contiguity": "forward return only when the next observation is exactly the next calendar month",
+    "leakage": "selection for month t uses only strictly prior months"
+  },
+  "save_failure": {
+    "step": "Save independent result",
+    "cause": "expected final filtered dataset manifest was not generated; tournament calculation and validation both succeeded",
+    "fixed_by_commit": "66a609f3606743ed5ae21b8f776ed8215e5c48de"
+  },
+  "interpretation": "This snapshot is an auditable record of a completed research computation, not a promoted strategy and not the final fresh-seed/holdout verdict."
+}
