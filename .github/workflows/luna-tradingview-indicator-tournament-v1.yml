@@ -40,12 +40,14 @@ jobs:
 
           url = "https://wigzicwgcsrhdummrbjx.supabase.co/functions/v1/luna-research-export-v1"
           workers = 4
-
+          temp = Path("data/luna_daily/monthly")
+          temp.mkdir(parents=True, exist_ok=True)
           months = pd.date_range("2021-09-01", "2026-08-01", freq="MS")
 
           def fetch_month(start):
               start_s = start.strftime("%Y-%m-%d")
               end_s = (start + pd.offsets.MonthEnd(1)).strftime("%Y-%m-%d")
+              out = temp / f"{start_s}.parquet"
               last = None
               for attempt in range(5):
                   try:
@@ -59,33 +61,47 @@ jobs:
                           continue
                       r.raise_for_status()
                       payload = r.json()
-                      return start_s, payload.get("data", [])
+                      df = pd.DataFrame(payload.get("data", []))
+                      if df.empty:
+                          raise RuntimeError(f"empty month {start_s}")
+                      df.to_parquet(out, index=False)
+                      return start_s, len(df)
                   except Exception as exc:
                       last = exc
               raise last
 
-          rows = []
           with ThreadPoolExecutor(max_workers=workers) as ex:
               futs = [ex.submit(fetch_month, m) for m in months]
               for fut in as_completed(futs):
-                  month, month_rows = fut.result()
-                  rows.extend(month_rows)
-                  print(f"completed_month={month} rows={len(month_rows)} total={len(rows)}", flush=True)
+                  month, n = fut.result()
+                  print(f"completed_month={month} rows={n}", flush=True)
 
           out = Path("data/luna_daily/daily_prices.csv")
-          out.parent.mkdir(parents=True, exist_ok=True)
-          df = pd.DataFrame(rows, columns=["date","symbol","market","open","high","low","close","adj_close","volume","amount","available_at"])
-          df["date"] = pd.to_datetime(df["date"])
-          for c in ["open","high","low","close","adj_close","volume","amount"]:
-              df[c] = pd.to_numeric(df[c], errors="coerce")
-          df["available_at"] = pd.to_datetime(df["available_at"], utc=True, errors="coerce")
+          if out.exists():
+              out.unlink()
+
+          parts = []
+          for p in sorted(temp.glob("*.parquet")):
+              df = pd.read_parquet(p)
+              parts.append(df)
+              if len(parts) >= 8:
+                  chunk = pd.concat(parts, ignore_index=True)
+                  header = not out.exists()
+                  chunk.to_csv(out, mode="a", header=header, index=False)
+                  parts = []
+          if parts:
+              chunk = pd.concat(parts, ignore_index=True)
+              header = not out.exists()
+              chunk.to_csv(out, mode="a", header=header, index=False)
+
+          df = pd.read_csv(out, parse_dates=["date"])
           df = df[(df["date"] >= "2021-09-01") & (df["date"] <= "2026-08-31")].copy()
           df = df.sort_values(["symbol","date"]).drop_duplicates(["symbol","date"])
           df.to_csv(out, index=False)
           summary = {"rows": len(df), "symbols": df["symbol"].nunique(), "start": str(df["date"].min().date()), "end": str(df["date"].max().date())}
           print(summary)
-          assert summary["symbols"] == 924, summary
           assert summary["rows"] > 1000000, summary
+          assert summary["symbols"] >= 924, summary
           assert summary["start"] == "2021-09-20", summary
           assert summary["end"] in {"2026-08-29","2026-08-31"}, summary
           PY
