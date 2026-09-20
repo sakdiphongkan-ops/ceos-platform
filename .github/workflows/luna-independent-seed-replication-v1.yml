@@ -61,17 +61,17 @@ jobs:
           rm -rf research/luna_seed_replication_v1
           mkdir -p research/luna_seed_replication_v1
           for seed_value in 20260920 20260921 20260922 20260923 20260924; do
-            mkdir -p "research/luna_seed_replication_v1/seed_\${seed_value}"
+            mkdir -p "research/luna_seed_replication_v1/seed_${seed_value}"
             python scripts/research/luna_adaptive_tournament_v2.py \
               --input data/luna_monthly_independent/monthly_price_factors.csv \
-              --output "research/luna_seed_replication_v1/seed_\${seed_value}" \
+              --output "research/luna_seed_replication_v1/seed_${seed_value}" \
               --formula-count 1000 \
               --lookback-months 24 \
               --min-history-months 12 \
               --cost-bps 20 \
               --k 20 \
-              --seed "\${seed_value}"
-            python - "\${seed_value}" <<'PY'
+              --seed "${seed_value}"
+            python - "${seed_value}" <<'PY'
           import json, sys
           from pathlib import Path
           seed_value=sys.argv[1]
