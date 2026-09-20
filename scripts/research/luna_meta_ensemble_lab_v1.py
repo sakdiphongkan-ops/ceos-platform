@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 
 FACTORS = [
-    "mom1","mom3","mom6","mom12","high52_ratio","vol20","maxdd60","avg_amount20"
+    "mom1","mom2","mom3","mom4","mom6","mom12","high52_ratio","vol20","maxdd60","avg_amount20"
 ]
 
 COMPONENTS = {
