@@ -41,6 +41,7 @@ class Candidate:
     vol_w: float
     trend_floor: float
     liq_floor: float
+    lq_style: str = "SAFE"
     k: int = 20
     stress_on: float = 0.75
     stress_off: float = 1.50
@@ -95,6 +96,7 @@ def make_candidates() -> list[Candidate]:
             for vw in (0.00, 0.10):
                 for trend_floor in (0.00, 0.20):
                     for liq_floor in (0.00, 0.20):
+                    for lq_style in ("SAFE", "CONTRARIAN"):
                         # Positive weights are normalized; lq uses lower turnover and
                         # lower price-to-52-week-high distance as positive signals.
                         total = mw + lqw + vw
@@ -103,11 +105,11 @@ def make_candidates() -> list[Candidate]:
                         idx += 1
                         name = (
                             f"B{idx:03d}_MW{mw:.2f}_LQ{lqw:.2f}_VW{vw:.2f}"
-                            f"_TF{trend_floor:.2f}_LF{liq_floor:.2f}"
+                            f"_TF{trend_floor:.2f}_LF{liq_floor:.2f}_{lq_style}"
                         )
                         out.append(Candidate(
                             name=name,mom_w=mw/total,lq_w=lqw/total,vol_w=vw/total,
-                            trend_floor=trend_floor,liq_floor=liq_floor
+                            trend_floor=trend_floor,liq_floor=liq_floor,lq_style=lq_style
                         ))
     return out
 
@@ -178,9 +180,16 @@ def score_candidates(m: pd.DataFrame, candidates: list[Candidate]) -> dict[str,p
             x = x[x.groupby("month")["R_MOM_60"].transform("rank", pct=True) >= c.trend_floor]
         if c.liq_floor > 0:
             x = x[x.groupby("month")["R_AMOUNT"].transform("rank", pct=True) >= c.liq_floor]
+        if c.lq_style == "SAFE":
+            lq_signal = 0.50 * (1.0 - x["R_ILLIQ_20"]) + 0.50 * x["R_AMOUNT"]
+        else:
+            # Literature-inspired contrarian variant: emphasize illiquidity and
+            # distance below the 52-week high. Liquidity-floor candidates still
+            # cap the most untradeable tail.
+            lq_signal = 0.50 * x["R_ILLIQ_20"] + 0.50 * (1.0 - x["R_DIST_HIGH_252"])
         x["score"] = (
             c.mom_w * (1.0 - x["R_MOM_20"])
-            + c.lq_w * (0.50 * (1.0 - x["R_ILLIQ_20"]) + 0.50 * (1.0 - x["R_DIST_HIGH_252"]))
+            + c.lq_w * lq_signal
             + c.vol_w * x["R_VOL_20"]
         )
         x = x.dropna(subset=["score","fwd1"])
@@ -215,7 +224,11 @@ def apply_regime(base: pd.DataFrame, regime: pd.DataFrame, c: Candidate) -> pd.S
 def cost_net(gross: pd.Series, turnover: pd.Series, bps: float, exposure: pd.Series | None = None) -> pd.Series:
     if exposure is None:
         exposure = pd.Series(1.0,index=gross.index)
-    return gross * exposure - (turnover * exposure) * (bps / 10000.0)
+    exposure = exposure.astype(float)
+    prev = exposure.shift(1).fillna(1.0)
+    exposure_turnover = (exposure - prev).abs()
+    total_turnover = turnover * exposure + exposure_turnover
+    return gross * exposure - total_turnover * (bps / 10000.0)
 
 def evaluate_periods(net: pd.Series) -> dict:
     ans = {}
@@ -275,11 +288,23 @@ def main() -> None:
             rows.append(row)
 
     all_df = pd.DataFrame(rows)
-    dev = all_df[all_df["bps"] == float(args.costs.split(",")[0])].sort_values(
-        ["DEV_geo_monthly","DEV_positive_month_pct","DEV_max_drawdown_pct"],
-        ascending=[False,False,False],
-    )
-    shortlist = dev.head(args.top_dev)
+    ref_bps=float(args.costs.split(",")[0])
+    stress_bps=float(args.costs.split(",")[-1])
+    wide=all_df[["candidate","bps","DEV_geo_monthly","DEV_positive_month_pct","DEV_max_drawdown_pct"]].copy()
+    piv=wide.pivot_table(index="candidate",columns="bps",values="DEV_geo_monthly",aggfunc="first")
+    posp=wide.pivot_table(index="candidate",columns="bps",values="DEV_positive_month_pct",aggfunc="first")
+    dd=wide[wide["bps"]==ref_bps].set_index("candidate")["DEV_max_drawdown_pct"]
+    robust=pd.DataFrame(index=piv.index)
+    robust["dev_geo_ref"]=piv.get(ref_bps,np.nan)
+    robust["dev_geo_stress"]=piv.get(stress_bps,np.nan)
+    robust["dev_geo_worst"]=robust[["dev_geo_ref","dev_geo_stress"]].min(axis=1)
+    robust["dev_pos_ref"]=posp.get(ref_bps,np.nan)
+    robust["dev_pos_stress"]=posp.get(stress_bps,np.nan)
+    robust["dev_dd_ref"]=dd
+    robust["robust_score"]=robust["dev_geo_worst"] - 0.25*robust["dev_dd_ref"].abs()
+    robust["candidate"]=robust.index
+    dev=robust.sort_values(["robust_score","dev_pos_ref","dev_pos_stress"],ascending=[False,False,False])
+    shortlist=dev.head(args.top_dev)
     # Regime overlays are evaluated only after the base family has been frozen by DEV.
     overlay_specs=[]
     for r in shortlist.itertuples(index=False):
@@ -312,12 +337,30 @@ def main() -> None:
     overlay_df=pd.DataFrame(overlay_rows)
 
     # Select only from DEV at the reference 20 bps. OOS/HOLDOUT are descriptive.
-    best_base=all_df[all_df.bps==float(args.costs.split(",")[0])].sort_values(
-        ["DEV_geo_monthly","DEV_positive_month_pct","DEV_max_drawdown_pct"],
-        ascending=[False,False,False]).iloc[0].to_dict()
-    best_overlay=overlay_df[overlay_df.bps==float(args.costs.split(",")[0])].sort_values(
-        ["DEV_geo_monthly","DEV_positive_month_pct","DEV_max_drawdown_pct"],
-        ascending=[False,False,False]).iloc[0].to_dict() if not overlay_df.empty else {}
+    best_base_meta=dev.iloc[0].to_dict()
+    best_base_row=all_df[(all_df.bps==ref_bps)&(all_df.candidate==best_base_meta["candidate"])].iloc[0].to_dict()
+    best_base={**best_base_row,"robust_score":float(best_base_meta["robust_score"]),
+               "dev_geo_worst_cost":float(best_base_meta["dev_geo_worst"]) }
+    if not overlay_df.empty:
+        owide=overlay_df[["candidate","bps","DEV_geo_monthly","DEV_positive_month_pct","DEV_max_drawdown_pct"]]
+        opiv=owide.pivot_table(index="candidate",columns="bps",values="DEV_geo_monthly",aggfunc="first")
+        opos=owide.pivot_table(index="candidate",columns="bps",values="DEV_positive_month_pct",aggfunc="first")
+        odd=owide[owide["bps"]==ref_bps].set_index("candidate")["DEV_max_drawdown_pct"]
+        ometa=pd.DataFrame(index=opiv.index)
+        ometa["ref"]=opiv.get(ref_bps,np.nan)
+        ometa["stress"]=opiv.get(stress_bps,np.nan)
+        ometa["worst"]=ometa[["ref","stress"]].min(axis=1)
+        ometa["pos_ref"]=opos.get(ref_bps,np.nan)
+        ometa["pos_stress"]=opos.get(stress_bps,np.nan)
+        ometa["dd"]=odd
+        ometa["score"]=ometa["worst"]-0.25*ometa["dd"].abs()
+        ometa["candidate"]=ometa.index
+        ob=ometa.sort_values(["score","pos_ref","pos_stress"],ascending=[False,False,False]).iloc[0]
+        best_overlay=overlay_df[(overlay_df.bps==ref_bps)&(overlay_df.candidate==ob["candidate"])].iloc[0].to_dict()
+        best_overlay["robust_score"]=float(ob["score"])
+        best_overlay["dev_geo_worst_cost"]=float(ob["worst"])
+    else:
+        best_overlay={}
 
     summary={
         "status":"COMPLETED",
@@ -327,7 +370,7 @@ def main() -> None:
         "overlay_count":len(overlay_specs),
         "reference_cost_bps":float(args.costs.split(",")[0]),
         "cost_stress_bps":[float(z) for z in args.costs.split(",")],
-        "selection_rule":"base candidate and regime overlay are selected using DEV only; OOS and HOLDOUT are frozen evaluations",
+        "selection_rule":"base candidate and regime overlay are selected using DEV only; robust score uses DEV at reference and stress costs plus drawdown; OOS and HOLDOUT are frozen evaluations",
         "theory_basis":[
             "short-term reversal",
             "liquidity-provision conditioning",
