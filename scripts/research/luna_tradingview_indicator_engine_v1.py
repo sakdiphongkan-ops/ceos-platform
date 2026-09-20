@@ -479,10 +479,10 @@ def monthly_snapshot(df: pd.DataFrame) -> pd.DataFrame:
     # Locked production M1 is the completed calendar-month return at month-end.
     # Compute it from month-end adjusted closes so the tournament baseline is
     # apple-to-apple with luna-m1s0k20rev-v1.
-    monthly["M1_MONTH_RETURN_ADJ"] = monthly.groupby("symbol")["adj_close"].pct_change()
-    # Locked production M1 uses the completed current-month return as the
-    # mean-reversion score at month-end, then holds into the next month.
-    monthly["M1_MOM20_ADJ"] = monthly["M1_MONTH_RETURN_ADJ"]
+    monthly["M1_MONTH_RETURN_CLOSE"] = monthly.groupby("symbol")["close"].pct_change()
+    # Locked production M1 uses raw close: current month-end close versus
+    # the previous month-end close, as implemented by luna_build_forecast_preorder.
+    monthly["M1_MOM20_ADJ"] = monthly["M1_MONTH_RETURN_CLOSE"]
     return monthly.reset_index(drop=True)
 
 
