@@ -27,6 +27,6 @@
     "Bull/Bear Power uptrend/downtrend uses price-vs-EMA50, matching the Bull/Bear Power anchor used by the research translation.",
     "These two proxy definitions are recorded hypotheses, not claims of byte-identical proprietary implementation."
   ],
-  "monthly_m1_definition": "completed calendar-month adjusted-close return at month-end; aligned to locked production M1",
+  "monthly_m1_definition": "completed calendar-month raw-close return from prior month-end to current month-end; verified against locked production selection_score",
   "forward_data_through": "2026-09-18"
 }
