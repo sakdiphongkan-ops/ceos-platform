@@ -1,0 +1,80 @@
+{
+  "status": "COMPLETED",
+  "engine": "luna-prior-leader-holdout-v1",
+  "dataset_rows": 51562,
+  "standardized_cost_bps": 20,
+  "k": 20,
+  "train_months": 47,
+  "holdout_months": 12,
+  "selection_rule": "select one candidate by training geometric monthly return only; freeze before holdout",
+  "candidate_pool": [
+    "M1_REV_K20",
+    "M2_REV_K20",
+    "S13_HIGHAMT_K20",
+    "S14_LOWAMT_K20",
+    "S46_MOM6_HIGH52_LOWVOL_K20",
+    "S48_MOM12_HIGH52_LOWVOL_K20",
+    "HIGH52_K20"
+  ],
+  "selected_by_training_only": {
+    "candidate_id": "S14_LOWAMT_K20",
+    "training_geometric_monthly_return": 0.006207075103266084,
+    "holdout_geometric_monthly_return": -0.017801124271108477,
+    "holdout_cumulative_return": -0.19389207244218165,
+    "holdout_positive_month_pct": 0.16666666666666666,
+    "holdout_months_ge_7pct": 0,
+    "holdout_max_drawdown": -0.21358168608740435
+  },
+  "candidates": [
+    {
+      "id": "S14_LOWAMT_K20",
+      "train_geo": 0.006207075103266084,
+      "hold_geo": -0.017801124271108477,
+      "hold_cum": -0.19389207244218165,
+      "hold_pos": 0.16666666666666666
+    },
+    {
+      "id": "S48_MOM12_HIGH52_LOWVOL_K20",
+      "train_geo": 0.0022019987973650556,
+      "hold_geo": 0.02456709064322611,
+      "hold_cum": 0.3380884603695222,
+      "hold_pos": 0.8333333333333334
+    },
+    {
+      "id": "S46_MOM6_HIGH52_LOWVOL_K20",
+      "train_geo": -0.00011259508412258828,
+      "hold_geo": 0.023760744071611578,
+      "hold_cum": 0.3255059179063349,
+      "hold_pos": 0.8333333333333334
+    },
+    {
+      "id": "M2_REV_K20",
+      "train_geo": -0.00036522724429909813,
+      "hold_geo": 0.032493275396093736,
+      "hold_cum": 0.3768046302792145,
+      "hold_pos": 0.9
+    },
+    {
+      "id": "M1_REV_K20",
+      "train_geo": -0.0005374540587128781,
+      "hold_geo": 0.00921844161894264,
+      "hold_cum": 0.1164059289552053,
+      "hold_pos": 0.6666666666666666
+    },
+    {
+      "id": "HIGH52_K20",
+      "train_geo": -0.002002573164749298,
+      "hold_geo": 0.011769885241603164,
+      "hold_cum": 0.15075000333206723,
+      "hold_pos": 0.6666666666666666
+    },
+    {
+      "id": "S13_HIGHAMT_K20",
+      "train_geo": -0.003834249069517494,
+      "hold_geo": 0.02872253720440869,
+      "hold_cum": 0.40468535089890345,
+      "hold_pos": 0.8333333333333334
+    }
+  ],
+  "interpretation": "The training-selected historical leader did not persist in the frozen holdout. This is evidence against selecting a strategy solely because it ranked first in an earlier sample."
+}
