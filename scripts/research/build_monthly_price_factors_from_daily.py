@@ -45,6 +45,7 @@ def main() -> None:
     # 252-trading-day rolling high approximates 52 weeks of trading data.
     df = df.sort_values(["symbol", "date"]).reset_index(drop=True)
     g = df.groupby("symbol", group_keys=False)
+    df["MOM_252"] = g["adj_close"].pct_change(252)
     df["HIGH52_RATIO"] = df["adj_close"] / g["adj_close"].rolling(
         252, min_periods=252
     ).max().reset_index(level=0, drop=True)
@@ -63,6 +64,9 @@ def main() -> None:
     m = m.rename(
         columns={
             "MOM_20": "mom1",
+            "MOM_60": "mom3",
+            "MOM_120": "mom6",
+            "MOM_252": "mom12",
             "VOL_20": "vol20",
             "MAXDD_60": "maxdd60",
             "AMOUNT": "avg_amount20",
@@ -107,7 +111,7 @@ def main() -> None:
             "mom1": "MOM_20 from last trading observation of each symbol-month",
             "mom3": "MOM_60 from last trading observation of each symbol-month",
             "mom6": "MOM_120 from last trading observation of each symbol-month",
-            "mom12": "MOM_252 from last trading observation is not calculated by the daily builder v1; retained as NaN",
+            "mom12": "MOM_252 from last trading observation of each symbol-month",
             "high52_ratio": "adj_close / rolling 252-trading-day high",
             "vol20": "VOL_20 from last trading observation",
             "maxdd60": "MAXDD_60 from last trading observation",
