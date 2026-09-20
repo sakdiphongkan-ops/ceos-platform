@@ -25,11 +25,11 @@ OUT_COLS = [
     "date","symbol","market","decision_ts","available_at","adj_close",
     "PE","PBV","EV_EBITDA","FCF_YIELD","EARNINGS_YIELD","DIV_YIELD",
     "ROE","ROA","ROIC","GPM","NPM","CFO_MARGIN","REV_G","EPS_G","NI_G","FCF_G",
-    "MOM_5","MOM_10","MOM_20","MOM_60","MOM_120","REL_MOM",
+    "MOM_5","MOM_10","MOM_20","MOM_60","MOM_120","MOM_252","REL_MOM",
     "VOL_10","VOL_20","BETA","MAXDD_60","ATR_PCT","ADV20","TURNOVER","AMOUNT",
     "ASSET_G","CAPEX_G","INVESTMENT_RATE","DIV_G","PAYOUT","BUYBACK","DE",
     "NET_DEBT_EBITDA","INTEREST_COVER","CURRENT_RATIO","RSI14",
-    "DIST_MA20","DIST_MA60","BREAKOUT20","BREAKOUT55","SKEW_20","SKEW_60","QUALITY_SCORE","VALUE_QUALITY","MOM_BLEND","CONSERVATIVE_SCORE","SAFETY_SCORE","GROWTH_QUALITY","INV_QUALITY",
+    "DIST_MA20","DIST_MA60","DIST_HIGH_252","BREAKOUT20","BREAKOUT55","SKEW_20","SKEW_60","ATR_PCT","ILLIQ_20","QUALITY_SCORE","VALUE_QUALITY","MOM_BLEND","CONSERVATIVE_SCORE","SAFETY_SCORE","GROWTH_QUALITY","INV_QUALITY",
     "fwd_return","fwd_return_1d","fwd_return_5d","fwd_return_20d",
 ]
 
@@ -103,7 +103,7 @@ def main() -> None:
 
     g = p.groupby("symbol", group_keys=False)
     ret = g[px].pct_change()
-    for n in [5,10,20,60,120]:
+    for n in [5,10,20,60,120,252]:
         p[f"MOM_{n}"] = g[px].pct_change(n)
     p["VOL_10"] = ret.groupby(p["symbol"]).rolling(10, min_periods=10).std().reset_index(level=0, drop=True)
     p["VOL_20"] = ret.groupby(p["symbol"]).rolling(20, min_periods=20).std().reset_index(level=0, drop=True)
@@ -112,10 +112,12 @@ def main() -> None:
     p["MAXDD_60"] = p[px] / g[px].rolling(60, min_periods=60).max().reset_index(level=0, drop=True) - 1
     p["DIST_MA20"] = p[px] / g[px].rolling(20, min_periods=20).mean().reset_index(level=0, drop=True) - 1
     p["DIST_MA60"] = p[px] / g[px].rolling(60, min_periods=60).mean().reset_index(level=0, drop=True) - 1
+    p["DIST_HIGH_252"] = p[px] / g[px].rolling(252, min_periods=252).max().reset_index(level=0, drop=True) - 1
     p["BREAKOUT20"] = p[px] / g[px].shift(1).rolling(20, min_periods=20).max().reset_index(level=0, drop=True) - 1
     p["BREAKOUT55"] = p[px] / g[px].shift(1).rolling(55, min_periods=55).max().reset_index(level=0, drop=True) - 1
     tr = g.apply(true_range).reset_index(level=0, drop=True)
     p["ATR_PCT"] = tr.groupby(p["symbol"]).rolling(14, min_periods=14).mean().reset_index(level=0, drop=True) / p["close"]
+    p["ILLIQ_20"] = (ret.abs() / p["amount"].replace(0, np.nan)).groupby(p["symbol"]).rolling(20, min_periods=20).mean().reset_index(level=0, drop=True)
 
     def adv(x: pd.Series) -> pd.Series:
         return x.rolling(20, min_periods=20).mean()
