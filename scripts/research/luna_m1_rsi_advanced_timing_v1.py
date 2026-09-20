@@ -77,17 +77,11 @@ def load(path: str) -> pd.DataFrame:
         p[c] = pd.to_numeric(p[c], errors="coerce")
     p["symbol"] = p["symbol"].astype(str).str.upper().str.strip()
     p = p.sort_values(["symbol","date"]).drop_duplicates(["symbol","date"]).reset_index(drop=True)
+    p["_adj"] = p["adj_close"].where(p["adj_close"].notna(), p["close"])
     g = p.groupby("symbol", sort=False)
-    adj = p["adj_close"].where(p["adj_close"].notna(), p["close"])
 
-    p["MOM20"] = g[adj.name].pct_change(20) if adj.name in p.columns else g["adj_close"].pct_change(20)
-    if adj.name not in p.columns:
-        p["adj"] = adj
-        g = p.groupby("symbol", sort=False)
-        p["MOM20"] = g["adj"].pct_change(20)
-        price_col = "adj"
-    else:
-        price_col = adj.name
+    price_col = "_adj"
+    p["MOM20"] = g[price_col].pct_change(20)
 
     for n in [7, 9, 14, 21]:
         p[f"RSI{n}"] = g[price_col].apply(lambda x, n=n: rsi(x, n)).reset_index(level=0, drop=True)
