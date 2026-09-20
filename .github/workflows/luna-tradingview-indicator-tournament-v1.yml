@@ -39,47 +39,38 @@ jobs:
           import pandas as pd
 
           url = "https://wigzicwgcsrhdummrbjx.supabase.co/functions/v1/luna-research-export-v1"
-          page_size = 1000
           workers = 4
-          batch_count = 47
 
-          def fetch_page(batch, offset):
+          months = pd.date_range("2021-09-01", "2026-08-01", freq="MS")
+
+          def fetch_month(start):
+              start_s = start.strftime("%Y-%m-%d")
+              end_s = (start + pd.offsets.MonthEnd(1)).strftime("%Y-%m-%d")
               last = None
               for attempt in range(5):
                   try:
                       r = requests.get(
                           url,
-                          params={"scope": "luna5y", "batch": batch, "offset": offset, "limit": page_size},
-                          timeout=120,
+                          params={"scope": "luna5y", "start": start_s, "end": end_s},
+                          timeout=180,
                       )
                       if r.status_code >= 500:
                           last = RuntimeError(f"server {r.status_code}: {r.text[:200]}")
                           continue
                       r.raise_for_status()
-                      return r.json().get("data", [])
+                      payload = r.json()
+                      return start_s, payload.get("data", [])
                   except Exception as exc:
                       last = exc
               raise last
 
-          def fetch_batch(batch):
-              out = []
-              offset = 0
-              while True:
-                  page = fetch_page(batch, offset)
-                  out.extend(page)
-                  print(f"batch={batch} offset={offset} rows={len(page)}", flush=True)
-                  if len(page) < page_size:
-                      break
-                  offset += page_size
-              return batch, out
-
           rows = []
           with ThreadPoolExecutor(max_workers=workers) as ex:
-              futs = [ex.submit(fetch_batch, b) for b in range(batch_count)]
+              futs = [ex.submit(fetch_month, m) for m in months]
               for fut in as_completed(futs):
-                  batch, batch_rows = fut.result()
-                  rows.extend(batch_rows)
-                  print(f"completed_batch={batch} total_rows={len(rows)}", flush=True)
+                  month, month_rows = fut.result()
+                  rows.extend(month_rows)
+                  print(f"completed_month={month} rows={len(month_rows)} total={len(rows)}", flush=True)
 
           out = Path("data/luna_daily/daily_prices.csv")
           out.parent.mkdir(parents=True, exist_ok=True)
@@ -96,7 +87,7 @@ jobs:
           assert summary["symbols"] == 925, summary
           assert summary["rows"] > 1000000, summary
           assert summary["start"] == "2021-09-20", summary
-          assert summary["end"] == "2026-08-29" or summary["end"] == "2026-08-31", summary
+          assert summary["end"] in {"2026-08-29","2026-08-31"}, summary
           PY
 
       - name: Build TradingView-derived indicator panel
