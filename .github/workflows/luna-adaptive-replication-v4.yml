@@ -1,0 +1,145 @@
+name: LUNA Adaptive Replication v4 - Public SET
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - "scripts/research/build_monthly_price_factor_library_v2.py"
+      - "scripts/research/luna_adaptive_tournament_v4.py"
+      - "scripts/research/luna_holdout_audit_v2.py"
+      - ".github/workflows/luna-adaptive-replication-v4.yml"
+
+concurrency:
+  group: luna-adaptive-replication-v4
+  cancel-in-progress: true
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy python-dateutil
+
+      - name: Download SET history
+        run: |
+          mkdir -p data/raw
+          curl -fL --retry 3 --retry-delay 2             "https://data.mendeley.com/public-api/zip/gybmm9t3mr/download/1"             -o data/raw/gybmm9t3mr-1.zip
+          test -s data/raw/gybmm9t3mr-1.zip
+
+      - name: Normalize SET history
+        run: |
+          rm -rf data/set_2000_2025
+          python scripts/research/download_mendeley_set.py             --zip data/raw/gybmm9t3mr-1.zip             --output-dir data/set_2000_2025             --quarantine-invalid             --max-invalid-rate 0.01
+
+      - name: Build daily factors
+        run: |
+          python scripts/research/build_factor_dataset.py             --prices data/set_2000_2025/prices.csv             --output data/set_2000_2025/factors.csv
+
+      - name: Restrict to trailing five years
+        run: |
+          python scripts/research/filter_last_5y.py             --input data/set_2000_2025/factors.csv             --output data/set_2000_2025/factors_5y.csv
+
+      - name: Build expanded monthly factor library
+        run: |
+          rm -rf data/luna_v4
+          python scripts/research/build_monthly_price_factor_library_v2.py             --prices data/set_2000_2025/prices.csv             --output data/luna_v4/monthly_factors_all.csv
+
+      - name: Restrict monthly library to five-year window
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import pandas as pd
+          src=Path("data/luna_v4/monthly_factors_all.csv")
+          out=Path("data/luna_v4/monthly_factors_5y.csv")
+          df=pd.read_csv(src)
+          df["month_end"]=pd.to_datetime(df["month_end"])
+          end=df["month_end"].max()
+          start=end-pd.DateOffset(years=5)
+          x=df[df["month_end"]>=start].copy()
+          x.sort_values(["month_end","symbol"]).to_csv(out,index=False)
+          print({"rows":len(x),"symbols":int(x["symbol"].nunique()),"months":int(x["month_end"].nunique()),"start":str(x["month_end"].min().date()),"end":str(x["month_end"].max().date())})
+          PY
+
+      - name: Run three fresh seeds
+        run: |
+          rm -rf research/luna_v4
+          mkdir -p research/luna_v4
+          for SEED in 20260920 20260921 20260922; do
+            python scripts/research/luna_adaptive_tournament_v4.py               --input data/luna_v4/monthly_factors_5y.csv               --output research/luna_v4/seed_${SEED}               --formula-count 1000               --seed ${SEED}               --lookback-months 24               --min-history-months 12               --cost-bps 20               --k 20
+            python scripts/research/luna_holdout_audit_v2.py               --input data/luna_v4/monthly_factors_5y.csv               --catalog research/luna_v4/seed_${SEED}/formula_catalog.json               --output research/luna_v4/seed_${SEED}/holdout               --holdout-months 12               --top-n 25               --k 20               --cost-bps 20               --benchmark-id M1_REV21_K20
+          done
+
+      - name: Build replication summary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          seeds=[20260920,20260921,20260922]
+          rows=[]
+          for s in seeds:
+            t=json.loads(Path(f"research/luna_v4/seed_{s}/summary.json").read_text())
+            h=json.loads(Path(f"research/luna_v4/seed_{s}/holdout/summary.json").read_text())
+            rows.append({
+              "seed":s,
+              "adaptive_geo_monthly":t["adaptive"]["geometric_monthly_return"],
+              "adaptive_cumulative":t["adaptive"]["cumulative_return"],
+              "adaptive_max_drawdown":t["adaptive"]["max_drawdown_pct"],
+              "adaptive_positive_month_pct":t["adaptive"]["positive_month_pct"],
+              "adaptive_months_ge_7pct":t["adaptive"]["months_ge_7pct"],
+              "m1_geo_monthly":t["benchmark_m1_rev21_k20"]["geometric_monthly_return"],
+              "m1_cumulative":t["benchmark_m1_rev21_k20"]["cumulative_return"],
+              "rank1_formula":h["rank1_frozen_candidate_holdout"]["formula_id"],
+              "rank1_holdout_geo_monthly":h["rank1_frozen_candidate_holdout"]["holdout_geometric_monthly"],
+              "rank1_holdout_cumulative":h["rank1_frozen_candidate_holdout"]["holdout_cumulative"],
+              "m1_holdout_geo_monthly":h["benchmark_holdout_geometric_monthly"],
+              "m1_holdout_cumulative":h["benchmark_holdout_cumulative"],
+            })
+          out={
+            "status":"COMPLETED",
+            "engine":"luna-adaptive-replication-v4",
+            "seeds":seeds,
+            "runs":rows,
+            "replication_gate":{
+              "holdout_required":True,
+              "target_geometric_monthly":0.07,
+              "formula_must_be_positive_holdout_in_all_seeds":True
+            },
+            "note":"Fresh seed replication is descriptive robustness evidence; no holdout result is used to select a formula."
+          }
+          Path("research-results/luna-v4-replication-summary.json").write_text(json.dumps(out,indent=2),encoding="utf-8")
+          print(json.dumps(out,indent=2))
+          PY
+
+      - name: Save results
+        run: |
+          mkdir -p research-results/luna-v4
+          cp research-results/luna-v4-replication-summary.json research-results/luna-v4/replication-summary.json
+          for SEED in 20260920 20260921 20260922; do
+            cp research/luna_v4/seed_${SEED}/summary.json research-results/luna-v4/seed-${SEED}-summary.json
+            cp research/luna_v4/seed_${SEED}/holdout/summary.json research-results/luna-v4/seed-${SEED}-holdout-summary.json
+          done
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research-results/
+          git diff --cached --quiet || git commit -m "research(luna): save v4 fresh-seed replication"
+          git pull --rebase origin master
+          git push
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: luna-v4-replication
+          path: research/luna_v4/
+          retention-days: 14
