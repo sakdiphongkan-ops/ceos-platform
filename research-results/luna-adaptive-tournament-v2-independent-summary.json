@@ -24,7 +24,6 @@
     "maxdd60",
     "avg_amount20"
   ],
-  "excluded_factors": [],
   "excluded_sparse_factors": [],
   "geometric_monthly_return": 0.0015598115562143189,
   "cumulative_return": 0.077682199169536,
@@ -36,7 +35,7 @@
   "max_drawdown_baht": -14031.858997471503,
   "peak_baht": 46162.48731020467,
   "trough_baht": 32130.628312733166,
-  "benchmark_m1": {
+  "benchmark_m1_alias": {
     "geometric_monthly_return": 0.009178451795070375,
     "cumulative_return": 0.7301275727922387,
     "positive_month_pct": 0.5,
@@ -52,8 +51,9 @@
   "lookback_months": 24,
   "min_history_months": 12,
   "cost_bps_per_one_way_turnover": 20.0,
-  "benchmark_included": "M1_REV_K20",
+  "benchmark_included": "M1_REV_K20_ALIAS",
   "data_contiguity_guard": "forward return is used only when the next observation is exactly the next calendar month",
+  "benchmark_warning": "M1_REV_K20_ALIAS is a factor-table proxy and is NOT the exact production M1 benchmark; use research-results/luna-m1-benchmark-locked-20260920.csv for Apple-to-Apple comparisons",
   "initial_capital_baht": 30000,
   "leakage_guard": "month t selection uses only strictly prior months; t return is never in selection history"
 }
