@@ -201,7 +201,7 @@ def rank_feature(g: pd.DataFrame, col: str, ascending: bool=True) -> pd.Series:
 def score_rerank(g: pd.DataFrame, rule: str) -> pd.Series:
     # Parse rank terms without splitting on the '-' inside rank(-FEATURE)
     # or in subtraction expressions such as rank(A)-rank(B).
-    terms=re.findall(r"([+-]?)\\s*rank\\(([^)]+)\\)",rule)
+    terms=re.findall(r"([+-]?)\s*rank\(([^)]+)\)",rule)
     if not terms:
         raise ValueError(f"invalid rerank rule: {rule}")
     score=pd.Series(0.0,index=g.index)
