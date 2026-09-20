@@ -15,7 +15,7 @@ import pandas as pd
 
 BASE = "https://scanner.tradingview.com/thailand/scan"
 
-INDICATORS = [
+TECHNICAL_INDICATORS = [
     "Recommend.Other","Recommend.All","Recommend.MA",
     "RSI","RSI[1]","Stoch.K","Stoch.D","Stoch.K[1]","Stoch.D[1]",
     "CCI20","CCI20[1]","ADX","ADX+DI","ADX-DI","ADX+DI[1]","ADX-DI[1]",
@@ -28,14 +28,15 @@ INDICATORS = [
     "Pivot.M.Classic.Middle","Pivot.M.Classic.R1","Pivot.M.Classic.R2","Pivot.M.Classic.R3",
     "Pivot.M.Fibonacci.S3","Pivot.M.Fibonacci.S2","Pivot.M.Fibonacci.S1",
     "Pivot.M.Fibonacci.Middle","Pivot.M.Fibonacci.R1","Pivot.M.Fibonacci.R2","Pivot.M.Fibonacci.R3",
-    "BB.lower","BB.upper","P.SAR","open","high","low","volume","change",
-    "Perf.1D","Perf.W","Perf.1M","Perf.3M","Perf.6M","Perf.YTD","Perf.Y"
+    "BB.lower","BB.upper","P.SAR","open","high","low","volume","change"
 ]
+STATIC_INDICATORS = ["Perf.1D","Perf.W","Perf.1M","Perf.3M","Perf.6M","Perf.YTD","Perf.Y"]
 
 def fetch(interval_suffix: str, start: int, end: int) -> dict:
-    cols = [x + interval_suffix for x in INDICATORS]
-    # name/description/exchange are stable screener fields and help map rows.
-    cols = ["name","description","exchange"] + cols
+    cols = ["name","description","exchange"]
+    cols += [x + interval_suffix for x in TECHNICAL_INDICATORS]
+    if interval_suffix == "":
+        cols += STATIC_INDICATORS
     payload = {
         "symbols": {"query": {"types": []}},
         "columns": cols,
@@ -59,7 +60,9 @@ def fetch(interval_suffix: str, start: int, end: int) -> dict:
     return r.json()
 
 def normalize(payload: dict, interval: str) -> pd.DataFrame:
-    cols = ["name","description","exchange"] + [x + interval for x in INDICATORS]
+    cols = ["name","description","exchange"] + [x + interval for x in TECHNICAL_INDICATORS]
+    if interval == "":
+        cols += STATIC_INDICATORS
     rows = []
     for item in payload.get("data", []):
         d = item.get("d", [])
