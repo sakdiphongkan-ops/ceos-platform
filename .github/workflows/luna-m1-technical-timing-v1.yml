@@ -7,6 +7,7 @@ on:
       - "scripts/research/export_supabase_daily_prices.py"
       - "scripts/research/build_technical_timing_features_v1.py"
       - "scripts/research/luna_m1_technical_timing_v1.py"
+      - "scripts/research/luna_m1_intramonth_entry_timing_v1.py"
       - ".github/workflows/luna-m1-technical-timing-v1.yml"
   workflow_dispatch:
 
