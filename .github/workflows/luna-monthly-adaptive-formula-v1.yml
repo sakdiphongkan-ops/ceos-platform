@@ -1,0 +1,100 @@
+name: LUNA Monthly Adaptive Formula Search v1
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - "scripts/research/luna_monthly_adaptive_formula_search_v1.py"
+      - "scripts/research/download_mendeley_set.py"
+      - "scripts/research/build_factor_dataset.py"
+      - "scripts/research/filter_last_5y.py"
+      - ".github/workflows/luna-monthly-adaptive-formula-v1.yml"
+
+concurrency:
+  group: luna-monthly-adaptive-formula-v1
+  cancel-in-progress: true
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          python -m pip install -U pip
+          pip install pandas numpy python-dateutil
+
+      - name: Download SET history
+        run: |
+          mkdir -p data/raw
+          curl -fL --retry 3 --retry-delay 2             "https://data.mendeley.com/public-api/zip/gybmm9t3mr/download/1"             -o data/raw/gybmm9t3mr-1.zip
+          test -s data/raw/gybmm9t3mr-1.zip
+
+      - name: Normalize SET/mai history
+        run: |
+          python scripts/research/download_mendeley_set.py             --zip data/raw/gybmm9t3mr-1.zip             --output-dir data/set_2000_2025             --quarantine-invalid             --max-invalid-rate 0.01
+
+      - name: Build point-in-time technical factors
+        run: |
+          python scripts/research/build_factor_dataset.py             --prices data/set_2000_2025/prices.csv             --output data/set_2000_2025/factors.csv
+
+      - name: Restrict to trailing 5 calendar years
+        run: |
+          python scripts/research/filter_last_5y.py             --input data/set_2000_2025/factors.csv             --output data/set_2000_2025/factors_5y.csv
+
+      - name: Audit forward returns
+        run: |
+          python scripts/research/qa_forward_returns.py             --input data/set_2000_2025/factors_5y.csv             --output research/monthly_formula_forward_qa.json             --extremes-output research/monthly_formula_forward_extremes.csv             --warn-abs-return 0.20             --hard-invalid
+
+      - name: Run 1000-formula monthly adaptive search
+        run: |
+          rm -rf research/luna_monthly_adaptive_formula_v1
+          python scripts/research/luna_monthly_adaptive_formula_search_v1.py             --input data/set_2000_2025/factors_5y.csv             --output research/luna_monthly_adaptive_formula_v1             --formula-count 1000             --k 20             --lookback-months 24             --min-history-months 12             --holdout-months 12             --cost-bps 20             --seed 20260920
+
+      - name: Validate
+        run: |
+          test -s research/luna_monthly_adaptive_formula_v1/summary.json
+          test -s research/luna_monthly_adaptive_formula_v1/adaptive_selection_ledger.csv
+          test -s research/luna_monthly_adaptive_formula_v1/frozen_holdout_ranked.csv
+          python - <<'PY'
+          import json
+          x=json.load(open("research/luna_monthly_adaptive_formula_v1/summary.json"))
+          assert x["formula_count"] == 1000
+          assert x["guards"]["selection_uses_strictly_prior_months"]
+          assert x["guards"]["holdout_excluded_from_formula_selection"]
+          assert x["months_available"] >= 48
+          print(json.dumps(x, indent=2))
+          PY
+
+      - name: Save results
+        run: |
+          mkdir -p research-results/luna-monthly-adaptive-formula-v1
+          cp research/luna_monthly_adaptive_formula_v1/summary.json             research-results/luna-monthly-adaptive-formula-v1/summary.json
+          cp research/luna_monthly_adaptive_formula_v1/adaptive_selection_ledger.csv             research-results/luna-monthly-adaptive-formula-v1/adaptive_selection_ledger.csv
+          cp research/luna_monthly_adaptive_formula_v1/frozen_holdout_ranked.csv             research-results/luna-monthly-adaptive-formula-v1/frozen_holdout_ranked.csv
+          cp research/luna_monthly_adaptive_formula_v1/formula_catalog.json             research-results/luna-monthly-adaptive-formula-v1/formula_catalog.json
+          cp research/monthly_formula_forward_qa.json             research-results/luna-monthly-adaptive-formula-v1/forward_qa.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research-results/luna-monthly-adaptive-formula-v1/
+          git diff --cached --quiet || git commit -m "research(luna): save monthly adaptive formula search result"
+          git push
+
+      - name: Upload full artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: luna-monthly-adaptive-formula-v1
+          path: |
+            research/luna_monthly_adaptive_formula_v1/
+            research/monthly_formula_forward_qa.json
+            research/monthly_formula_forward_extremes.csv
+          retention-days: 14
