@@ -127,12 +127,14 @@ def load_panel(path: str) -> pd.DataFrame:
 
 
 def add_forward(df: pd.DataFrame) -> pd.DataFrame:
-    x=df[["symbol","month_end","adj_close"]].copy().sort_values(["symbol","month_end"])
+    # Production portfolio returns are based on raw close prices, so the
+    # tournament must use the same price basis for apples-to-apples audit.
+    x=df[["symbol","month_end","close"]].copy().sort_values(["symbol","month_end"])
     x["next_month"]=x.groupby("symbol")["month_end"].shift(-1)
-    x["next_adj"]=x.groupby("symbol")["adj_close"].shift(-1)
+    x["next_close"]=x.groupby("symbol")["close"].shift(-1)
     x["fwd_month"]=np.where(
         x["next_month"].eq(x["month_end"]+pd.offsets.MonthEnd(1)),
-        x["next_adj"]/x["adj_close"]-1,
+        x["next_close"]/x["close"]-1,
         np.nan
     )
     return df.merge(x[["symbol","month_end","fwd_month"]],on=["symbol","month_end"],how="left")
