@@ -19,6 +19,8 @@ export const config={
   marketImpactBps:num("LUNA_MARKET_IMPACT_BPS",8),
   liveReconciliation:bool("LUNA_LIVE_RECONCILIATION",false),
   liveReconciliationMs:num("LUNA_LIVE_RECONCILIATION_MS",5000),
+  liveAccountCashDriftTolerance:num("LUNA_LIVE_ACCOUNT_CASH_DRIFT_TOLERANCE",25),
+  liveAccountQtyDriftTolerance:num("LUNA_LIVE_ACCOUNT_QTY_DRIFT_TOLERANCE",0.5),
   executionTest:bool("LUNA_EXECUTION_TEST",false),
   priceOnlyFallback:bool("LUNA_PRICE_ONLY_FALLBACK",false),
   executionMode:process.env.LUNA_EXECUTION_MODE ?? "paper",
