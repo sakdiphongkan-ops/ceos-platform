@@ -381,7 +381,8 @@ async function startSession(){
         :(config.priceOnlyFallback
           ?"LUNA-TH1H Strategy v1 price-only paper fallback: EMA cross + momentum with stop/take-profit/time exit; no order-book filter."
           :"LUNA-TH1H Strategy v1: EMA cross + momentum + spread + order-book imbalance with stop/take-profit/time exit."),
-      initial_capital:config.initialCapital,
+      initial_capital:portfolio.initialCapital,
+      configured_initial_capital:config.initialCapital,
       live_broker_reconciled:config.mode==="live" || config.executionMode==="live",
       starting_cash:portfolio.cash,
       starting_position_count:Object.keys(portfolio.positions).length
@@ -394,7 +395,8 @@ async function startSession(){
   lastLiveAccountStateSyncAt=Date.now();
   queueAudit("SESSION_STARTED",{
     provider:config.marketDataProvider,
-    capital:config.initialCapital,
+    capital:portfolio.initialCapital,
+    configured_initial_capital:config.initialCapital,
     execution_test:config.executionTest,
     fee_bps:config.feeBps,
     sell_tax_bps:config.sellTaxBps,
@@ -405,6 +407,7 @@ async function startSession(){
   if(config.mode==="live" || config.executionMode==="live"){
     queueAudit("BROKER_PORTFOLIO_RECONCILED",{
       broker_cash:portfolio.cash,
+      broker_equity_value:portfolio.initialCapital,
       position_count:Object.keys(portfolio.positions).length,
       symbols:Object.keys(portfolio.positions).sort(),
       risk_capital:portfolio.initialCapital
