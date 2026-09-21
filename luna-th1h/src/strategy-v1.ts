@@ -80,6 +80,10 @@ export class StrategyV1{
     }
   }
 
+  reset(){
+    this.states.clear();
+  }
+
   prime(symbol:string,prices:number[]){
     const st=stateFor(this.states,symbol);
     st.prices=[];
