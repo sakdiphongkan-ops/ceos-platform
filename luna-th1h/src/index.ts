@@ -15,6 +15,7 @@ let portfolio:PortfolioState;
 let executionTestStep=0;
 let lastSnapshotAt=0;
 let sessionStartPromise:Promise<void>|null=null;
+let sessionEndPromise:Promise<void>|null=null;
 let auditQueueTail:Promise<void>=Promise.resolve();
 let activeAnalyses=0;
 const analysisWaiters:Array<()=>void>=[];
@@ -533,20 +534,29 @@ async function handleQuote(q:Quote){
 }
 
 async function endSession(status="CLOSED"){
-  if(heartbeatTimer) clearInterval(heartbeatTimer);
-  heartbeatTimer=undefined;
+  if(sessionEndPromise) return sessionEndPromise;
   if(!sessionId) return;
-  try{
-    await writeSnapshot();
-    await audit("SESSION_ENDED",{status},activeStrategyVersion(),sessionId);
-    await auditQueueTail;
-    await ingest("",{action:"end_session",session_id:sessionId,status});
-  }catch(err){
-    console.error(JSON.stringify({event:"SESSION_END_ERROR",error:String(err)}));
-  }finally{
-    sessionId=null;
-    sessionDate=null;
-  }
+
+  const closingSessionId=sessionId;
+  sessionEndPromise=(async()=>{
+    if(heartbeatTimer) clearInterval(heartbeatTimer);
+    heartbeatTimer=undefined;
+    try{
+      await writeSnapshot();
+      await queueAudit("SESSION_ENDED",{status},activeStrategyVersion());
+      await auditQueueTail;
+      await ingest("",{action:"end_session",session_id:closingSessionId,status});
+    }catch(err){
+      console.error(JSON.stringify({event:"SESSION_END_ERROR",error:String(err)}));
+    }finally{
+      if(sessionId===closingSessionId){
+        sessionId=null;
+        sessionDate=null;
+      }
+    }
+  })().finally(()=>{sessionEndPromise=null});
+
+  await sessionEndPromise;
 }
 
 async function main(){
