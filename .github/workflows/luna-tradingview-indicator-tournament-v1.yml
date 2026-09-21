@@ -140,7 +140,7 @@ jobs:
           if cache_panel.exists() and cache_summary.exists():
               try:
                   meta=json.loads(cache_summary.read_text())
-                  use_cache=meta.get("cache_version") in {"20260921-m1-raw-close-v4","20260921-m1-20d-adj-v5"}
+                  use_cache=meta.get("cache_version") in {"20260920-null-traded-v3","20260921-m1-raw-close-v4","20260921-m1-20d-adj-v5"}
               except Exception:
                   use_cache=False
 
