@@ -80,14 +80,6 @@ jobs:
         run: |
           python scripts/research/luna_neutralized_alpha_crowding_v1.py             --input data/set_2000_2025/monthly_factors_5y_v4.csv             --search-summary research/luna_failure_driven_search_v1/summary.json             --formula-catalog research/luna_failure_driven_search_v1/formula_catalog.json             --benchmark research-results/luna-m1-benchmark-locked-20260920.csv             --output research/luna_research_scorecard_v1
 
-      - name: Run research quality gate
-        run: |
-          python scripts/research/luna_research_quality_gate_v2.py \
-            --summary research/luna_failure_driven_search_v1/summary.json \
-            --scorecard research/luna_research_scorecard_v1/scorecard.json \
-            --neutralized research/luna_research_scorecard_v1/neutralized-alpha-crowding.json \
-            --output research/luna_research_scorecard_v1/promotion-gate.json
-
       - name: Run dependent-data multiple-testing diagnostic
         run: |
           python scripts/research/luna_dependent_data_multiple_testing_v1.py \
@@ -114,6 +106,15 @@ jobs:
             --inner-valid-months 6 \
             --outer-holdout-months 12 \
             --min-history-months 9
+
+      - name: Run research quality gate
+        run: |
+          python scripts/research/luna_research_quality_gate_v2.py \
+            --summary research/luna_failure_driven_search_v1/summary.json \
+            --scorecard research/luna_research_scorecard_v1/scorecard.json \
+            --neutralized research/luna_research_scorecard_v1/neutralized-alpha-crowding.json \
+            --replication research/luna_fresh_seed_replication_v1/replication.json \
+            --output research/luna_research_scorecard_v1/promotion-gate.json
 
       - name: Create model registry entry
         run: |
