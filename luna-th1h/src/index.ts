@@ -15,10 +15,10 @@ let executionTestStep=0;
 let lastPersistAt=0;
 const lastPersistBySymbol=new Map<string,number>();
 const PERSIST_SIGNAL_MS=1_000;
-const strategyV1=new StrategyV1();
+const strategyV1=new StrategyV1({}, {priceOnlyFallback:config.priceOnlyFallback});
 
 function activeStrategyVersion(){
-  return config.executionTest?EXECUTION_TEST_VERSION:STRATEGY_V1_VERSION;
+  return config.executionTest?EXECUTION_TEST_VERSION:strategyV1.version;
 }
 
 function todayInTimezone(timezone:string){
@@ -121,7 +121,9 @@ async function startSession(){
       strategy_version:activeStrategyVersion(),
       strategy_description:config.executionTest
         ?"Deterministic execution-engine self-test: BUY then SELL a synthetic paper symbol."
-        :"LUNA-TH1H Strategy v1: EMA cross + momentum + spread + order-book imbalance with stop/take-profit/time exit.",
+        :(config.priceOnlyFallback
+          ?"LUNA-TH1H Strategy v1 price-only paper fallback: EMA cross + momentum with stop/take-profit/time exit; no order-book filter."
+          :"LUNA-TH1H Strategy v1: EMA cross + momentum + spread + order-book imbalance with stop/take-profit/time exit."),
       initial_capital:config.initialCapital
     }
   });
@@ -177,10 +179,10 @@ function getSignal(q:Quote):Signal{
   const pos=portfolio.positions[q.symbol];
   const phase=marketPhase(q.ts);
   if(pos?.qty>0 && phase==="FORCE_CLOSE"){
-    return {symbol:q.symbol,ts:q.ts,action:"SELL",reason:"FORCE_CLOSE_EOD",strategyVersion:STRATEGY_V1_VERSION};
+    return {symbol:q.symbol,ts:q.ts,action:"SELL",reason:"FORCE_CLOSE_EOD",strategyVersion:strategyV1.version};
   }
   if(phase!=="ACTIVE"){
-    return {symbol:q.symbol,ts:q.ts,action:"HOLD",reason:`${phase}_ENTRY_BLOCK`,strategyVersion:STRATEGY_V1_VERSION};
+    return {symbol:q.symbol,ts:q.ts,action:"HOLD",reason:`${phase}_ENTRY_BLOCK`,strategyVersion:strategyV1.version};
   }
   return strategyV1.evaluate(q,{
     positionQty:pos?.qty??0,
@@ -353,7 +355,7 @@ async function main(){
     provider:config.marketDataProvider,
     capital:config.initialCapital,
     executionTest:config.executionTest,
-    strategy:STRATEGY_V1_VERSION
+    strategy:strategyV1.version
   }));
 
   if(!["paper","live"].includes(config.mode)) throw new Error(`Unknown LUNA_MODE: ${config.mode}`);
