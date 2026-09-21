@@ -167,3 +167,18 @@ Sources:
 - SET SMART Marketplace: https://www.set.or.th/en/services/connectivity-and-data/data/smart-marketplace
 - SET Financial Statement API specification: https://media.set.or.th/set/Documents/2025/Apr/16_SMART_Marketplace_Financial_Statement_Specification.pdf
 - SET Company Fundamental API specification: https://media.set.or.th/set/Documents/2022/Oct/05_1_Company_Fundamental_Specification.pdf
+
+
+## Addendum — universe and survivorship robustness
+
+The fixed finalist is now tested without re-selection under:
+- liquidity-universe cuts using top 95%, 90%, and 80% ADV20 per month,
+- price-floor filters,
+- an explicit current-survivor-only stress to expose survivorship sensitivity,
+- deterministic 80% random symbol-dropout replications.
+
+The current-survivor-only case is intentionally diagnostic and is never treated as an unbiased production universe. The production baseline remains the observed-history monthly universe.
+
+A separate sector/industry neutralization engine now requires both classification metadata and a point-in-time availability timestamp. When the current dataset lacks these fields, LUNA records UNAVAILABLE rather than inventing classifications. Future promotion requires this institutional metadata layer to be available.
+
+This closes an important research gap: a formula should survive reasonable changes in the investable universe, and its performance should be inspected after removing sector/style concentration, without allowing those stresses to re-select the formula.
