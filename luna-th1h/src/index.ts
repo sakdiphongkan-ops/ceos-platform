@@ -12,7 +12,7 @@ let auditChain="GENESIS";
 let heartbeatTimer:NodeJS.Timeout|undefined;
 let portfolio:PortfolioState;
 let executionTestStep=0;
-const lastPersistBySymbol=new Map<string,number>();
+let lastPersistAt=0;
 const PERSIST_SIGNAL_MS=1_000;
 const strategyV1=new StrategyV1();
 
@@ -304,12 +304,11 @@ async function handleQuote(q:Quote){
   const signal=getSignal(q);
 
   const now=Date.now();
-  const lastPersist=lastPersistBySymbol.get(q.symbol) ?? 0;
-  const shouldPersist=(now-lastPersist)>=PERSIST_SIGNAL_MS || signal.action!=="HOLD";
+  const shouldPersist=config.executionTest || (now-lastPersistAt)>=PERSIST_SIGNAL_MS || signal.action!=="HOLD";
   if(shouldPersist){
     await ingest("",{action:"tick",session_id:sessionId,quote:q});
     await ingest("",{action:"signal",session_id:sessionId,signal});
-    lastPersistBySymbol.set(q.symbol,now);
+    lastPersistAt=now;
   }
 
   console.log(JSON.stringify({event:"SIGNAL",quote:q,signal}));
