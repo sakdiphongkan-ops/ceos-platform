@@ -36,6 +36,16 @@ SET_API_BASE = os.getenv(
 SET_API_POLL_SEC = max(1.0, float(os.getenv("SET_MARKETDATA_POLL_SEC", "2")))
 SET_API_TIMEOUT_SEC = max(2.0, float(os.getenv("SET_MARKETDATA_TIMEOUT_SEC", "8")))
 
+# Paper-only public fallback. TradingView's public Thailand screener is not
+# treated as exchange-certified real-time data; it is used only to keep the
+# Paper Trading pipeline alive when licensed providers are unavailable.
+TRADINGVIEW_URL = os.getenv("TRADINGVIEW_SCANNER_URL", "https://scanner.tradingview.com/thailand/scan")
+TRADINGVIEW_POLL_SEC = max(2.0, float(os.getenv("TRADINGVIEW_POLL_SEC", "5")))
+PUBLIC_FALLBACK_ENABLED = (
+    os.getenv("LUNA_PUBLIC_MARKETDATA_FALLBACK", "true").lower() == "true"
+    and not LIVE_ARMED
+)
+
 BROKER_ID = os.getenv("LUNA_SETTRADE_BROKER_ID") or os.getenv("SETTRADE_BROKER_ID", "")
 APP_ID = os.getenv("LUNA_SETTRADE_APP_ID") or os.getenv("SETTRADE_APP_ID", "")
 APP_SECRET = os.getenv("LUNA_SETTRADE_APP_SECRET") or os.getenv("SETTRADE_APP_SECRET", "")
@@ -380,6 +390,125 @@ def _run_set_api():
             raise ProviderUnavailable(f"set_api_runtime:{exc}") from exc
 
 
+
+def _run_tradingview_session():
+    global _collector_error, _selected_provider, _provider_restarts
+
+    if not PUBLIC_FALLBACK_ENABLED:
+        raise ProviderUnavailable("public_fallback_disabled")
+    if not SYMBOLS:
+        raise ProviderUnavailable("SETTRADE_REALTIME_SYMBOLS is empty")
+
+    payload = {
+        "columns": ["name", "close", "change", "change_abs", "volume"],
+        "ignore_unknown_fields": False,
+        "options": {"lang": "th"},
+        "range": [0, 1000],
+        "sort": {"sortBy": "name", "sortOrder": "asc", "nullsFirst": False},
+        "preset": "all_stocks",
+    }
+    body = json.dumps(payload).encode("utf-8")
+
+    _selected_provider = "TRADINGVIEW_PUBLIC"
+    _provider_restarts += 1
+    with _feed_lock:
+        _channel_status["price"].update(
+            running=True,
+            restarts=_channel_status["price"]["restarts"] + 1,
+            last_start=_now_iso(),
+            last_error=None,
+        )
+        _channel_status["book"].update(running=False)
+
+    print(
+        f"LUNA_MARKETDATA provider_start provider=TRADINGVIEW_PUBLIC "
+        f"symbols={len(SYMBOLS)} quality=public_screener_unverified_latency",
+        flush=True,
+    )
+
+    while True:
+        req = Request(
+            TRADINGVIEW_URL,
+            data=body,
+            headers={
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "Origin": "https://www.tradingview.com",
+                "Referer": "https://www.tradingview.com/",
+                "User-Agent": "LUNA-TH1H/0.4.0",
+            },
+            method="POST",
+        )
+        try:
+            with urlopen(req, timeout=SET_API_TIMEOUT_SEC) as response:
+                raw_text = response.read().decode("utf-8")
+                status = getattr(response, "status", 200)
+            if status >= 400:
+                raise ProviderUnavailable(f"tradingview_http_{status}")
+            payload_out = json.loads(raw_text)
+            rows = payload_out.get("data", []) if isinstance(payload_out, dict) else []
+            wanted = set(SYMBOLS)
+            found = 0
+
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                ticker = str(row.get("s") or "").upper()
+                d = row.get("d") or []
+                if ":" in ticker:
+                    symbol = ticker.split(":", 1)[1]
+                else:
+                    symbol = ticker
+                if symbol not in wanted or len(d) < 5:
+                    continue
+
+                last = _num(d[1])
+                if last is None:
+                    continue
+
+                # TradingView public scanner does not reliably expose a source
+                # exchange timestamp in this response. ts therefore means
+                # ingestion time, while source identifies the unverified feed.
+                now = _now_iso()
+                with _quote_lock:
+                    prior = dict(_quotes.get(symbol, {}))
+                    was_new = symbol not in _quotes
+                    _quotes[symbol] = {
+                        "symbol": symbol,
+                        "ts": now,
+                        "source_ts": None,
+                        "bid": prior.get("bid"),
+                        "ask": prior.get("ask"),
+                        "last": last,
+                        "bid_size": prior.get("bid_size"),
+                        "ask_size": prior.get("ask_size"),
+                        "total_volume": _num(d[4]),
+                        "source": "tradingview-public-screener",
+                        "data_quality": "public_screener_unverified_latency",
+                        "_ingested_ts": time.time(),
+                    }
+                found += 1
+                if was_new:
+                    print(
+                        f"LUNA_MARKETDATA first_quote provider=TRADINGVIEW_PUBLIC symbol={symbol}",
+                        flush=True,
+                    )
+
+            if found == 0:
+                raise ProviderUnavailable("tradingview_no_matching_symbols")
+
+            _collector_error = None
+            time.sleep(TRADINGVIEW_POLL_SEC)
+
+        except ProviderUnavailable:
+            raise
+        except HTTPError as exc:
+            raise ProviderUnavailable(f"tradingview_http_{exc.code}") from exc
+        except URLError as exc:
+            raise ProviderUnavailable(f"tradingview_network:{exc.reason}") from exc
+        except Exception as exc:
+            raise ProviderUnavailable(f"tradingview_runtime:{exc}") from exc
+
 def _run_settrade_session():
     global _collector_error, _selected_provider, _provider_restarts
 
@@ -477,8 +606,11 @@ def _provider_order():
         return ["SET_API"]
     if PROVIDER_MODE == "SETTRADE":
         return ["SETTRADE"]
-    # AUTO: prefer official SET market-data API, then Settrade.
-    return ["SET_API", "SETTRADE"]
+    # AUTO: licensed sources first; public scanner is paper-only last resort.
+    order = ["SET_API", "SETTRADE"]
+    if PUBLIC_FALLBACK_ENABLED:
+        order.append("TRADINGVIEW_PUBLIC")
+    return order
 
 
 def _provider_available(name: str):
@@ -486,6 +618,8 @@ def _provider_available(name: str):
         return set_api_configured()
     if name == "SETTRADE":
         return settrade_configured()
+    if name == "TRADINGVIEW_PUBLIC":
+        return PUBLIC_FALLBACK_ENABLED
     return False
 
 
@@ -518,8 +652,12 @@ def _run_supervisor():
             try:
                 if provider == "SET_API":
                     _run_set_api()
-                else:
+                elif provider == "SETTRADE":
                     _run_settrade_session()
+                elif provider == "TRADINGVIEW_PUBLIC":
+                    _run_tradingview_session()
+                else:
+                    raise ProviderUnavailable(f"unknown_provider:{provider}")
                 ran = True
                 backoff = RECONNECT_BASE_SEC
                 break
@@ -606,6 +744,7 @@ def health():
         "provider_candidates": _provider_order(),
         "set_api_configured": set_api_configured(),
         "settrade_configured": settrade_configured(),
+        "public_fallback_enabled": PUBLIC_FALLBACK_ENABLED,
         "realtime_marketdata_enabled": REALTIME_ENABLED,
         "realtime_bid_offer_enabled": REALTIME_BOOK,
         "realtime_symbol_target": len(SYMBOLS),
@@ -735,6 +874,7 @@ def diagnostics(x_luna_gateway: Optional[str] = Header(default=None)):
         "provider_candidates": _provider_order(),
         "set_api_configured": set_api_configured(),
         "settrade_configured": settrade_configured(),
+        "public_fallback_enabled": PUBLIC_FALLBACK_ENABLED,
         "settrade_missing_credentials": missing_settrade_credentials(),
         "python_sdk_loaded": Investor is not None,
         "realtime_marketdata_enabled": REALTIME_ENABLED,
