@@ -1,5 +1,6 @@
 import {config} from "./config.js";
 import {validateOrder} from "./risk.js";
+import {PRICE_ONLY_VERSION} from "./strategy-v1.js";
 import type {Quote,Signal,Side} from "./types.js";
 
 export interface PositionState{
@@ -62,8 +63,13 @@ export function planOrder(signal:Signal,q:Quote,state:PortfolioState):PlannedOrd
   if(signal.action==="HOLD") return {accepted:false,reason:"SIGNAL_HOLD"};
 
   const side:Side=signal.action;
-  const referencePrice=side==="BUY"?q.ask:q.bid;
-  if(!referencePrice || referencePrice<=0) return {accepted:false,reason:"NO_EXECUTABLE_PRICE"};
+  const priceOnlyPaper=signal.strategyVersion===PRICE_ONLY_VERSION;
+  const referencePrice=priceOnlyPaper
+    ? (Number.isFinite(Number(q.last)) && Number(q.last)>0 ? Number(q.last) : 0)
+    : (side==="BUY"?q.ask:q.bid);
+  if(!referencePrice || referencePrice<=0){
+    return {accepted:false,reason:priceOnlyPaper?"NO_LAST_PRICE":"NO_EXECUTABLE_PRICE"};
+  }
 
   const pos=position(state,q.symbol);
   const currentNotional=pos.qty*referencePrice;
@@ -77,7 +83,7 @@ export function planOrder(signal:Signal,q:Quote,state:PortfolioState):PlannedOrd
     const estimatedAllInPerShare=referencePrice*(1+slippageRate)*(1+feeRate);
     const affordable=state.cash/estimatedAllInPerShare;
     let qty=roundDown(Math.min(remainingPosition/referencePrice,targetNotional/referencePrice,affordable));
-    if(q.askSize && q.askSize>0) qty=Math.min(qty,roundDown(q.askSize));
+    if(!priceOnlyPaper && q.askSize && q.askSize>0) qty=Math.min(qty,roundDown(q.askSize));
     if(qty<=0) return {accepted:false,reason:"INSUFFICIENT_CASH_OR_POSITION_HEADROOM"};
 
     const notional=qty*referencePrice;
@@ -93,7 +99,7 @@ export function planOrder(signal:Signal,q:Quote,state:PortfolioState):PlannedOrd
 
   if(pos.qty<=0) return {accepted:false,reason:"NO_LONG_POSITION"};
   let qty=pos.qty;
-  if(q.bidSize && q.bidSize>0) qty=Math.min(qty,roundDown(q.bidSize));
+  if(!priceOnlyPaper && q.bidSize && q.bidSize>0) qty=Math.min(qty,roundDown(q.bidSize));
   if(qty<=0) return {accepted:false,reason:"NO_SELLABLE_LIQUIDITY"};
 
   const notional=qty*referencePrice;
