@@ -1,4 +1,5 @@
 name: LUNA Failure-Driven Search v1
+# luna-search-v1 trigger: full family inference + quality gate
 
 on:
   push:
