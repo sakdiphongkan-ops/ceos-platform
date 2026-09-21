@@ -39,17 +39,14 @@ jobs:
           import pandas as pd
 
           url = "https://wigzicwgcsrhdummrbjx.supabase.co/functions/v1/luna-research-export-v1"
-          workers = 4
+          workers = 2
           temp = Path("data/luna_daily/monthly")
           temp.mkdir(parents=True, exist_ok=True)
           months = pd.date_range("2021-09-01", "2026-09-01", freq="MS")
 
-          def fetch_month(start):
-              start_s = start.strftime("%Y-%m-%d")
-              end_s = (start + pd.offsets.MonthEnd(1)).strftime("%Y-%m-%d")
-              out = temp / f"{start_s}.parquet"
+          def fetch_range(start_s, end_s):
               last = None
-              for attempt in range(5):
+              for attempt in range(4):
                   try:
                       r = requests.get(
                           url,
@@ -63,12 +60,29 @@ jobs:
                       payload = r.json()
                       df = pd.DataFrame(payload.get("data", []))
                       if df.empty:
-                          raise RuntimeError(f"empty month {start_s}")
-                      df.to_parquet(out, index=False)
-                      return start_s, len(df)
+                          raise RuntimeError(f"empty range {start_s}..{end_s}")
+                      return df
                   except Exception as exc:
                       last = exc
-              raise last
+              # DB statement timeouts are much less likely on smaller windows.
+              s=pd.Timestamp(start_s)
+              e=pd.Timestamp(end_s)
+              if (e-s).days <= 7:
+                  raise last
+              mid=s+pd.Timedelta(days=((e-s).days//2))
+              left=fetch_range(s.strftime("%Y-%m-%d"),mid.strftime("%Y-%m-%d"))
+              right_start=(mid+pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+              right=fetch_range(right_start,e.strftime("%Y-%m-%d"))
+              return pd.concat([left,right],ignore_index=True)
+
+          def fetch_month(start):
+              start_s = start.strftime("%Y-%m-%d")
+              end_s = (start + pd.offsets.MonthEnd(1)).strftime("%Y-%m-%d")
+              out = temp / f"{start_s}.parquet"
+              df=fetch_range(start_s,end_s)
+              df=df.sort_values(["symbol","date"]).drop_duplicates(["symbol","date"])
+              df.to_parquet(out,index=False)
+              return start_s, len(df)
 
           with ThreadPoolExecutor(max_workers=workers) as ex:
               futs = [ex.submit(fetch_month, m) for m in months]
