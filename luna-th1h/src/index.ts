@@ -684,7 +684,8 @@ function kickoffPrewarm(q:Quote){
   const generation=sessionGeneration;
   if(prewarmedSymbols.has(q.symbol) || prewarmInFlight.has(q.symbol) || prewarmCache.has(q.symbol)) return;
   const startedAt=Date.now();
-  const promise=(async()=>{
+  let promise:Promise<void>;
+  promise=(async()=>{
     try{
       const response=await ingest("",{
         action:"recent_ticks",
@@ -717,7 +718,9 @@ function kickoffPrewarm(q:Quote){
         fetch_ms:Date.now()-startedAt
       },strategyV1.version);
     }finally{
-      prewarmInFlight.delete(q.symbol);
+      if(prewarmInFlight.get(q.symbol)===promise){
+        prewarmInFlight.delete(q.symbol);
+      }
     }
   })();
   prewarmInFlight.set(q.symbol,promise);
