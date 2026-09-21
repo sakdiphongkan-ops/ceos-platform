@@ -19,6 +19,7 @@ def main():
     ap.add_argument("--universe",required=False)
     ap.add_argument("--sector-neutralization",required=False)
     ap.add_argument("--lifecycle",required=False)
+    ap.add_argument("--pit-security-master",required=False)
     args=ap.parse_args()
     s=json.loads(Path(args.search_summary).read_text())
     c=json.loads(Path(args.scorecard).read_text())
@@ -27,6 +28,7 @@ def main():
     u=json.loads(Path(args.universe).read_text()) if args.universe else {}
     sn=json.loads(Path(args.sector_neutralization).read_text()) if args.sector_neutralization else {}
     lc=json.loads(Path(args.lifecycle).read_text()) if args.lifecycle else {}
+    pit=json.loads(Path(args.pit_security_master).read_text()) if args.pit_security_master else {}
     reg={
       "registry_version":"luna-model-registry-v1",
       "created_at":datetime.now(timezone.utc).isoformat(),
@@ -46,6 +48,7 @@ def main():
         "universe_robustness_sha256":sha(args.universe) if args.universe else None,
         "sector_neutralization_sha256":sha(args.sector_neutralization) if args.sector_neutralization else None,
         "symbol_lifecycle_sha256":sha(args.lifecycle) if args.lifecycle else None,
+        "pit_security_master_validation_sha256":sha(args.pit_security_master) if args.pit_security_master else None,
         "benchmark_sha256":sha(args.benchmark),
         "holdout_start":s["holdout_start"],
         "holdout_end":s["holdout_end"],
@@ -75,6 +78,7 @@ def main():
           "universe_robustness": u,
           "sector_industry_neutralization": sn,
           "symbol_lifecycle": lc,
+          "pit_security_master_validation": pit,
         },
         "promotion_checks":c["promotion_checks"],
       },
