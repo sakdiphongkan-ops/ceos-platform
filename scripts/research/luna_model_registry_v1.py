@@ -22,6 +22,7 @@ def main():
     ap.add_argument("--pit-security-master",required=False)
     ap.add_argument("--pit-fundamentals",required=False)
     ap.add_argument("--corporate-actions",required=False)
+    ap.add_argument("--promotion-gate",required=False)
     args=ap.parse_args()
     s=json.loads(Path(args.search_summary).read_text())
     c=json.loads(Path(args.scorecard).read_text())
@@ -33,6 +34,7 @@ def main():
     pit=json.loads(Path(args.pit_security_master).read_text()) if args.pit_security_master else {}
     pf=json.loads(Path(args.pit_fundamentals).read_text()) if args.pit_fundamentals else {}
     ca=json.loads(Path(args.corporate_actions).read_text()) if args.corporate_actions else {}
+    pg=json.loads(Path(args.promotion_gate).read_text()) if args.promotion_gate else {}
     reg={
       "registry_version":"luna-model-registry-v1",
       "created_at":datetime.now(timezone.utc).isoformat(),
@@ -55,6 +57,7 @@ def main():
         "pit_security_master_validation_sha256":sha(args.pit_security_master) if args.pit_security_master else None,
         "pit_fundamentals_validation_sha256":sha(args.pit_fundamentals) if args.pit_fundamentals else None,
         "corporate_actions_validation_sha256":sha(args.corporate_actions) if args.corporate_actions else None,
+        "promotion_gate_sha256":sha(args.promotion_gate) if args.promotion_gate else None,
         "benchmark_sha256":sha(args.benchmark),
         "holdout_start":s["holdout_start"],
         "holdout_end":s["holdout_end"],
@@ -87,6 +90,7 @@ def main():
           "pit_security_master_validation": pit,
           "pit_fundamentals_validation": pf,
           "corporate_actions_validation": ca,
+          "promotion_gate": pg,
         },
         "promotion_checks":c["promotion_checks"],
       },
