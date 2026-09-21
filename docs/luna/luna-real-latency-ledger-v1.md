@@ -150,3 +150,18 @@ The quote-analysis ingress now uses the same bounded mailbox pattern as executio
 This prevents an overloaded feed from building an unbounded per-symbol promise chain. The runtime intentionally analyzes the newest available market state instead of allowing stale queued quotes to create execution latency. Existing execution-session and generation guards still protect against cross-session orders.
 
 This is a runtime-latency optimization, not a strategy-performance claim: under overload, intermediate quotes may be skipped for decision analysis.
+
+
+### Batched telemetry path — 2026-09-22
+
+Persistence is now separated from the quote/execution decision path through a bounded telemetry queue.
+
+- ticks are coalesced per `session_id + symbol`
+- signals remain FIFO and are not coalesced
+- default batch size is 50
+- default flush interval is 50 ms
+- the Edge Function writes telemetry in bulk
+- runtime retries are protected by unique telemetry keys
+- fast live-state updates use a single batch RPC per telemetry batch
+
+This reduces client-to-Supabase HTTP request frequency under multi-symbol load. It does not change the trading decision formula itself. Telemetry persistence is explicitly non-critical to order submission; session shutdown drains the queue before ending the session.
