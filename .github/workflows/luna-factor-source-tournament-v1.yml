@@ -1,0 +1,86 @@
+name: LUNA Factor Source Tournament v1
+
+on:
+  workflow_dispatch:
+    inputs:
+      formula_count:
+        description: "Formulas per track"
+        required: true
+        default: "5000"
+        type: string
+      seed:
+        description: "Shared tournament seed"
+        required: true
+        default: "20260921"
+        type: string
+
+jobs:
+  tournament:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: python -m pip install -U pip pandas numpy python-dateutil
+      - name: Download historical SET dataset
+        run: |
+          mkdir -p data/raw
+          curl -fL --retry 3 --retry-delay 2 "https://data.mendeley.com/public-api/zip/gybmm9t3mr/download/1" -o data/raw/gybmm9t3mr-1.zip
+          test -s data/raw/gybmm9t3mr-1.zip
+      - name: Normalize SET history
+        run: |
+          rm -rf data/set_2000_2025
+          python scripts/research/download_mendeley_set.py             --zip data/raw/gybmm9t3mr-1.zip             --output-dir data/set_2000_2025             --quarantine-invalid             --max-invalid-rate 0.01
+      - name: Build daily factors
+        run: |
+          FUND_ARGS=""
+          if test -s data/raw/pit_fundamentals.csv; then
+            FUND_ARGS="--fundamentals data/raw/pit_fundamentals.csv"
+          fi
+          python scripts/research/build_factor_dataset.py             --prices data/set_2000_2025/prices.csv             $FUND_ARGS             --benchmark research-results/luna-m1-benchmark-locked-20260920.csv             --output data/set_2000_2025/factors.csv
+      - name: Filter trailing five years
+        run: |
+          python scripts/research/filter_last_5y.py             --input data/set_2000_2025/factors.csv             --output data/set_2000_2025/factors_5y.csv
+      - name: Build monthly panel
+        run: |
+          python scripts/research/build_monthly_factor_dataset_v4.py             --input data/set_2000_2025/factors_5y.csv             --output data/set_2000_2025/monthly_factors_5y_v4.csv
+      - name: Run Apple-to-Apple factor tournament
+        run: |
+          rm -rf research/luna_factor_source_tournament_v1
+          python scripts/research/luna_factor_source_tournament_v1.py             --input data/set_2000_2025/monthly_factors_5y_v4.csv             --benchmark research-results/luna-m1-benchmark-locked-20260920.csv             --output research/luna_factor_source_tournament_v1             --formula-count ${{ inputs.formula_count }}             --seed ${{ inputs.seed }}             --k 20             --cost-bps 20             --lookback-months 24             --inner-train-months 12             --inner-valid-months 6             --outer-holdout-months 12             --min-history-months 9
+      - name: Validate tournament contract
+        run: |
+          python - <<'PY'
+          import json
+          p="research/luna_factor_source_tournament_v1/factor-source-tournament.json"
+          x=json.load(open(p))
+          assert x["status"]=="COMPLETED"
+          c=x["experimental_contract"]
+          assert c["same_seed"] == int("${{ inputs.seed }}")
+          assert c["same_formula_count"] == int("${{ inputs.formula_count }}")
+          assert c["same_k"] == 20
+          assert c["same_cost_bps"] == 20
+          assert c["same_frozen_holdout"] is True
+          assert c["holdout_used_for_selection"] is False
+          assert len(x["tracks"]) == 3
+          print(json.dumps(x,indent=2))
+          PY
+      - name: Publish tournament evidence
+        run: |
+          rm -rf research-results/luna-factor-source-tournament-v1
+          mkdir -p research-results/luna-factor-source-tournament-v1
+          cp research/luna_factor_source_tournament_v1/factor-source-tournament.json              research-results/luna-factor-source-tournament-v1/factor-source-tournament.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research-results/luna-factor-source-tournament-v1
+          git diff --cached --quiet || git commit -m "research(luna): publish factor source tournament"
+          git fetch origin master
+          git rebase origin/master
+          git push origin HEAD:master
