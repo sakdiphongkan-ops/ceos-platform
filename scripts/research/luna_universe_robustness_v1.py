@@ -67,7 +67,6 @@ def formula_score(d, formula):
 
 def portfolio(d, months, formula, k, cost_bps, scenario, seed=None):
     x = d.copy()
-    x["score"] = formula_score(x, formula)
     prev = set()
     rows = []
 
@@ -81,7 +80,7 @@ def portfolio(d, months, formula, k, cost_bps, scenario, seed=None):
 
     for m in months:
         g = x.loc[x["month_end"].eq(m)].copy()
-        g = g.dropna(subset=["score", "fwd1"])
+        g = g.dropna(subset=["fwd1"])
         if scenario == "current_survivor_only" and survivor_set is not None:
             g = g[g["symbol"].astype(str).isin(survivor_set)]
 
@@ -105,6 +104,13 @@ def portfolio(d, months, formula, k, cost_bps, scenario, seed=None):
                 kept = set(rng.choice(syms, size=n, replace=False).tolist())
                 g = g[g["symbol"].astype(str).isin(kept)]
 
+        if len(g) < k:
+            continue
+
+        # Re-rank only inside the stressed eligible universe so every scenario
+        # represents a genuine investable-universe perturbation.
+        g["score"] = formula_score(g, formula)
+        g = g.dropna(subset=["score"])
         if len(g) < k:
             continue
 
