@@ -80,3 +80,10 @@ A live placement request with an ambiguous network outcome is reconciled by clie
 The Settrade gateway polling loop no longer performs multi-second exponential retries inside the quote critical path. Each fetch has a bounded timeout (LUNA_MARKET_GATEWAY_TIMEOUT_MS, default 750 ms, minimum 200 ms) and failed cycles advance to the next poll interval. Poll timing compensates for fetch time so a fast gateway does not accumulate avoidable polling drift.
 
 This changes the latency contract from retry until the gateway recovers to prefer fresh bounded snapshots and let the next poll recover. A gateway that repeatedly exceeds the deadline is observable as LUNA_GATEWAY_FETCH_FAILED rather than silently holding the market-data loop for several seconds.
+
+
+## Session-boundary and execution-time update — 2026-09-21
+
+Each quote-processing cycle captures its session id and session generation after session startup/rollover. A concurrent quote handler that crosses a session boundary is discarded before it persists the quote or signal into the wrong session. Scheduled execution continues to carry the same generation guard as a second line of defense.
+
+Paper fills now use the actual execution timestamp rather than the source quote timestamp. The fill audit records both quote time and execution time so delayed market data cannot make the execution history look artificially earlier than the decision.
