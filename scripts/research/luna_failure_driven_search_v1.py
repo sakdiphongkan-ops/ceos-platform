@@ -233,4 +233,4 @@ def main():
 
 if __name__=="__main__": main()
 
-# CI trigger: rerun validated failure-driven search after publish-race fix.
+# CI trigger: rerun validated failure-driven search after publish-race fix. Multiple-testing matrix is persisted for downstream inference.
