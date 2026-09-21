@@ -1064,18 +1064,26 @@ async function handleQuote(q:Quote){
         return;
       }
 
-      const recon = config.liveReconciliation && config.executionMode==="live" && now-lastReconciliationAt>=config.liveReconciliationMs
-        ? (lastReconciliationAt=now, reconcileLiveOrderStates())
-        : Promise.resolve();
-      const accountSync = config.liveReconciliation
-        && config.executionMode==="live"
-        && pendingLiveReservations.size===0
-        && now-lastLiveAccountStateSyncAt>=config.liveReconciliationMs
-        ? refreshLiveAccountState(sessionId!,sessionGeneration,true).catch(err=>{
-            queueAudit("LIVE_ACCOUNT_STATE_SYNC_ERROR",{error:String(err)},activeStrategyVersion());
-            throw err;
-          })
-        : Promise.resolve();
+      const brokerMaintenance=(
+        async()=>{
+          if(config.liveReconciliation && config.executionMode==="live"){
+            if(now-lastReconciliationAt>=config.liveReconciliationMs){
+              lastReconciliationAt=now;
+              await reconcileLiveOrderStates();
+            }
+            if(
+              pendingLiveReservations.size===0
+              && now-lastLiveAccountStateSyncAt>=config.liveReconciliationMs
+            ){
+              await refreshLiveAccountState(sessionId!,sessionGeneration,true);
+            }
+          }
+        }
+      )().catch(err=>{
+        queueAudit("BROKER_MAINTENANCE_ERROR",{error:String(err)},activeStrategyVersion());
+        throw err;
+      });
+
       Promise.all([
         queueAudit("HEARTBEAT",{
           provider:config.marketDataProvider,
@@ -1084,8 +1092,7 @@ async function handleQuote(q:Quote){
           execution_test:config.executionTest
         }),
         writeSnapshot(),
-        recon,
-        accountSync
+        brokerMaintenance
       ]).catch(err=>console.error(JSON.stringify({event:"HEARTBEAT_ERROR",error:String(err)})));
     },1_000);
   }
