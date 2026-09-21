@@ -43,7 +43,7 @@ type Trade = {
 };
 
 const LUNA_API = "https://wigzicwgcsrhdummrbjx.supabase.co/functions/v1/luna-api";
-const LUNA_STRATEGY = "luna-th1h-v1.0.0-price-only-paper-warm5";
+const LUNA_STRATEGY = "luna-th1h-v1.0.0";
 const TIMEFRAME = "15m";
 
 type LunaFeed = {
@@ -177,9 +177,9 @@ export default function LunaPortfolioPage() {
     </header>
     <div className="page">
       <section className="hero-row"><div><div className="eyebrow">INTRADAY CONTROL · LIVE PORTFOLIO</div><h2>What LUNA owns right now</h2><p>Database-backed holdings, executions, P&amp;L and risk exposure.</p></div><div className="hero-meta"><div className="data-chip"><span className="data-dot"/> {live ? "LIVE DATA" : "DATA OFFLINE"}</div><div className="safe-badge"><ShieldCheck size={15}/> {liveExecution ? "LIVE EXECUTION" : "PAPER EXECUTION"} / {killSwitch ? "KILL SWITCH ON" : "GATED"}</div></div></section>
-      <SystemControlRoom strategy={LUNA_STRATEGY} asOf={session?.session_date ?? new Date().toISOString().slice(0,10)} />
+      <SystemControlRoom strategy={session?.strategy_version ?? LUNA_STRATEGY} asOf={session?.session_date ?? new Date().toISOString().slice(0,10)} />
       <section className="live-operating-strip">
-        <div><span>MARKET DATA</span><strong>{live ? "LIVE FEED" : "OFFLINE"}</strong><small>15s refresh · SET</small></div>
+        <div><span>MARKET DATA</span><strong>{live ? "LIVE FEED" : "OFFLINE"}</strong><small>2s UI refresh · gateway ≥100ms · SET</small></div>
         <div><span>EXECUTION MODE</span><strong>{executionMode}</strong><small>{liveExecution ? "live gate open" : "paper only"}</small></div>
         <div><span>KILL SWITCH</span><strong>{killSwitch ? "ON" : "OFF"}</strong><small>{armed ? "armed" : "disarmed"}</small></div>
         <div><span>LIVE ORDER GATE</span><strong>{liveExecution ? "READY" : "LOCKED"}</strong><small>broker bridge status</small></div>
@@ -193,8 +193,8 @@ export default function LunaPortfolioPage() {
         <Metric label="Unrealized P&L" value={signed(unrealized)} sub="Current open positions" positive={unrealized>=0}/>
         <Metric label="Realized P&L" value={signed(realized)} sub="Closed / executed" positive={realized>=0}/>
         <Metric label="Fees" value={`-฿${money(fees)}`} sub="Recorded execution cost"/>
-        <Metric label="Latency p95" value={` ${(feed?.latency?.summary?.end_to_end_ms?.p95??0).toFixed(1)} ms`} sub={`n=${feed?.latency?.summary?.sample_count??0} real executions`}/>
-        <Metric label="Latency p99" value={` ${(feed?.latency?.summary?.end_to_end_ms?.p99??0).toFixed(1)} ms`} sub={`queue p95 ${(feed?.latency?.summary?.queue_wait_ms?.p95??0).toFixed(1)} ms`}/>
+        <LatencyMetric label="Latency p95" metric={feed?.latency?.summary?.end_to_end_ms?.p95} sampleCount={feed?.latency?.summary?.sample_count??0} sub="real executions"/>
+        <LatencyMetric label="Latency p99" metric={feed?.latency?.summary?.end_to_end_ms?.p99} sampleCount={feed?.latency?.summary?.sample_count??0} sub={feed?.latency?.summary?.queue_wait_ms?.p95 != null ? "queue p95 " + feed.latency.summary.queue_wait_ms.p95.toFixed(1) + " ms" : "queue p95 not measured"}/>
       </section>
       <section className="content-grid">
         <div className="main-card">
@@ -306,6 +306,11 @@ function SystemControlRoom({strategy,asOf}:{strategy:string;asOf:string}) {
 
 function GateBadge({pass}:{pass:boolean}) {
   return <span className={`gate-badge ${pass?"pass":"fail"}`}>{pass?"PASS":"BLOCK"}</span>;
+}
+
+function LatencyMetric({label,metric,sampleCount,sub}:{label:string;metric?:number;sampleCount:number;sub:string}){
+  const measured=sampleCount>0 && Number.isFinite(metric);
+  return <Metric label={label} value={measured ? metric!.toFixed(1)+" ms" : "NOT MEASURED"} sub={measured ? "n="+sampleCount+" · "+sub : "n=0 · "+sub} />;
 }
 
 function Metric({label,value,sub,positive}:{label:string;value:string;sub:string;positive?:boolean}) {
