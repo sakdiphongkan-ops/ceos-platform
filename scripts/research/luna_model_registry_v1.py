@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+"""Create an immutable-style LUNA research/model registry entry."""
+from __future__ import annotations
+import argparse, hashlib, json, os
+from pathlib import Path
+from datetime import datetime, timezone
+
+def sha(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+def main():
+    ap=argparse.ArgumentParser()
+    ap.add_argument("--search-summary",required=True)
+    ap.add_argument("--scorecard",required=True)
+    ap.add_argument("--output",required=True)
+    ap.add_argument("--benchmark",required=True)
+    args=ap.parse_args()
+    s=json.loads(Path(args.search_summary).read_text())
+    c=json.loads(Path(args.scorecard).read_text())
+    reg={
+      "registry_version":"luna-model-registry-v1",
+      "created_at":datetime.now(timezone.utc).isoformat(),
+      "git_sha":os.getenv("GITHUB_SHA"),
+      "workflow_run_id":os.getenv("GITHUB_RUN_ID"),
+      "candidate":{
+        "formula_id":s["final_formula"]["id"],
+        "formula":s["final_formula"],
+        "selection":s["final_selection"],
+      },
+      "lineage":{
+        "input_sha256":s["input_sha256"],
+        "search_summary_sha256":sha(args.search_summary),
+        "scorecard_sha256":sha(args.scorecard),
+        "benchmark_sha256":sha(args.benchmark),
+        "holdout_start":s["holdout_start"],
+        "holdout_end":s["holdout_end"],
+        "selection_rule":s["selection_rule"],
+        "holdout_rule":s["holdout_rule"],
+        "leakage_guard":s["leakage_guard"],
+      },
+      "evidence":{
+        "outer_oos":s["outer_oos_stats"],
+        "frozen_holdout":s["frozen_holdout"],
+        "diagnostics":{
+          "development_ic_mean":c["development_ic_mean"],
+          "development_icir_annualized":c["development_icir_annualized"],
+          "quintile_spread_mean":c["quintile_spread_mean"],
+          "benchmark_overlap":c["benchmark_overlap"],
+        },
+        "promotion_checks":c["promotion_checks"],
+      },
+      "promotion":{
+        "status":"RESEARCH_ONLY",
+        "reason":"Registry entry is immutable evidence of a research candidate; production promotion requires independent human review and additional live/shadow validation.",
+      }
+    }
+    out=Path(args.output);out.parent.mkdir(parents=True,exist_ok=True)
+    out.write_text(json.dumps(reg,indent=2,default=str),encoding="utf-8")
+    print(json.dumps(reg,indent=2,default=str))
+
+if __name__=="__main__":
+    main()
