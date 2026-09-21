@@ -108,6 +108,7 @@ def main():
     ap.add_argument("--output", required=True)
     ap.add_argument("--k", type=int, default=20)
     ap.add_argument("--cost-bps", type=float, default=20)
+    ap.add_argument("--decision-hour", type=int, default=17)
     args = ap.parse_args()
 
     d = pd.read_csv(args.input)
@@ -136,6 +137,7 @@ def main():
             "formula_id": fid,
             "reason": "No sector or industry metadata column exists in the research panel.",
             "required_contract": "sector/industry classification plus point-in-time availability timestamp",
+            "decision_cutoff": f"month_end {args.decision_hour:02d}:00 Asia/Bangkok (converted to UTC)",
         }
         (out / "sector-neutralization.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
         print(json.dumps(result, indent=2))
@@ -154,8 +156,11 @@ def main():
         return
 
     d[availability_col] = pd.to_datetime(d[availability_col], errors="coerce", utc=True)
-    month_ts = d["month_end"].dt.tz_localize("UTC")
-    bad = d[availability_col].notna() & (d[availability_col] > month_ts)
+    decision_ts = (
+        d["month_end"].dt.tz_localize("Asia/Bangkok")
+        + pd.Timedelta(hours=args.decision_hour)
+    ).dt.tz_convert("UTC")
+    bad = d[availability_col].notna() & (d[availability_col] > decision_ts)
     if bad.any():
         raise SystemExit(f"point-in-time sector/industry leakage detected: {int(bad.sum())} rows")
 
