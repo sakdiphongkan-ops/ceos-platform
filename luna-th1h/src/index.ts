@@ -347,7 +347,7 @@ function getSignal(q:Quote):Signal{
 
 async function executeSignal(q:Quote,signal:Signal){
   mark(portfolio,q);
-  const plan=planOrder(signal,q,portfolio);
+  const plan=planOrder(signal,q,portfolio,executionReservations);
   if(!plan.accepted){
     if(signal.action!=="HOLD"){
       queueAudit("ORDER_BLOCKED",{
@@ -358,6 +358,7 @@ async function executeSignal(q:Quote,signal:Signal){
   }
 
   const fill=simulateFill(plan);
+  const reservation=reserveExecution(fill);
   const clientOrderId=`${sessionId}:${q.symbol}:${signal.ts}:${plan.side}:${executionTestStep}`;
 
   if(config.executionMode==="live"){
@@ -407,9 +408,11 @@ async function executeSignal(q:Quote,signal:Signal){
         status:"SUBMITTED",
         updatedAtMs:Date.now()
       });
+      pendingLiveReservations.set(clientOrderId,reservation);
       console.log(JSON.stringify({event:"LIVE_ORDER_SUBMITTED",brokerOrderId:brokerOrder.broker_order_id}));
       return;
     }catch(err){
+      releaseExecution(reservation);
       queueAudit("BROKER_ORDER_ERROR",{client_order_id:clientOrderId,error:String(err)},signal.strategyVersion);
       throw err;
     }
@@ -474,6 +477,8 @@ async function executeSignal(q:Quote,signal:Signal){
       error:String(err)
     },signal.strategyVersion);
     throw err;
+  }finally{
+    releaseExecution(reservation);
   }
 }
 
