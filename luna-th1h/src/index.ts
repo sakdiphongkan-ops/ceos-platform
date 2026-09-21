@@ -25,9 +25,6 @@ let lastLiveAccountStateAttemptAt=0;
 let sessionStartPromise:Promise<void>|null=null;
 let sessionEndPromise:Promise<void>|null=null;
 let auditQueueTail:Promise<void>=Promise.resolve();
-let activeAnalyses=0;
-const analysisWaiters:Array<()=>void>=[];
-const symbolChains=new Map<string,Promise<void>>();
 type ExecutionReservationToken={
   buyCash:number;
   grossExposure:number;
@@ -47,6 +44,9 @@ const executionReservations:ExecutionReservations={
   reservedSellQty:{}
 };
 const pendingLiveReservations=new Map<string,ExecutionReservationToken>();
+const analysisScheduler=new LatestExecutionScheduler(
+  Math.max(1,Math.floor(config.maxAnalysisConcurrency))
+);
 const executionScheduler=new LatestExecutionScheduler(
   Math.max(1,Math.floor(config.maxExecutionConcurrency))
 );
@@ -58,7 +58,6 @@ const prewarmCache=new Map<string,{prices:number[];fetchedAtMs:number;fetchMs:nu
 const liveOrderStates=new Map<string,TrackedLiveOrder>();
 const PERSIST_HOLD_MS=5_000;
 const SNAPSHOT_MS=1_000;
-const MAX_ANALYSIS_CONCURRENCY=16;
 const strategyV1=new StrategyV1({}, {priceOnlyFallback:config.priceOnlyFallback});
 
 function activeStrategyVersion(){
@@ -139,21 +138,6 @@ function queueAudit(
     });
   auditQueueTail=next;
   return next;
-}
-
-async function acquireAnalysisSlot(){
-  if(activeAnalyses<MAX_ANALYSIS_CONCURRENCY){
-    activeAnalyses++;
-    return;
-  }
-  await new Promise<void>(resolve=>analysisWaiters.push(resolve));
-  activeAnalyses++;
-}
-
-function releaseAnalysisSlot(){
-  activeAnalyses=Math.max(0,activeAnalyses-1);
-  const waiter=analysisWaiters.shift();
-  if(waiter) waiter();
 }
 
 function reserveExecution(fill:{symbol:string;side:"BUY"|"SELL";qty:number;notional:number;totalCashDelta:number}):ExecutionReservationToken{
@@ -1134,6 +1118,7 @@ async function endSession(status="CLOSED"){
   if(!sessionId) return;
 
   const closingSessionId=sessionId;
+  analysisScheduler.cancelPending();
   executionScheduler.cancelPending();
   sessionEndPromise=(async()=>{
     if(heartbeatTimer) clearInterval(heartbeatTimer);
@@ -1177,6 +1162,9 @@ async function main(){
     marketPhase:currentMarketPhase()
   }));
 
+  if(!Number.isInteger(config.maxAnalysisConcurrency) || config.maxAnalysisConcurrency<1 || config.maxAnalysisConcurrency>32){
+    throw new Error("LUNA_MAX_ANALYSIS_CONCURRENCY_MUST_BE_1_TO_32");
+  }
   if(!Number.isInteger(config.maxExecutionConcurrency) || config.maxExecutionConcurrency<1 || config.maxExecutionConcurrency>16){
     throw new Error("LUNA_MAX_EXECUTION_CONCURRENCY_MUST_BE_1_TO_16");
   }
@@ -1211,33 +1199,31 @@ async function main(){
   }
 
   for await(const q of marketQuotes(config.marketDataProvider)){
-    const previous=symbolChains.get(q.symbol) ?? Promise.resolve();
-    const next=previous
-      .catch(err=>console.error(JSON.stringify({
-        event:"LUNA_SYMBOL_CHAIN_ERROR",
+    void analysisScheduler.enqueue(q.symbol,async()=>{
+      try{
+        await handleQuote(q);
+      }catch(err){
+        console.error(JSON.stringify({
+          event:"LUNA_QUOTE_CYCLE_ERROR",
+          symbol:q.symbol,
+          ts:q.ts,
+          error:String(err)
+        }));
+      }
+    }).then(result=>{
+      if(result.superseded){
+        // The quote remained in the feed but was replaced before analysis started.
+        // This deliberately bounds latency under overload: analyze the newest state,
+        // not stale market data queued behind it.
+      }
+    }).catch(err=>{
+      console.error(JSON.stringify({
+        event:"LUNA_ANALYSIS_QUEUE_ERROR",
         symbol:q.symbol,
+        ts:q.ts,
         error:String(err)
-      })))
-      .then(async()=>{
-        await acquireAnalysisSlot();
-        try{
-          await handleQuote(q);
-        }catch(err){
-          console.error(JSON.stringify({
-            event:"LUNA_QUOTE_CYCLE_ERROR",
-            symbol:q.symbol,
-            ts:q.ts,
-            error:String(err)
-          }));
-        }finally{
-          releaseAnalysisSlot();
-        }
-      });
-
-    symbolChains.set(q.symbol,next);
-    next.finally(()=>{
-      if(symbolChains.get(q.symbol)===next) symbolChains.delete(q.symbol);
-    }).catch(()=>undefined);
+      }));
+    });
   }
 }
 
