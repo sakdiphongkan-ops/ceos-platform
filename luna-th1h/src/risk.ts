@@ -8,13 +8,9 @@ export function validateOrder(input:{
   currentPositionNotional:number;
   cash:number;
 }){
-  const maxPosition=config.initialCapital*config.maxPositionPct;
   const maxGross=config.initialCapital*config.maxGrossExposurePct;
 
   if(input.notional<=0) return {ok:false as const,reason:"INVALID_NOTIONAL"};
-  if(input.side==="BUY" && input.currentPositionNotional+input.notional>maxPosition+1e-8){
-    return {ok:false as const,reason:"MAX_POSITION"};
-  }
   if(input.side==="BUY" && input.grossExposure+input.notional>maxGross+1e-8){
     return {ok:false as const,reason:"MAX_GROSS_EXPOSURE"};
   }
