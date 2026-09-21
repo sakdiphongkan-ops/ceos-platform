@@ -22,6 +22,7 @@ jobs:
       - run: npm install
       - run: npm run typecheck
       - run: npm run test:market-session
+      - run: npm run test:strategy-state
       - run: npm run test:latency
       - run: npm run backtest:fixture
 
