@@ -6,4 +6,7 @@ export interface Quote {
 }
 export interface Signal {
   symbol:string; ts:string; action:"BUY"|"SELL"|"HOLD"; reason:string; strategyVersion:string;
+  signalStrength?:number;
+  targetAllocationPct?:number;
+  sizingReason?:string;
 }
