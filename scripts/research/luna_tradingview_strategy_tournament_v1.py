@@ -264,7 +264,10 @@ def evaluate(df: pd.DataFrame,c: Candidate,bps: float) -> pd.DataFrame:
                 current={s:1/20.0 for s in entered["symbol"]}
                 gross=float(np.nansum(entered["w"]*entered["fwd_month"].fillna(0.0)))
         syms=set(prev)|set(current)
-        turnover=0.5*sum(abs(current.get(s,0)-prev.get(s,0)) for s in syms)
+        # Production turnover is total buy+sell traded weight, i.e. the
+        # full L1 distance between consecutive target portfolios. Do not
+        # multiply by 0.5; transaction cost is charged on this full turnover.
+        turnover=sum(abs(current.get(s,0)-prev.get(s,0)) for s in syms)
         net=gross-turnover*bps/10000.0
         rows.append({
             "month_end":month,
