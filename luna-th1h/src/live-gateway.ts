@@ -56,18 +56,28 @@ export async function liveAccountState():Promise<LiveAccountState>{
   ){
     throw new Error(`GATEWAY_ACCOUNT_STATE_BAD_RESPONSE: ${JSON.stringify(body)}`);
   }
+  const positions=body.positions.map((x:any)=>({
+    symbol:String(x.symbol),
+    qty:Number(x.qty),
+    avg_price:Number(x.avg_price),
+    market_price:x.market_price==null?null:Number(x.market_price),
+    market_value:x.market_value==null?null:Number(x.market_value),
+    unrealized_pnl:x.unrealized_pnl==null?null:Number(x.unrealized_pnl),
+    realized_pnl:x.realized_pnl==null?null:Number(x.realized_pnl)
+  }));
+  if(positions.some((x:any)=>
+    !x.symbol
+    || !Number.isFinite(x.qty)
+    || x.qty<=0
+    || !Number.isFinite(x.avg_price)
+    || x.avg_price<=0
+  )){
+    throw new Error("GATEWAY_ACCOUNT_STATE_INVALID_POSITION");
+  }
   return {
     as_of:String(body.as_of ?? new Date().toISOString()),
     cash:Number(body.cash),
-    positions:body.positions.map((x:any)=>({
-      symbol:String(x.symbol),
-      qty:Number(x.qty),
-      avg_price:Number(x.avg_price),
-      market_price:x.market_price==null?null:Number(x.market_price),
-      market_value:x.market_value==null?null:Number(x.market_value),
-      unrealized_pnl:x.unrealized_pnl==null?null:Number(x.unrealized_pnl),
-      realized_pnl:x.realized_pnl==null?null:Number(x.realized_pnl)
-    })),
+    positions,
     unparsed_symbols:body.unparsed_symbols.map((x:any)=>String(x))
   };
 }
