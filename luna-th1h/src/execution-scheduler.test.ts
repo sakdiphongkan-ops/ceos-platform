@@ -34,7 +34,17 @@ if(!supersededResult.superseded) throw new Error("older pending signal was not s
 
 if(!events.includes("BBB-1-ran")) throw new Error("different symbol should execute concurrently");
 
-gate.resolve();
+const pendingCancelScheduler=new LatestExecutionScheduler(1);
+const cancelGate=deferred<void>();
+const running=pendingCancelScheduler.enqueue("CCC",async()=>{await cancelGate.promise;});
+const stale=pendingCancelScheduler.enqueue("DDD",async()=>{events.push("DDD-ran");});
+pendingCancelScheduler.cancelPending();
+const staleResult=await stale;
+if(!staleResult.superseded) throw new Error("pending signal was not canceled at session close");
+if(events.includes("DDD-ran")) throw new Error("canceled pending signal executed");
+
+cancelGate.resolve();
+await running;
 await Promise.all([first,latest,other]);
 
 if(events.includes("AAA-2-ran")) throw new Error("superseded AAA task executed");
