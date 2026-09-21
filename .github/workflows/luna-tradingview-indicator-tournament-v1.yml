@@ -218,10 +218,16 @@ jobs:
                  .tail(1)[["symbol","month_end","close"]]
                  .sort_values(["symbol","month_end"])
           )
-          m["expected_m1"]=m.groupby("symbol")["close"].pct_change()
+          raw["m1_20d"]=raw.groupby("symbol")["adj_close"].pct_change(20)
+          m=(
+              raw.sort_values(["symbol","date"])
+                 .groupby(["symbol","month_end"],as_index=False)
+                 .tail(1)[["symbol","month_end","m1_20d"]]
+                 .sort_values(["symbol","month_end"])
+          )
           p=pd.read_csv(panel,parse_dates=["month_end"])[["symbol","month_end","M1_MOM20_ADJ"]]
-          z=m.merge(p,on=["symbol","month_end"],how="inner").dropna(subset=["expected_m1","M1_MOM20_ADJ"])
-          d=(z["expected_m1"]-z["M1_MOM20_ADJ"]).abs()
+          z=m.merge(p,on=["symbol","month_end"],how="inner").dropna(subset=["m1_20d","M1_MOM20_ADJ"])
+          d=(z["m1_20d"]-z["M1_MOM20_ADJ"]).abs()
           mx=float(d.max()) if len(d) else 0.0
           print({"rows":len(z),"symbols":z["symbol"].nunique(),"max_abs_diff":mx})
           assert len(z)>50000
