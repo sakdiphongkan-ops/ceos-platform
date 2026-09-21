@@ -120,7 +120,7 @@ jobs:
           cache_panel=Path("research-results/luna-tradingview-v1/monthly-indicator-panel.csv")
           cache_summary=Path("research-results/luna-tradingview-v1/indicator-engine-summary.json")
           out=Path("research/luna_tradingview_indicator_engine_v1")
-          cache_version="20260920-null-traded-v3"
+          cache_version="20260921-m1-raw-close-v4"
 
           use_cache=False
           if cache_panel.exists() and cache_summary.exists():
@@ -187,6 +187,33 @@ jobs:
               (out/"summary.json").write_text(json.dumps(meta,indent=2),encoding="utf-8")
           PY
 
+      - name: Validate M1 monthly feature parity
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          from pathlib import Path
+
+          daily=Path("data/luna_daily/daily_prices.csv")
+          panel=Path("research/luna_tradingview_indicator_engine_v1/monthly_indicator_panel.csv")
+          raw=pd.read_csv(daily,parse_dates=["date"])
+          raw=raw.dropna(subset=["close"]).copy()
+          raw["month_end"]=raw["date"].dt.to_period("M").dt.to_timestamp("M")
+          m=(
+              raw.sort_values(["symbol","date"])
+                 .groupby(["symbol","month_end"],as_index=False)
+                 .tail(1)[["symbol","month_end","close"]]
+                 .sort_values(["symbol","month_end"])
+          )
+          m["expected_m1"]=m.groupby("symbol")["close"].pct_change()
+          p=pd.read_csv(panel,parse_dates=["month_end"])[["symbol","month_end","M1_MOM20_ADJ"]]
+          z=m.merge(p,on=["symbol","month_end"],how="inner").dropna(subset=["expected_m1","M1_MOM20_ADJ"])
+          d=(z["expected_m1"]-z["M1_MOM20_ADJ"]).abs()
+          mx=float(d.max()) if len(d) else 0.0
+          print({"rows":len(z),"symbols":z["symbol"].nunique(),"max_abs_diff":mx})
+          assert len(z)>50000
+          assert mx <= 1e-12
+          PY
+
       - name: Run M1 x TradingView strategy tournament
         run: |
           rm -rf research/luna_tradingview_strategy_tournament_v1
@@ -212,8 +239,8 @@ jobs:
           audit=x["locked_m1_baseline_audit"]
           assert audit["available"] is True
           assert audit["common_months"] == 59
-          if not audit["within_1bp"]:
-              print("WARNING: locked production audit does not match within 1bp; use same-data BASELINE control for candidate comparison.")
+          assert audit["within_1bp"] is True, audit
+          assert audit["max_abs_diff"] <= 0.0001, audit
           print(json.dumps(x,indent=2))
           PY
 
