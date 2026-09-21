@@ -251,7 +251,7 @@ def find_divergence_signal(
         conf2 = pd.Timestamp(p2["confirmed_date"])
         if conf2 < start or conf2 > end:
             continue
-        prior = piv.iloc[max(0, j - 8):j]
+        prior = piv[piv["pivot_i"] < p2["pivot_i"]]
         prior = prior[
             (p2["pivot_i"] - prior["pivot_i"] <= max_gap)
             & (prior["pivot_low"] > 0)
