@@ -1,0 +1,40 @@
+[
+  {
+    "endpoint": "security_profile",
+    "params": {
+      "reportDate": "YYYY-MM-DD"
+    },
+    "filename": "security_profile_YYYY-MM-DD.json"
+  },
+  {
+    "endpoint": "financial_statement_last_update",
+    "params": {},
+    "filename": "financial_statement_last_update.json"
+  },
+  {
+    "endpoint": "financial_statement_all",
+    "params": {
+      "asOfYear": "YYYY",
+      "asOfQuarter": "1"
+    },
+    "filename": "financial_statement_YYYY_Q1.json"
+  },
+  {
+    "endpoint": "fundamental_eod_all_symbols",
+    "params": {
+      "securityType": "All",
+      "date": "YYYY-MM-DD",
+      "adjustedPriceFlag": "Y"
+    },
+    "filename": "fundamental_eod_YYYY-MM-DD.json"
+  },
+  {
+    "endpoint": "financial_data_all_symbols",
+    "params": {
+      "accountPeriod": "C",
+      "year": "YYYY",
+      "quarter": "1"
+    },
+    "filename": "financial_data_YYYY_Q1.json"
+  }
+]
