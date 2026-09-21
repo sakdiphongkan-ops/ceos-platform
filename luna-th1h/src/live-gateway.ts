@@ -84,6 +84,7 @@ export interface LiveReconciliationOrder {
   status:string;
   filled_qty?:number;
   avg_fill_price?:number|null;
+  fee?:number|null;
   updated_at_ms?:number;
   raw?:unknown;
 }
