@@ -626,16 +626,20 @@ async function executeSignal(
       session_id:sessionId,
       fill:{
         client_order_id:clientOrderId,
+        broker_order_id:null,
         symbol:fill.symbol,
         side:fill.side,
         qty:fill.qty,
+        order_qty:fill.qty,
+        cumulative_filled_qty:fill.qty,
         order_price:fill.referencePrice,
         fill_price:fill.fillPrice,
         fee:fill.fee,
         slippage:fill.slippage,
         ts:executionTs,
         reason:signal.reason,
-        strategy_version:signal.strategyVersion
+        strategy_version:signal.strategyVersion,
+        idempotency_key:`${clientOrderId}:FILL:${fill.qty}`
       }
     });
     const result=(response as {result?:{idempotent?:boolean,order_id?:string,fill_id?:number,position_qty?:number,avg_price?:number,realized_pnl?:number}})?.result;
@@ -749,13 +753,16 @@ async function reconcileLiveOrderStates(){
             symbol:current.symbol,
             side:current.side,
             qty:deltaQty,
+            order_qty:current.submittedQty,
+            cumulative_filled_qty:next.filledQty,
             order_price:reference,
             fill_price:next.avgFillPrice,
             fee,
             slippage,
             ts:new Date(next.updatedAtMs).toISOString(),
             reason:"BROKER_RECONCILIATION",
-            strategy_version:current.strategyVersion
+            strategy_version:current.strategyVersion,
+            idempotency_key:`${current.clientOrderId}:FILL:${next.filledQty}`
           }
         });
         const result=(response as {result?:{idempotent?:boolean}})?.result;
