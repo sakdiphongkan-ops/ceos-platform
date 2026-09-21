@@ -240,4 +240,4 @@ def main():
 
 if __name__=="__main__": main()
 
-# CI trigger: rerun validated failure-driven search after publish-race fix. Multiple-testing matrix is persisted for downstream inference; PIT fundamental factors are eligible when covered.
+# CI trigger: rerun validated failure-driven search after publish-race fix. Universe/sector robustness, multiple-testing, fresh-seed replication, and PIT factors are now part of the downstream evidence chain.
