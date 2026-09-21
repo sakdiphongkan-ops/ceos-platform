@@ -89,8 +89,11 @@ def main():
             if len(qret)>=2:
                 candidate_spread.append({"month_end":str(m.date()),"top_bottom_spread":float(qret.iloc[-1]-qret.iloc[0])})
 
-    ic=pd.Series(list(candidate_ic.values()),dtype=float).dropna()
-    icir=float(ic.mean()/ic.std(ddof=1)*math.sqrt(12)) if len(ic)>1 and ic.std(ddof=1)>0 else None
+    ic_df=pd.DataFrame({"month_end":list(candidate_ic.keys()),"ic":list(candidate_ic.values())})
+    ic_df["month_end"]=pd.to_datetime(ic_df["month_end"])
+    ic=ic_df.ic.dropna()
+    dev_ic=ic_df.loc[ic_df["month_end"].isin(dev),"ic"].dropna()
+    icir=float(dev_ic.mean()/dev_ic.std(ddof=1)*math.sqrt(12)) if len(dev_ic)>1 and dev_ic.std(ddof=1)>0 else None
 
     # Exact candidate portfolio series for diagnostics.
     rows={m:d.index[d.month_end.eq(m)].to_numpy() for m in months}
@@ -156,7 +159,7 @@ def main():
         "search_summary_sha256":hashlib.sha256(Path(args.search_summary).read_bytes()).hexdigest(),
         "formula_catalog_sha256":hashlib.sha256(Path(args.formula_catalog).read_bytes()).hexdigest(),
         "formula_id":fid,"formula":formula,
-        "development_ic_mean":float(ic[ic.index.isin([*range(len(ic))])].mean()) if len(ic) else None,
+        "development_ic_mean":float(dev_ic.mean()) if len(dev_ic) else None,
         "development_icir_annualized":icir,
         "ic_month_count":int(len(ic)),
         "quintile_spread_mean":float(pd.DataFrame(candidate_spread).top_bottom_spread.mean()) if candidate_spread else None,
