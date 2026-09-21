@@ -14,6 +14,10 @@ on:
       - scripts/research/luna_model_registry_v1.py
       - research-results/luna-m1-benchmark-locked-20260920.csv
 
+concurrency:
+  group: luna-failure-driven-search-v1
+  cancel-in-progress: false
+
 jobs:
   search:
     if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'luna-search-v1')
