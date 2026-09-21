@@ -38,6 +38,8 @@ def main() -> None:
     ap.add_argument("--universe", required=False)
     ap.add_argument("--sector-neutralization", required=False)
     ap.add_argument("--lifecycle", required=False)
+    ap.add_argument("--pit-fundamentals", required=False)
+    ap.add_argument("--corporate-actions", required=False)
     ap.add_argument("--output", required=True)
     ap.add_argument("--max-crowding-warning", type=float, default=0.90)
     args = ap.parse_args()
@@ -49,8 +51,19 @@ def main() -> None:
     universe = load(args.universe) if args.universe else {}
     sector = load(args.sector_neutralization) if args.sector_neutralization else {}
     lifecycle = load(args.lifecycle) if args.lifecycle else {}
+    pit_fund = load(args.pit_fundamentals) if args.pit_fundamentals else {}
+    corporate = load(args.corporate_actions) if args.corporate_actions else {}
 
     checks = score.get("promotion_checks", {})
+    fundamental_factors = {
+        "PE","PBV","EV_EBITDA","FCF_YIELD","EARNINGS_YIELD","DIV_YIELD","ROE","ROA","ROIC",
+        "GPM","NPM","CFO_MARGIN","REV_G","EPS_G","NI_G","FCF_G","ASSET_G","CAPEX_G",
+        "INVESTMENT_RATE","DIV_G","PAYOUT","BUYBACK","DE","NET_DEBT_EBITDA","INTEREST_COVER",
+        "CURRENT_RATIO","TURNOVER","QUALITY_SCORE","VALUE_QUALITY","CONSERVATIVE_SCORE",
+        "GROWTH_QUALITY","INV_QUALITY"
+    }
+    candidate_terms = {t[0] for t in summary.get("final_formula", {}).get("terms", []) if isinstance(t, list) and t}
+    uses_fundamentals = bool(candidate_terms & fundamental_factors)
     hard = {
         "holdout_geo_positive": bool(checks.get("holdout_geo_positive", False)),
         "outer_oos_geo_positive": bool(checks.get("outer_oos_geo_positive", False)),
@@ -65,6 +78,8 @@ def main() -> None:
         ),
         "sector_neutralization_available": sector.get("status") == "COMPLETED",
         "symbol_lifecycle_available": lifecycle.get("status") == "COMPLETED",
+        "pit_fundamentals_contract_ready_when_used": (not uses_fundamentals) or pit_fund.get("status") == "COMPLETED",
+        "corporate_actions_contract_available": corporate.get("status") in {"COMPLETED", "UNAVAILABLE"},
     }
 
     crowding = neutral.get("crowding_max_abs_corr")
@@ -96,6 +111,9 @@ def main() -> None:
             "universe_robustness": universe,
             "sector_industry_neutralization": sector,
             "symbol_lifecycle": lifecycle,
+            "pit_fundamentals": pit_fund,
+            "corporate_actions": corporate,
+            "candidate_uses_fundamentals": uses_fundamentals,
         },
         "promotion_status": (
             "PROMOTION_ELIGIBLE_PENDING_FRESH_SEED_REPLICATION"
