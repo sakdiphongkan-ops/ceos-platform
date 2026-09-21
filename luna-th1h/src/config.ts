@@ -11,6 +11,8 @@ export const config={
   sellTaxBps:num("LUNA_SELL_TAX_BPS",10),
   slippageBps:num("LUNA_SLIPPAGE_BPS",5),
   marketImpactBps:num("LUNA_MARKET_IMPACT_BPS",8),
+  liveReconciliation:bool("LUNA_LIVE_RECONCILIATION",false),
+  liveReconciliationMs:num("LUNA_LIVE_RECONCILIATION_MS",5000),
   executionTest:bool("LUNA_EXECUTION_TEST",false),
   priceOnlyFallback:bool("LUNA_PRICE_ONLY_FALLBACK",false),
   executionMode:process.env.LUNA_EXECUTION_MODE ?? "paper",
