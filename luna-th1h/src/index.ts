@@ -21,6 +21,7 @@ let sessionGeneration=0;
 let lastSnapshotAt=0;
 let lastReconciliationAt=0;
 let lastLiveAccountStateSyncAt=0;
+let lastLiveAccountStateAttemptAt=0;
 let sessionStartPromise:Promise<void>|null=null;
 let sessionEndPromise:Promise<void>|null=null;
 let auditQueueTail:Promise<void>=Promise.resolve();
@@ -314,8 +315,12 @@ async function refreshLiveAccountState(
 
   const now=Date.now();
   if(!force && now-lastLiveAccountStateSyncAt<config.liveReconciliationMs) return;
+  if(now-lastLiveAccountStateAttemptAt<config.liveReconciliationMs){
+    throw new Error("LIVE_ACCOUNT_STATE_SYNC_BACKOFF");
+  }
   if(pendingLiveReservations.size>0 && !force) return;
 
+  lastLiveAccountStateAttemptAt=now;
   const broker=await liveAccountState();
   if(sessionId!==expectedSessionId || sessionGeneration!==expectedSessionGeneration){
     throw new Error("LIVE_ACCOUNT_STATE_SESSION_CHANGED");
@@ -1133,6 +1138,7 @@ async function endSession(status="CLOSED"){
         sessionId=null;
         sessionDate=null;
         lastLiveAccountStateSyncAt=0;
+        lastLiveAccountStateAttemptAt=0;
         sessionGeneration++;
         prewarmCache.clear();
         prewarmInFlight.clear();
