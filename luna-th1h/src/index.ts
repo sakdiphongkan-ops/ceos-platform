@@ -6,6 +6,7 @@ import {transitionBrokerOrder,type BrokerOrderState} from "./broker-state.js";
 import {applyFill,createPortfolio,mark,planOrder,simulateFill,snapshot,type ExecutionReservations,type PortfolioState} from "./execution.js";
 import type {Quote,Signal} from "./types.js";
 import {marketPhaseAt,sessionDateAt} from "./market-session.js";
+import {LatestExecutionScheduler} from "./execution-scheduler.js";
 
 const EXECUTION_TEST_VERSION="luna-th1h-execution-test-0.1.0";
 
@@ -31,21 +32,15 @@ type ExecutionReservationToken={
   symbol:string;
 };
 
-type ExecutionJob={
-  task:()=>Promise<void>;
-  resolve:()=>void;
-  reject:(error:unknown)=>void;
-};
-
 const executionReservations:ExecutionReservations={
   reservedBuyCash:0,
   reservedGrossExposure:0,
   reservedSellQty:{}
 };
 const pendingLiveReservations=new Map<string,ExecutionReservationToken>();
-const executionQueue:ExecutionJob[]=[];
-const executionSymbolChains=new Map<string,Promise<void>>();
-let activeExecutionJobs=0;
+const executionScheduler=new LatestExecutionScheduler(
+  Math.max(1,Math.floor(config.maxExecutionConcurrency))
+);
 
 const lastPersistBySymbol=new Map<string,number>();
 const prewarmedSymbols=new Set<string>();
@@ -173,39 +168,6 @@ function releaseExecution(token:ExecutionReservationToken){
     if(left<=0) delete executionReservations.reservedSellQty[token.symbol];
     else executionReservations.reservedSellQty[token.symbol]=left;
   }
-}
-
-function pumpExecutionQueue(){
-  while(activeExecutionJobs<MAX_EXECUTION_CONCURRENCY && executionQueue.length>0){
-    const job=executionQueue.shift()!;
-    activeExecutionJobs++;
-    void job.task()
-      .then(job.resolve,job.reject)
-      .finally(()=>{
-        activeExecutionJobs--;
-        pumpExecutionQueue();
-      })
-      .catch(()=>undefined);
-  }
-}
-
-function enqueueExecution(task:()=>Promise<void>){
-  return new Promise<void>((resolve,reject)=>{
-    executionQueue.push({task,resolve,reject});
-    pumpExecutionQueue();
-  });
-}
-
-function enqueueSymbolExecution(symbol:string,task:()=>Promise<void>){
-  const previous=executionSymbolChains.get(symbol)??Promise.resolve();
-  const next=previous
-    .catch(()=>undefined)
-    .then(()=>enqueueExecution(task));
-  executionSymbolChains.set(symbol,next);
-  next.finally(()=>{
-    if(executionSymbolChains.get(symbol)===next) executionSymbolChains.delete(symbol);
-  }).catch(()=>undefined);
-  return next;
 }
 
 function currentMarketPhase(){
@@ -741,7 +703,7 @@ async function handleQuote(q:Quote){
 
   if(signal.action!=="HOLD"){
     const executionQueuedAt=Date.now();
-    enqueueSymbolExecution(q.symbol,async()=>{
+    void executionScheduler.enqueue(q.symbol,async()=>{
       try{
         // Re-check the session immediately before execution. A signal may have
         // waited behind another order long enough to cross REDUCE_ONLY/CLOSED.
@@ -761,8 +723,8 @@ async function handleQuote(q:Quote){
             market_phase:executionPhase,
             quote_ts:q.ts,
             quote_age_ms:quoteAgeMs,
-            execution_queue_depth:executionQueue.length,
-            active_execution_jobs:activeExecutionJobs
+            execution_queue_depth:executionScheduler.stats().queuedSymbols,
+            active_execution_jobs:executionScheduler.stats().activeJobs
           },signal.strategyVersion);
           return;
         }
@@ -804,6 +766,22 @@ async function handleQuote(q:Quote){
           end_to_end_ms:Date.now()-startedAt
         }));
       }
+    }).then((result)=>{
+      if(result.superseded){
+        queueAudit("SIGNAL_SUPERSEDED",{
+          symbol:q.symbol,
+          action:signal.action,
+          quote_ts:q.ts,
+          reason:"LATEST_SIGNAL_WINS"
+        },signal.strategyVersion);
+      }
+    }).catch((err)=>{
+      console.error(JSON.stringify({
+        event:"EXECUTION_QUEUE_ERROR",
+        symbol:q.symbol,
+        action:signal.action,
+        error:String(err)
+      }));
     });
   }
 
