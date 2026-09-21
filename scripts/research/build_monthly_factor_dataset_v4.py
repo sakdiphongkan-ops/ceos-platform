@@ -39,7 +39,9 @@ def main():
     d["symbol"]=d["symbol"].astype(str).str.strip().str.upper()
     d["adj_close"]=pd.to_numeric(d["adj_close"],errors="coerce")
     for c in d.columns:
-        if c not in {"date","symbol"}:
+        if c not in {"date","symbol","sector","sector_code","industry","industry_code",
+                     "sector_available_at","industry_available_at","metadata_available_at",
+                     "listed_date","delist_date"}:
             d[c]=pd.to_numeric(d[c],errors="coerce")
 
     d=d.dropna(subset=["symbol","adj_close"]).sort_values(["symbol","date"])
@@ -48,6 +50,18 @@ def main():
     m=d.loc[idx].copy().sort_values(["month_end","symbol"]).reset_index(drop=True)
 
     out=m[["symbol","month_end","adj_close"]].copy()
+
+    # Preserve optional point-in-time classification metadata for downstream
+    # neutrality diagnostics. These columns are descriptive only unless an
+    # explicit availability timestamp is supplied.
+    metadata_cols=[
+        "sector","sector_code","industry","industry_code",
+        "sector_available_at","industry_available_at","metadata_available_at",
+        "listed_date","delist_date"
+    ]
+    for c in metadata_cols:
+        if c in m.columns and c not in out.columns:
+            out[c]=m[c]
     for f in FACTORS:
         if f=="REV21":
             src="MOM_20"
