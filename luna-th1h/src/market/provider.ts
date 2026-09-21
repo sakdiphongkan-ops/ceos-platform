@@ -18,45 +18,38 @@ export function marketQuotes(provider:string):AsyncGenerator<Quote>{
 async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
   const url = process.env.LUNA_MARKET_GATEWAY_URL ?? "";
   const key = process.env.LUNA_MARKET_GATEWAY_KEY ?? "";
-  const pollMs = Math.max(100,Number(process.env.LUNA_MARKET_GATEWAY_POLL_MS ?? 100));
+  const pollMs = Math.max(50,Number(process.env.LUNA_MARKET_GATEWAY_POLL_MS ?? 100));
+  const timeoutMs = Math.max(200,Number(process.env.LUNA_MARKET_GATEWAY_TIMEOUT_MS ?? 750));
   if(!url || !key) throw new Error("LUNA_MARKET_GATEWAY_URL and LUNA_MARKET_GATEWAY_KEY are required.");
 
   const previous = new Map<string,string>();
   let lastGatewayCount=-1;
 
   while(true){
+    const cycleStarted=Date.now();
     let body:any = {};
     let ok=false;
-    let lastError:unknown=null;
 
-    for(let attempt=1;attempt<=4;attempt++){
-      try{
-        const res = await fetch(`${url}/quotes`,{
-          headers:{"x-luna-gateway":key,"accept":"application/json"},
-          cache:"no-store",
-          signal:AbortSignal.timeout(5000)
-        });
-        body = await res.json().catch(()=>({}));
-        if(!res.ok) throw new Error(`HTTP_${res.status}: ${JSON.stringify(body)}`);
-        ok=true;
-        break;
-      }catch(err){
-        lastError=err;
-        console.error(JSON.stringify({
-          event:"LUNA_GATEWAY_FETCH_RETRY",
-          attempt,
-          error:String(err)
-        }));
-        await new Promise(r=>setTimeout(r,Math.min(5000,250*2**(attempt-1))));
-      }
+    try{
+      const res = await fetch(`${url}/quotes`,{
+        headers:{"x-luna-gateway":key,"accept":"application/json"},
+        cache:"no-store",
+        signal:AbortSignal.timeout(timeoutMs)
+      });
+      body = await res.json().catch(()=>({}));
+      if(!res.ok) throw new Error(`HTTP_${res.status}: ${JSON.stringify(body)}`);
+      ok=true;
+    }catch(err){
+      console.error(JSON.stringify({
+        event:"LUNA_GATEWAY_FETCH_FAILED",
+        error:String(err),
+        timeout_ms:timeoutMs,
+        poll_ms:pollMs
+      }));
     }
 
     if(!ok){
-      console.error(JSON.stringify({
-        event:"LUNA_GATEWAY_FETCH_DEGRADED",
-        error:String(lastError)
-      }));
-      await new Promise(r=>setTimeout(r,Math.max(1000,pollMs*4)));
+      await new Promise(r=>setTimeout(r,pollMs));
       continue;
     }
 
@@ -104,6 +97,8 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
       previous.set(q.symbol,sig);
       yield q;
     }
-    await new Promise(r=>setTimeout(r,pollMs));
+
+    const elapsed=Date.now()-cycleStarted;
+    await new Promise(r=>setTimeout(r,Math.max(0,pollMs-elapsed)));
   }
 }
