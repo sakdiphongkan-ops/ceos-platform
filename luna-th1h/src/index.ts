@@ -362,6 +362,7 @@ async function executeSignal(q:Quote,signal:Signal){
   const clientOrderId=`${sessionId}:${q.symbol}:${signal.ts}:${plan.side}:${executionTestStep}`;
 
   if(config.executionMode==="live"){
+    let brokerOrderReturned=false;
     try{
       const brokerOrder=await placeLiveOrder({
         clientOrderId,
@@ -371,32 +372,7 @@ async function executeSignal(q:Quote,signal:Signal){
         price:plan.referencePrice,
         reason:signal.reason
       });
-      await ingest("",{
-        action:"record_broker_event",
-        event:{
-          session_id:sessionId,
-          client_order_id:brokerOrder.client_order_id,
-          broker_order_id:brokerOrder.broker_order_id,
-          event_type:"BROKER_ORDER_SUBMITTED",
-          ts:new Date().toISOString(),
-          payload:{
-            symbol:brokerOrder.symbol,
-            side:brokerOrder.side,
-            qty:brokerOrder.qty,
-            price:brokerOrder.price,
-            raw:brokerOrder.raw
-          },
-          idempotency_key:sessionId+":BROKER_ORDER_SUBMITTED:"+brokerOrder.client_order_id
-        }
-      });
-      queueAudit("BROKER_ORDER_SUBMITTED",{
-        client_order_id:brokerOrder.client_order_id,
-        broker_order_id:brokerOrder.broker_order_id,
-        symbol:brokerOrder.symbol,
-        side:brokerOrder.side,
-        qty:brokerOrder.qty,
-        price:brokerOrder.price
-      },signal.strategyVersion);
+      brokerOrderReturned=true;
       liveOrderStates.set(clientOrderId,{
         clientOrderId,
         brokerOrderId:brokerOrder.broker_order_id,
@@ -409,11 +385,51 @@ async function executeSignal(q:Quote,signal:Signal){
         updatedAtMs:Date.now()
       });
       pendingLiveReservations.set(clientOrderId,reservation);
+
+      try{
+        await ingest("",{
+          action:"record_broker_event",
+          event:{
+            session_id:sessionId,
+            client_order_id:brokerOrder.client_order_id,
+            broker_order_id:brokerOrder.broker_order_id,
+            event_type:"BROKER_ORDER_SUBMITTED",
+            ts:new Date().toISOString(),
+            payload:{
+              symbol:brokerOrder.symbol,
+              side:brokerOrder.side,
+              qty:brokerOrder.qty,
+              price:brokerOrder.price,
+              raw:brokerOrder.raw
+            },
+            idempotency_key:sessionId+":BROKER_ORDER_SUBMITTED:"+brokerOrder.client_order_id
+          }
+        });
+      }catch(bookkeepingError){
+        queueAudit("BROKER_ORDER_BOOKKEEPING_ERROR",{
+          client_order_id:clientOrderId,
+          broker_order_id:brokerOrder.broker_order_id,
+          error:String(bookkeepingError)
+        },signal.strategyVersion);
+      }
+
+      queueAudit("BROKER_ORDER_SUBMITTED",{
+        client_order_id:brokerOrder.client_order_id,
+        broker_order_id:brokerOrder.broker_order_id,
+        symbol:brokerOrder.symbol,
+        side:brokerOrder.side,
+        qty:brokerOrder.qty,
+        price:brokerOrder.price
+      },signal.strategyVersion);
       console.log(JSON.stringify({event:"LIVE_ORDER_SUBMITTED",brokerOrderId:brokerOrder.broker_order_id}));
       return;
     }catch(err){
-      releaseExecution(reservation);
-      queueAudit("BROKER_ORDER_ERROR",{client_order_id:clientOrderId,error:String(err)},signal.strategyVersion);
+      if(!brokerOrderReturned) releaseExecution(reservation);
+      queueAudit("BROKER_ORDER_ERROR",{
+        client_order_id:clientOrderId,
+        error:String(err),
+        reservation_held:brokerOrderReturned
+      },signal.strategyVersion);
       throw err;
     }
   }
