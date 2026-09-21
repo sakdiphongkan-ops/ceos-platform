@@ -35,6 +35,8 @@ def main() -> None:
     ap.add_argument("--scorecard", required=True)
     ap.add_argument("--neutralized", required=True)
     ap.add_argument("--replication", required=False)
+    ap.add_argument("--universe", required=False)
+    ap.add_argument("--sector-neutralization", required=False)
     ap.add_argument("--output", required=True)
     ap.add_argument("--max-crowding-warning", type=float, default=0.90)
     args = ap.parse_args()
@@ -43,6 +45,8 @@ def main() -> None:
     score = load(args.scorecard)
     neutral = load(args.neutralized)
     replication = load(args.replication) if args.replication else {}
+    universe = load(args.universe) if args.universe else {}
+    sector = load(args.sector_neutralization) if args.sector_neutralization else {}
 
     checks = score.get("promotion_checks", {})
     hard = {
@@ -53,6 +57,11 @@ def main() -> None:
         "cost_45bps_holdout_positive": bool(checks.get("cost_45bps_holdout_positive", False)),
         "k_stability_positive": bool(checks.get("k10_k20_k30_k50_all_positive_at20bps", False)),
         "neutralized_ic_positive": bool(float(neutral.get("neutral_ic_mean", -math.inf)) > 0),
+        "universe_stress_available": universe.get("status") == "COMPLETED",
+        "universe_stress_holdout_median_positive": bool(
+            float(universe.get("random_dropout", {}).get("median_holdout_geo", -math.inf)) > 0
+        ),
+        "sector_neutralization_available": sector.get("status") == "COMPLETED",
     }
 
     crowding = neutral.get("crowding_max_abs_corr")
@@ -81,6 +90,8 @@ def main() -> None:
             "crowding_warning": crowding_warning,
             "fresh_seed_replication_evidence_present": fresh_seed_replication,
             "fresh_seed_replication": replication.get("runs", []),
+            "universe_robustness": universe,
+            "sector_industry_neutralization": sector,
         },
         "promotion_status": (
             "PROMOTION_ELIGIBLE_PENDING_FRESH_SEED_REPLICATION"
