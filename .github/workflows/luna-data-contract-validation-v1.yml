@@ -10,6 +10,8 @@ on:
       - scripts/research/validate_pit_security_master_v1.py
       - scripts/research/validate_pit_fundamentals_v1.py
       - scripts/research/validate_corporate_actions_v1.py
+      - scripts/research/build_factor_dataset.py
+      - tests/research/test_build_factor_dataset_pit.py
       - data/contracts/luna_*.schema.json
       - data/contracts/set_smartmarketplace_request_plan_v1.json
 
@@ -24,7 +26,9 @@ jobs:
           python-version: "3.12"
       - name: Syntax validation
         run: |
-          python -m py_compile             scripts/research/pull_set_smartmarketplace_v1.py             scripts/research/batch_pull_set_smartmarketplace_v1.py             scripts/research/normalize_set_pit_fundamentals_v1.py             scripts/research/validate_pit_security_master_v1.py             scripts/research/validate_pit_fundamentals_v1.py             scripts/research/validate_corporate_actions_v1.py
+          python -m py_compile             scripts/research/pull_set_smartmarketplace_v1.py             scripts/research/batch_pull_set_smartmarketplace_v1.py             scripts/research/normalize_set_pit_fundamentals_v1.py             scripts/research/validate_pit_security_master_v1.py             scripts/research/validate_pit_fundamentals_v1.py             scripts/research/validate_corporate_actions_v1.py \
+            scripts/research/build_factor_dataset.py \
+            tests/research/test_build_factor_dataset_pit.py
       - name: JSON contract validation
         run: |
           python - <<'PY'
@@ -36,6 +40,10 @@ jobs:
           json.loads(Path("data/contracts/set_smartmarketplace_request_plan_v1.json").read_text(encoding="utf-8"))
           print("OK request plan")
           PY
+      - name: PIT field-level merge regression
+        run: |
+          python tests/research/test_build_factor_dataset_pit.py
+
       - name: Missing-source validator behavior
         run: |
           mkdir -p research/data-contract-validation
