@@ -98,3 +98,10 @@ While live reconciliation is enabled, LUNA periodically compares broker cash and
 ## Restart safety update — 2026-09-21
 
 On live startup LUNA also checks for broker orders that are still non-terminal. Because a restarted worker may no longer have the original in-memory reservation/client-order mapping, any remaining broker open order causes live session startup to fail closed rather than risk duplicate BUY or SELL exposure. The gateway treats only explicitly terminal order statuses as safe to ignore; unknown statuses remain active for safety.
+
+
+## Broker risk-capital update — 2026-09-21
+
+Live risk sizing now uses broker account equity rather than broker cash alone. The gateway computes normalized equity as cash plus explicitly reported position market value, or market price multiplied by quantity when an explicit market value is unavailable. Portfolio cost fields are not treated as market value. This prevents an account that already holds stocks from being sized as though only its idle cash were the entire risk capital.
+
+Settrade's public Python SDK examples/snippets confirm the Equity interface exposes `get_account_info()`, `get_portfolio()`, `get_orders()`, place/cancel/change order functions, and realtime equity order subscription. LUNA therefore uses the SDK's equity order-list capability for restart safety rather than depending on an invented broker method. citeturn134614view0turn987317search6
