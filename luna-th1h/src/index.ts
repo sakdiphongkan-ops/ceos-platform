@@ -26,6 +26,8 @@ const symbolChains=new Map<string,Promise<void>>();
 let executionChain:Promise<void>=Promise.resolve();
 const lastPersistBySymbol=new Map<string,number>();
 const prewarmedSymbols=new Set<string>();
+const prewarmInFlight=new Map<string,Promise<void>>();
+const prewarmCache=new Map<string,{prices:number[];fetchedAtMs:number;fetchMs:number}>();
 const liveOrderStates=new Map<string,BrokerOrderState>();
 const PERSIST_HOLD_MS=5_000;
 const SNAPSHOT_MS=1_000;
@@ -486,35 +488,57 @@ async function reconcileLiveOrderStates(){
   }
 }
 
-async function prewarmStrategy(q:Quote){
-  if(prewarmedSymbols.has(q.symbol)) return;
-  try{
-    const response=await ingest("",{
-      action:"recent_ticks",
-      symbol:q.symbol,
-      source:q.source,
-      limit:25
-    });
-    const quotes=Array.isArray((response as any)?.quotes)?(response as any).quotes:[];
-    const prices=quotes
-      .filter((x:any)=>x?.ts && x.ts!==q.ts && Number.isFinite(Number(x.last)) && Number(x.last)>0)
-      .map((x:any)=>Number(x.last));
-    strategyV1.prime(q.symbol,prices);
+function kickoffPrewarm(q:Quote){
+  if(prewarmedSymbols.has(q.symbol) || prewarmInFlight.has(q.symbol) || prewarmCache.has(q.symbol)) return;
+  const startedAt=Date.now();
+  const promise=(async()=>{
+    try{
+      const response=await ingest("",{
+        action:"recent_ticks",
+        symbol:q.symbol,
+        source:q.source,
+        limit:25
+      });
+      const quotes=Array.isArray((response as any)?.quotes)?(response as any).quotes:[];
+      const prices=quotes
+        .filter((x:any)=>x?.ts && x.ts!==q.ts && Number.isFinite(Number(x.last)) && Number(x.last)>0)
+        .map((x:any)=>Number(x.last));
+      prewarmCache.set(q.symbol,{
+        prices,
+        fetchedAtMs:Date.now(),
+        fetchMs:Date.now()-startedAt
+      });
+      queueAudit("STRATEGY_PREWARM_READY",{
+        symbol:q.symbol,
+        source:q.source,
+        data_quality:q.dataQuality??null,
+        historical_points:prices.length,
+        fetch_ms:Date.now()-startedAt
+      },strategyV1.version);
+    }catch(err){
+      queueAudit("STRATEGY_PREWARM_ERROR",{
+        symbol:q.symbol,
+        source:q.source,
+        error:String(err),
+        fetch_ms:Date.now()-startedAt
+      },strategyV1.version);
+    }finally{
+      prewarmInFlight.delete(q.symbol);
+    }
+  })();
+  prewarmInFlight.set(q.symbol,promise);
+  void promise;
+}
+
+function consumePrewarm(q:Quote){
+  const cached=prewarmCache.get(q.symbol);
+  if(!cached) return {applied:false,fetchMs:0};
+  const applied=strategyV1.primeIfSparse(q.symbol,cached.prices,2);
+  if(applied){
     prewarmedSymbols.add(q.symbol);
-    queueAudit("STRATEGY_PREWARM",{
-      symbol:q.symbol,
-      source:q.source,
-      data_quality:q.dataQuality??null,
-      historical_points:prices.length
-    },strategyV1.version);
-  }catch(err){
-    queueAudit("STRATEGY_PREWARM_ERROR",{
-      symbol:q.symbol,
-      source:q.source,
-      error:String(err)
-    },strategyV1.version);
-    prewarmedSymbols.add(q.symbol);
+    prewarmCache.delete(q.symbol);
   }
+  return {applied,fetchMs:cached.fetchMs};
 }
 
 async function ensureSession(){
@@ -540,6 +564,8 @@ async function handleQuote(q:Quote){
     await endSession("ROLLOVER");
     strategyV1.reset();
     prewarmedSymbols.clear();
+    prewarmCache.clear();
+    prewarmInFlight.clear();
     lastPersistBySymbol.clear();
     lastSnapshotAt=0;
     await ensureSession();
@@ -553,9 +579,9 @@ async function handleQuote(q:Quote){
   }
 
   const startedAt=Date.now();
-  const prewarmStartedAt=startedAt;
-  await prewarmStrategy(q);
-  const prewarmMs=Date.now()-prewarmStartedAt;
+  kickoffPrewarm(q);
+  const prewarm=consumePrewarm(q);
+  const prewarmMs=0;
 
   // Hard decision gate immediately before analysis. This prevents an in-flight
   // quote from generating a trade signal after the market session has closed.
@@ -594,6 +620,9 @@ async function handleQuote(q:Quote){
     quote:q,
     signal,
     market_lag_ms:marketLagMs,
+    prewarm_ms:prewarmMs,
+    prewarm_applied:prewarm.applied,
+    prewarm_fetch_ms:prewarm.fetchMs,
     analysis_ms:Date.now()-startedAt
   }));
 
