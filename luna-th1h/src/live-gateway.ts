@@ -25,6 +25,54 @@ function ensureConfigured(){
   if(!config.liveGatewayKey) throw new Error("LUNA_LIVE_GATEWAY_KEY_NOT_CONFIGURED");
 }
 
+export interface LiveAccountState {
+  as_of:string;
+  cash:number;
+  positions:Array<{
+    symbol:string;
+    qty:number;
+    avg_price:number;
+    market_price:number|null;
+    market_value:number|null;
+    unrealized_pnl:number|null;
+    realized_pnl:number|null;
+  }>;
+  unparsed_symbols:string[];
+}
+
+export async function liveAccountState():Promise<LiveAccountState>{
+  ensureConfigured();
+  const res=await fetch(`${config.liveGatewayUrl}/account-state`,{
+    headers:headers(),
+    signal:AbortSignal.timeout(5000)
+  });
+  const body=await res.json().catch(()=>({}));
+  if(!res.ok) throw new Error(`GATEWAY_ACCOUNT_STATE_HTTP_${res.status}: ${JSON.stringify(body)}`);
+  if(
+    !body?.ok
+    || !Number.isFinite(Number(body.cash))
+    || !Array.isArray(body.positions)
+    || !Array.isArray(body.unparsed_symbols)
+  ){
+    throw new Error(`GATEWAY_ACCOUNT_STATE_BAD_RESPONSE: ${JSON.stringify(body)}`);
+  }
+  return {
+    as_of:String(body.as_of ?? new Date().toISOString()),
+    cash:Number(body.cash),
+    positions:body.positions.map((x:any)=>({
+      symbol:String(x.symbol),
+      qty:Number(x.qty),
+      avg_price:Number(x.avg_price),
+      market_price:x.market_price==null?null:Number(x.market_price),
+      market_value:x.market_value==null?null:Number(x.market_value),
+      unrealized_pnl:x.unrealized_pnl==null?null:Number(x.unrealized_pnl),
+      realized_pnl:x.realized_pnl==null?null:Number(x.realized_pnl)
+    })),
+    unparsed_symbols:body.unparsed_symbols.map((x:any)=>String(x))
+  };
+}
+
+
 export async function liveGatewayHealth(){
   ensureConfigured();
   const res=await fetch(`${config.liveGatewayUrl}/health`,{headers:headers()});
