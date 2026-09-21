@@ -141,6 +141,9 @@ def main() -> None:
 
     # Point-in-time fundamental merge: only values whose publication timestamp is
     # at or before this row's decision timestamp are eligible.
+    pit_fundamental_rows = 0
+    pit_future_rows = 0
+    pit_fundamental_fields = []
     if args.fundamentals:
         f = pd.read_csv(args.fundamentals)
         required = {"symbol","available_at"}
@@ -168,6 +171,13 @@ def main() -> None:
             elif out_name not in p.columns:
                 p[out_name] = np.nan
         p["available_at"] = p[["available_at","fund_available_at"]].max(axis=1)
+        pit_fundamental_rows = int(p["fund_available_at"].notna().sum())
+        pit_future_rows = int((p["fund_available_at"] > p["decision_ts"]).fillna(False).sum())
+        pit_fundamental_fields = [
+            c for c in FUND_COLS if c in p.columns and pd.to_numeric(p[c], errors="coerce").notna().any()
+        ]
+        if pit_future_rows:
+            raise SystemExit(f"point-in-time fundamental leakage detected: {pit_future_rows} rows")
     else:
         for c in [c for c in OUT_COLS if c.isupper() and c not in p.columns]:
             p[c] = np.nan
@@ -216,6 +226,10 @@ def main() -> None:
         "end": str(out["date"].max()),
         "price_column": px,
         "fundamentals_point_in_time": bool(args.fundamentals),
+        "pit_fundamental_rows": pit_fundamental_rows,
+        "pit_future_rows": pit_future_rows,
+        "pit_fundamental_fields_covered": pit_fundamental_fields,
+        "pit_contract": "fundamentals must provide source availability timestamp; statement as-of date alone is not accepted",
         "benchmark_used": bool(args.benchmark),
         "recognized_factor_count": int(sum(c in out.columns for c in OUT_COLS)),
         "forward_return_definition": "next trading observation relative to decision-day adjusted close",
