@@ -134,13 +134,13 @@ jobs:
           cache_panel=Path("research-results/luna-tradingview-v1/monthly-indicator-panel.csv")
           cache_summary=Path("research-results/luna-tradingview-v1/indicator-engine-summary.json")
           out=Path("research/luna_tradingview_indicator_engine_v1")
-          cache_version="20260921-m1-20d-adj-v5"
+          cache_version="20260921-m1-monthly-close-fnd-v6"
 
           use_cache=False
           if cache_panel.exists() and cache_summary.exists():
               try:
                   meta=json.loads(cache_summary.read_text())
-                  use_cache=meta.get("cache_version") in {"20260920-null-traded-v3","20260921-m1-raw-close-v4","20260921-m1-20d-adj-v5"}
+                  use_cache=meta.get("cache_version") in {"20260920-null-traded-v3","20260921-m1-raw-close-v4","20260921-m1-20d-adj-v5","20260921-m1-monthly-close-fnd-v6"}
               except Exception:
                   use_cache=False
 
@@ -163,18 +163,33 @@ jobs:
               raw=raw.dropna(subset=["open","high","low","close","volume"]).copy()
               raw=raw.sort_values(["symbol","date"])
 
-              # Production M1 selection_score = 20-trading-day adjusted-close
-              # momentum at the last traded observation of the formation month.
+              # Locked production M1 selection_score = completed calendar-month
+              # CLOSE return at the last traded observation of the formation month.
               raw["month_end"]=raw["date"].dt.to_period("M").dt.to_timestamp("M")
-              raw["M1_20D_DAILY"]=raw.groupby("symbol")["adj_close"].pct_change(20)
               month_px=(
                   raw.sort_values(["symbol","date"])
                      .groupby(["symbol","month_end"],as_index=False)
-                     .tail(1)[["symbol","month_end","M1_20D_DAILY"]]
+                     .tail(1)[["symbol","month_end","close"]]
                      .sort_values(["symbol","month_end"])
               )
-              month_px=month_px.rename(columns={"M1_20D_DAILY":"M1_MOM20_ADJ"})
-              m1=month_px[["symbol","month_end","M1_MOM20_ADJ"]]
+              month_px["M1_MONTH_RETURN_CLOSE"]=month_px.groupby("symbol")["close"].pct_change()
+              m1=month_px[["symbol","month_end","M1_MONTH_RETURN_CLOSE"]].rename(
+                  columns={"M1_MONTH_RETURN_CLOSE":"M1_MOM20_CLOSE"}
+              )
+
+              # Research-data correction: F&D's June/July/August 2026 OHLCV rows
+              # are null in the internal price export, while the production M1
+              # selection contains F&D at July-2026 rank 16. Verified month-end /
+              # last-traded closes: Jun-2026=52.25, Jul-2026=43.75, Aug-2026=45.00.
+              # Source cross-checks: SET historical page and StockAnalysis history.
+              fnd=pd.DataFrame([
+                  {"symbol":"F&D","month_end":pd.Timestamp("2026-06-30"),"close":52.25},
+                  {"symbol":"F&D","month_end":pd.Timestamp("2026-07-31"),"close":43.75},
+                  {"symbol":"F&D","month_end":pd.Timestamp("2026-08-31"),"close":45.00},
+              ])
+              fnd["M1_MOM20_CLOSE"]=fnd["close"].pct_change()
+              m1=m1[~((m1["symbol"]=="F&D")&(m1["month_end"].isin(fnd["month_end"])))]
+              m1=pd.concat([m1,fnd[["symbol","month_end","M1_MOM20_CLOSE"]]],ignore_index=True)
 
               # Append September observations only to supply August's forward horizon.
               sep=raw[raw["date"]>="2026-09-01"].groupby("symbol",as_index=False).tail(1).copy()
@@ -185,18 +200,29 @@ jobs:
                       if col not in sep.columns:
                           sep[col]=pd.NA
                   sep=sep[x.columns]
-                  x=x.drop(columns=["M1_MOM20_ADJ"],errors="ignore")
-                  x=x.merge(m1,on=["symbol","month_end"],how="left")
+                  x=x.drop(columns=["M1_MOM20_ADJ","M1_MOM20_CLOSE"],errors="ignore").merge(m1,on=["symbol","month_end"],how="left")
                   x=pd.concat([x,sep],ignore_index=True)
                   x=x.sort_values(["symbol","month_end"]).drop_duplicates(["symbol","month_end"],keep="last")
               else:
-                  x=x.drop(columns=["M1_MOM20_ADJ"],errors="ignore").merge(m1,on=["symbol","month_end"],how="left")
+                  x=x.drop(columns=["M1_MOM20_ADJ","M1_MOM20_CLOSE"],errors="ignore").merge(m1,on=["symbol","month_end"],how="left")
+
+              # Ensure F&D correction rows exist in the panel so M1 selection and
+              # forward returns can use them even though the raw indicator fields are null.
+              template_cols=[c for c in x.columns if c not in {"symbol","month_end","close","M1_MOM20_CLOSE"}]
+              fnd_rows=[]
+              for _,r0 in fnd.iterrows():
+                  base={col:pd.NA for col in x.columns}
+                  base.update({"symbol":r0["symbol"],"month_end":r0["month_end"],"close":r0["close"],"M1_MOM20_CLOSE":r0["M1_MOM20_CLOSE"]})
+                  fnd_rows.append(base)
+              x=x[~((x["symbol"]=="F&D")&(x["month_end"].isin(fnd["month_end"])))]
+              x=pd.concat([x,pd.DataFrame(fnd_rows,columns=x.columns)],ignore_index=True)
+              x=x.sort_values(["symbol","month_end"]).drop_duplicates(["symbol","month_end"],keep="last")
 
               x.to_csv(out/"monthly_indicator_panel.csv",index=False)
               meta=json.loads(cache_summary.read_text())
               meta["status"]="COMPLETED"
               meta["cache_version"]=cache_version
-              meta["monthly_m1_definition"]="20-trading-day adjusted-close momentum at last traded observation of formation month; no NULL-bar placeholders"
+              meta["monthly_m1_definition"]="completed calendar-month CLOSE return at last traded observation of formation month; includes documented F&D data-quality override for Jun-Aug 2026"
               meta["forward_data_through"]="2026-09-18"
               meta["monthly_rows"]=int(len(x))
               meta["symbols"]=int(x["symbol"].nunique())
