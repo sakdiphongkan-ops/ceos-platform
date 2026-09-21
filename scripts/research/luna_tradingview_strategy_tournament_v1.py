@@ -116,7 +116,7 @@ def build_candidates() -> list[Candidate]:
 
 def load_panel(path: str) -> pd.DataFrame:
     df=pd.read_csv(path,parse_dates=["month_end"])
-    req={"symbol","month_end","adj_close","M1_MOM20_ADJ"}
+    req={"symbol","month_end","close","M1_MOM20_CLOSE"}
     miss=sorted(req-set(df.columns))
     if miss:
         raise SystemExit(f"missing required panel columns: {miss}")
@@ -226,7 +226,7 @@ def select_month(g: pd.DataFrame, c: Candidate) -> pd.DataFrame:
     x=g.dropna(subset=["M1_MOM20_ADJ"]).copy()
     if len(x)<20:
         return x.iloc[0:0]
-    pool=x.sort_values(["M1_MOM20_ADJ","symbol"],ascending=[True,True]).head(c.pool)
+    pool=x.sort_values(["M1_MOM20_CLOSE","symbol"],ascending=[True,True]).head(c.pool)
     if c.kind in {"RERANK"}:
         pool=pool.copy()
         pool["_score"]=score_rerank(pool,c.rule)
