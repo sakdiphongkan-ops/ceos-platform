@@ -30,6 +30,7 @@ export const config={
   marketDataGatewayKey:process.env.LUNA_MARKET_GATEWAY_KEY ?? "",
   marketDataGatewayPollMs:num("LUNA_MARKET_GATEWAY_POLL_MS",100),
   maxQuoteAgeMs:num("LUNA_MAX_QUOTE_AGE_MS",3000),
+  maxExecutionConcurrency:num("LUNA_MAX_EXECUTION_CONCURRENCY",4),
   reduceOnlyTime:process.env.LUNA_REDUCE_ONLY_TIME ?? "16:20",
   forceCloseTime:process.env.LUNA_FORCE_CLOSE_TIME ?? "16:25",
   supabaseUrl:process.env.SUPABASE_URL ?? "",
