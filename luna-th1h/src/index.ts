@@ -124,9 +124,10 @@ async function audit(
 function queueAudit(
   eventType:string,
   payload:Record<string,unknown>,
-  strategyVersion=activeStrategyVersion()
+  strategyVersion=activeStrategyVersion(),
+  sessionIdOverride:string|null=sessionId
 ){
-  const queuedSessionId=sessionId;
+  const queuedSessionId=sessionIdOverride;
   const next=auditQueueTail
     .then(()=>audit(eventType,payload,strategyVersion,queuedSessionId))
     .catch(err=>{
@@ -649,7 +650,7 @@ async function reconcileLiveOrderStates(){
               side:current.side,
               qty:deltaQty,
               fill_price:next.avgFillPrice
-            },current.strategyVersion);
+            },current.strategyVersion,current.sessionId);
           }
         }
       }
@@ -672,7 +673,7 @@ async function reconcileLiveOrderStates(){
         delta_qty:deltaQty,
         order_session_id:current.sessionId,
         order_session_generation:current.sessionGeneration
-      },current.strategyVersion);
+      },current.strategyVersion,current.sessionId);
     }
   }catch(err){
     queueAudit("BROKER_RECONCILIATION_ERROR",{error:String(err)});
