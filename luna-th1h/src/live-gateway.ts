@@ -77,3 +77,27 @@ export async function placeLiveOrder(order:{
     raw:body.raw
   };
 }
+
+export interface LiveReconciliationOrder {
+  client_order_id:string;
+  broker_order_id?:string|null;
+  status:string;
+  filled_qty?:number;
+  avg_fill_price?:number|null;
+  updated_at_ms?:number;
+  raw?:unknown;
+}
+
+export async function reconcileLiveOrders(clientOrderIds:string[]):Promise<LiveReconciliationOrder[]>{
+  ensureConfigured();
+  if(clientOrderIds.length===0) return [];
+  const res=await fetch(`${config.liveGatewayUrl}/reconcile`,{
+    method:"POST",
+    headers:headers(),
+    body:JSON.stringify({client_order_ids:clientOrderIds})
+  });
+  const body=await res.json().catch(()=>({}));
+  if(!res.ok) throw new Error(`GATEWAY_RECONCILE_HTTP_${res.status}: ${JSON.stringify(body)}`);
+  if(!Array.isArray(body?.orders)) throw new Error(`GATEWAY_RECONCILE_BAD_RESPONSE: ${JSON.stringify(body)}`);
+  return body.orders as LiveReconciliationOrder[];
+}
