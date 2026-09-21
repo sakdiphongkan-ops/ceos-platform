@@ -194,7 +194,7 @@ async function startSession(){
   if(!data.session?.id) throw new Error("Supabase did not return a session id");
   sessionId=data.session.id;
   sessionDate=todayInTimezone(config.timezone);
-  await audit("SESSION_STARTED",{
+  queueAudit("SESSION_STARTED",{
     provider:config.marketDataProvider,
     capital:config.initialCapital,
     execution_test:config.executionTest,
@@ -204,8 +204,16 @@ async function startSession(){
     timezone:config.timezone,
     market_phase:currentMarketPhase()
   });
-  await writeSnapshot();
-  console.log(JSON.stringify({event:"LUNA_SESSION_STARTED",sessionId,strategyVersion:activeStrategyVersion()}));
+  void writeSnapshot().catch(err=>console.error(JSON.stringify({
+    event:"SESSION_START_SNAPSHOT_ERROR",
+    error:String(err)
+  })));
+  console.log(JSON.stringify({
+    event:"LUNA_SESSION_STARTED",
+    sessionId,
+    strategyVersion:activeStrategyVersion(),
+    startupCriticalPath:"session_create_only"
+  }));
 }
 
 function getSignal(q:Quote):Signal{
@@ -545,7 +553,9 @@ async function handleQuote(q:Quote){
   }
 
   const startedAt=Date.now();
+  const prewarmStartedAt=startedAt;
   await prewarmStrategy(q);
+  const prewarmMs=Date.now()-prewarmStartedAt;
 
   // Hard decision gate immediately before analysis. This prevents an in-flight
   // quote from generating a trade signal after the market session has closed.
@@ -623,6 +633,7 @@ async function handleQuote(q:Quote){
             action:signal.action,
             quote_ts:q.ts,
             market_lag_ms:marketLagMs,
+            prewarm_ms:prewarmMs,
             analysis_ms:Math.max(0,Date.now()-startedAt-queueWaitMs),
             queue_wait_ms:queueWaitMs,
             execution_ms:executionMs,
