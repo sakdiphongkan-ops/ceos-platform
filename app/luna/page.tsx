@@ -43,7 +43,7 @@ type Trade = {
 };
 
 const LUNA_API = "https://wigzicwgcsrhdummrbjx.supabase.co/functions/v1/luna-api";
-const LUNA_STRATEGY = "luna-th1h-v1.0.0";
+const LUNA_STRATEGY = "luna-th1h-v1.1.0";
 const TIMEFRAME = "15m";
 
 type LunaFeed = {
@@ -141,19 +141,30 @@ export default function LunaPortfolioPage() {
   const fees=Number(sessionSnapshot?.fees??0);
   const exposure=equity?Number(sessionSnapshot?.gross_exposure??marketValue)/equity*100:0;
   const selectedPos=selected&&positions.some(p=>p.symbol===selected.symbol)?positions.find(p=>p.symbol===selected.symbol)??null:null;
+  const executionMode=String(feed?.execution_control?.execution_mode??session?.mode??"paper").toUpperCase();
+  const killSwitch=Boolean(feed?.execution_control?.kill_switch??true);
+  const armed=Boolean(feed?.execution_control?.armed??false);
+  const liveExecution=executionMode==="LIVE" && !killSwitch && armed;
 
   return <main className="luna-shell">
     <header className="topbar">
       <div className="brand"><div className="brand-mark">L</div><div><div className="eyebrow">LUNA-TH1H</div><h1>Portfolio</h1></div></div>
       <div className="top-actions">
-        <div className="market-status"><CircleDot size={11}/> SET / {session?.mode?.toUpperCase()??"PAPER"}</div><div className="timeframe-chip"><BarChart3 size={13}/> {TIMEFRAME}</div>
+        <div className="market-status"><CircleDot size={11}/> SET / {executionMode}</div><div className="timeframe-chip"><BarChart3 size={13}/> {TIMEFRAME}</div>
         <button className="icon-button" title="Refresh" onClick={load}><RefreshCw size={17}/></button>
         <div className="session-chip"><Clock3 size={14}/> {session?.session_date??"—"} · {live?"FEED OK":"OFFLINE"}</div>
       </div>
     </header>
     <div className="page">
-      <section className="hero-row"><div><div className="eyebrow">INTRADAY CONTROL · LIVE PORTFOLIO</div><h2>What LUNA owns right now</h2><p>Database-backed holdings, executions, P&amp;L and risk exposure.</p></div><div className="hero-meta"><div className="data-chip"><span className="data-dot"/> {live ? "LIVE DATA" : "DATA OFFLINE"}</div><div className="safe-badge"><ShieldCheck size={15}/> {session?.mode?.toUpperCase()??"PAPER"} / SAFE</div></div></section>
+      <section className="hero-row"><div><div className="eyebrow">INTRADAY CONTROL · LIVE PORTFOLIO</div><h2>What LUNA owns right now</h2><p>Database-backed holdings, executions, P&amp;L and risk exposure.</p></div><div className="hero-meta"><div className="data-chip"><span className="data-dot"/> {live ? "LIVE DATA" : "DATA OFFLINE"}</div><div className="safe-badge"><ShieldCheck size={15}/> {liveExecution ? "LIVE EXECUTION" : "PAPER EXECUTION"} / {killSwitch ? "KILL SWITCH ON" : "GATED"}</div></div></section>
       <SystemControlRoom strategy={LUNA_STRATEGY} asOf={session?.session_date ?? new Date().toISOString().slice(0,10)} />
+      <section className="live-operating-strip">
+        <div><span>MARKET DATA</span><strong>{live ? "LIVE FEED" : "OFFLINE"}</strong><small>15s refresh · SET</small></div>
+        <div><span>EXECUTION MODE</span><strong>{executionMode}</strong><small>{liveExecution ? "live gate open" : "paper only"}</small></div>
+        <div><span>KILL SWITCH</span><strong>{killSwitch ? "ON" : "OFF"}</strong><small>{armed ? "armed" : "disarmed"}</small></div>
+        <div><span>LIVE ORDER GATE</span><strong>{liveExecution ? "READY" : "LOCKED"}</strong><small>broker bridge status</small></div>
+        <div className="live-operating-note"><ShieldCheck size={15}/><span>ระบบนี้ยังไม่ส่งคำสั่งซื้อขาย SET อัตโนมัติจากหน้าเว็บ — ใช้ signal/paper execution เป็นหลักจนกว่า gate จะผ่าน</span></div>
+      </section>
       {error&&<div className="error-banner"><span>{error}</span><button onClick={load}>Retry</button></div>}
       <section className="summary-grid"><Metric label="Market ticks" value={String(sessionTicks.length)} sub="Latest session feed"/><Metric label="Signals" value={String(sessionSignals.length)} sub="15m strategy signals"/><Metric label="Orders" value={String(sessionOrders.length)} sub="Recorded this session"/>
         <Metric label="Total Equity" value={`฿${money(equity)}`} sub={`Initial ฿${money(initial)}`} positive={equity>=initial}/>
