@@ -87,3 +87,14 @@ This changes the latency contract from retry until the gateway recovers to prefe
 Each quote-processing cycle captures its session id and session generation after session startup/rollover. A concurrent quote handler that crosses a session boundary is discarded before it persists the quote or signal into the wrong session. Scheduled execution continues to carry the same generation guard as a second line of defense.
 
 Paper fills now use the actual execution timestamp rather than the source quote timestamp. The fill audit records both quote time and execution time so delayed market data cannot make the execution history look artificially earlier than the decision.
+
+
+## Broker-authoritative state update — 2026-09-21
+
+Live sessions now initialize the local portfolio from the broker account state instead of the paper `initialCapital` balance. The gateway exposes normalized cash and equity positions from Settrade account/portfolio data; unparsed holdings fail live startup rather than being guessed.
+
+While live reconciliation is enabled, LUNA periodically compares broker cash and position quantities with the local execution state. A drift beyond configured tolerances blocks the live execution path and records `LIVE_ACCOUNT_STATE_DRIFT`. Broker synchronization is serialized after broker-order reconciliation so a newly reported fill cannot race the drift check.
+
+## Restart safety update — 2026-09-21
+
+On live startup LUNA also checks for broker orders that are still non-terminal. Because a restarted worker may no longer have the original in-memory reservation/client-order mapping, any remaining broker open order causes live session startup to fail closed rather than risk duplicate BUY or SELL exposure. The gateway treats only explicitly terminal order statuses as safe to ignore; unknown statuses remain active for safety.
