@@ -562,6 +562,13 @@ async function reconcileLiveOrderStates(){
       }
 
       liveOrderStates.set(current.clientOrderId,next);
+      if(["FILLED","CANCELED","REJECTED"].includes(next.status)){
+        const reservation=pendingLiveReservations.get(current.clientOrderId);
+        if(reservation){
+          releaseExecution(reservation);
+          pendingLiveReservations.delete(current.clientOrderId);
+        }
+      }
       queueAudit("BROKER_ORDER_RECONCILED",{
         client_order_id:next.clientOrderId,
         broker_order_id:next.brokerOrderId,
