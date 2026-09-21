@@ -1,0 +1,56 @@
+name: LUNA Data Contract Validation v1
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - scripts/research/pull_set_smartmarketplace_v1.py
+      - scripts/research/batch_pull_set_smartmarketplace_v1.py
+      - scripts/research/normalize_set_pit_fundamentals_v1.py
+      - scripts/research/validate_pit_security_master_v1.py
+      - scripts/research/validate_pit_fundamentals_v1.py
+      - scripts/research/validate_corporate_actions_v1.py
+      - data/contracts/luna_*.schema.json
+      - data/contracts/set_smartmarketplace_request_plan_v1.json
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Syntax validation
+        run: |
+          python -m py_compile             scripts/research/pull_set_smartmarketplace_v1.py             scripts/research/batch_pull_set_smartmarketplace_v1.py             scripts/research/normalize_set_pit_fundamentals_v1.py             scripts/research/validate_pit_security_master_v1.py             scripts/research/validate_pit_fundamentals_v1.py             scripts/research/validate_corporate_actions_v1.py
+      - name: JSON contract validation
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          for p in Path("data/contracts").glob("*.schema.json"):
+              json.loads(p.read_text(encoding="utf-8"))
+              print("OK", p)
+          json.loads(Path("data/contracts/set_smartmarketplace_request_plan_v1.json").read_text(encoding="utf-8"))
+          print("OK request plan")
+          PY
+      - name: Missing-source validator behavior
+        run: |
+          mkdir -p research/data-contract-validation
+          python scripts/research/validate_pit_security_master_v1.py --input /tmp/missing-security-master.csv --output research/data-contract-validation --allow-missing
+          python scripts/research/validate_pit_fundamentals_v1.py --input /tmp/missing-fundamentals.csv --output research/data-contract-validation --allow-missing
+          python scripts/research/validate_corporate_actions_v1.py --input /tmp/missing-corporate-actions.csv --output research/data-contract-validation --allow-missing
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          for name in [
+              "pit-security-master-validation.json",
+              "pit-fundamentals-validation.json",
+              "corporate-actions-validation.json",
+          ]:
+              x=json.loads((Path("research/data-contract-validation")/name).read_text())
+              assert x["status"] == "UNAVAILABLE"
+              print("OK", name)
+          PY
