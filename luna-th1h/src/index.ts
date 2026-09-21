@@ -143,8 +143,6 @@ function releaseAnalysisSlot(){
   if(waiter) waiter();
 }
 
-const MAX_EXECUTION_CONCURRENCY=Math.max(1,Math.floor(config.maxExecutionConcurrency));
-
 function reserveExecution(fill:{symbol:string;side:"BUY"|"SELL";qty:number;notional:number;totalCashDelta:number}):ExecutionReservationToken{
   const token:ExecutionReservationToken={
     buyCash:fill.side==="BUY"?Math.max(0,-fill.totalCashDelta):0,
@@ -744,8 +742,9 @@ async function handleQuote(q:Quote){
           end_to_end_ms:endToEndMs,
           market_phase:currentMarketPhase(),
           source:q.source,
-          execution_queue_depth:executionQueue.length,
-          active_execution_jobs:activeExecutionJobs
+          execution_queue_depth:executionScheduler.stats().queuedSymbols,
+          pending_execution_jobs:executionScheduler.stats().pendingJobs,
+          active_execution_jobs:executionScheduler.stats().activeJobs
         },signal.strategyVersion);
         console.log(JSON.stringify({
           event:"EXECUTION_COMPLETE",
@@ -754,8 +753,9 @@ async function handleQuote(q:Quote){
           queue_wait_ms:queueWaitMs,
           end_to_end_ms:endToEndMs,
           market_lag_ms:marketLagMs,
-          active_execution_jobs:activeExecutionJobs,
-          execution_queue_depth:executionQueue.length
+          active_execution_jobs:executionScheduler.stats().activeJobs,
+          execution_queue_depth:executionScheduler.stats().queuedSymbols,
+          pending_execution_jobs:executionScheduler.stats().pendingJobs
         }));
       }catch(err){
         console.error(JSON.stringify({
