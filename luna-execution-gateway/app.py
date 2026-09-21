@@ -251,8 +251,6 @@ def _normalize_account_state(eq):
         "cash": cash,
         "positions": positions,
         "unparsed_symbols": sorted(set(unparsed)),
-        "account_raw": account_raw,
-        "portfolio_raw": portfolio_raw,
     }
 
 
