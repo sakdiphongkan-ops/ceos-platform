@@ -2,7 +2,7 @@
 
 The fundamental feed is usable for research only when the source preserves **availability time**.
 
-SET's current SMART Marketplace documentation exposes Company Fundamental Data with financial data and important ratios, while its financial-statement specification exposes fields such as symbol, fiscal year, quarter, statement type, as-of date and adjustment status. citeturn907553search1turn907553search12
+SET's current SMART Marketplace documentation exposes Company Fundamental Data with financial data and important ratios, while its financial-statement specification exposes fields such as symbol, fiscal year, quarter, statement type, as-of date and adjustment status. Source: SET SMART Marketplace Company Fundamental Data and Financial Statement Data Specification.
 
 ## Required time semantics
 
