@@ -651,6 +651,9 @@ async function endSession(status="CLOSED"){
     if(heartbeatTimer) clearInterval(heartbeatTimer);
     heartbeatTimer=undefined;
     try{
+      if(config.liveReconciliation && config.executionMode==="live"){
+        await reconcileLiveOrderStates();
+      }
       await writeSnapshot();
       await queueAudit("SESSION_ENDED",{status},activeStrategyVersion());
       await auditQueueTail;
