@@ -24,6 +24,10 @@ on:
       - scripts/research/luna_symbol_lifecycle_diagnostic_v1.py
       - scripts/research/validate_pit_security_master_v1.py
       - data/contracts/luna_pit_security_master_v1.schema.json
+      - data/contracts/luna_pit_fundamentals_v1.schema.json
+      - data/contracts/luna_corporate_actions_v1.schema.json
+      - scripts/research/validate_pit_fundamentals_v1.py
+      - scripts/research/validate_corporate_actions_v1.py
       - research-results/luna-m1-benchmark-locked-20260920.csv
 
 concurrency:
@@ -62,7 +66,11 @@ jobs:
 
       - name: Build daily factors
         run: |
-          python scripts/research/build_factor_dataset.py --prices data/set_2000_2025/prices.csv --output data/set_2000_2025/factors.csv
+          FUND_ARGS=""
+          if test -s data/raw/pit_fundamentals.csv; then
+            FUND_ARGS="--fundamentals data/raw/pit_fundamentals.csv"
+          fi
+          python scripts/research/build_factor_dataset.py             --prices data/set_2000_2025/prices.csv             $FUND_ARGS             --output data/set_2000_2025/factors.csv
 
       - name: Filter trailing five years
         run: |
@@ -108,6 +116,14 @@ jobs:
             --output research/luna_research_scorecard_v1 \
             --k 20 \
             --cost-bps 20
+
+      - name: Validate PIT fundamentals contract
+        run: |
+          python scripts/research/validate_pit_fundamentals_v1.py             --input data/raw/pit_fundamentals.csv             --output research/luna_research_scorecard_v1             --allow-missing
+
+      - name: Validate corporate action ledger
+        run: |
+          python scripts/research/validate_corporate_actions_v1.py             --input data/raw/corporate_actions.csv             --output research/luna_research_scorecard_v1             --allow-missing
 
       - name: Validate PIT security master contract
         run: |
@@ -174,6 +190,10 @@ jobs:
           assert lc["status"]=="COMPLETED"
           pit=json.load(open("research/luna_research_scorecard_v1/pit-security-master-validation.json"))
           assert pit["status"] in {"COMPLETED","UNAVAILABLE"}
+          pf=json.load(open("research/luna_research_scorecard_v1/pit-fundamentals-validation.json"))
+          assert pf["status"] in {"COMPLETED","UNAVAILABLE"}
+          ca=json.load(open("research/luna_research_scorecard_v1/corporate-actions-validation.json"))
+          assert ca["status"] in {"COMPLETED","UNAVAILABLE"}
           mt=json.load(open("research/luna_research_scorecard_v1/multiple-testing.json"))
           assert mt["status"]=="COMPLETED"
           rep=json.load(open("research/luna_fresh_seed_replication_v1/replication.json"))
@@ -206,6 +226,8 @@ jobs:
           cp research/luna_research_scorecard_v1/sector-neutralization.json research-results/luna-failure-driven-search-v1/sector-neutralization.json
           cp research/luna_research_scorecard_v1/symbol-lifecycle.json research-results/luna-failure-driven-search-v1/symbol-lifecycle.json
           cp research/luna_research_scorecard_v1/pit-security-master-validation.json research-results/luna-failure-driven-search-v1/pit-security-master-validation.json
+          cp research/luna_research_scorecard_v1/pit-fundamentals-validation.json research-results/luna-failure-driven-search-v1/pit-fundamentals-validation.json
+          cp research/luna_research_scorecard_v1/corporate-actions-validation.json research-results/luna-failure-driven-search-v1/corporate-actions-validation.json
           cp research/luna_fresh_seed_replication_v1/replication.json research-results/luna-failure-driven-search-v1/fresh-seed-replication.json
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
