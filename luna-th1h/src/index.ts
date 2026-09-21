@@ -580,6 +580,7 @@ async function handleQuote(q:Quote){
   // quote from generating a trade signal after the market session has closed.
   const decisionPhase=currentMarketPhase();
   if(decisionPhase==="CLOSED"){
+    await endSession("MARKET_CLOSED");
     return;
   }
 
@@ -666,6 +667,16 @@ async function handleQuote(q:Quote){
   if(!heartbeatTimer){
     heartbeatTimer=setInterval(()=>{
       const now=Date.now();
+      const phase=currentMarketPhase();
+
+      if(phase==="CLOSED"){
+        void endSession("MARKET_CLOSED").catch(err=>console.error(JSON.stringify({
+          event:"SESSION_AUTO_CLOSE_ERROR",
+          error:String(err)
+        })));
+        return;
+      }
+
       const recon = config.liveReconciliation && config.executionMode==="live" && now-lastReconciliationAt>=config.liveReconciliationMs
         ? (lastReconciliationAt=now, reconcileLiveOrderStates())
         : Promise.resolve();
@@ -673,7 +684,7 @@ async function handleQuote(q:Quote){
         queueAudit("HEARTBEAT",{
           provider:config.marketDataProvider,
           last_quote_ts:q.ts,
-          market_phase:currentMarketPhase(),
+          market_phase:phase,
           execution_test:config.executionTest
         }),
         writeSnapshot(),
