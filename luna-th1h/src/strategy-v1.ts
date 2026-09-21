@@ -104,6 +104,25 @@ export class StrategyV1{
     }
   }
 
+  primeIfSparse(symbol:string,prices:number[],maxLivePrices=2){
+    if(!prices.length) return false;
+    const st=stateFor(this.states,symbol);
+    if(st.prices.length>maxLivePrices) return false;
+    const livePrices=[...st.prices];
+    this.prime(symbol,prices);
+    const replay=stateFor(this.states,symbol);
+    for(const price of livePrices){
+      if(!finite(price)) continue;
+      replay.previousFast=replay.emaFast;
+      replay.previousSlow=replay.emaSlow;
+      replay.emaFast=ema(replay.emaFast,price,this.params.fastPeriod);
+      replay.emaSlow=ema(replay.emaSlow,price,this.params.slowPeriod);
+      replay.prices.push(price);
+      if(replay.prices.length>this.params.slowPeriod*4) replay.prices.shift();
+    }
+    return true;
+  }
+
   evaluate(q:Quote,ctx:StrategyContext):Signal{
     if(q.symbol.startsWith("__")){
       return {symbol:q.symbol,ts:q.ts,action:"HOLD",reason:"NON_TRADABLE_SYMBOL",strategyVersion:this.version};
