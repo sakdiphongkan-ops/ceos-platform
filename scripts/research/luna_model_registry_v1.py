@@ -16,11 +16,15 @@ def main():
     ap.add_argument("--benchmark",required=True)
     ap.add_argument("--neutralized",required=False)
     ap.add_argument("--multiple-testing",required=False)
+    ap.add_argument("--universe",required=False)
+    ap.add_argument("--sector-neutralization",required=False)
     args=ap.parse_args()
     s=json.loads(Path(args.search_summary).read_text())
     c=json.loads(Path(args.scorecard).read_text())
     n=json.loads(Path(args.neutralized).read_text()) if args.neutralized else {}
     mt=json.loads(Path(args.multiple_testing).read_text()) if args.multiple_testing else {}
+    u=json.loads(Path(args.universe).read_text()) if args.universe else {}
+    sn=json.loads(Path(args.sector_neutralization).read_text()) if args.sector_neutralization else {}
     reg={
       "registry_version":"luna-model-registry-v1",
       "created_at":datetime.now(timezone.utc).isoformat(),
@@ -37,6 +41,8 @@ def main():
         "scorecard_sha256":sha(args.scorecard),
         "neutralized_sha256":sha(args.neutralized) if args.neutralized else None,
         "multiple_testing_sha256":sha(args.multiple_testing) if args.multiple_testing else None,
+        "universe_robustness_sha256":sha(args.universe) if args.universe else None,
+        "sector_neutralization_sha256":sha(args.sector_neutralization) if args.sector_neutralization else None,
         "benchmark_sha256":sha(args.benchmark),
         "holdout_start":s["holdout_start"],
         "holdout_end":s["holdout_end"],
@@ -63,6 +69,8 @@ def main():
             "reality_check_style_p_value":mt.get("reality_check_style_p_value"),
             "block_length_months":mt.get("block_length_months"),
           },
+          "universe_robustness": u,
+          "sector_industry_neutralization": sn,
         },
         "promotion_checks":c["promotion_checks"],
       },
