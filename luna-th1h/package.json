@@ -16,7 +16,8 @@
     "normalize:set": "tsx src/normalize-set-file.ts",
     "batch:15m": "tsx src/batch-replay-15m.ts",
     "aggregate:15m": "tsx src/aggregate-15m.ts",
-    "research:v2": "tsx src/replay-research-v2.ts"
+    "research:v2": "tsx src/replay-research-v2.ts",
+    "test:latency": "tsx src/latency-harness.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.0"
@@ -26,4 +27,4 @@
     "typescript": "^5.5.4",
     "@types/node": "^22.10.0"
   }
-}
+}\n
