@@ -110,4 +110,6 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add research-results/luna-failure-driven-search-v1
           git diff --cached --quiet || git commit -m "research(luna-search-v1): publish failure-driven search result"
-          git push
+          git fetch origin master
+          git rebase origin/master
+          git push origin HEAD:master
