@@ -205,15 +205,12 @@ def main() -> None:
                     (ts.notna() & (ts > base["decision_ts"].reset_index(drop=True))).sum()
                 )
 
-        row_map = base.set_index("_row_id")["symbol"]
-        # Reindex back to the original p order.
-        latest_field_ts = latest_field_ts.reindex(range(len(base))).set_axis(base["_row_id"].to_numpy())
-        matched_any = matched_any.reindex(base["_row_id"].to_numpy())
+        # Map the timestamp/coverage arrays back to the original price-row order
+        # using the immutable _row_id created before the as-of joins.
         latest_by_row = pd.Series(pd.NaT, index=range(len(p)), dtype="datetime64[ns, UTC]")
         any_by_row = pd.Series(False, index=range(len(p)))
-        order_ids = base["_row_id"].to_numpy()
-        latest_by_row.iloc[order_ids] = latest_field_ts.to_numpy()
-        any_by_row.iloc[order_ids] = matched_any.to_numpy()
+        latest_by_row.loc[latest_field_ts.index] = latest_field_ts.to_numpy()
+        any_by_row.loc[matched_any.index] = matched_any.to_numpy()
 
         p["fund_available_at"] = latest_by_row.to_numpy()
         pit_fundamental_rows = int(any_by_row.sum())
