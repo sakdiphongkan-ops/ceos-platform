@@ -13,6 +13,7 @@ let heartbeatTimer:NodeJS.Timeout|undefined;
 let portfolio:PortfolioState;
 let executionTestStep=0;
 let lastPersistAt=0;
+const lastPersistBySymbol=new Map<string,number>();
 const PERSIST_SIGNAL_MS=1_000;
 const strategyV1=new StrategyV1();
 
