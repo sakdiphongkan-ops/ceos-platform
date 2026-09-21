@@ -194,7 +194,9 @@ async function startSession(){
     execution_test:config.executionTest,
     fee_bps:config.feeBps,
     sell_tax_bps:config.sellTaxBps,
-    slippage_bps:config.slippageBps
+    slippage_bps:config.slippageBps,
+    timezone:config.timezone,
+    market_phase:currentMarketPhase()
   });
   await writeSnapshot();
   console.log(JSON.stringify({event:"LUNA_SESSION_STARTED",sessionId,strategyVersion:activeStrategyVersion()}));
@@ -745,7 +747,9 @@ async function main(){
     provider:config.marketDataProvider,
     capital:config.initialCapital,
     executionTest:config.executionTest,
-    strategy:strategyV1.version
+    strategy:strategyV1.version,
+    timezone:config.timezone,
+    marketPhase:currentMarketPhase()
   }));
 
   if(!["paper","live"].includes(config.mode)) throw new Error(`Unknown LUNA_MODE: ${config.mode}`);
