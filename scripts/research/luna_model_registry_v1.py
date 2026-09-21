@@ -20,6 +20,8 @@ def main():
     ap.add_argument("--sector-neutralization",required=False)
     ap.add_argument("--lifecycle",required=False)
     ap.add_argument("--pit-security-master",required=False)
+    ap.add_argument("--pit-fundamentals",required=False)
+    ap.add_argument("--corporate-actions",required=False)
     args=ap.parse_args()
     s=json.loads(Path(args.search_summary).read_text())
     c=json.loads(Path(args.scorecard).read_text())
@@ -29,6 +31,8 @@ def main():
     sn=json.loads(Path(args.sector_neutralization).read_text()) if args.sector_neutralization else {}
     lc=json.loads(Path(args.lifecycle).read_text()) if args.lifecycle else {}
     pit=json.loads(Path(args.pit_security_master).read_text()) if args.pit_security_master else {}
+    pf=json.loads(Path(args.pit_fundamentals).read_text()) if args.pit_fundamentals else {}
+    ca=json.loads(Path(args.corporate_actions).read_text()) if args.corporate_actions else {}
     reg={
       "registry_version":"luna-model-registry-v1",
       "created_at":datetime.now(timezone.utc).isoformat(),
@@ -49,6 +53,8 @@ def main():
         "sector_neutralization_sha256":sha(args.sector_neutralization) if args.sector_neutralization else None,
         "symbol_lifecycle_sha256":sha(args.lifecycle) if args.lifecycle else None,
         "pit_security_master_validation_sha256":sha(args.pit_security_master) if args.pit_security_master else None,
+        "pit_fundamentals_validation_sha256":sha(args.pit_fundamentals) if args.pit_fundamentals else None,
+        "corporate_actions_validation_sha256":sha(args.corporate_actions) if args.corporate_actions else None,
         "benchmark_sha256":sha(args.benchmark),
         "holdout_start":s["holdout_start"],
         "holdout_end":s["holdout_end"],
@@ -79,6 +85,8 @@ def main():
           "sector_industry_neutralization": sn,
           "symbol_lifecycle": lc,
           "pit_security_master_validation": pit,
+          "pit_fundamentals_validation": pf,
+          "corporate_actions_validation": ca,
         },
         "promotion_checks":c["promotion_checks"],
       },
