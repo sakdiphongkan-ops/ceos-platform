@@ -18,6 +18,7 @@ def main():
     ap.add_argument("--multiple-testing",required=False)
     ap.add_argument("--universe",required=False)
     ap.add_argument("--sector-neutralization",required=False)
+    ap.add_argument("--lifecycle",required=False)
     args=ap.parse_args()
     s=json.loads(Path(args.search_summary).read_text())
     c=json.loads(Path(args.scorecard).read_text())
@@ -25,6 +26,7 @@ def main():
     mt=json.loads(Path(args.multiple_testing).read_text()) if args.multiple_testing else {}
     u=json.loads(Path(args.universe).read_text()) if args.universe else {}
     sn=json.loads(Path(args.sector_neutralization).read_text()) if args.sector_neutralization else {}
+    lc=json.loads(Path(args.lifecycle).read_text()) if args.lifecycle else {}
     reg={
       "registry_version":"luna-model-registry-v1",
       "created_at":datetime.now(timezone.utc).isoformat(),
@@ -43,6 +45,7 @@ def main():
         "multiple_testing_sha256":sha(args.multiple_testing) if args.multiple_testing else None,
         "universe_robustness_sha256":sha(args.universe) if args.universe else None,
         "sector_neutralization_sha256":sha(args.sector_neutralization) if args.sector_neutralization else None,
+        "symbol_lifecycle_sha256":sha(args.lifecycle) if args.lifecycle else None,
         "benchmark_sha256":sha(args.benchmark),
         "holdout_start":s["holdout_start"],
         "holdout_end":s["holdout_end"],
@@ -71,6 +74,7 @@ def main():
           },
           "universe_robustness": u,
           "sector_industry_neutralization": sn,
+          "symbol_lifecycle": lc,
         },
         "promotion_checks":c["promotion_checks"],
       },
