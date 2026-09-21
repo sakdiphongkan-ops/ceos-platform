@@ -19,7 +19,7 @@ export const config={
   marketDataProvider:process.env.MARKET_DATA_PROVIDER ?? "mock",
   marketDataGatewayUrl:process.env.LUNA_MARKET_GATEWAY_URL ?? "",
   marketDataGatewayKey:process.env.LUNA_MARKET_GATEWAY_KEY ?? "",
-  marketDataGatewayPollMs:num("LUNA_MARKET_GATEWAY_POLL_MS",500),
+  marketDataGatewayPollMs:num("LUNA_MARKET_GATEWAY_POLL_MS",250),
   reduceOnlyTime:process.env.LUNA_REDUCE_ONLY_TIME ?? "16:20",
   forceCloseTime:process.env.LUNA_FORCE_CLOSE_TIME ?? "16:25",
   supabaseUrl:process.env.SUPABASE_URL ?? "",
