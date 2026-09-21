@@ -278,20 +278,28 @@ def _normalize_account_state(eq):
             unparsed.append(symbol)
             continue
 
+            market_price = _first_number(row, (
+            "market_price",
+            "last_price",
+            "close_price",
+        ))
+        market_value = _first_number(row, (
+            "market_value",
+            "amount",
+            "total_market_value",
+        ))
+        if market_value is None and market_price is not None:
+            market_value = market_price * qty
+        if market_value is None:
+            unparsed.append(symbol)
+            continue
+
         positions.append({
             "symbol": symbol,
             "qty": qty,
             "avg_price": avg_price,
-            "market_price": _first_number(row, (
-                "market_price",
-                "last_price",
-                "close_price",
-            )),
-            "market_value": _first_number(row, (
-                "market_value",
-                "amount",
-                "total_market_value",
-            )),
+            "market_price": market_price,
+            "market_value": market_value,
             "unrealized_pnl": _first_number(row, (
                 "profit",
                 "unrealized_profit",
@@ -302,10 +310,13 @@ def _normalize_account_state(eq):
             )),
         })
 
+    equity_value = cash + sum(float(x["market_value"]) for x in positions)
+
     return {
         "ok": True,
         "as_of": _now_iso(),
         "cash": cash,
+        "equity_value": equity_value,
         "positions": positions,
         "unparsed_symbols": sorted(set(unparsed)),
     }
