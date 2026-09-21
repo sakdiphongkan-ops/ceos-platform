@@ -21,6 +21,7 @@ jobs:
           cache-dependency-path: luna-th1h/package.json
       - run: npm install
       - run: npm run typecheck
+      - run: npm run test:market-session
       - run: npm run test:latency
       - run: npm run backtest:fixture
 
