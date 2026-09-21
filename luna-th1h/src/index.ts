@@ -15,6 +15,7 @@ let auditChain="GENESIS";
 let heartbeatTimer:NodeJS.Timeout|undefined;
 let portfolio:PortfolioState;
 let executionTestStep=0;
+let sessionGeneration=0;
 let lastSnapshotAt=0;
 let lastReconciliationAt=0;
 let sessionStartPromise:Promise<void>|null=null;
@@ -489,6 +490,7 @@ async function reconcileLiveOrderStates(){
 }
 
 function kickoffPrewarm(q:Quote){
+  const generation=sessionGeneration;
   if(prewarmedSymbols.has(q.symbol) || prewarmInFlight.has(q.symbol) || prewarmCache.has(q.symbol)) return;
   const startedAt=Date.now();
   const promise=(async()=>{
@@ -503,6 +505,7 @@ function kickoffPrewarm(q:Quote){
       const prices=quotes
         .filter((x:any)=>x?.ts && x.ts!==q.ts && Number.isFinite(Number(x.last)) && Number(x.last)>0)
         .map((x:any)=>Number(x.last));
+      if(generation!==sessionGeneration) return;
       prewarmCache.set(q.symbol,{
         prices,
         fetchedAtMs:Date.now(),
@@ -562,6 +565,7 @@ async function handleQuote(q:Quote){
       to_session_date:today
     },activeStrategyVersion(),sessionId);
     await endSession("ROLLOVER");
+    sessionGeneration++;
     strategyV1.reset();
     prewarmedSymbols.clear();
     prewarmCache.clear();
