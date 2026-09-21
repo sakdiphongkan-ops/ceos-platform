@@ -258,7 +258,10 @@ async function executeSignal(q:Quote,signal:Signal){
     estimated_fill_price:fill.fillPrice,
     notional:fill.notional,
     fee:fill.fee,
-    slippage:fill.slippage
+    slippage:fill.slippage,
+    signal_strength:signal.signalStrength??null,
+    target_allocation_pct:signal.targetAllocationPct??null,
+    sizing_reason:signal.sizingReason??null
   },signal.strategyVersion);
 
   try{
@@ -291,7 +294,10 @@ async function executeSignal(q:Quote,signal:Signal){
       fill_price:fill.fillPrice,fee:fill.fee,slippage:fill.slippage,
       position_qty:result.position_qty,
       avg_price:result.avg_price,
-      realized_pnl:result.realized_pnl
+      realized_pnl:result.realized_pnl,
+      signal_strength:signal.signalStrength??null,
+      target_allocation_pct:signal.targetAllocationPct??null,
+      sizing_reason:signal.sizingReason??null
     },signal.strategyVersion);
     await writeSnapshot();
   }catch(err){
