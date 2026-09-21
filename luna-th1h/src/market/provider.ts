@@ -18,7 +18,7 @@ export function marketQuotes(provider:string):AsyncGenerator<Quote>{
 async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
   const url = process.env.LUNA_MARKET_GATEWAY_URL ?? "";
   const key = process.env.LUNA_MARKET_GATEWAY_KEY ?? "";
-  const pollMs = Math.max(250,Number(process.env.LUNA_MARKET_GATEWAY_POLL_MS ?? 500));
+  const pollMs = Math.max(100,Number(process.env.LUNA_MARKET_GATEWAY_POLL_MS ?? 100));
   if(!url || !key) throw new Error("LUNA_MARKET_GATEWAY_URL and LUNA_MARKET_GATEWAY_KEY are required.");
 
   const previous = new Map<string,string>();
@@ -95,6 +95,10 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
         dataQuality:raw.data_quality ? String(raw.data_quality) : undefined
       };
       if(q.last===null && q.bid===null && q.ask===null) continue;
+      const parsedTs=Date.parse(q.ts);
+      if(!Number.isFinite(parsedTs)) continue;
+      const quoteAgeMs=Math.max(0,Date.now()-parsedTs);
+      if(quoteAgeMs>Number(process.env.LUNA_MAX_QUOTE_AGE_MS ?? 3000)) continue;
       const sig=JSON.stringify([q.ts,q.bid,q.ask,q.last,q.bidSize,q.askSize]);
       if(previous.get(q.symbol)===sig) continue;
       previous.set(q.symbol,sig);
