@@ -22,6 +22,7 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
   if(!url || !key) throw new Error("LUNA_MARKET_GATEWAY_URL and LUNA_MARKET_GATEWAY_KEY are required.");
 
   const previous = new Map<string,string>();
+  let lastGatewayCount=-1;
 
   while(true){
     let body:any = {};
@@ -60,6 +61,17 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
     }
 
     const quotes = Array.isArray(body?.quotes) ? body.quotes as any[] : [];
+    if(quotes.length!==lastGatewayCount){
+      console.log(JSON.stringify({
+        event:"LUNA_GATEWAY_QUOTES_STATE",
+        count:quotes.length,
+        target:Number(body?.target ?? 0),
+        selected_provider:body?.selected_provider ?? null,
+        collector_started:Boolean(body?.collector_started),
+        collector_error:body?.collector_error ?? null
+      }));
+      lastGatewayCount=quotes.length;
+    }
     if(quotes.length===0){
       console.error(JSON.stringify({
         event:"LUNA_GATEWAY_EMPTY_QUOTES",
