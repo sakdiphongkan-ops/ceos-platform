@@ -54,6 +54,13 @@ function position(state:PortfolioState,symbol:string):PositionState{
 function roundDown(n:number){
   return Math.max(0,Math.floor(n));
 }
+function usablePrice(...values:Array<number|null|undefined>){
+  for(const value of values){
+    if(typeof value==="number" && Number.isFinite(value) && value>0) return value;
+  }
+  return 0;
+}
+
 
 export function mark(state:PortfolioState,q:Quote){
   state.marks[q.symbol]=q;
@@ -160,7 +167,7 @@ export function applyFill(state:PortfolioState,fill:SimulatedFill){
 export function currentGrossExposure(state:PortfolioState){
   return Object.entries(state.positions).reduce((sum,[symbol,pos])=>{
     const q=state.marks[symbol];
-    const price=q?.last ?? q?.bid ?? q?.ask ?? pos.avgPrice;
+    const price=usablePrice(q?.last,q?.bid,q?.ask,pos.avgPrice);
     return sum+Math.max(0,pos.qty*price);
   },0);
 }
@@ -168,14 +175,14 @@ export function currentGrossExposure(state:PortfolioState){
 export function snapshot(state:PortfolioState){
   const marketValue=Object.entries(state.positions).reduce((sum,[symbol,pos])=>{
     const q=state.marks[symbol];
-    const liquidationPrice=q?.bid ?? q?.last ?? q?.ask ?? pos.avgPrice;
+    const liquidationPrice=usablePrice(q?.bid,q?.last,q?.ask,pos.avgPrice);
     return sum+Math.max(0,pos.qty*liquidationPrice);
   },0);
   const grossExposure=currentGrossExposure(state);
   const realizedPnl=Object.values(state.positions).reduce((sum,p)=>sum+p.realizedPnl,0);
   const unrealizedPnl=Object.entries(state.positions).reduce((sum,[symbol,pos])=>{
     const q=state.marks[symbol];
-    const markPrice=q?.bid ?? q?.last ?? q?.ask ?? pos.avgPrice;
+    const markPrice=usablePrice(q?.bid,q?.last,q?.ask,pos.avgPrice);
     return sum+(markPrice*pos.qty-pos.costBasis);
   },0);
   return {
