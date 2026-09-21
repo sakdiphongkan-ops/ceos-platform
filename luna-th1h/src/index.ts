@@ -14,6 +14,7 @@ let portfolio:PortfolioState;
 let executionTestStep=0;
 let lastPersistAt=0;
 const lastPersistBySymbol=new Map<string,number>();
+const prewarmedSymbols=new Set<string>();
 const PERSIST_SIGNAL_MS=1_000;
 const strategyV1=new StrategyV1({}, {priceOnlyFallback:config.priceOnlyFallback});
 
@@ -303,7 +304,39 @@ async function executeSignal(q:Quote,signal:Signal){
   }
 }
 
+async function prewarmStrategy(q:Quote){
+  if(prewarmedSymbols.has(q.symbol)) return;
+  try{
+    const response=await ingest("",{
+      action:"recent_ticks",
+      symbol:q.symbol,
+      source:q.source,
+      limit:25
+    });
+    const quotes=Array.isArray((response as any)?.quotes)?(response as any).quotes:[];
+    const prices=quotes
+      .filter((x:any)=>x?.ts && x.ts!==q.ts && Number.isFinite(Number(x.last)) && Number(x.last)>0)
+      .map((x:any)=>Number(x.last));
+    strategyV1.prime(q.symbol,prices);
+    prewarmedSymbols.add(q.symbol);
+    await audit("STRATEGY_PREWARM",{
+      symbol:q.symbol,
+      source:q.source,
+      data_quality:q.dataQuality??null,
+      historical_points:prices.length
+    },strategyV1.version);
+  }catch(err){
+    await audit("STRATEGY_PREWARM_ERROR",{
+      symbol:q.symbol,
+      source:q.source,
+      error:String(err)
+    },strategyV1.version);
+    prewarmedSymbols.add(q.symbol);
+  }
+}
+
 async function handleQuote(q:Quote){
+  await prewarmStrategy(q);
   const signal=getSignal(q);
 
   const now=Date.now();
