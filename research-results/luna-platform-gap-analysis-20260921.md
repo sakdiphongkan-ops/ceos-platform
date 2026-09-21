@@ -127,3 +127,16 @@ A production candidate should require:
 - successful shadow/paper tracking.
 
 The 7% geometric-monthly hurdle remains a research target, not something the optimizer is allowed to achieve through future leakage or holdout tuning.
+
+
+## Addendum — 2026-09-21
+
+The next implementation layer is now in the repository:
+
+- Neutralized alpha diagnostics: raw IC vs factor-neutralized IC, annualized neutral ICIR, neutral churn, and peer crowding correlations.
+- Broker order lifecycle state machine with explicit transitions from submitted through partial/final fill, cancellation, rejection, or unknown.
+- Optional live reconciliation gateway endpoint and periodic reconciliation loop.
+- Reconciled broker fills can be recorded idempotently and applied to local portfolio state.
+- Configurable visible-depth market impact plus max-position enforcement remain active in the execution model.
+
+These changes are motivated by documented platform practices: LEAN treats live fills as asynchronous order events and provides explicit order status/order-event handling; QuantRocket/Alphalens emphasizes factor tear sheets, quantile spreads, IC and turnover analysis; Numerai explicitly evaluates neutralized information coefficients, neutral churn, and model correlations. citeturn342024search0turn250777search3turn342024search1
