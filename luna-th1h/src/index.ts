@@ -724,8 +724,22 @@ async function handleQuote(q:Quote){
 
   if(signal.action!=="HOLD"){
     const executionQueuedAt=Date.now();
+    const scheduledSessionId=sessionId;
+    const scheduledSessionGeneration=sessionGeneration;
     void executionScheduler.enqueue(q.symbol,async()=>{
       try{
+        if(sessionId!==scheduledSessionId || sessionGeneration!==scheduledSessionGeneration){
+          await queueAudit("ORDER_SUPPRESSED_SESSION_GENERATION",{
+            symbol:q.symbol,
+            action:signal.action,
+            quote_ts:q.ts,
+            scheduled_session_id:scheduledSessionId,
+            current_session_id:sessionId,
+            scheduled_session_generation:scheduledSessionGeneration,
+            current_session_generation:sessionGeneration
+          },signal.strategyVersion);
+          return;
+        }
         // Re-check the session immediately before execution. A signal may have
         // waited behind another order long enough to cross REDUCE_ONLY/CLOSED.
         const executionPhase=currentMarketPhase();
