@@ -14,6 +14,8 @@ on:
       - scripts/research/validate_corporate_actions_v1.py
       - scripts/research/build_factor_dataset.py
       - tests/research/test_build_factor_dataset_pit.py
+      - scripts/research/luna_factor_source_tournament_v1.py
+      - .github/workflows/luna-factor-source-tournament-v1.yml
       - data/contracts/luna_*.schema.json
       - data/contracts/set_smartmarketplace_request_plan_v1.json
 
@@ -31,6 +33,7 @@ jobs:
           python -m py_compile             scripts/research/pull_set_smartmarketplace_v1.py             scripts/research/batch_pull_set_smartmarketplace_v1.py             scripts/research/normalize_set_pit_fundamentals_v1.py             scripts/research/validate_pit_security_master_v1.py             scripts/research/validate_pit_fundamentals_v1.py             scripts/research/validate_corporate_actions_v1.py \
             scripts/research/derive_set_financial_statement_availability_v1.py \
             tests/research/test_set_financial_statement_availability.py \
+            scripts/research/luna_factor_source_tournament_v1.py \
             scripts/research/build_factor_dataset.py \
             tests/research/test_build_factor_dataset_pit.py
       - name: JSON contract validation
