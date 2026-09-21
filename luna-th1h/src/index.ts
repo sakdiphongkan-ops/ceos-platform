@@ -7,6 +7,7 @@ import {applyFill,createPortfolio,mark,planOrder,simulateFill,snapshot,type Exec
 import type {Quote,Signal} from "./types.js";
 import {marketPhaseAt,sessionDateAt} from "./market-session.js";
 import {LatestExecutionScheduler} from "./execution-scheduler.js";
+import {compareLiveAccountState} from "./live-account-reconciliation.js";
 
 const EXECUTION_TEST_VERSION="luna-th1h-execution-test-0.1.0";
 
@@ -19,6 +20,7 @@ let executionTestStep=0;
 let sessionGeneration=0;
 let lastSnapshotAt=0;
 let lastReconciliationAt=0;
+let lastLiveAccountStateSyncAt=0;
 let sessionStartPromise:Promise<void>|null=null;
 let sessionEndPromise:Promise<void>|null=null;
 let auditQueueTail:Promise<void>=Promise.resolve();
@@ -289,6 +291,67 @@ async function createInitialPortfolio(){
   return state;
 }
 
+async function refreshLiveAccountState(
+  expectedSessionId:string,
+  expectedSessionGeneration:number,
+  force=false
+){
+  if(config.executionMode!=="live") return;
+  if(sessionId!==expectedSessionId || sessionGeneration!==expectedSessionGeneration){
+    throw new Error("LIVE_ACCOUNT_STATE_SESSION_MISMATCH");
+  }
+
+  const now=Date.now();
+  if(!force && now-lastLiveAccountStateSyncAt<config.liveReconciliationMs) return;
+  if(pendingLiveReservations.size>0 && !force) return;
+
+  const broker=await liveAccountState();
+  if(sessionId!==expectedSessionId || sessionGeneration!==expectedSessionGeneration){
+    throw new Error("LIVE_ACCOUNT_STATE_SESSION_CHANGED");
+  }
+  if(broker.unparsed_symbols.length>0){
+    throw new Error(
+      "LIVE_BROKER_PORTFOLIO_UNPARSED:"+broker.unparsed_symbols.join(",")
+    );
+  }
+
+  const result=compareLiveAccountState(
+    portfolio,
+    {
+      cash:broker.cash,
+      positions:broker.positions.map(x=>({
+        symbol:x.symbol,
+        qty:x.qty,
+        avg_price:x.avg_price
+      }))
+    },
+    {
+      cash:config.liveAccountCashDriftTolerance,
+      qty:config.liveAccountQtyDriftTolerance
+    }
+  );
+
+  if(!result.ok){
+    await queueAudit("LIVE_ACCOUNT_STATE_DRIFT",{
+      broker_as_of:broker.as_of,
+      cash_delta:result.cashDelta,
+      cash_tolerance:config.liveAccountCashDriftTolerance,
+      position_mismatches:result.positionMismatches
+    },activeStrategyVersion(),expectedSessionId);
+    throw new Error(
+      "LIVE_ACCOUNT_STATE_DRIFT:cash="+result.cashDelta.toFixed(2)+
+      ":positions="+result.positionMismatches.length
+    );
+  }
+
+  lastLiveAccountStateSyncAt=Date.now();
+  queueAudit("LIVE_ACCOUNT_STATE_SYNC",{
+    broker_as_of:broker.as_of,
+    broker_cash:broker.cash,
+    position_count:broker.positions.length
+  },activeStrategyVersion(),expectedSessionId);
+}
+
 async function startSession(){
   portfolio=await createInitialPortfolio();
   const response=await ingest("",{
@@ -312,6 +375,7 @@ async function startSession(){
   if(!data.session?.id) throw new Error("Supabase did not return a session id");
   sessionId=data.session.id;
   sessionDate=todayInTimezone(config.timezone);
+  lastLiveAccountStateSyncAt=Date.now();
   if(config.mode==="live" || config.executionMode==="live"){
     queueAudit("BROKER_PORTFOLIO_RECONCILED",{
       broker_cash:portfolio.cash,
@@ -394,6 +458,13 @@ async function executeSignal(
 ){
   if(sessionId!==expectedSessionId || sessionGeneration!==expectedSessionGeneration){
     throw new Error("EXECUTION_SESSION_GENERATION_MISMATCH");
+  }
+  if(config.executionMode==="live"){
+    await refreshLiveAccountState(
+      expectedSessionId!,
+      expectedSessionGeneration,
+      false
+    );
   }
   mark(portfolio,q);
   const plan=planOrder(signal,q,portfolio,executionReservations);
@@ -996,6 +1067,15 @@ async function handleQuote(q:Quote){
       const recon = config.liveReconciliation && config.executionMode==="live" && now-lastReconciliationAt>=config.liveReconciliationMs
         ? (lastReconciliationAt=now, reconcileLiveOrderStates())
         : Promise.resolve();
+      const accountSync = config.liveReconciliation
+        && config.executionMode==="live"
+        && pendingLiveReservations.size===0
+        && now-lastLiveAccountStateSyncAt>=config.liveReconciliationMs
+        ? refreshLiveAccountState(sessionId!,sessionGeneration,true).catch(err=>{
+            queueAudit("LIVE_ACCOUNT_STATE_SYNC_ERROR",{error:String(err)},activeStrategyVersion());
+            throw err;
+          })
+        : Promise.resolve();
       Promise.all([
         queueAudit("HEARTBEAT",{
           provider:config.marketDataProvider,
@@ -1004,7 +1084,8 @@ async function handleQuote(q:Quote){
           execution_test:config.executionTest
         }),
         writeSnapshot(),
-        recon
+        recon,
+        accountSync
       ]).catch(err=>console.error(JSON.stringify({event:"HEARTBEAT_ERROR",error:String(err)})));
     },1_000);
   }
@@ -1033,6 +1114,7 @@ async function endSession(status="CLOSED"){
       if(sessionId===closingSessionId){
         sessionId=null;
         sessionDate=null;
+        lastLiveAccountStateSyncAt=0;
         sessionGeneration++;
         prewarmCache.clear();
         prewarmInFlight.clear();
