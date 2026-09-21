@@ -55,3 +55,13 @@ The execution path now uses bounded concurrency of four jobs with FIFO ordering 
 A reservation ledger is applied before the first network await. BUY orders reserve estimated cash and gross exposure; SELL orders reserve sellable quantity. The planner subtracts these reservations when calculating available capacity, preventing concurrent jobs from independently consuming the same portfolio headroom.
 
 Live-order reservations remain held until broker reconciliation reaches a terminal state (`FILLED`, `CANCELED`, or `REJECTED`). Paper reservations are released after the fill is recorded and local portfolio state is updated.
+
+## Latest-signal-wins execution update — 2026-09-21
+
+Execution scheduling now uses a per-symbol mailbox. At most one execution for a symbol may be running, and at most one not-yet-started execution for that symbol is retained. When a newer signal arrives before the older one starts, the older pending signal is marked `superseded` and never reaches planning, reservation, broker, or paper-fill execution.
+
+This removes stale queued work rather than merely detecting staleness after queue wait. Different symbols still execute concurrently up to `LUNA_MAX_EXECUTION_CONCURRENCY`.
+
+Pending mailbox entries are canceled when a session closes, so signals cannot carry across a market session boundary. Each scheduled execution also carries the session id/generation; a running task that returns after a rollover cannot mutate the new session's local paper portfolio.
+
+The audit ledger records `SIGNAL_SUPERSEDED` for replaced pending signals and `ORDER_SUPPRESSED_SESSION_GENERATION` when a scheduled task reaches execution after its session is no longer current.
