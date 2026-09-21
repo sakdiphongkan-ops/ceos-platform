@@ -278,7 +278,7 @@ def _normalize_account_state(eq):
             unparsed.append(symbol)
             continue
 
-            market_price = _first_number(row, (
+        market_price = _first_number(row, (
             "market_price",
             "last_price",
             "close_price",
