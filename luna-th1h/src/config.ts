@@ -11,6 +11,7 @@ export const config={
   sellTaxBps:num("LUNA_SELL_TAX_BPS",10),
   slippageBps:num("LUNA_SLIPPAGE_BPS",5),
   executionTest:bool("LUNA_EXECUTION_TEST",false),
+  priceOnlyFallback:bool("LUNA_PRICE_ONLY_FALLBACK",false),
   executionMode:process.env.LUNA_EXECUTION_MODE ?? "paper",
   liveGatewayUrl:process.env.LUNA_LIVE_GATEWAY_URL ?? "",
   liveGatewayKey:process.env.LUNA_LIVE_GATEWAY_KEY ?? "",
