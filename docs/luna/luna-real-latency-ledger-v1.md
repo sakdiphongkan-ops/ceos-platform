@@ -135,3 +135,18 @@ A local Node benchmark comparing the previous market-phase implementation with t
 - approximately 25.2× faster for the market-phase formatting portion
 
 This is a component benchmark, not an end-to-end trading latency claim. Broker/network latency, market-feed latency, database latency, and strategy execution remain separate contributors.
+
+
+### Latest-quote analysis mailbox
+
+The quote-analysis ingress now uses the same bounded mailbox pattern as execution:
+
+- one running analysis per symbol
+- at most one pending quote per symbol
+- a newer pending quote replaces an older pending quote
+- global analysis concurrency is capped by `LUNA_MAX_ANALYSIS_CONCURRENCY` (default 16)
+- session shutdown cancels pending analysis work
+
+This prevents an overloaded feed from building an unbounded per-symbol promise chain. The runtime intentionally analyzes the newest available market state instead of allowing stale queued quotes to create execution latency. Existing execution-session and generation guards still protect against cross-session orders.
+
+This is a runtime-latency optimization, not a strategy-performance claim: under overload, intermediate quotes may be skipped for decision analysis.
