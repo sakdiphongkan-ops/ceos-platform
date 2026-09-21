@@ -65,3 +65,18 @@ This removes stale queued work rather than merely detecting staleness after queu
 Pending mailbox entries are canceled when a session closes, so signals cannot carry across a market session boundary. Each scheduled execution also carries the session id/generation; a running task that returns after a rollover cannot mutate the new session's local paper portfolio.
 
 The audit ledger records `SIGNAL_SUPERSEDED` for replaced pending signals and `ORDER_SUPPRESSED_SESSION_GENERATION` when a scheduled task reaches execution after its session is no longer current.
+
+
+## Audit and broker-recovery update — 2026-09-21
+
+The audit hash chain now advances only after the corresponding audit write succeeds. A failed ingest therefore does not silently advance the in-memory chain past an unwritten event.
+
+Live orders are session-tagged with the session id, generation, and strategy version that created them. Broker reconciliation records a late fill against the originating session rather than whichever session happens to be active when the broker reports it. If the local worker has already rolled into a new session, the late fill is recorded but its local portfolio mutation is suppressed and an explicit LIVE_FILL_LOCAL_APPLY_SUPPRESSED_SESSION_GENERATION audit event is emitted.
+
+A live placement request with an ambiguous network outcome is reconciled by client_order_id before its reservation is released. If the broker already accepted the order, LUNA keeps the reservation and tracks the recovered order instead of risking a duplicate placement. Live mode now also requires broker reconciliation to be enabled during preflight.
+
+## Market-feed deadline update — 2026-09-21
+
+The Settrade gateway polling loop no longer performs multi-second exponential retries inside the quote critical path. Each fetch has a bounded timeout (LUNA_MARKET_GATEWAY_TIMEOUT_MS, default 750 ms, minimum 200 ms) and failed cycles advance to the next poll interval. Poll timing compensates for fetch time so a fast gateway does not accumulate avoidable polling drift.
+
+This changes the latency contract from retry until the gateway recovers to prefer fresh bounded snapshots and let the next poll recover. A gateway that repeatedly exceeds the deadline is observable as LUNA_GATEWAY_FETCH_FAILED rather than silently holding the market-data loop for several seconds.
