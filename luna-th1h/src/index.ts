@@ -362,6 +362,7 @@ async function executeSignal(
   }
 
   const fill=simulateFill(plan);
+  const executionTs=new Date().toISOString();
   const reservation=reserveExecution(fill);
   const clientOrderId=`${sessionId}:${q.symbol}:${signal.ts}:${plan.side}:${executionTestStep}`;
 
@@ -497,7 +498,7 @@ async function executeSignal(
         fill_price:fill.fillPrice,
         fee:fill.fee,
         slippage:fill.slippage,
-        ts:q.ts,
+        ts:executionTs,
         reason:signal.reason,
         strategy_version:signal.strategyVersion
       }
@@ -523,6 +524,8 @@ async function executeSignal(
     }
     queueAudit("ORDER_FILLED",{
       client_order_id:clientOrderId,
+      quote_ts:q.ts,
+      execution_ts:executionTs,
       order_id:result.order_id,
       fill_id:result.fill_id,
       symbol:fill.symbol,side:fill.side,qty:fill.qty,
