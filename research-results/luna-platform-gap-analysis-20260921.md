@@ -138,6 +138,11 @@ The next implementation layer is now in the repository:
 - Optional live reconciliation gateway endpoint and periodic reconciliation loop.
 - Reconciled broker fills can be recorded idempotently and applied to local portfolio state.
 - Configurable visible-depth market impact plus max-position enforcement remain active in the execution model.
+- Dependent-data multiple-testing diagnostic using a moving-block bootstrap over the full searched formula family.
+- Fresh-seed replication runner using the same search specification under three independent seeds.
+- Research quality gate v2 binding holdout/OOS/IC/cost/K/neutralization/replication evidence before registry promotion.
+- Full formula monthly-return matrix persisted as compressed research evidence for downstream inference.
+- Point-in-time fundamental factors carried through the monthly panel and automatically admitted only when coverage exists.
 
 These changes are motivated by documented platform practices: LEAN treats live fills as asynchronous order events and provides explicit order status/order-event handling; QuantRocket/Alphalens emphasizes factor tear sheets, quantile spreads, IC and turnover analysis; Numerai explicitly evaluates neutralized information coefficients, neutral churn, and model correlations. citeturn342024search0turn250777search3turn342024search1
 
