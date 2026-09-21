@@ -34,3 +34,16 @@ The synthetic latency/backpressure harness remains separate from this real execu
 Session startup now keeps only the mandatory session-creation request on the quote critical path. The initial audit event is queued and the opening snapshot is written asynchronously; session shutdown still waits for the audit queue and writes a final snapshot before closing the session.
 
 The market clock is implemented as a deterministic `marketPhaseAt()` function in `luna-th1h/src/market-session.ts` and regression-tested across ACTIVE, lunch CLOSED, REDUCE_ONLY, FORCE_CLOSE, post-close, weekend, and invalid close-time ordering cases.
+
+## Async prewarm update — 2026-09-21
+
+Strategy prewarming no longer blocks the quote analysis critical path. On the first quote for a symbol, LUNA starts a bounded single-flight `recent_ticks` lookup in the background while the live quote is evaluated immediately.
+
+When the historical seed arrives, it is applied only if the symbol still has a sparse live state (at most two live prices). Existing live prices are replayed on top of the historical seed. A mature live state is never overwritten by late warm-up data.
+
+Warm-up results are generation-scoped to the active session. A warm-up request that completes after a session closes or rolls over cannot populate the next session's strategy state.
+
+Latency logs therefore distinguish:
+- `prewarm_ms`: blocking prewarm time on the critical path (expected 0 after this change)
+- `prewarm_applied`: whether a completed historical seed was merged
+- `prewarm_fetch_ms`: elapsed time of the background historical lookup
