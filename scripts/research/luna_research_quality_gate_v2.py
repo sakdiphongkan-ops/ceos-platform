@@ -34,6 +34,7 @@ def main() -> None:
     ap.add_argument("--summary", required=True)
     ap.add_argument("--scorecard", required=True)
     ap.add_argument("--neutralized", required=True)
+    ap.add_argument("--replication", required=False)
     ap.add_argument("--output", required=True)
     ap.add_argument("--max-crowding-warning", type=float, default=0.90)
     args = ap.parse_args()
@@ -41,6 +42,7 @@ def main() -> None:
     summary = load(args.summary)
     score = load(args.scorecard)
     neutral = load(args.neutralized)
+    replication = load(args.replication) if args.replication else {}
 
     checks = score.get("promotion_checks", {})
     hard = {
@@ -59,7 +61,7 @@ def main() -> None:
         and float(crowding) > args.max_crowding_warning
     )
 
-    fresh_seed_replication = bool(summary.get("fresh_seed_replication", False))
+    fresh_seed_replication = bool(replication.get("replication_pass", False))
 
     failed = [k for k, v in hard.items() if not v]
     result = {
@@ -78,6 +80,7 @@ def main() -> None:
             "crowding_max_abs_corr": crowding,
             "crowding_warning": crowding_warning,
             "fresh_seed_replication_evidence_present": fresh_seed_replication,
+            "fresh_seed_replication": replication.get("runs", []),
         },
         "promotion_status": (
             "PROMOTION_ELIGIBLE_PENDING_FRESH_SEED_REPLICATION"
