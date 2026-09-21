@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://luna.local/contracts/corporate-actions-v1.json",
+  "title": "LUNA Corporate Action Ledger v1",
+  "type": "object",
+  "required": ["symbol", "action_type", "effective_date", "available_at"],
+  "properties": {
+    "symbol": {"type":"string","minLength":1},
+    "action_type": {"type":"string","enum":["SPLIT","REVERSE_SPLIT","BONUS","RIGHTS","DIVIDEND","DELIST","LIST","NAME_CHANGE","OTHER"]},
+    "effective_date": {"type":"string","format":"date"},
+    "available_at": {"type":"string","format":"date-time"},
+    "ex_date": {"type":["string","null"],"format":"date"},
+    "payment_date": {"type":["string","null"],"format":"date"},
+    "ratio_num": {"type":["number","null"],"exclusiveMinimum":0},
+    "ratio_den": {"type":["number","null"],"exclusiveMinimum":0},
+    "cash_amount": {"type":["number","null"]},
+    "old_symbol": {"type":["string","null"]},
+    "new_symbol": {"type":["string","null"]},
+    "source": {"type":["string","null"]},
+    "source_record_id": {"type":["string","null"]}
+  },
+  "additionalProperties": false
+}
