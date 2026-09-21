@@ -59,6 +59,7 @@ export async function liveOpenOrders():Promise<LiveOpenOrder[]>{
 export interface LiveAccountState {
   as_of:string;
   cash:number;
+  equity_value:number;
   positions:Array<{
     symbol:string;
     qty:number;
@@ -82,6 +83,8 @@ export async function liveAccountState():Promise<LiveAccountState>{
   if(
     !body?.ok
     || !Number.isFinite(Number(body.cash))
+    || !Number.isFinite(Number(body.equity_value))
+    || Number(body.equity_value)<Number(body.cash)
     || !Array.isArray(body.positions)
     || !Array.isArray(body.unparsed_symbols)
   ){
@@ -108,6 +111,7 @@ export async function liveAccountState():Promise<LiveAccountState>{
   return {
     as_of:String(body.as_of ?? new Date().toISOString()),
     cash:Number(body.cash),
+    equity_value:Number(body.equity_value),
     positions,
     unparsed_symbols:body.unparsed_symbols.map((x:any)=>String(x))
   };
