@@ -13,10 +13,18 @@ let auditChain="GENESIS";
 let heartbeatTimer:NodeJS.Timeout|undefined;
 let portfolio:PortfolioState;
 let executionTestStep=0;
-let lastPersistAt=0;
+let lastSnapshotAt=0;
+let sessionStartPromise:Promise<void>|null=null;
+let auditQueueTail:Promise<void>=Promise.resolve();
+let activeAnalyses=0;
+const analysisWaiters:Array<()=>void>=[];
+const symbolChains=new Map<string,Promise<void>>();
+let executionChain:Promise<void>=Promise.resolve();
 const lastPersistBySymbol=new Map<string,number>();
 const prewarmedSymbols=new Set<string>();
-const PERSIST_SIGNAL_MS=1_000;
+const PERSIST_HOLD_MS=5_000;
+const SNAPSHOT_MS=1_000;
+const MAX_ANALYSIS_CONCURRENCY=16;
 const strategyV1=new StrategyV1({}, {priceOnlyFallback:config.priceOnlyFallback});
 
 function activeStrategyVersion(){
@@ -65,14 +73,57 @@ async function ingest(path:string,body:Record<string,unknown>,agentRequired=true
   throw lastError instanceof Error?lastError:new Error(String(lastError));
 }
 
-async function audit(eventType:string,payload:Record<string,unknown>,strategyVersion=activeStrategyVersion()){
+async function audit(
+  eventType:string,
+  payload:Record<string,unknown>,
+  strategyVersion=activeStrategyVersion(),
+  sessionIdOverride:string|null=sessionId
+){
   const ts=new Date().toISOString();
   const canonical=JSON.stringify({prev:auditChain,ts,eventType,payload,strategyVersion});
   auditChain=await sha256(canonical);
   await ingest("",{
-    action:"audit",session_id:sessionId,ts,event_type:eventType,payload,
+    action:"audit",session_id:sessionIdOverride,ts,event_type:eventType,payload,
     strategy_version:strategyVersion,hash:auditChain
   });
+}
+
+function queueAudit(
+  eventType:string,
+  payload:Record<string,unknown>,
+  strategyVersion=activeStrategyVersion()
+){
+  const queuedSessionId=sessionId;
+  const next=auditQueueTail
+    .then(()=>audit(eventType,payload,strategyVersion,queuedSessionId))
+    .catch(err=>{
+      console.error(JSON.stringify({event:"AUDIT_ERROR",event_type:eventType,error:String(err)}));
+    });
+  auditQueueTail=next;
+  return next;
+}
+
+async function acquireAnalysisSlot(){
+  if(activeAnalyses<MAX_ANALYSIS_CONCURRENCY){
+    activeAnalyses++;
+    return;
+  }
+  await new Promise<void>(resolve=>analysisWaiters.push(resolve));
+  activeAnalyses++;
+}
+
+function releaseAnalysisSlot(){
+  const waiter=analysisWaiters.shift();
+  if(waiter) waiter();
+  else activeAnalyses=Math.max(0,activeAnalyses-1);
+}
+
+function currentMarketPhase(){
+  return marketPhase(new Date().toISOString());
+}
+
+function currentSessionDate(){
+  return todayInTimezone(config.timezone);
 }
 
 async function writeSnapshot(){
@@ -160,9 +211,23 @@ function hhmmMinutes(value:string){
 }
 function marketPhase(ts:string){
   const minutes=localMinutes(ts,config.timezone);
+  const weekday=new Intl.DateTimeFormat("en-US",{
+    timeZone:config.timezone,
+    weekday:"short"
+  }).format(new Date(ts));
+  if(weekday==="Sat" || weekday==="Sun") return "CLOSED";
+
+  const morningStart=10*60;
+  const morningEnd=12*60+30;
+  const afternoonStart=14*60;
+  const tradingEnd=16*60+30;
   const reduceOnly=hhmmMinutes(config.reduceOnlyTime);
   const forceClose=hhmmMinutes(config.forceCloseTime);
+
   if(forceClose<=reduceOnly) throw new Error("forceCloseTime must be after reduceOnlyTime");
+  if(minutes<morningStart) return "CLOSED";
+  if(minutes>=morningEnd && minutes<afternoonStart) return "CLOSED";
+  if(minutes>=tradingEnd) return "CLOSED";
   if(minutes>=forceClose) return "FORCE_CLOSE";
   if(minutes>=reduceOnly) return "REDUCE_ONLY";
   return "ACTIVE";
@@ -180,12 +245,21 @@ function getSignal(q:Quote):Signal{
   }
 
   const pos=portfolio.positions[q.symbol];
-  const phase=marketPhase(q.ts);
+  const phase=currentMarketPhase();
   if(pos?.qty>0 && phase==="FORCE_CLOSE"){
     return {symbol:q.symbol,ts:q.ts,action:"SELL",reason:"FORCE_CLOSE_EOD",strategyVersion:strategyV1.version};
   }
-  if(phase!=="ACTIVE"){
-    return {symbol:q.symbol,ts:q.ts,action:"HOLD",reason:`${phase}_ENTRY_BLOCK`,strategyVersion:strategyV1.version};
+  if(phase==="CLOSED"){
+    return {symbol:q.symbol,ts:q.ts,action:"HOLD",reason:"MARKET_CLOSED",strategyVersion:strategyV1.version};
+  }
+  if(phase==="REDUCE_ONLY"){
+    const decision=strategyV1.evaluate(q,{
+      positionQty:pos?.qty??0,
+      avgPrice:pos?.avgPrice??0,
+      nowMs:Date.now()
+    });
+    if(decision.action==="SELL") return decision;
+    return {symbol:q.symbol,ts:q.ts,action:"HOLD",reason:"REDUCE_ONLY_ENTRY_BLOCK",strategyVersion:strategyV1.version};
   }
   return strategyV1.evaluate(q,{
     positionQty:pos?.qty??0,
@@ -199,7 +273,7 @@ async function executeSignal(q:Quote,signal:Signal){
   const plan=planOrder(signal,q,portfolio);
   if(!plan.accepted){
     if(signal.action!=="HOLD"){
-      await audit("ORDER_BLOCKED",{
+      queueAudit("ORDER_BLOCKED",{
         symbol:q.symbol,action:signal.action,reason:plan.reason,quote:q
       },signal.strategyVersion);
     }
@@ -237,7 +311,7 @@ async function executeSignal(q:Quote,signal:Signal){
           idempotency_key:sessionId+":BROKER_ORDER_SUBMITTED:"+brokerOrder.client_order_id
         }
       });
-      await audit("BROKER_ORDER_SUBMITTED",{
+      queueAudit("BROKER_ORDER_SUBMITTED",{
         client_order_id:brokerOrder.client_order_id,
         broker_order_id:brokerOrder.broker_order_id,
         symbol:brokerOrder.symbol,
@@ -248,12 +322,12 @@ async function executeSignal(q:Quote,signal:Signal){
       console.log(JSON.stringify({event:"LIVE_ORDER_SUBMITTED",brokerOrderId:brokerOrder.broker_order_id}));
       return;
     }catch(err){
-      await audit("BROKER_ORDER_ERROR",{client_order_id:clientOrderId,error:String(err)},signal.strategyVersion);
+      queueAudit("BROKER_ORDER_ERROR",{client_order_id:clientOrderId,error:String(err)},signal.strategyVersion);
       throw err;
     }
   }
 
-  await audit("ORDER_SUBMITTED",{
+  queueAudit("ORDER_SUBMITTED",{
     client_order_id:clientOrderId,
     symbol:fill.symbol,side:fill.side,qty:fill.qty,
     reference_price:fill.referencePrice,
@@ -288,7 +362,7 @@ async function executeSignal(q:Quote,signal:Signal){
     if(!result) throw new Error("record_fill returned no result");
 
     if(!result.idempotent) applyFill(portfolio,fill);
-    await audit("ORDER_FILLED",{
+    queueAudit("ORDER_FILLED",{
       client_order_id:clientOrderId,
       order_id:result.order_id,
       fill_id:result.fill_id,
@@ -301,9 +375,12 @@ async function executeSignal(q:Quote,signal:Signal){
       target_allocation_pct:signal.targetAllocationPct??null,
       sizing_reason:signal.sizingReason??null
     },signal.strategyVersion);
-    await writeSnapshot();
+    if(Date.now()-lastSnapshotAt>=SNAPSHOT_MS){
+      lastSnapshotAt=Date.now();
+      void writeSnapshot().catch(err=>console.error(JSON.stringify({event:"SNAPSHOT_ERROR",error:String(err)})));
+    }
   }catch(err){
-    await audit("ORDER_ERROR",{
+    queueAudit("ORDER_ERROR",{
       client_order_id:clientOrderId,
       symbol:fill.symbol,side:fill.side,qty:fill.qty,
       error:String(err)
@@ -345,14 +422,14 @@ async function prewarmStrategy(q:Quote){
       .map((x:any)=>Number(x.last));
     strategyV1.prime(q.symbol,prices);
     prewarmedSymbols.add(q.symbol);
-    await audit("STRATEGY_PREWARM",{
+    queueAudit("STRATEGY_PREWARM",{
       symbol:q.symbol,
       source:q.source,
       data_quality:q.dataQuality??null,
       historical_points:prices.length
     },strategyV1.version);
   }catch(err){
-    await audit("STRATEGY_PREWARM_ERROR",{
+    queueAudit("STRATEGY_PREWARM_ERROR",{
       symbol:q.symbol,
       source:q.source,
       error:String(err)
@@ -361,30 +438,104 @@ async function prewarmStrategy(q:Quote){
   }
 }
 
+async function ensureSession(){
+  const phase=currentMarketPhase();
+  if(sessionId) return;
+  if(phase==="CLOSED") return;
+  if(!sessionStartPromise){
+    sessionStartPromise=startSession().finally(()=>{sessionStartPromise=null});
+  }
+  await sessionStartPromise;
+}
+
 async function handleQuote(q:Quote){
-  await rolloverSessionIfNeeded(q);
+  await ensureSession();
+  if(!sessionId) return;
+
+  const today=currentSessionDate();
+  if(sessionDate && sessionDate!==today){
+    await audit("SESSION_ROLLOVER",{
+      from_session_date:sessionDate,
+      to_session_date:today
+    },activeStrategyVersion(),sessionId);
+    await endSession("ROLLOVER");
+    strategyV1.reset();
+    prewarmedSymbols.clear();
+    lastPersistBySymbol.clear();
+    lastSnapshotAt=0;
+    await ensureSession();
+    if(!sessionId) return;
+  }
+
+  const phase=currentMarketPhase();
+  if(phase==="CLOSED"){
+    await endSession("MARKET_CLOSED");
+    return;
+  }
+
+  const startedAt=Date.now();
   await prewarmStrategy(q);
   const signal=getSignal(q);
 
   const now=Date.now();
-  const shouldPersist=config.executionTest || (now-lastPersistAt)>=PERSIST_SIGNAL_MS || signal.action!=="HOLD";
+  const lastPersist=lastPersistBySymbol.get(q.symbol)??0;
+  const shouldPersist=config.executionTest
+    || signal.action!=="HOLD"
+    || now-lastPersist>=PERSIST_HOLD_MS;
+
   if(shouldPersist){
-    await ingest("",{action:"tick",session_id:sessionId,quote:q});
-    await ingest("",{action:"signal",session_id:sessionId,signal});
-    lastPersistAt=now;
+    lastPersistBySymbol.set(q.symbol,now);
+    void Promise.all([
+      ingest("",{action:"tick",session_id:sessionId,quote:q}),
+      ingest("",{action:"signal",session_id:sessionId,signal})
+    ]).catch(err=>console.error(JSON.stringify({
+      event:"PERSIST_SIGNAL_ERROR",
+      symbol:q.symbol,
+      error:String(err)
+    })));
   }
 
-  console.log(JSON.stringify({event:"SIGNAL",quote:q,signal}));
+  const marketLagMs=Math.max(0,Date.now()-Date.parse(q.ts));
+  console.log(JSON.stringify({
+    event:"SIGNAL",
+    quote:q,
+    signal,
+    market_lag_ms:marketLagMs,
+    analysis_ms:Date.now()-startedAt
+  }));
 
-  await executeSignal(q,signal);
+  const executionQueuedAt=Date.now();
+  executionChain=executionChain
+    .catch(()=>undefined)
+    .then(async()=>{
+      try{
+        await executeSignal(q,signal);
+        console.log(JSON.stringify({
+          event:"EXECUTION_COMPLETE",
+          symbol:q.symbol,
+          action:signal.action,
+          queue_wait_ms:Date.now()-executionQueuedAt,
+          end_to_end_ms:Date.now()-startedAt,
+          market_lag_ms:marketLagMs
+        }));
+      }catch(err){
+        console.error(JSON.stringify({
+          event:"EXECUTION_ERROR",
+          symbol:q.symbol,
+          action:signal.action,
+          error:String(err),
+          end_to_end_ms:Date.now()-startedAt
+        }));
+      }
+    });
 
   if(!heartbeatTimer){
     heartbeatTimer=setInterval(()=>{
       Promise.all([
-        audit("HEARTBEAT",{
+        queueAudit("HEARTBEAT",{
           provider:config.marketDataProvider,
           last_quote_ts:q.ts,
-          market_phase:marketPhase(q.ts),
+          market_phase:currentMarketPhase(),
           execution_test:config.executionTest
         }),
         writeSnapshot()
@@ -399,7 +550,8 @@ async function endSession(status="CLOSED"){
   if(!sessionId) return;
   try{
     await writeSnapshot();
-    await audit("SESSION_ENDED",{status});
+    await audit("SESSION_ENDED",{status},activeStrategyVersion(),sessionId);
+    await auditQueueTail;
     await ingest("",{action:"end_session",session_id:sessionId,status});
   }catch(err){
     console.error(JSON.stringify({event:"SESSION_END_ERROR",error:String(err)}));
@@ -437,21 +589,34 @@ async function main(){
     throw new Error("Supabase ingest security configuration is incomplete.");
   }
 
-  await startSession();
-
   for await(const q of marketQuotes(config.marketDataProvider)){
-    if(!sessionId) throw new Error("Session is not active");
-    try{
-      await handleQuote(q);
-    }catch(err){
-      console.error(JSON.stringify({
-        event:"LUNA_QUOTE_CYCLE_ERROR",
+    const previous=symbolChains.get(q.symbol) ?? Promise.resolve();
+    const next=previous
+      .catch(err=>console.error(JSON.stringify({
+        event:"LUNA_SYMBOL_CHAIN_ERROR",
         symbol:q.symbol,
-        ts:q.ts,
         error:String(err)
-      }));
-      await new Promise(r=>setTimeout(r,500));
-    }
+      })))
+      .then(async()=>{
+        await acquireAnalysisSlot();
+        try{
+          await handleQuote(q);
+        }catch(err){
+          console.error(JSON.stringify({
+            event:"LUNA_QUOTE_CYCLE_ERROR",
+            symbol:q.symbol,
+            ts:q.ts,
+            error:String(err)
+          }));
+        }finally{
+          releaseAnalysisSlot();
+        }
+      });
+
+    symbolChains.set(q.symbol,next);
+    next.finally(()=>{
+      if(symbolChains.get(q.symbol)===next) symbolChains.delete(q.symbol);
+    }).catch(()=>undefined);
   }
 }
 
