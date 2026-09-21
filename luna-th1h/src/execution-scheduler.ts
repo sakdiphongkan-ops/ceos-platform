@@ -66,6 +66,20 @@ export class LatestExecutionScheduler{
     };
   }
 
+  cancelPending(){
+    for(const mailbox of this.mailboxes.values()){
+      if(mailbox.pending){
+        mailbox.pending.resolve({executed:false,superseded:true});
+        mailbox.pending=undefined;
+      }
+    }
+    this.readySymbols.length=0;
+    this.scheduled.clear();
+    for(const [symbol,mailbox] of this.mailboxes){
+      if(!mailbox.running) this.mailboxes.delete(symbol);
+    }
+  }
+
   private schedule(symbol:string){
     const mailbox=this.mailboxes.get(symbol);
     if(!mailbox || mailbox.running || !mailbox.pending || this.scheduled.has(symbol)) return;
