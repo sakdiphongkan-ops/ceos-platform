@@ -97,6 +97,11 @@ MLflow provides experiment tracking, parameter/metric visualization, artifact li
 - Max-position enforcement in the execution planner.
 - Visible-depth market-impact model in paper execution.
 - HOLD signals removed from execution queue while heartbeat remains active.
+- PIT security-master contract and validator for symbol lifecycle, sector/industry,
+  effective intervals, and `available_at` semantics.
+- Universe stress now requires the configured number of deterministic random
+  replicates rather than silently running fewer experiments.
+- Symbol lifecycle audit distinguishes observed disappearance from verified delisting.
 
 ## Next highest-value gaps
 
