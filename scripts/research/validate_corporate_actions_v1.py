@@ -42,7 +42,7 @@ def main():
     issues=[]
     bad=int(d["symbol"].isna().sum()+d["symbol"].eq("").sum())
     if bad: issues.append({"check":"symbol_present","bad_rows":bad})
-    bad=int(d["action_type"].isna().sum()+~d["action_type"].isin(ACTIONS).sum())
+    bad=int(d["action_type"].isna().sum() + (~d["action_type"].isin(ACTIONS)).sum())
     if bad: issues.append({"check":"action_type_domain","bad_rows":bad})
     for c in ["effective_date","available_at"]:
         bad=int(d[c].isna().sum())
@@ -55,8 +55,9 @@ def main():
         if bad: issues.append({"check":"positive_ratios","bad_rows":bad})
 
     if "cash_amount" in d.columns:
-        cash=pd.to_numeric(d["cash_amount"],errors="coerce")
-        bad=int((cash.notna() & ~cash.map(lambda x: x == x)).sum())
+        raw_cash=d["cash_amount"]
+        cash=pd.to_numeric(raw_cash,errors="coerce")
+        bad=int((raw_cash.notna() & cash.isna()).sum())
         if bad: issues.append({"check":"cash_amount_numeric","bad_rows":bad})
 
     # Event availability can be after its economic effective date. That is valid.
