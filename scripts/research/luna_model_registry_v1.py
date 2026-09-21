@@ -15,10 +15,12 @@ def main():
     ap.add_argument("--output",required=True)
     ap.add_argument("--benchmark",required=True)
     ap.add_argument("--neutralized",required=False)
+    ap.add_argument("--multiple-testing",required=False)
     args=ap.parse_args()
     s=json.loads(Path(args.search_summary).read_text())
     c=json.loads(Path(args.scorecard).read_text())
     n=json.loads(Path(args.neutralized).read_text()) if args.neutralized else {}
+    mt=json.loads(Path(args.multiple_testing).read_text()) if args.multiple_testing else {}
     reg={
       "registry_version":"luna-model-registry-v1",
       "created_at":datetime.now(timezone.utc).isoformat(),
@@ -34,6 +36,7 @@ def main():
         "search_summary_sha256":sha(args.search_summary),
         "scorecard_sha256":sha(args.scorecard),
         "neutralized_sha256":sha(args.neutralized) if args.neutralized else None,
+        "multiple_testing_sha256":sha(args.multiple_testing) if args.multiple_testing else None,
         "benchmark_sha256":sha(args.benchmark),
         "holdout_start":s["holdout_start"],
         "holdout_end":s["holdout_end"],
@@ -53,6 +56,13 @@ def main():
           "neutral_icir_annualized":n.get("neutral_icir_annualized"),
           "neutral_churn_mean":n.get("neutral_churn_mean"),
           "crowding_max_abs_corr":n.get("crowding_max_abs_corr"),
+          "multiple_testing": {
+            "method":mt.get("method"),
+            "formula_family_size_after_coverage":mt.get("formula_family_size_after_coverage"),
+            "observed_max_t":mt.get("observed_max_t"),
+            "reality_check_style_p_value":mt.get("reality_check_style_p_value"),
+            "block_length_months":mt.get("block_length_months"),
+          },
         },
         "promotion_checks":c["promotion_checks"],
       },
