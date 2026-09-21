@@ -25,6 +25,37 @@ function ensureConfigured(){
   if(!config.liveGatewayKey) throw new Error("LUNA_LIVE_GATEWAY_KEY_NOT_CONFIGURED");
 }
 
+export interface LiveOpenOrder{
+  order_id:string;
+  symbol:string;
+  side:string;
+  status:string;
+  volume:number|null;
+  matched_volume:number|null;
+}
+
+export async function liveOpenOrders():Promise<LiveOpenOrder[]>{
+  ensureConfigured();
+  const res=await fetch(`${config.liveGatewayUrl}/open-orders`,{
+    headers:headers(),
+    signal:AbortSignal.timeout(5000)
+  });
+  const body=await res.json().catch(()=>({}));
+  if(!res.ok) throw new Error(`GATEWAY_OPEN_ORDERS_HTTP_${res.status}: ${JSON.stringify(body)}`);
+  if(!body?.ok || !Array.isArray(body.open_orders)){
+    throw new Error(`GATEWAY_OPEN_ORDERS_BAD_RESPONSE: ${JSON.stringify(body)}`);
+  }
+  return body.open_orders.map((x:any)=>({
+    order_id:String(x.order_id??""),
+    symbol:String(x.symbol??""),
+    side:String(x.side??""),
+    status:String(x.status??"UNKNOWN"),
+    volume:x.volume==null?null:Number(x.volume),
+    matched_volume:x.matched_volume==null?null:Number(x.matched_volume)
+  }));
+}
+
+
 export interface LiveAccountState {
   as_of:string;
   cash:number;
