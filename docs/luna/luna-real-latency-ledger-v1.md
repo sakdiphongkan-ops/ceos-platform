@@ -111,3 +111,27 @@ Settrade's public Python SDK examples/snippets confirm the Equity interface expo
 Live broker fills are now persisted with both broker order identity and a cumulative-fill idempotency key. An order with submitted quantity Q may transition through PARTIALLY_FILLED states until cumulative filled quantity reaches Q; each delta fill gets its own durable row, while replaying the same cumulative fill returns idempotent without changing portfolio state again.
 
 The Edge Function and worker now pass order_qty, cumulative_filled_qty, broker_order_id, and idempotency_key to the new luna_record_fill_v2 contract. This closes the prior failure mode where the second partial fill on the same client order could be mistaken for a duplicate of the first fill.
+
+## Runtime organization and hot-path optimization — 2026-09-22
+
+The runtime now applies a second-stage performance cleanup focused on preserving trading semantics while reducing repeated work on the quote path.
+
+### Changes
+
+- Market-session timezone formatters are cached instead of constructing `Intl.DateTimeFormat` instances for every quote.
+- Session date formatting reuses the same cached timezone formatter.
+- `HH:MM` market-boundary parsing is cached after first use.
+- Live `BROKER_ORDER_SUBMITTED` bookkeeping is moved off the order-submission critical path; broker acceptance and reservation state are recorded first, while durable bookkeeping continues asynchronously.
+- Decision logging defaults to signal-only instead of printing every HOLD quote. Full logging remains configurable with `LUNA_DECISION_LOG_MODE=all`.
+- Heartbeat frequency is configurable and defaults to 5 seconds with `LUNA_HEARTBEAT_MS`, reducing unnecessary maintenance/audit pressure while preserving the separate live reconciliation interval.
+- Supabase ingest requests now have a bounded timeout (default 3 seconds) through `LUNA_SUPABASE_REQUEST_TIMEOUT_MS`, so a stalled persistence endpoint cannot hold a runtime request indefinitely.
+
+### Measured micro-benchmark
+
+A local Node benchmark comparing the previous market-phase implementation with the cached formatter implementation over 10,000 calls measured approximately:
+
+- previous: 1,131 ms
+- cached: 44.8 ms
+- approximately 25.2× faster for the market-phase formatting portion
+
+This is a component benchmark, not an end-to-end trading latency claim. Broker/network latency, market-feed latency, database latency, and strategy execution remain separate contributors.
