@@ -80,16 +80,20 @@ export function planOrder(signal:Signal,q:Quote,state:PortfolioState):PlannedOrd
 
   const pos=position(state,q.symbol);
   const currentNotional=pos.qty*referencePrice;
-  const maxPositionNotional=state.initialCapital*config.maxPositionPct;
 
   if(side==="BUY"){
-    const remainingPosition=Math.max(0,maxPositionNotional-currentNotional);
-    const targetNotional=state.initialCapital*config.entryNotionalPct;
+    const targetFraction=Math.min(1,Math.max(0,Number(signal.targetAllocationPct??5)/100));
+    const targetNotional=Math.max(0,state.initialCapital*targetFraction-currentNotional);
+    const grossHeadroom=Math.max(0,state.initialCapital*config.maxGrossExposurePct-currentGrossExposure(state));
     const slippageRate=config.slippageBps/10000;
     const feeRate=config.feeBps/10000;
     const estimatedAllInPerShare=referencePrice*(1+slippageRate)*(1+feeRate);
     const affordable=state.cash/estimatedAllInPerShare;
-    let qty=roundDown(Math.min(remainingPosition/referencePrice,targetNotional/referencePrice,affordable));
+    let qty=roundDown(Math.min(
+      targetNotional/referencePrice,
+      grossHeadroom/referencePrice,
+      affordable
+    ));
     if(!priceOnlyPaper && q.askSize && q.askSize>0) qty=Math.min(qty,roundDown(q.askSize));
     if(qty<=0) return {accepted:false,reason:"INSUFFICIENT_CASH_OR_POSITION_HEADROOM"};
 
