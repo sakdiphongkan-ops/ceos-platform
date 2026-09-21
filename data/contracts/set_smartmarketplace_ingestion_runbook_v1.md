@@ -34,3 +34,12 @@ This prevents `asOfDate`, fiscal period, or current retrieval time from being si
 - Financial Statement all-companies endpoint documented by SET: `https://marketplace.set.or.th/api/public/financial-statement/all`.
 - Financial Statement Last Update endpoint documented by SET: `https://marketplace.set.or.th/api/public/financial-statement/last-update-date`.
 - Company Fundamental Data endpoints documented by SET include EOD statistics and Financial Data & Ratio services.
+
+
+## Financial Statement PIT availability
+
+SET documents a Last Update Date API and states that financial data is available through the financial-statement API at 04:00 BKK. LUNA therefore has a dedicated helper:
+
+`python scripts/research/derive_set_financial_statement_availability_v1.py --financial-statement <raw.json> --last-update <last-update.json> --output <normalized.json>`
+
+The helper matches each statement period to its Last Update Date and assigns the documented 04:00 BKK availability time. It does **not** use `asOfDate` as the availability time. Source: SET Financial Statement Data Specification, including Last Update Date and stated 04:00 BKK availability.
