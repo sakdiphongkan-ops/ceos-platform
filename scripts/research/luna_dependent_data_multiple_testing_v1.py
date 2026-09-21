@@ -3,7 +3,7 @@
 
 Implements a block-bootstrap max-t Reality-Check-style diagnostic over the
 entire searched formula family. The frozen holdout is excluded completely.
-This is a research diagnostic, not a formal p-value proof.
+This is a research diagnostic, not a formal p-value proof. The search-v1 CI trigger intentionally reruns the full family after inference changes.
 """
 
 from __future__ import annotations
