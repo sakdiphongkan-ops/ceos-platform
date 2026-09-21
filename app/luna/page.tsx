@@ -90,8 +90,8 @@ export default function LunaPortfolioPage() {
   useEffect(()=>{ load(); const id=setInterval(load,2000); return()=>clearInterval(id); },[load]);
 
   const sessions=[...(feed?.sessions??[])].sort((a,b)=>{
-    const ad=new Date(String(a.session_date??"")+"T"+String(a.created_at??"00:00:00")).getTime();
-    const bd=new Date(String(b.session_date??"")+"T"+String(b.created_at??"00:00:00")).getTime();
+    const ad=new Date(a.created_at??a.started_at??a.session_date??0).getTime();
+    const bd=new Date(b.created_at??b.started_at??b.session_date??0).getTime();
     return bd-ad;
   });
   const openSession=sessions.find(s=>s.status==="OPEN");
