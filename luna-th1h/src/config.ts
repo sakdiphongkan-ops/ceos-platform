@@ -1,6 +1,12 @@
 const num=(name:string, fallback:number)=>Number(process.env[name] ?? fallback);
 const bool=(name:string, fallback:boolean)=>String(process.env[name] ?? fallback).toLowerCase()==="true";
 
+const MARKET_TIMEZONE="Asia/Bangkok";
+const requestedTimezone=process.env.LUNA_TIMEZONE ?? MARKET_TIMEZONE;
+if(requestedTimezone!==MARKET_TIMEZONE){
+  throw new Error(`LUNA_TIMEZONE_MUST_BE_${MARKET_TIMEZONE.replace("/","_").toUpperCase()}`);
+}
+
 export const config={
   mode:process.env.LUNA_MODE ?? "paper",
   initialCapital:num("LUNA_INITIAL_CAPITAL",1_000_000),
@@ -18,7 +24,7 @@ export const config={
   executionMode:process.env.LUNA_EXECUTION_MODE ?? "paper",
   liveGatewayUrl:process.env.LUNA_LIVE_GATEWAY_URL ?? "",
   liveGatewayKey:process.env.LUNA_LIVE_GATEWAY_KEY ?? "",
-  timezone:process.env.LUNA_TIMEZONE ?? "Asia/Bangkok",
+  timezone:MARKET_TIMEZONE,
   marketDataProvider:process.env.MARKET_DATA_PROVIDER ?? "mock",
   marketDataGatewayUrl:process.env.LUNA_MARKET_GATEWAY_URL ?? "",
   marketDataGatewayKey:process.env.LUNA_MARKET_GATEWAY_KEY ?? "",
