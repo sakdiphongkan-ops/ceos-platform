@@ -3,7 +3,7 @@ import {marketQuotes} from "./market/provider.js";
 import {StrategyV1,VERSION as STRATEGY_V1_VERSION} from "./strategy-v1.js";
 import {liveGatewayDiagnostics,liveGatewayHealth,placeLiveOrder,reconcileLiveOrders} from "./live-gateway.js";
 import {transitionBrokerOrder,type BrokerOrderState} from "./broker-state.js";
-import {applyFill,createPortfolio,mark,planOrder,simulateFill,snapshot, type PortfolioState} from "./execution.js";
+import {applyFill,createPortfolio,mark,planOrder,simulateFill,snapshot,type ExecutionReservations,type PortfolioState} from "./execution.js";
 import type {Quote,Signal} from "./types.js";
 import {marketPhaseAt,sessionDateAt} from "./market-session.js";
 
@@ -24,7 +24,29 @@ let auditQueueTail:Promise<void>=Promise.resolve();
 let activeAnalyses=0;
 const analysisWaiters:Array<()=>void>=[];
 const symbolChains=new Map<string,Promise<void>>();
-let executionChain:Promise<void>=Promise.resolve();
+type ExecutionReservationToken={
+  buyCash:number;
+  grossExposure:number;
+  sellQty:number;
+  symbol:string;
+};
+
+type ExecutionJob={
+  task:()=>Promise<void>;
+  resolve:()=>void;
+  reject:(error:unknown)=>void;
+};
+
+const executionReservations:ExecutionReservations={
+  reservedBuyCash:0,
+  reservedGrossExposure:0,
+  reservedSellQty:{}
+};
+const pendingLiveReservations=new Map<string,ExecutionReservationToken>();
+const executionQueue:ExecutionJob[]=[];
+const executionSymbolChains=new Map<string,Promise<void>>();
+let activeExecutionJobs=0;
+
 const lastPersistBySymbol=new Map<string,number>();
 const prewarmedSymbols=new Set<string>();
 const prewarmInFlight=new Map<string,Promise<void>>();
@@ -124,6 +146,66 @@ function releaseAnalysisSlot(){
   activeAnalyses=Math.max(0,activeAnalyses-1);
   const waiter=analysisWaiters.shift();
   if(waiter) waiter();
+}
+
+const MAX_EXECUTION_CONCURRENCY=4;
+
+function reserveExecution(fill:{symbol:string;side:"BUY"|"SELL";qty:number;notional:number;totalCashDelta:number}):ExecutionReservationToken{
+  const token:ExecutionReservationToken={
+    buyCash:fill.side==="BUY"?Math.max(0,-fill.totalCashDelta):0,
+    grossExposure:fill.side==="BUY"?Math.max(0,fill.notional):0,
+    sellQty:fill.side==="SELL"?Math.max(0,fill.qty):0,
+    symbol:fill.symbol
+  };
+  executionReservations.reservedBuyCash+=token.buyCash;
+  executionReservations.reservedGrossExposure+=token.grossExposure;
+  if(token.sellQty>0){
+    executionReservations.reservedSellQty[token.symbol]=(executionReservations.reservedSellQty[token.symbol]??0)+token.sellQty;
+  }
+  return token;
+}
+
+function releaseExecution(token:ExecutionReservationToken){
+  executionReservations.reservedBuyCash=Math.max(0,executionReservations.reservedBuyCash-token.buyCash);
+  executionReservations.reservedGrossExposure=Math.max(0,executionReservations.reservedGrossExposure-token.grossExposure);
+  if(token.sellQty>0){
+    const left=Math.max(0,(executionReservations.reservedSellQty[token.symbol]??0)-token.sellQty);
+    if(left<=0) delete executionReservations.reservedSellQty[token.symbol];
+    else executionReservations.reservedSellQty[token.symbol]=left;
+  }
+}
+
+function pumpExecutionQueue(){
+  while(activeExecutionJobs<MAX_EXECUTION_CONCURRENCY && executionQueue.length>0){
+    const job=executionQueue.shift()!;
+    activeExecutionJobs++;
+    void job.task()
+      .then(job.resolve,job.reject)
+      .finally(()=>{
+        activeExecutionJobs--;
+        pumpExecutionQueue();
+      })
+      .catch(()=>undefined);
+  }
+}
+
+function enqueueExecution(task:()=>Promise<void>){
+  return new Promise<void>((resolve,reject)=>{
+    executionQueue.push({task,resolve,reject});
+    pumpExecutionQueue();
+  });
+}
+
+function enqueueSymbolExecution(symbol:string,task:()=>Promise<void>){
+  const previous=executionSymbolChains.get(symbol)??Promise.resolve();
+  const next=previous
+    .catch(()=>undefined)
+    .then(()=>enqueueExecution(task));
+  executionSymbolChains.set(symbol,next);
+  next.finally(()=>{
+    if(executionSymbolChains.get(symbol)===next) executionSymbolChains.delete(symbol);
+  }).catch(()=>undefined);
+  return next;
 }
 
 function currentMarketPhase(){
