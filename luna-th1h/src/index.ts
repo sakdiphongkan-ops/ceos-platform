@@ -644,12 +644,27 @@ async function handleQuote(q:Quote){
             return;
           }
           await executeSignal(q,signal);
+          const queueWaitMs=Date.now()-executionQueuedAt;
+          const endToEndMs=Date.now()-startedAt;
+          const executionMs=Math.max(0,endToEndMs-marketLagMs);
+          queueAudit("LATENCY_METRIC",{
+            symbol:q.symbol,
+            action:signal.action,
+            quote_ts:q.ts,
+            market_lag_ms:marketLagMs,
+            analysis_ms:Math.max(0,Date.now()-startedAt-queueWaitMs),
+            queue_wait_ms:queueWaitMs,
+            execution_ms:executionMs,
+            end_to_end_ms:endToEndMs,
+            market_phase:currentMarketPhase(),
+            source:q.source
+          },signal.strategyVersion);
           console.log(JSON.stringify({
             event:"EXECUTION_COMPLETE",
             symbol:q.symbol,
             action:signal.action,
-            queue_wait_ms:Date.now()-executionQueuedAt,
-            end_to_end_ms:Date.now()-startedAt,
+            queue_wait_ms:queueWaitMs,
+            end_to_end_ms:endToEndMs,
             market_lag_ms:marketLagMs
           }));
         }catch(err){
