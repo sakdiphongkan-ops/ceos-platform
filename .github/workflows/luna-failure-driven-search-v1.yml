@@ -49,6 +49,15 @@ jobs:
           rm -rf research/luna_failure_driven_search_v1
           python scripts/research/luna_failure_driven_search_v1.py             --input data/set_2000_2025/monthly_factors_5y_v4.csv             --benchmark research-results/luna-m1-benchmark-locked-20260920.csv             --output research/luna_failure_driven_search_v1             --formula-count 5000             --seed 20260921             --k 20             --cost-bps 20             --lookback-months 24             --inner-train-months 12             --inner-valid-months 6             --outer-holdout-months 12             --min-history-months 9
 
+      - name: Run institutional scorecard
+        run: |
+          rm -rf research/luna_research_scorecard_v1
+          python scripts/research/luna_research_scorecard_v1.py             --input data/set_2000_2025/monthly_factors_5y_v4.csv             --search-summary research/luna_failure_driven_search_v1/summary.json             --formula-catalog research/luna_failure_driven_search_v1/formula_catalog.json             --benchmark research-results/luna-m1-benchmark-locked-20260920.csv             --output research/luna_research_scorecard_v1
+
+      - name: Create model registry entry
+        run: |
+          python scripts/research/luna_model_registry_v1.py             --search-summary research/luna_failure_driven_search_v1/summary.json             --scorecard research/luna_research_scorecard_v1/scorecard.json             --benchmark research-results/luna-m1-benchmark-locked-20260920.csv             --output research/luna_research_scorecard_v1/model-registry-entry.json
+
       - name: Validate result
         run: |
           python - <<'PY'
@@ -71,6 +80,8 @@ jobs:
           cp research/luna_failure_driven_search_v1/formula_catalog.json research-results/luna-failure-driven-search-v1/formula-catalog.json
           cp research/luna_failure_driven_search_v1/final_selection_board.csv research-results/luna-failure-driven-search-v1/final-selection-board.csv
           cp research/luna_failure_driven_search_v1/full_period_descriptive.csv research-results/luna-failure-driven-search-v1/full-period-descriptive.csv
+          cp research/luna_research_scorecard_v1/scorecard.json research-results/luna-failure-driven-search-v1/scorecard.json
+          cp research/luna_research_scorecard_v1/model-registry-entry.json research-results/luna-failure-driven-search-v1/model-registry-entry.json
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add research-results/luna-failure-driven-search-v1
