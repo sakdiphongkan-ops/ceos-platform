@@ -749,6 +749,9 @@ async function handleQuote(q:Quote){
   await ensureSession();
   if(!sessionId) return;
 
+  let activeSessionId=sessionId;
+  let activeSessionGeneration=sessionGeneration;
+
   const today=currentSessionDate();
   if(sessionDate && sessionDate!==today){
     await queueAudit("SESSION_ROLLOVER",{
@@ -764,7 +767,11 @@ async function handleQuote(q:Quote){
     lastSnapshotAt=0;
     await ensureSession();
     if(!sessionId) return;
+    activeSessionId=sessionId;
+    activeSessionGeneration=sessionGeneration;
   }
+
+  if(sessionId!==activeSessionId || sessionGeneration!==activeSessionGeneration) return;
 
   const phase=currentMarketPhase();
   if(phase==="CLOSED"){
@@ -788,6 +795,8 @@ async function handleQuote(q:Quote){
   const signal=getSignal(q);
   const marketLagMs=Math.max(0,Date.now()-Date.parse(q.ts));
 
+  if(sessionId!==activeSessionId || sessionGeneration!==activeSessionGeneration) return;
+
   const now=Date.now();
   const lastPersist=lastPersistBySymbol.get(q.symbol)??0;
   const shouldPersist=config.executionTest
@@ -797,10 +806,10 @@ async function handleQuote(q:Quote){
   if(shouldPersist){
     lastPersistBySymbol.set(q.symbol,now);
     const writes:Promise<unknown>[]=[
-      ingest("",{action:"tick",session_id:sessionId,quote:q})
+      ingest("",{action:"tick",session_id:activeSessionId,quote:q})
     ];
     if(signal.action!=="HOLD" || config.executionTest){
-      writes.push(ingest("",{action:"signal",session_id:sessionId,signal}));
+      writes.push(ingest("",{action:"signal",session_id:activeSessionId,signal}));
     }
     void Promise.all(writes).catch(err=>console.error(JSON.stringify({
       event:"PERSIST_SIGNAL_ERROR",
@@ -822,8 +831,8 @@ async function handleQuote(q:Quote){
 
   if(signal.action!=="HOLD"){
     const executionQueuedAt=Date.now();
-    const scheduledSessionId=sessionId;
-    const scheduledSessionGeneration=sessionGeneration;
+    const scheduledSessionId=activeSessionId;
+    const scheduledSessionGeneration=activeSessionGeneration;
     void executionScheduler.enqueue(q.symbol,async()=>{
       try{
         if(sessionId!==scheduledSessionId || sessionGeneration!==scheduledSessionGeneration){
