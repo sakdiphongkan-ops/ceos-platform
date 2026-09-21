@@ -4,7 +4,7 @@ const bool=(name:string, fallback:boolean)=>String(process.env[name] ?? fallback
 export const config={
   mode:process.env.LUNA_MODE ?? "paper",
   initialCapital:num("LUNA_INITIAL_CAPITAL",1_000_000),
-  maxPositionPct:num("LUNA_MAX_POSITION_PCT",0.20),
+  maxPositionPct:num("LUNA_MAX_POSITION_PCT",1.00),
   maxGrossExposurePct:num("LUNA_MAX_GROSS_EXPOSURE_PCT",1),
   entryNotionalPct:num("LUNA_ENTRY_NOTIONAL_PCT",0.20),
   feeBps:num("LUNA_FEE_BPS",25),
