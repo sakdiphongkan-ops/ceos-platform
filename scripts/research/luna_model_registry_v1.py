@@ -14,9 +14,11 @@ def main():
     ap.add_argument("--scorecard",required=True)
     ap.add_argument("--output",required=True)
     ap.add_argument("--benchmark",required=True)
+    ap.add_argument("--neutralized",required=False)
     args=ap.parse_args()
     s=json.loads(Path(args.search_summary).read_text())
     c=json.loads(Path(args.scorecard).read_text())
+    n=json.loads(Path(args.neutralized).read_text()) if args.neutralized else {}
     reg={
       "registry_version":"luna-model-registry-v1",
       "created_at":datetime.now(timezone.utc).isoformat(),
@@ -31,6 +33,7 @@ def main():
         "input_sha256":s["input_sha256"],
         "search_summary_sha256":sha(args.search_summary),
         "scorecard_sha256":sha(args.scorecard),
+        "neutralized_sha256":sha(args.neutralized) if args.neutralized else None,
         "benchmark_sha256":sha(args.benchmark),
         "holdout_start":s["holdout_start"],
         "holdout_end":s["holdout_end"],
@@ -46,6 +49,10 @@ def main():
           "development_icir_annualized":c["development_icir_annualized"],
           "quintile_spread_mean":c["quintile_spread_mean"],
           "benchmark_overlap":c["benchmark_overlap"],
+          "neutral_ic_mean":n.get("neutral_ic_mean"),
+          "neutral_icir_annualized":n.get("neutral_icir_annualized"),
+          "neutral_churn_mean":n.get("neutral_churn_mean"),
+          "crowding_max_abs_corr":n.get("crowding_max_abs_corr"),
         },
         "promotion_checks":c["promotion_checks"],
       },
