@@ -1,0 +1,58 @@
+name: LUNA SET SMART Marketplace Ingestion v1
+
+on:
+  workflow_dispatch:
+    inputs:
+      endpoint:
+        description: "Documented SET endpoint"
+        required: true
+        type: choice
+        options:
+          - security_profile
+          - financial_statement_all
+          - financial_statement_last_update
+          - fundamental_eod_by_symbol
+          - fundamental_eod_all_symbols
+          - financial_data_by_symbol
+          - financial_data_all_symbols
+      params_json:
+        description: "JSON query parameters matching the SET specification"
+        required: true
+        default: "{}"
+        type: string
+      output_name:
+        description: "Raw output filename"
+        required: true
+        default: "set-response.json"
+        type: string
+
+jobs:
+  pull:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      SET_API_KEY: ${{ secrets.SET_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate secret presence
+        run: |
+          test -n "$SET_API_KEY" || {
+            echo "SET_API_KEY secret is not configured for this repository."
+            exit 1
+          }
+      - name: Pull raw official SET payload
+        run: |
+          mkdir -p artifacts/set
+          python scripts/research/pull_set_smartmarketplace_v1.py             --endpoint "${{ inputs.endpoint }}"             --params-json '${{ inputs.params_json }}'             --output "artifacts/set/${{ inputs.output_name }}"
+      - name: Upload raw payload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: luna-set-${{ github.run_id }}
+          path: artifacts/set/
+          if-no-files-found: error
+          retention-days: 30
