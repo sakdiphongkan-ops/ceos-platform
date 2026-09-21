@@ -493,6 +493,10 @@ async function handleQuote(q:Quote){
     analysis_ms:Date.now()-startedAt
   }));
 
+  if(signal.action==="HOLD"){
+    return;
+  }
+
   const executionQueuedAt=Date.now();
   executionChain=executionChain
     .catch(()=>undefined)
