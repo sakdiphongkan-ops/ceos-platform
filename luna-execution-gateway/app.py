@@ -285,7 +285,6 @@ def _normalize_account_state(eq):
         ))
         market_value = _first_number(row, (
             "market_value",
-            "amount",
             "total_market_value",
         ))
         if market_value is None and market_price is not None:
