@@ -114,9 +114,9 @@ async function acquireAnalysisSlot(){
 }
 
 function releaseAnalysisSlot(){
+  activeAnalyses=Math.max(0,activeAnalyses-1);
   const waiter=analysisWaiters.shift();
   if(waiter) waiter();
-  else activeAnalyses=Math.max(0,activeAnalyses-1);
 }
 
 function currentMarketPhase(){
