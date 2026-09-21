@@ -143,7 +143,9 @@ def main():
     ap.add_argument("--k", type=int, default=20)
     ap.add_argument("--cost-bps", type=float, default=20)
     ap.add_argument("--random-replicates", type=int, default=20)
-    ap.add_argument("--random-seeds", default="20260931,20260932,20260933")
+    ap.add_argument("--random-base-seed", type=int, default=20260931)
+    ap.add_argument("--random-seeds", default=None,
+                    help="Optional comma-separated explicit seeds; otherwise deterministic seeds are generated from random-base-seed.")
     args = ap.parse_args()
 
     d = pd.read_csv(args.input)
@@ -188,9 +190,18 @@ def main():
             "available": bool(len(fr)),
         })
 
-    seeds = [int(x.strip()) for x in args.random_seeds.split(",") if x.strip()]
+    if args.random_replicates < 1:
+        raise SystemExit("--random-replicates must be >= 1")
+    if args.random_seeds:
+        seeds = [int(x.strip()) for x in args.random_seeds.split(",") if x.strip()]
+        if len(seeds) < args.random_replicates:
+            # Extend deterministically instead of silently running fewer replicates.
+            seeds.extend(args.random_base_seed + i for i in range(len(seeds), args.random_replicates))
+    else:
+        seeds = [args.random_base_seed + i for i in range(args.random_replicates)]
+    seeds = seeds[:args.random_replicates]
     random = []
-    for seed in seeds[:args.random_replicates]:
+    for seed in seeds:
         fr = portfolio(d, months, formula, args.k, args.cost_bps, "random_dropout_0.80", seed=seed)
         h = fr.reindex(holdout).dropna() if len(fr) else pd.DataFrame()
         random.append({
@@ -208,6 +219,9 @@ def main():
         "scenarios": results,
         "random_dropout": {
             "keep_fraction": 0.80,
+            "requested_replicates": int(args.random_replicates),
+            "actual_replicates": int(len(random)),
+            "base_seed": int(args.random_base_seed),
             "replicates": random,
             "median_holdout_geo": float(np.median([x["frozen_holdout"]["geo"] for x in random])) if random else None,
             "positive_replicate_fraction": float(np.mean([x["frozen_holdout"]["geo"] > 0 for x in random])) if random else None,
@@ -215,6 +229,11 @@ def main():
         "survivorship_proxy": {
             "method": "current_survivor_only",
             "warning": "This is an explicit survivorship-bias stress, not an unbiased production universe.",
+        },
+        "replicate_contract": {
+            "requested": int(args.random_replicates),
+            "actual": int(len(random)),
+            "contract_satisfied": len(random) == args.random_replicates,
         },
         "interpretation_guard": "Fixed-formula diagnostic only; no scenario is used to re-select or tune the formula.",
     }
