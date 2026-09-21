@@ -820,6 +820,7 @@ async function endSession(status="CLOSED"){
   if(!sessionId) return;
 
   const closingSessionId=sessionId;
+  executionScheduler.cancelPending();
   sessionEndPromise=(async()=>{
     if(heartbeatTimer) clearInterval(heartbeatTimer);
     heartbeatTimer=undefined;
