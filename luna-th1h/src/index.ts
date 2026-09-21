@@ -375,7 +375,17 @@ async function main(){
 
   for await(const q of marketQuotes(config.marketDataProvider)){
     if(!sessionId) throw new Error("Session is not active");
-    await handleQuote(q);
+    try{
+      await handleQuote(q);
+    }catch(err){
+      console.error(JSON.stringify({
+        event:"LUNA_QUOTE_CYCLE_ERROR",
+        symbol:q.symbol,
+        ts:q.ts,
+        error:String(err)
+      }));
+      await new Promise(r=>setTimeout(r,500));
+    }
   }
 }
 
