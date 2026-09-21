@@ -17,7 +17,7 @@ try:
 except Exception:  # pragma: no cover
     Investor = None
 
-APP_VERSION = "0.4.0"
+APP_VERSION = "0.5.0"
 app = FastAPI(title="LUNA Execution + Market Data Gateway", version=APP_VERSION)
 
 LIVE_ARMED = os.getenv("LIVE_TRADING_ARMED", "false").lower() == "true"
@@ -155,6 +155,105 @@ def client():
         inv = investor_client()
         _equity = inv.Equity(account_no=os.getenv("SETTRADE_ACCOUNT_NO", ""))
     return _equity
+
+
+def _first_number(mapping: Dict[str, Any], keys):
+    for key in keys:
+        value = _num(mapping.get(key))
+        if value is not None:
+            return value
+    return None
+
+
+def _normalize_account_state(eq):
+    account_raw = eq.get_account_info()
+    portfolio_raw = eq.get_portfolio()
+
+    account_data = account_raw.get("data", {}) if isinstance(account_raw, dict) else {}
+    portfolio_data = portfolio_raw.get("data", []) if isinstance(portfolio_raw, dict) else []
+
+    if not isinstance(account_data, dict):
+        raise ProviderUnavailable("settrade_account_info_data_invalid")
+    if not isinstance(portfolio_data, list):
+        raise ProviderUnavailable("settrade_portfolio_data_invalid")
+
+    cash = _first_number(account_data, (
+        "cash_balance",
+        "available_cash",
+        "available_balance",
+        "cash",
+        "balance",
+    ))
+    if cash is None:
+        raise ProviderUnavailable("settrade_cash_balance_unavailable")
+
+    positions = []
+    unparsed = []
+    for row in portfolio_data:
+        if not isinstance(row, dict):
+            continue
+        symbol = str(
+            row.get("symbol")
+            or row.get("stock_symbol")
+            or row.get("symbol_code")
+            or ""
+        ).strip().upper()
+        if not symbol:
+            continue
+
+        qty = _first_number(row, (
+            "actual_volume",
+            "volume",
+            "qty",
+            "quantity",
+            "current_volume",
+        ))
+        avg_price = _first_number(row, (
+            "average_price",
+            "avg_price",
+            "cost_price",
+            "start_price",
+            "price",
+        ))
+        if qty is None or avg_price is None:
+            unparsed.append(symbol)
+            continue
+        if qty <= 0:
+            continue
+
+        positions.append({
+            "symbol": symbol,
+            "qty": qty,
+            "avg_price": avg_price,
+            "market_price": _first_number(row, (
+                "market_price",
+                "last_price",
+                "close_price",
+            )),
+            "market_value": _first_number(row, (
+                "market_value",
+                "amount",
+                "total_market_value",
+            )),
+            "unrealized_pnl": _first_number(row, (
+                "profit",
+                "unrealized_profit",
+            )),
+            "realized_pnl": _first_number(row, (
+                "realize_profit",
+                "realized_profit",
+            )),
+        })
+
+    return {
+        "ok": True,
+        "as_of": _now_iso(),
+        "cash": cash,
+        "positions": positions,
+        "unparsed_symbols": sorted(set(unparsed)),
+        "account_raw": account_raw,
+        "portfolio_raw": portfolio_raw,
+    }
 
 
 def _num(value):
@@ -805,6 +904,17 @@ def quote(symbol: str, x_luna_gateway: Optional[str] = Header(default=None)):
         "ok": True,
         "quote": {k: v for k, v in data.items() if k != "_ingested_ts"},
     }
+
+
+@app.get("/account-state")
+def account_state(x_luna_gateway: Optional[str] = Header(default=None)):
+    auth(x_luna_gateway)
+    eq = client()
+    try:
+        state = _normalize_account_state(eq)
+    except ProviderUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    return state
 
 
 @app.get("/portfolio")
