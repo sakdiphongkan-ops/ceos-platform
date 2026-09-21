@@ -62,7 +62,9 @@ def main():
 
     # Event availability can be after its economic effective date. That is valid.
     # The important leakage rule is enforced downstream: available_at <= decision_ts.
-    duplicate_key=[c for c in ["symbol","action_type","effective_date","ex_date","source_record_id"] if c in d.columns]
+    duplicate_key=[c for c in ["symbol","action_type","effective_date","ex_date"] if c in d.columns]
+    if "source_record_id" in d.columns and d["source_record_id"].notna().any():
+        duplicate_key.append("source_record_id")
     if duplicate_key:
         dup=int(d.duplicated(duplicate_key,keep=False).sum())
         if dup: issues.append({"check":"event_identity_unique","bad_rows":dup,"key":duplicate_key})
