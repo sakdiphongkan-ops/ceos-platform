@@ -473,7 +473,8 @@ def add_mtf_ratings(daily: pd.DataFrame, raw: pd.DataFrame) -> pd.DataFrame:
 
 def monthly_snapshot(df: pd.DataFrame) -> pd.DataFrame:
     # Use the last actual traded observation within each calendar month.
-    # Production M1 uses the last traded close, not a calendar-end NULL row.
+    # Production M1 signal is 20-trading-day adjusted-close momentum at this
+    # formation date, so retain the last daily M1_MOM20_ADJ observation.
     out=df.dropna(subset=["close"]).copy()
     out["month_end"]=out["date"].dt.to_period("M").dt.to_timestamp("M")
     monthly=(
@@ -483,13 +484,6 @@ def monthly_snapshot(df: pd.DataFrame) -> pd.DataFrame:
            .reset_index(drop=True)
            .sort_values(["symbol","month_end"])
     )
-    # Locked production M1 is the completed calendar-month return at month-end.
-    # Compute it from month-end adjusted closes so the tournament baseline is
-    # apple-to-apple with luna-m1s0k20rev-v1.
-    monthly["M1_MONTH_RETURN_CLOSE"] = monthly.groupby("symbol")["close"].pct_change()
-    # Locked production M1 uses raw close: current month-end close versus
-    # the previous month-end close, as implemented by luna_build_forecast_preorder.
-    monthly["M1_MOM20_ADJ"] = monthly["M1_MONTH_RETURN_CLOSE"]
     return monthly.reset_index(drop=True)
 
 
