@@ -238,6 +238,15 @@ function marketPhase(ts:string){
 }
 
 function getSignal(q:Quote):Signal{
+  const quoteTsMs=Date.parse(q.ts);
+  if(!Number.isFinite(quoteTsMs)){
+    return {symbol:q.symbol,ts:q.ts,action:"HOLD",reason:"INVALID_QUOTE_TIMESTAMP",strategyVersion:strategyV1.version};
+  }
+  const quoteAgeMs=Math.max(0,Date.now()-quoteTsMs);
+  if(quoteAgeMs>config.maxQuoteAgeMs){
+    return {symbol:q.symbol,ts:q.ts,action:"HOLD",reason:"STALE_QUOTE",strategyVersion:strategyV1.version};
+  }
+
   if(config.executionTest && q.symbol==="__LUNA_TEST__"){
     executionTestStep++;
     const action=executionTestStep===1?"BUY":executionTestStep===2?"SELL":"HOLD";
@@ -615,15 +624,21 @@ async function handleQuote(q:Quote){
           // Re-check the session immediately before execution. A signal may have
           // waited behind another order long enough to cross REDUCE_ONLY/CLOSED.
           const executionPhase=currentMarketPhase();
+          const quoteTsMs=Date.parse(q.ts);
+          const quoteAgeMs=Number.isFinite(quoteTsMs)
+            ? Math.max(0,Date.now()-quoteTsMs)
+            : Number.POSITIVE_INFINITY;
           const blockedByPhase =
             executionPhase==="CLOSED"
-            || (signal.action==="BUY" && executionPhase!=="ACTIVE");
+            || (signal.action==="BUY" && executionPhase!=="ACTIVE")
+            || quoteAgeMs>config.maxQuoteAgeMs;
           if(blockedByPhase){
             await queueAudit("ORDER_SUPPRESSED_MARKET_PHASE",{
               symbol:q.symbol,
               action:signal.action,
               market_phase:executionPhase,
-              quote_ts:q.ts
+              quote_ts:q.ts,
+              quote_age_ms:quoteAgeMs
             },signal.strategyVersion);
             return;
           }
