@@ -17,10 +17,10 @@ app = FastAPI(title="LUNA Execution + Market Data Gateway", version="0.3.0")
 
 LIVE_ARMED = os.getenv("LIVE_TRADING_ARMED", "false").lower() == "true"
 GATEWAY_KEY = os.getenv("LUNA_GATEWAY_KEY", "")
-BROKER_ID = os.getenv("SETTRADE_BROKER_ID", "")
-APP_ID = os.getenv("SETTRADE_APP_ID", "")
-APP_SECRET = os.getenv("SETTRADE_APP_SECRET", "")
-APP_CODE = os.getenv("SETTRADE_APP_CODE", "")
+BROKER_ID = os.getenv("LUNA_SETTRADE_BROKER_ID") or os.getenv("SETTRADE_BROKER_ID", "")
+APP_ID = os.getenv("LUNA_SETTRADE_APP_ID") or os.getenv("SETTRADE_APP_ID", "")
+APP_SECRET = os.getenv("LUNA_SETTRADE_APP_SECRET") or os.getenv("SETTRADE_APP_SECRET", "")
+APP_CODE = os.getenv("LUNA_SETTRADE_APP_CODE") or os.getenv("SETTRADE_APP_CODE", "")
 
 REALTIME_ENABLED = os.getenv("REALTIME_MARKETDATA_ENABLED", "false").lower() == "true"
 REALTIME_BOOK = os.getenv("REALTIME_BID_OFFER_ENABLED", "true").lower() == "true"
