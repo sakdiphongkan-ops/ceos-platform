@@ -110,7 +110,7 @@ export class StrategyV1{
     const momentumBps=previousPrice?((price/previousPrice)-1)*10_000:0;
 
     if(st.prices.length<this.params.slowPeriod || st.emaFast===null || st.emaSlow===null){
-      return {symbol:q.symbol,ts:q.ts,action:"HOLD",reason:"WARMUP",strategyVersion:VERSION};
+      return {symbol:q.symbol,ts:q.ts,action:"HOLD",reason:"WARMUP",strategyVersion:this.version};
     }
 
     if(ctx.positionQty>0){
@@ -122,26 +122,26 @@ export class StrategyV1{
 
       if(trendBroken){
         st.lastDecisionTs=ctx.nowMs; st.entryTs=null;
-        return {symbol:q.symbol,ts:q.ts,action:"SELL",reason:"EMA_TREND_BREAK",strategyVersion:VERSION};
+        return {symbol:q.symbol,ts:q.ts,action:"SELL",reason:"EMA_TREND_BREAK",strategyVersion:this.version};
       }
       if(price<=stopLoss){
         st.lastDecisionTs=ctx.nowMs; st.entryTs=null;
-        return {symbol:q.symbol,ts:q.ts,action:"SELL",reason:"STOP_LOSS",strategyVersion:VERSION};
+        return {symbol:q.symbol,ts:q.ts,action:"SELL",reason:"STOP_LOSS",strategyVersion:this.version};
       }
       if(price>=takeProfit){
         st.lastDecisionTs=ctx.nowMs; st.entryTs=null;
-        return {symbol:q.symbol,ts:q.ts,action:"SELL",reason:"TAKE_PROFIT",strategyVersion:VERSION};
+        return {symbol:q.symbol,ts:q.ts,action:"SELL",reason:"TAKE_PROFIT",strategyVersion:this.version};
       }
       if(timedOut){
         st.lastDecisionTs=ctx.nowMs; st.entryTs=null;
-        return {symbol:q.symbol,ts:q.ts,action:"SELL",reason:"MAX_HOLD_TIME",strategyVersion:VERSION};
+        return {symbol:q.symbol,ts:q.ts,action:"SELL",reason:"MAX_HOLD_TIME",strategyVersion:this.version};
       }
 
-      return {symbol:q.symbol,ts:q.ts,action:"HOLD",reason:"HOLD_POSITION",strategyVersion:VERSION};
+      return {symbol:q.symbol,ts:q.ts,action:"HOLD",reason:"HOLD_POSITION",strategyVersion:this.version};
     }
 
     if(ctx.nowMs-st.lastDecisionTs<this.params.cooldownMs){
-      return {symbol:q.symbol,ts:q.ts,action:"HOLD",reason:"COOLDOWN",strategyVersion:VERSION};
+      return {symbol:q.symbol,ts:q.ts,action:"HOLD",reason:"COOLDOWN",strategyVersion:this.version};
     }
 
     const trendUp=st.emaFast>st.emaSlow;
@@ -156,14 +156,14 @@ export class StrategyV1{
       return {
         symbol:q.symbol,ts:q.ts,action:"BUY",
         reason:`${this.priceOnlyFallback && !hasBook ? "PRICE_ONLY_FALLBACK " : ""}EMA_TREND_UP momentum=${momentumBps.toFixed(2)}bps spread=${spreadBps.toFixed(2)}bps imbalance=${imbalance.toFixed(3)}`,
-        strategyVersion:VERSION
+        strategyVersion:this.version
       };
     }
 
     return {
       symbol:q.symbol,ts:q.ts,action:"HOLD",
       reason:`${this.priceOnlyFallback && !hasBook ? "PRICE_ONLY_FALLBACK " : ""}NO_ENTRY momentum=${momentumBps.toFixed(2)}bps spread=${spreadBps.toFixed(2)}bps imbalance=${imbalance.toFixed(3)}`,
-      strategyVersion:VERSION
+      strategyVersion:this.version
     };
   }
 }
