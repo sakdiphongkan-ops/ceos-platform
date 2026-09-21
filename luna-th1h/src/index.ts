@@ -238,6 +238,7 @@ async function getExecutionControl(){
 async function preflightLive(){
   if(config.executionMode!=="live") throw new Error("LIVE_EXECUTION_MODE_REQUIRED");
   if(config.mode!=="live") throw new Error("LUNA_MODE_MUST_BE_LIVE_FOR_LIVE_EXECUTION");
+  if(!config.liveReconciliation) throw new Error("LIVE_RECONCILIATION_MUST_BE_ENABLED");
   if(String(process.env.LIVE_RECONCILIATION_READY ?? "false").toLowerCase()!=="true"){
     throw new Error("LIVE_RECONCILIATION_NOT_READY");
   }
