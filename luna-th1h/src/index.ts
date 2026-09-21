@@ -1,7 +1,8 @@
 import {config} from "./config.js";
 import {marketQuotes} from "./market/provider.js";
 import {StrategyV1,VERSION as STRATEGY_V1_VERSION} from "./strategy-v1.js";
-import {liveGatewayDiagnostics,liveGatewayHealth,placeLiveOrder} from "./live-gateway.js";
+import {liveGatewayDiagnostics,liveGatewayHealth,placeLiveOrder,reconcileLiveOrders} from "./live-gateway.js";
+import {transitionBrokerOrder,type BrokerOrderState} from "./broker-state.js";
 import {applyFill,createPortfolio,mark,planOrder,simulateFill,snapshot, type PortfolioState} from "./execution.js";
 import type {Quote,Signal} from "./types.js";
 
@@ -14,6 +15,7 @@ let heartbeatTimer:NodeJS.Timeout|undefined;
 let portfolio:PortfolioState;
 let executionTestStep=0;
 let lastSnapshotAt=0;
+let lastReconciliationAt=0;
 let sessionStartPromise:Promise<void>|null=null;
 let sessionEndPromise:Promise<void>|null=null;
 let auditQueueTail:Promise<void>=Promise.resolve();
@@ -23,6 +25,7 @@ const symbolChains=new Map<string,Promise<void>>();
 let executionChain:Promise<void>=Promise.resolve();
 const lastPersistBySymbol=new Map<string,number>();
 const prewarmedSymbols=new Set<string>();
+const liveOrderStates=new Map<string,BrokerOrderState>();
 const PERSIST_HOLD_MS=5_000;
 const SNAPSHOT_MS=1_000;
 const MAX_ANALYSIS_CONCURRENCY=16;
@@ -320,6 +323,17 @@ async function executeSignal(q:Quote,signal:Signal){
         qty:brokerOrder.qty,
         price:brokerOrder.price
       },signal.strategyVersion);
+      liveOrderStates.set(clientOrderId,{
+        clientOrderId,
+        brokerOrderId:brokerOrder.broker_order_id,
+        symbol:brokerOrder.symbol,
+        side:brokerOrder.side,
+        submittedQty:brokerOrder.qty,
+        filledQty:0,
+        avgFillPrice:null,
+        status:"SUBMITTED",
+        updatedAtMs:Date.now()
+      });
       console.log(JSON.stringify({event:"LIVE_ORDER_SUBMITTED",brokerOrderId:brokerOrder.broker_order_id}));
       return;
     }catch(err){
@@ -394,6 +408,91 @@ function quoteSessionDate(ts:string){
   return new Intl.DateTimeFormat("en-CA",{
     timeZone:config.timezone,year:"numeric",month:"2-digit",day:"2-digit"
   }).format(new Date(ts));
+}
+
+async function reconcileLiveOrderStates(){
+  if(!config.liveReconciliation || config.executionMode!=="live") return;
+  const pending=[...liveOrderStates.values()]
+    .filter(x=>!["FILLED","CANCELED","REJECTED"].includes(x.status));
+  if(pending.length===0) return;
+  try{
+    const updates=await reconcileLiveOrders(pending.map(x=>x.clientOrderId));
+    for(const u of updates){
+      const current=liveOrderStates.get(u.client_order_id);
+      if(!current) continue;
+      let next;
+      try{
+        next=transitionBrokerOrder(current,{
+          brokerOrderId:u.broker_order_id??current.brokerOrderId,
+          status:String(u.status).toUpperCase() as BrokerOrderState["status"],
+          filledQty:Number(u.filled_qty??current.filledQty),
+          avgFillPrice:u.avg_fill_price??current.avgFillPrice,
+          updatedAtMs:Number(u.updated_at_ms??Date.now())
+        });
+      }catch(err){
+        queueAudit("BROKER_STATE_TRANSITION_ERROR",{
+          client_order_id:u.client_order_id,error:String(err),update:u
+        });
+        continue;
+      }
+
+      const deltaQty=next.filledQty-current.filledQty;
+      if(deltaQty>0 && next.avgFillPrice && next.avgFillPrice>0){
+        const quote=portfolio.marks[current.symbol];
+        const reference=quote
+          ? (current.side==="BUY"?(quote.ask??quote.last??next.avgFillPrice):(quote.bid??quote.last??next.avgFillPrice))
+          : next.avgFillPrice;
+        const feeRate=config.feeBps/10000+(current.side==="SELL"?config.sellTaxBps/10000:0);
+        const notional=next.avgFillPrice*deltaQty;
+        const fee=notional*feeRate;
+        const slippage=Math.abs(next.avgFillPrice-reference)*deltaQty;
+        const response=await ingest("",{
+          action:"record_fill",
+          session_id:sessionId,
+          fill:{
+            client_order_id:current.clientOrderId,
+            broker_order_id:next.brokerOrderId,
+            symbol:current.symbol,
+            side:current.side,
+            qty:deltaQty,
+            order_price:reference,
+            fill_price:next.avgFillPrice,
+            fee,
+            slippage,
+            ts:new Date(next.updatedAtMs).toISOString(),
+            reason:"BROKER_RECONCILIATION",
+            strategy_version:activeStrategyVersion()
+          }
+        });
+        const result=(response as {result?:{idempotent?:boolean}})?.result;
+        if(result && !result.idempotent){
+          applyFill(portfolio,{
+            symbol:current.symbol,
+            side:current.side,
+            qty:deltaQty,
+            referencePrice:reference,
+            fillPrice:next.avgFillPrice,
+            notional,
+            fee,
+            slippage,
+            totalCashDelta:current.side==="BUY"?-(notional+fee):(notional-fee)
+          });
+        }
+      }
+
+      liveOrderStates.set(current.clientOrderId,next);
+      queueAudit("BROKER_ORDER_RECONCILED",{
+        client_order_id:next.clientOrderId,
+        broker_order_id:next.brokerOrderId,
+        status:next.status,
+        filled_qty:next.filledQty,
+        avg_fill_price:next.avgFillPrice,
+        delta_qty:deltaQty
+      });
+    }
+  }catch(err){
+    queueAudit("BROKER_RECONCILIATION_ERROR",{error:String(err)});
+  }
 }
 
 async function prewarmStrategy(q:Quote){
@@ -522,6 +621,10 @@ async function handleQuote(q:Quote){
 
   if(!heartbeatTimer){
     heartbeatTimer=setInterval(()=>{
+      const now=Date.now();
+      const recon = config.liveReconciliation && config.executionMode==="live" && now-lastReconciliationAt>=config.liveReconciliationMs
+        ? (lastReconciliationAt=now, reconcileLiveOrderStates())
+        : Promise.resolve();
       Promise.all([
         queueAudit("HEARTBEAT",{
           provider:config.marketDataProvider,
@@ -529,9 +632,10 @@ async function handleQuote(q:Quote){
           market_phase:currentMarketPhase(),
           execution_test:config.executionTest
         }),
-        writeSnapshot()
+        writeSnapshot(),
+        recon
       ]).catch(err=>console.error(JSON.stringify({event:"HEARTBEAT_ERROR",error:String(err)})));
-    },60_000);
+    },1_000);
   }
 }
 
