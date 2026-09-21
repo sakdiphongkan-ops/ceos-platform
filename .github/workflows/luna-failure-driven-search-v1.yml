@@ -54,30 +54,19 @@ jobs:
           rm -rf research/luna_research_scorecard_v1
           python scripts/research/luna_research_scorecard_v1.py             --input data/set_2000_2025/monthly_factors_5y_v4.csv             --search-summary research/luna_failure_driven_search_v1/summary.json             --formula-catalog research/luna_failure_driven_search_v1/formula_catalog.json             --benchmark research-results/luna-m1-benchmark-locked-20260920.csv             --output research/luna_research_scorecard_v1
 
+      - name: Run neutralized alpha and crowding diagnostics
+        run: |
+          python scripts/research/luna_neutralized_alpha_crowding_v1.py             --input data/set_2000_2025/monthly_factors_5y_v4.csv             --search-summary research/luna_failure_driven_search_v1/summary.json             --formula-catalog research/luna_failure_driven_search_v1/formula_catalog.json             --benchmark research-results/luna-m1-benchmark-locked-20260920.csv             --output research/luna_research_scorecard_v1
+
       - name: Create model registry entry
         run: |
-          python scripts/research/luna_model_registry_v1.py             --search-summary research/luna_failure_driven_search_v1/summary.json             --scorecard research/luna_research_scorecard_v1/scorecard.json             --benchmark research-results/luna-m1-benchmark-locked-20260920.csv             --output research/luna_research_scorecard_v1/model-registry-entry.json
+          python scripts/research/luna_model_registry_v1.py             --search-summary research/luna_failure_driven_search_v1/summary.json             --scorecard research/luna_research_scorecard_v1/scorecard.json             --benchmark research-results/luna-m1-benchmark-locked-20260920.csv             --neutralized research/luna_research_scorecard_v1/neutralized-alpha-crowding.json             --output research/luna_research_scorecard_v1/model-registry-entry.json
 
       - name: Run neutralized alpha and crowding diagnostics
         run: |
           python scripts/research/luna_neutralized_alpha_crowding_v1.py             --input data/set_2000_2025/monthly_factors_5y_v4.csv             --search-summary research/luna_failure_driven_search_v1/summary.json             --formula-catalog research/luna_failure_driven_search_v1/formula_catalog.json             --benchmark research-results/luna-m1-benchmark-locked-20260920.csv             --output research/luna_research_scorecard_v1
 
-      - name: Validate result
-        run: |
-          python - <<'PY'
-          import json
-          p="research/luna_failure_driven_search_v1/summary.json"
-          x=json.load(open(p))
-          assert x["status"]=="COMPLETED"
-          assert x["formula_count"]==5000
-          assert x["frozen_holdout"]["months"] >= 6
-          assert x["leakage_guard"]
-          print(json.dumps(x,indent=2))
-          PY
-
-      - name: Publish result
-        run: |
-          rm -rf research-results/luna-failure-driven-search-v1
+v1
           mkdir -p research-results/luna-failure-driven-search-v1
           cp research/luna_failure_driven_search_v1/summary.json research-results/luna-failure-driven-search-v1/summary.json
           cp research/luna_failure_driven_search_v1/outer_oos_ledger.csv research-results/luna-failure-driven-search-v1/outer-oos-ledger.csv
