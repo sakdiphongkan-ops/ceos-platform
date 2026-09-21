@@ -165,6 +165,60 @@ def _first_number(mapping: Dict[str, Any], keys):
     return None
 
 
+def _normalize_open_orders(eq):
+    getter = getattr(eq, "get_orders", None)
+    if not callable(getter):
+        raise ProviderUnavailable("settrade_get_orders_method_unavailable")
+
+    raw = getter()
+    data = raw.get("data", []) if isinstance(raw, dict) else []
+    if not isinstance(data, list):
+        raise ProviderUnavailable("settrade_orders_data_invalid")
+
+    terminal = {
+        "MATCHED", "FILLED", "CANCELLED", "CANCELED",
+        "REJECTED", "EXPIRED", "COMPLETED", "DONE"
+    }
+    active = []
+    for row in data:
+        if not isinstance(row, dict):
+            continue
+        status = str(
+            row.get("status")
+            or row.get("order_status")
+            or row.get("show_order_status")
+            or ""
+        ).strip().upper()
+        if status in terminal:
+            continue
+        active.append({
+            "order_id": str(
+                row.get("order_no")
+                or row.get("order_id")
+                or row.get("orderNo")
+                or ""
+            ),
+            "symbol": str(row.get("symbol") or "").strip().upper(),
+            "side": str(row.get("side") or "").strip().upper(),
+            "status": status or "UNKNOWN",
+            "volume": _num(
+                row.get("volume")
+                if row.get("volume") is not None
+                else row.get("qty")
+            ),
+            "matched_volume": _num(
+                row.get("matched_volume")
+                if row.get("matched_volume") is not None
+                else row.get("filled_volume")
+            ),
+        })
+    return {
+        "ok": True,
+        "as_of": _now_iso(),
+        "open_orders": active,
+    }
+
+
 def _normalize_account_state(eq):
     account_raw = eq.get_account_info()
     portfolio_raw = eq.get_portfolio()
@@ -913,6 +967,17 @@ def account_state(x_luna_gateway: Optional[str] = Header(default=None)):
     eq = client()
     try:
         state = _normalize_account_state(eq)
+    except ProviderUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    return state
+
+
+@app.get("/open-orders")
+def open_orders(x_luna_gateway: Optional[str] = Header(default=None)):
+    auth(x_luna_gateway)
+    eq = client()
+    try:
+        state = _normalize_open_orders(eq)
     except ProviderUnavailable as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     return state
