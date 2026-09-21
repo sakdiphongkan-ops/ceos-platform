@@ -13,6 +13,7 @@ on:
       - scripts/research/luna_neutralized_alpha_crowding_v1.py
       - scripts/research/luna_model_registry_v1.py
       - scripts/research/luna_research_quality_gate_v2.py
+      - scripts/research/luna_dependent_data_multiple_testing_v1.py
       - research-results/luna-m1-benchmark-locked-20260920.csv
 
 concurrency:
@@ -68,6 +69,16 @@ jobs:
           rm -rf research/luna_failure_driven_search_v1
           python scripts/research/luna_failure_driven_search_v1.py             --input data/set_2000_2025/monthly_factors_5y_v4.csv             --benchmark research-results/luna-m1-benchmark-locked-20260920.csv             --output research/luna_failure_driven_search_v1             --formula-count 5000             --seed 20260921             --k 20             --cost-bps 20             --lookback-months 24             --inner-train-months 12             --inner-valid-months 6             --outer-holdout-months 12             --min-history-months 9
 
+      - name: Run dependent-data multiple-testing diagnostic
+        run: |
+          python scripts/research/luna_dependent_data_multiple_testing_v1.py \
+            --return-matrix research/luna_failure_driven_search_v1/formula_return_matrix.csv.gz \
+            --summary research/luna_failure_driven_search_v1/summary.json \
+            --output research/luna_research_scorecard_v1/multiple-testing.json \
+            --bootstrap-count 500 \
+            --block-length 3 \
+            --seed 20260921
+
       - name: Run institutional scorecard
         run: |
           rm -rf research/luna_research_scorecard_v1
@@ -103,10 +114,13 @@ jobs:
           assert n["status"]=="COMPLETED"
           g=json.load(open("research/luna_research_scorecard_v1/promotion-gate.json"))
           assert g["status"]=="COMPLETED"
+          mt=json.load(open("research/luna_research_scorecard_v1/multiple-testing.json"))
+          assert mt["status"]=="COMPLETED"
           print(json.dumps({
               "search": x,
               "neutralized": n,
               "promotion_gate": g,
+              "multiple_testing": mt,
           }, indent=2))
           PY
 
@@ -116,6 +130,7 @@ jobs:
           mkdir -p research-results/luna-failure-driven-search-v1
           cp research/luna_failure_driven_search_v1/summary.json research-results/luna-failure-driven-search-v1/summary.json
           cp research/luna_failure_driven_search_v1/outer_oos_ledger.csv research-results/luna-failure-driven-search-v1/outer-oos-ledger.csv
+          cp research/luna_failure_driven_search_v1/formula_return_matrix.csv.gz research-results/luna-failure-driven-search-v1/formula-return-matrix.csv.gz
           cp research/luna_failure_driven_search_v1/formula_catalog.json research-results/luna-failure-driven-search-v1/formula-catalog.json
           cp research/luna_failure_driven_search_v1/final_selection_board.csv research-results/luna-failure-driven-search-v1/final-selection-board.csv
           cp research/luna_failure_driven_search_v1/full_period_descriptive.csv research-results/luna-failure-driven-search-v1/full-period-descriptive.csv
@@ -123,6 +138,7 @@ jobs:
           cp research/luna_research_scorecard_v1/neutralized-alpha-crowding.json research-results/luna-failure-driven-search-v1/neutralized-alpha-crowding.json
           cp research/luna_research_scorecard_v1/model-registry-entry.json research-results/luna-failure-driven-search-v1/model-registry-entry.json
           cp research/luna_research_scorecard_v1/promotion-gate.json research-results/luna-failure-driven-search-v1/promotion-gate.json
+          cp research/luna_research_scorecard_v1/multiple-testing.json research-results/luna-failure-driven-search-v1/multiple-testing.json
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add research-results/luna-failure-driven-search-v1
