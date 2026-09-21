@@ -286,14 +286,6 @@ async function createInitialPortfolio(){
     };
   }
 
-  queueAudit("BROKER_PORTFOLIO_RECONCILED",{
-    broker_as_of:broker.as_of,
-    broker_cash:broker.cash,
-    position_count:Object.keys(state.positions).length,
-    symbols:Object.keys(state.positions).sort(),
-    risk_capital:state.initialCapital
-  },activeStrategyVersion());
-
   return state;
 }
 
@@ -320,6 +312,14 @@ async function startSession(){
   if(!data.session?.id) throw new Error("Supabase did not return a session id");
   sessionId=data.session.id;
   sessionDate=todayInTimezone(config.timezone);
+  if(config.mode==="live" || config.executionMode==="live"){
+    queueAudit("BROKER_PORTFOLIO_RECONCILED",{
+      broker_cash:portfolio.cash,
+      position_count:Object.keys(portfolio.positions).length,
+      symbols:Object.keys(portfolio.positions).sort(),
+      risk_capital:portfolio.initialCapital
+    },activeStrategyVersion());
+  }
   queueAudit("SESSION_STARTED",{
     provider:config.marketDataProvider,
     capital:config.initialCapital,
