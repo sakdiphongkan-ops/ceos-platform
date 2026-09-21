@@ -1,4 +1,5 @@
 import type {Quote,Signal} from "./types.js";
+import {computeSignalSizing} from "./sizing.js";
 
 export const VERSION="luna-th1h-v1.0.0";
 export const PRICE_ONLY_VERSION="luna-th1h-v1.0.0-price-only-paper-warm5";
@@ -166,6 +167,7 @@ export class StrategyV1{
     }
 
     const trendUp=st.emaFast>st.emaSlow;
+    const trendGapBps=st.emaSlow>0?((st.emaFast/st.emaSlow)-1)*10_000:0;
 
     const entryOk = trendUp
       && momentumBps>=this.params.minMomentumBps
@@ -174,13 +176,27 @@ export class StrategyV1{
     if(entryOk){
       st.lastDecisionTs=ctx.nowMs;
       st.entryTs=ctx.nowMs;
+      const sizing=computeSignalSizing({
+        momentumBps,
+        minMomentumBps:this.params.minMomentumBps,
+        trendGapBps,
+        hasBook,
+        dataQuality:q.dataQuality
+      });
       return {
         symbol:q.symbol,ts:q.ts,action:"BUY",
-        reason:`${this.priceOnlyFallback && !hasBook ? "PRICE_ONLY_FALLBACK " : ""}EMA_TREND_UP momentum=${momentumBps.toFixed(2)}bps spread=${spreadBps.toFixed(2)}bps imbalance=${imbalance.toFixed(3)}`,
-        strategyVersion:this.version
+        reason:(this.priceOnlyFallback && !hasBook ? "PRICE_ONLY_FALLBACK " : "")
+          + "EMA_TREND_UP momentum="+momentumBps.toFixed(2)+"bps"
+          + " spread="+spreadBps.toFixed(2)+"bps"
+          + " imbalance="+imbalance.toFixed(3)
+          + " strength="+sizing.strength.toFixed(3)
+          + " target="+(sizing.targetFraction*100).toFixed(1)+"%",
+        strategyVersion:this.version,
+        signalStrength:sizing.strength,
+        targetAllocationPct:sizing.targetFraction*100,
+        sizingReason:sizing.reason
       };
     }
-
     return {
       symbol:q.symbol,ts:q.ts,action:"HOLD",
       reason:`${this.priceOnlyFallback && !hasBook ? "PRICE_ONLY_FALLBACK " : ""}NO_ENTRY momentum=${momentumBps.toFixed(2)}bps spread=${spreadBps.toFixed(2)}bps imbalance=${imbalance.toFixed(3)}`,
