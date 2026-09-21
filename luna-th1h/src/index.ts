@@ -376,14 +376,6 @@ async function startSession(){
   sessionId=data.session.id;
   sessionDate=todayInTimezone(config.timezone);
   lastLiveAccountStateSyncAt=Date.now();
-  if(config.mode==="live" || config.executionMode==="live"){
-    queueAudit("BROKER_PORTFOLIO_RECONCILED",{
-      broker_cash:portfolio.cash,
-      position_count:Object.keys(portfolio.positions).length,
-      symbols:Object.keys(portfolio.positions).sort(),
-      risk_capital:portfolio.initialCapital
-    },activeStrategyVersion());
-  }
   queueAudit("SESSION_STARTED",{
     provider:config.marketDataProvider,
     capital:config.initialCapital,
@@ -394,6 +386,14 @@ async function startSession(){
     timezone:config.timezone,
     market_phase:currentMarketPhase()
   });
+  if(config.mode==="live" || config.executionMode==="live"){
+    queueAudit("BROKER_PORTFOLIO_RECONCILED",{
+      broker_cash:portfolio.cash,
+      position_count:Object.keys(portfolio.positions).length,
+      symbols:Object.keys(portfolio.positions).sort(),
+      risk_capital:portfolio.initialCapital
+    },activeStrategyVersion());
+  }
   void writeSnapshot().catch(err=>console.error(JSON.stringify({
     event:"SESSION_START_SNAPSHOT_ERROR",
     error:String(err)
