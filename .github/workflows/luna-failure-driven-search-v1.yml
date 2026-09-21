@@ -5,6 +5,7 @@ name: LUNA Failure-Driven Search v1
 # luna-search-v1 trigger: PIT security-master validation
 # luna-search-v1 trigger: PIT fundamentals + corporate-actions validation
 # luna-search-v1 trigger: immutable promotion-gate lineage
+# luna-search-v1 trigger: Python syntax validation
 
 on:
   push:
@@ -54,6 +55,10 @@ jobs:
 
       - name: Install dependencies
         run: python -m pip install -U pip pandas numpy python-dateutil
+
+      - name: Python syntax validation
+        run: |
+          python -m py_compile             scripts/research/luna_failure_driven_search_v1.py             scripts/research/luna_research_scorecard_v1.py             scripts/research/luna_neutralized_alpha_crowding_v1.py             scripts/research/luna_research_quality_gate_v2.py             scripts/research/luna_dependent_data_multiple_testing_v1.py             scripts/research/luna_fresh_seed_replication_v1.py             scripts/research/luna_universe_robustness_v1.py             scripts/research/luna_sector_industry_neutralization_v1.py             scripts/research/luna_symbol_lifecycle_diagnostic_v1.py             scripts/research/validate_pit_security_master_v1.py             scripts/research/validate_pit_fundamentals_v1.py             scripts/research/validate_corporate_actions_v1.py             scripts/research/luna_model_registry_v1.py
 
       - name: Download historical SET dataset
         run: |
