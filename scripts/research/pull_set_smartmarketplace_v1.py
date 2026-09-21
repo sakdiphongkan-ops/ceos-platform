@@ -10,6 +10,9 @@ Supported built-in endpoints are limited to URLs confirmed by SET documentation:
 - financial_statement_all
 - financial_statement_last_update
 Use --url for other documented endpoints.
+
+SET documents a 30 requests/minute rate limit and a minimum 2-second interval between
+consecutive requests for Company Fundamental Data; batch orchestration must enforce it.
 """
 from __future__ import annotations
 
@@ -27,6 +30,10 @@ ENDPOINTS = {
     "security_profile": "https://marketplace.set.or.th/api/public/reference-data/security-profile",
     "financial_statement_all": "https://marketplace.set.or.th/api/public/financial-statement/all",
     "financial_statement_last_update": "https://marketplace.set.or.th/api/public/financial-statement/last-update-date",
+    "fundamental_eod_by_symbol": "https://www.setsmart.com/api/listed-company-api/eod-price-by-symbol",
+    "fundamental_eod_all_symbols": "https://www.setsmart.com/api/listed-company-api/eod-price-by-security-type",
+    "financial_data_by_symbol": "https://www.setsmart.com/api/listed-company-api/financial-data-and-ratio-by-symbol",
+    "financial_data_all_symbols": "https://www.setsmart.com/api/listed-company-api/financial-data-and-ratio",
 }
 
 
