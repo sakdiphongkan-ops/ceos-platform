@@ -43,7 +43,7 @@ type Trade = {
 };
 
 const LUNA_API = "https://wigzicwgcsrhdummrbjx.supabase.co/functions/v1/luna-api";
-const LUNA_STRATEGY = "luna-m2s0k20rev-r25e50-v1.0";
+const LUNA_STRATEGY = "luna-th1h-v1.0.0";
 const TIMEFRAME = "15m";
 
 type LunaFeed = {
