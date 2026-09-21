@@ -33,10 +33,13 @@ export const config={
   marketDataGatewayPollMs:num("LUNA_MARKET_GATEWAY_POLL_MS",100),
   maxQuoteAgeMs:num("LUNA_MAX_QUOTE_AGE_MS",3000),
   maxExecutionConcurrency:num("LUNA_MAX_EXECUTION_CONCURRENCY",4),
+  heartbeatMs:num("LUNA_HEARTBEAT_MS",5000),
+  decisionLogMode:process.env.LUNA_DECISION_LOG_MODE ?? "signals",
   reduceOnlyTime:process.env.LUNA_REDUCE_ONLY_TIME ?? "16:20",
   forceCloseTime:process.env.LUNA_FORCE_CLOSE_TIME ?? "16:25",
   supabaseUrl:process.env.SUPABASE_URL ?? "",
   supabaseAnonKey:process.env.SUPABASE_ANON_KEY ?? "",
   supabaseFunctionUrl:process.env.SUPABASE_FUNCTION_URL ?? "",
+  supabaseRequestTimeoutMs:num("LUNA_SUPABASE_REQUEST_TIMEOUT_MS",3000),
   lunaAgentKey:process.env.LUNA_AGENT_KEY ?? "",
 };
