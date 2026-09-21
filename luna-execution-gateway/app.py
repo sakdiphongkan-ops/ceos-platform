@@ -215,10 +215,13 @@ def _normalize_account_state(eq):
             "start_price",
             "price",
         ))
-        if qty is None or avg_price is None:
+        if qty is None:
             unparsed.append(symbol)
             continue
         if qty <= 0:
+            continue
+        if avg_price is None or avg_price <= 0:
+            unparsed.append(symbol)
             continue
 
         positions.append({
