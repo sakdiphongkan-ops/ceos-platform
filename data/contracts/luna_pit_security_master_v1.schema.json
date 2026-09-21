@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://luna.local/contracts/pit-security-master-v1.json",
+  "title": "LUNA Point-in-Time Security Master v1",
+  "type": "object",
+  "required": [
+    "symbol",
+    "effective_from",
+    "available_at"
+  ],
+  "properties": {
+    "symbol": {
+      "type": "string",
+      "minLength": 1
+    },
+    "isin": {
+      "type": ["string", "null"]
+    },
+    "security_name": {
+      "type": ["string", "null"]
+    },
+    "market": {
+      "type": ["string", "null"]
+    },
+    "sector": {
+      "type": ["string", "null"]
+    },
+    "sector_code": {
+      "type": ["string", "null"]
+    },
+    "industry": {
+      "type": ["string", "null"]
+    },
+    "industry_code": {
+      "type": ["string", "null"]
+    },
+    "listed_date": {
+      "type": ["string", "null"],
+      "format": "date"
+    },
+    "delist_date": {
+      "type": ["string", "null"],
+      "format": "date"
+    },
+    "effective_from": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "effective_to": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "available_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source": {
+      "type": ["string", "null"]
+    },
+    "source_record_id": {
+      "type": ["string", "null"]
+    }
+  },
+  "additionalProperties": false
+}
