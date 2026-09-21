@@ -392,6 +392,9 @@ async function main(){
   }));
 
   if(!["paper","live"].includes(config.mode)) throw new Error(`Unknown LUNA_MODE: ${config.mode}`);
+  if(config.priceOnlyFallback && (config.mode==="live" || config.executionMode==="live")){
+    throw new Error("PRICE_ONLY_FALLBACK_IS_PAPER_ONLY");
+  }
   if(config.mode==="live" || config.executionMode==="live") await preflightLive();
   if(!["mock","set-marketplace","settrade-gateway"].includes(config.marketDataProvider)){
     throw new Error(`Unknown MARKET_DATA_PROVIDER: ${config.marketDataProvider}`);
