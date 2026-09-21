@@ -275,8 +275,8 @@ async function createInitialPortfolio(){
       ].join("/")).join(",")
     );
   }
-  if(!Number.isFinite(broker.cash) || broker.cash<0){
-    throw new Error("LIVE_BROKER_CASH_INVALID");
+  if(!Number.isFinite(broker.cash) || broker.cash<0 || !Number.isFinite(broker.equity_value) || broker.equity_value<broker.cash){
+    throw new Error("LIVE_BROKER_ACCOUNT_VALUE_INVALID");
   }
   if(broker.unparsed_symbols.length>0){
     throw new Error(
@@ -284,7 +284,7 @@ async function createInitialPortfolio(){
     );
   }
 
-  const state=createPortfolio(config.initialCapital);
+  const state=createPortfolio(broker.equity_value);
   state.cash=broker.cash;
 
   for(const item of broker.positions){
