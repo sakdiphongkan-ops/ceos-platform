@@ -19,7 +19,8 @@
     "research:v2": "tsx src/replay-research-v2.ts",
     "test:latency": "tsx src/latency-harness.ts",
     "test:market-session": "tsx src/market-session.test.ts",
-    "test:strategy-state": "tsx src/strategy-v1.test.ts"
+    "test:strategy-state": "tsx src/strategy-v1.test.ts",
+    "test:execution-reservations": "tsx src/execution-reservation.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.0"
