@@ -151,6 +151,14 @@ def main():
     for fml in formulas:
         candidates[fml["id"]]=formula_returns(d,months,rows,ranks,fml,args.k,args.cost_bps)
 
+    # Persist the complete monthly return matrix so downstream statistical
+    # diagnostics can test the full searched family without recomputing signals.
+    return_matrix=pd.DataFrame({
+        fid: fr["net_return"].reindex(months)
+        for fid,fr in candidates.items()
+    }, index=pd.Index(months,name="month_end"))
+    return_matrix.to_csv(out/"formula_return_matrix.csv.gz",compression="gzip")
+
     # Frozen holdout: NEVER used in candidate construction/selection.
     holdout=months[-args.outer_holdout_months:]
     development=months[:-args.outer_holdout_months]
