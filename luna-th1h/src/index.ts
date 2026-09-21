@@ -493,34 +493,32 @@ async function handleQuote(q:Quote){
     analysis_ms:Date.now()-startedAt
   }));
 
-  if(signal.action==="HOLD"){
-    return;
+  if(signal.action!=="HOLD"){
+    const executionQueuedAt=Date.now();
+    executionChain=executionChain
+      .catch(()=>undefined)
+      .then(async()=>{
+        try{
+          await executeSignal(q,signal);
+          console.log(JSON.stringify({
+            event:"EXECUTION_COMPLETE",
+            symbol:q.symbol,
+            action:signal.action,
+            queue_wait_ms:Date.now()-executionQueuedAt,
+            end_to_end_ms:Date.now()-startedAt,
+            market_lag_ms:marketLagMs
+          }));
+        }catch(err){
+          console.error(JSON.stringify({
+            event:"EXECUTION_ERROR",
+            symbol:q.symbol,
+            action:signal.action,
+            error:String(err),
+            end_to_end_ms:Date.now()-startedAt
+          }));
+        }
+      });
   }
-
-  const executionQueuedAt=Date.now();
-  executionChain=executionChain
-    .catch(()=>undefined)
-    .then(async()=>{
-      try{
-        await executeSignal(q,signal);
-        console.log(JSON.stringify({
-          event:"EXECUTION_COMPLETE",
-          symbol:q.symbol,
-          action:signal.action,
-          queue_wait_ms:Date.now()-executionQueuedAt,
-          end_to_end_ms:Date.now()-startedAt,
-          market_lag_ms:marketLagMs
-        }));
-      }catch(err){
-        console.error(JSON.stringify({
-          event:"EXECUTION_ERROR",
-          symbol:q.symbol,
-          action:signal.action,
-          error:String(err),
-          end_to_end_ms:Date.now()-startedAt
-        }));
-      }
-    });
 
   if(!heartbeatTimer){
     heartbeatTimer=setInterval(()=>{
