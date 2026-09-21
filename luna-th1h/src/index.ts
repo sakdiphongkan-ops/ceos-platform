@@ -1,7 +1,7 @@
 import {config} from "./config.js";
 import {marketQuotes} from "./market/provider.js";
 import {StrategyV1,VERSION as STRATEGY_V1_VERSION} from "./strategy-v1.js";
-import {liveGatewayDiagnostics,liveGatewayHealth,placeLiveOrder,reconcileLiveOrders} from "./live-gateway.js";
+import {liveAccountState,liveGatewayDiagnostics,liveGatewayHealth,placeLiveOrder,reconcileLiveOrders} from "./live-gateway.js";
 import {transitionBrokerOrder,type BrokerOrderState} from "./broker-state.js";
 import {applyFill,createPortfolio,mark,planOrder,simulateFill,snapshot,type ExecutionReservations,type PortfolioState} from "./execution.js";
 import type {Quote,Signal} from "./types.js";
@@ -255,8 +255,50 @@ async function preflightLive(){
   }
 }
 
+async function createInitialPortfolio(){
+  if(config.mode!=="live" && config.executionMode!=="live"){
+    return createPortfolio(config.initialCapital);
+  }
+
+  const broker=await liveAccountState();
+  if(!Number.isFinite(broker.cash) || broker.cash<0){
+    throw new Error("LIVE_BROKER_CASH_INVALID");
+  }
+  if(broker.unparsed_symbols.length>0){
+    throw new Error(
+      "LIVE_BROKER_PORTFOLIO_UNPARSED:"+broker.unparsed_symbols.join(",")
+    );
+  }
+
+  const state=createPortfolio(config.initialCapital);
+  state.cash=broker.cash;
+
+  for(const item of broker.positions){
+    if(!Number.isFinite(item.qty) || item.qty<=0) continue;
+    if(!Number.isFinite(item.avg_price) || item.avg_price<=0){
+      throw new Error("LIVE_BROKER_POSITION_AVG_PRICE_INVALID:"+item.symbol);
+    }
+    state.positions[item.symbol]={
+      qty:item.qty,
+      avgPrice:item.avg_price,
+      costBasis:item.avg_price*item.qty,
+      realizedPnl:Number(item.realized_pnl??0)
+    };
+  }
+
+  queueAudit("BROKER_PORTFOLIO_RECONCILED",{
+    broker_as_of:broker.as_of,
+    broker_cash:broker.cash,
+    position_count:Object.keys(state.positions).length,
+    symbols:Object.keys(state.positions).sort(),
+    risk_capital:state.initialCapital
+  },activeStrategyVersion());
+
+  return state;
+}
+
 async function startSession(){
-  portfolio=createPortfolio(config.initialCapital);
+  portfolio=await createInitialPortfolio();
   const response=await ingest("",{
     action:"start_session",
     session:{
@@ -268,7 +310,10 @@ async function startSession(){
         :(config.priceOnlyFallback
           ?"LUNA-TH1H Strategy v1 price-only paper fallback: EMA cross + momentum with stop/take-profit/time exit; no order-book filter."
           :"LUNA-TH1H Strategy v1: EMA cross + momentum + spread + order-book imbalance with stop/take-profit/time exit."),
-      initial_capital:config.initialCapital
+      initial_capital:config.initialCapital,
+      live_broker_reconciled:config.mode==="live" || config.executionMode==="live",
+      starting_cash:portfolio.cash,
+      starting_position_count:Object.keys(portfolio.positions).length
     }
   });
   const data=response as {session?:{id?:string}};
