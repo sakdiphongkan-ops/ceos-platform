@@ -32,6 +32,12 @@ type ExecutionReservationToken={
   symbol:string;
 };
 
+type TrackedLiveOrder=BrokerOrderState & {
+  sessionId:string;
+  sessionGeneration:number;
+  strategyVersion:string;
+};
+
 const executionReservations:ExecutionReservations={
   reservedBuyCash:0,
   reservedGrossExposure:0,
@@ -46,7 +52,7 @@ const lastPersistBySymbol=new Map<string,number>();
 const prewarmedSymbols=new Set<string>();
 const prewarmInFlight=new Map<string,Promise<void>>();
 const prewarmCache=new Map<string,{prices:number[];fetchedAtMs:number;fetchMs:number}>();
-const liveOrderStates=new Map<string,BrokerOrderState>();
+const liveOrderStates=new Map<string,TrackedLiveOrder>();
 const PERSIST_HOLD_MS=5_000;
 const SNAPSHOT_MS=1_000;
 const MAX_ANALYSIS_CONCURRENCY=16;
@@ -105,12 +111,14 @@ async function audit(
   sessionIdOverride:string|null=sessionId
 ){
   const ts=new Date().toISOString();
-  const canonical=JSON.stringify({prev:auditChain,ts,eventType,payload,strategyVersion});
-  auditChain=await sha256(canonical);
+  const previousHash=auditChain;
+  const canonical=JSON.stringify({prev:previousHash,ts,eventType,payload,strategyVersion});
+  const nextHash=await sha256(canonical);
   await ingest("",{
     action:"audit",session_id:sessionIdOverride,ts,event_type:eventType,payload,
-    strategy_version:strategyVersion,hash:auditChain
+    strategy_version:strategyVersion,hash:nextHash
   });
+  auditChain=nextHash;
 }
 
 function queueAudit(
@@ -166,6 +174,32 @@ function releaseExecution(token:ExecutionReservationToken){
     if(left<=0) delete executionReservations.reservedSellQty[token.symbol];
     else executionReservations.reservedSellQty[token.symbol]=left;
   }
+}
+
+function registerLiveOrder(input:{
+  clientOrderId:string;
+  brokerOrderId:string|null;
+  symbol:string;
+  side:BrokerOrderState["side"];
+  qty:number;
+  sessionId:string;
+  sessionGeneration:number;
+  strategyVersion:string;
+}){
+  liveOrderStates.set(input.clientOrderId,{
+    clientOrderId:input.clientOrderId,
+    brokerOrderId:input.brokerOrderId,
+    symbol:input.symbol,
+    side:input.side,
+    submittedQty:input.qty,
+    filledQty:0,
+    avgFillPrice:null,
+    status:"SUBMITTED",
+    updatedAtMs:Date.now(),
+    sessionId:input.sessionId,
+    sessionGeneration:input.sessionGeneration,
+    strategyVersion:input.strategyVersion
+  });
 }
 
 function currentMarketPhase(){
@@ -331,6 +365,7 @@ async function executeSignal(
 
   if(config.executionMode==="live"){
     let brokerOrderReturned=false;
+    let brokerOrderRecovered=false;
     try{
       const brokerOrder=await placeLiveOrder({
         clientOrderId,
@@ -341,16 +376,15 @@ async function executeSignal(
         reason:signal.reason
       });
       brokerOrderReturned=true;
-      liveOrderStates.set(clientOrderId,{
+      registerLiveOrder({
         clientOrderId,
         brokerOrderId:brokerOrder.broker_order_id,
         symbol:brokerOrder.symbol,
         side:brokerOrder.side,
-        submittedQty:brokerOrder.qty,
-        filledQty:0,
-        avgFillPrice:null,
-        status:"SUBMITTED",
-        updatedAtMs:Date.now()
+        qty:brokerOrder.qty,
+        sessionId:expectedSessionId!,
+        sessionGeneration:expectedSessionGeneration,
+        strategyVersion:signal.strategyVersion
       });
       pendingLiveReservations.set(clientOrderId,reservation);
 
@@ -392,11 +426,44 @@ async function executeSignal(
       console.log(JSON.stringify({event:"LIVE_ORDER_SUBMITTED",brokerOrderId:brokerOrder.broker_order_id}));
       return;
     }catch(err){
-      if(!brokerOrderReturned) releaseExecution(reservation);
+      if(!brokerOrderReturned){
+        try{
+          const recoveredOrders=await reconcileLiveOrders([clientOrderId]);
+          const recovered=recoveredOrders.find(x=>x.client_order_id===clientOrderId);
+          if(recovered){
+            registerLiveOrder({
+              clientOrderId,
+              brokerOrderId:recovered.broker_order_id??null,
+              symbol:signal.symbol,
+              side:signal.action,
+              qty:plan.qty,
+              sessionId:expectedSessionId!,
+              sessionGeneration:expectedSessionGeneration,
+              strategyVersion:signal.strategyVersion
+            });
+            pendingLiveReservations.set(clientOrderId,reservation);
+            brokerOrderRecovered=true;
+            queueAudit("BROKER_ORDER_RECOVERED_AFTER_PLACE_ERROR",{
+              client_order_id:clientOrderId,
+              broker_order_id:recovered.broker_order_id??null,
+              status:recovered.status,
+              filled_qty:Number(recovered.filled_qty??0)
+            },signal.strategyVersion);
+          }
+        }catch(recoveryError){
+          queueAudit("BROKER_ORDER_RECOVERY_ERROR",{
+            client_order_id:clientOrderId,
+            error:String(recoveryError)
+          },signal.strategyVersion);
+        }
+        if(!brokerOrderRecovered) releaseExecution(reservation);
+      }
       queueAudit("BROKER_ORDER_ERROR",{
         client_order_id:clientOrderId,
         error:String(err),
-        reservation_held:brokerOrderReturned
+        reservation_held:brokerOrderReturned||brokerOrderRecovered,
+        recovery_attempted:!brokerOrderReturned,
+        recovered:brokerOrderRecovered
       },signal.strategyVersion);
       throw err;
     }
@@ -499,13 +566,20 @@ async function reconcileLiveOrderStates(){
       if(!current) continue;
       let next;
       try{
-        next=transitionBrokerOrder(current,{
+        const transitioned=transitionBrokerOrder(current,{
           brokerOrderId:u.broker_order_id??current.brokerOrderId,
           status:String(u.status).toUpperCase() as BrokerOrderState["status"],
           filledQty:Number(u.filled_qty??current.filledQty),
           avgFillPrice:u.avg_fill_price??current.avgFillPrice,
           updatedAtMs:Number(u.updated_at_ms??Date.now())
         });
+        next={
+          ...current,
+          ...transitioned,
+          sessionId:current.sessionId,
+          sessionGeneration:current.sessionGeneration,
+          strategyVersion:current.strategyVersion
+        };
       }catch(err){
         queueAudit("BROKER_STATE_TRANSITION_ERROR",{
           client_order_id:u.client_order_id,error:String(err),update:u
@@ -528,7 +602,7 @@ async function reconcileLiveOrderStates(){
         const slippage=Math.abs(next.avgFillPrice-reference)*deltaQty;
         const response=await ingest("",{
           action:"record_fill",
-          session_id:sessionId,
+          session_id:current.sessionId,
           fill:{
             client_order_id:current.clientOrderId,
             broker_order_id:next.brokerOrderId,
@@ -541,22 +615,41 @@ async function reconcileLiveOrderStates(){
             slippage,
             ts:new Date(next.updatedAtMs).toISOString(),
             reason:"BROKER_RECONCILIATION",
-            strategy_version:activeStrategyVersion()
+            strategy_version:current.strategyVersion
           }
         });
         const result=(response as {result?:{idempotent?:boolean}})?.result;
         if(result && !result.idempotent){
-          applyFill(portfolio,{
-            symbol:current.symbol,
-            side:current.side,
-            qty:deltaQty,
-            referencePrice:reference,
-            fillPrice:next.avgFillPrice,
-            notional,
-            fee,
-            slippage,
-            totalCashDelta:current.side==="BUY"?-(notional+fee):(notional-fee)
-          });
+          const sameSession=(
+            sessionId===current.sessionId
+            && sessionGeneration===current.sessionGeneration
+          );
+          if(sameSession){
+            applyFill(portfolio,{
+              symbol:current.symbol,
+              side:current.side,
+              qty:deltaQty,
+              referencePrice:reference,
+              fillPrice:next.avgFillPrice,
+              notional,
+              fee,
+              slippage,
+              totalCashDelta:current.side==="BUY"?-(notional+fee):(notional-fee)
+            });
+          }else{
+            queueAudit("LIVE_FILL_LOCAL_APPLY_SUPPRESSED_SESSION_GENERATION",{
+              client_order_id:current.clientOrderId,
+              broker_order_id:next.brokerOrderId,
+              order_session_id:current.sessionId,
+              order_session_generation:current.sessionGeneration,
+              current_session_id:sessionId,
+              current_session_generation:sessionGeneration,
+              symbol:current.symbol,
+              side:current.side,
+              qty:deltaQty,
+              fill_price:next.avgFillPrice
+            },current.strategyVersion);
+          }
         }
       }
 
@@ -567,6 +660,7 @@ async function reconcileLiveOrderStates(){
           releaseExecution(reservation);
           pendingLiveReservations.delete(current.clientOrderId);
         }
+        liveOrderStates.delete(current.clientOrderId);
       }
       queueAudit("BROKER_ORDER_RECONCILED",{
         client_order_id:next.clientOrderId,
@@ -574,8 +668,10 @@ async function reconcileLiveOrderStates(){
         status:next.status,
         filled_qty:next.filledQty,
         avg_fill_price:next.avgFillPrice,
-        delta_qty:deltaQty
-      });
+        delta_qty:deltaQty,
+        order_session_id:current.sessionId,
+        order_session_generation:current.sessionGeneration
+      },current.strategyVersion);
     }
   }catch(err){
     queueAudit("BROKER_RECONCILIATION_ERROR",{error:String(err)});
@@ -653,10 +749,10 @@ async function handleQuote(q:Quote){
 
   const today=currentSessionDate();
   if(sessionDate && sessionDate!==today){
-    await audit("SESSION_ROLLOVER",{
+    await queueAudit("SESSION_ROLLOVER",{
       from_session_date:sessionDate,
       to_session_date:today
-    },activeStrategyVersion(),sessionId);
+    },activeStrategyVersion());
     await endSession("ROLLOVER");
     strategyV1.reset();
     prewarmedSymbols.clear();
