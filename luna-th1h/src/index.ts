@@ -5,6 +5,7 @@ import {liveGatewayDiagnostics,liveGatewayHealth,placeLiveOrder,reconcileLiveOrd
 import {transitionBrokerOrder,type BrokerOrderState} from "./broker-state.js";
 import {applyFill,createPortfolio,mark,planOrder,simulateFill,snapshot, type PortfolioState} from "./execution.js";
 import type {Quote,Signal} from "./types.js";
+import {marketPhaseAt,sessionDateAt} from "./market-session.js";
 
 const EXECUTION_TEST_VERSION="luna-th1h-execution-test-0.1.0";
 
@@ -123,11 +124,16 @@ function releaseAnalysisSlot(){
 }
 
 function currentMarketPhase(){
-  return marketPhase(new Date().toISOString());
+  return marketPhaseAt(
+    new Date().toISOString(),
+    config.timezone,
+    config.reduceOnlyTime,
+    config.forceCloseTime
+  );
 }
 
 function currentSessionDate(){
-  return todayInTimezone(config.timezone);
+  return sessionDateAt(new Date().toISOString(),config.timezone);
 }
 
 async function writeSnapshot(){
@@ -202,43 +208,6 @@ async function startSession(){
   console.log(JSON.stringify({event:"LUNA_SESSION_STARTED",sessionId,strategyVersion:activeStrategyVersion()}));
 }
 
-function localMinutes(ts:string,timezone:string){
-  const parts=new Intl.DateTimeFormat("en-GB",{
-    timeZone:timezone,hour:"2-digit",minute:"2-digit",hourCycle:"h23"
-  }).formatToParts(new Date(ts));
-  const hour=Number(parts.find(p=>p.type==="hour")?.value ?? 0);
-  const minute=Number(parts.find(p=>p.type==="minute")?.value ?? 0);
-  return hour*60+minute;
-}
-function hhmmMinutes(value:string){
-  const [h,m]=value.split(":").map(Number);
-  if(!Number.isInteger(h)||!Number.isInteger(m)||h<0||h>23||m<0||m>59) throw new Error(`INVALID_HHMM: ${value}`);
-  return h*60+m;
-}
-function marketPhase(ts:string){
-  const minutes=localMinutes(ts,config.timezone);
-  const weekday=new Intl.DateTimeFormat("en-US",{
-    timeZone:config.timezone,
-    weekday:"short"
-  }).format(new Date(ts));
-  if(weekday==="Sat" || weekday==="Sun") return "CLOSED";
-
-  const morningStart=10*60;
-  const morningEnd=12*60+30;
-  const afternoonStart=14*60;
-  const tradingEnd=16*60+30;
-  const reduceOnly=hhmmMinutes(config.reduceOnlyTime);
-  const forceClose=hhmmMinutes(config.forceCloseTime);
-
-  if(forceClose<=reduceOnly) throw new Error("forceCloseTime must be after reduceOnlyTime");
-  if(minutes<morningStart) return "CLOSED";
-  if(minutes>=morningEnd && minutes<afternoonStart) return "CLOSED";
-  if(minutes>=tradingEnd) return "CLOSED";
-  if(minutes>=forceClose) return "FORCE_CLOSE";
-  if(minutes>=reduceOnly) return "REDUCE_ONLY";
-  return "ACTIVE";
-}
-
 function getSignal(q:Quote):Signal{
   const quoteTsMs=Date.parse(q.ts);
   if(!Number.isFinite(quoteTsMs)){
@@ -279,7 +248,7 @@ function getSignal(q:Quote):Signal{
   return strategyV1.evaluate(q,{
     positionQty:pos?.qty??0,
     avgPrice:pos?.avgPrice??0,
-    nowMs:Date.parse(q.ts)
+    nowMs:Date.now()
   });
 }
 
