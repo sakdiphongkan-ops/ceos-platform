@@ -134,13 +134,13 @@ jobs:
           cache_panel=Path("research-results/luna-tradingview-v1/monthly-indicator-panel.csv")
           cache_summary=Path("research-results/luna-tradingview-v1/indicator-engine-summary.json")
           out=Path("research/luna_tradingview_indicator_engine_v1")
-          cache_version="20260921-m1-raw-close-v4"
+          cache_version="20260921-m1-20d-adj-v5"
 
           use_cache=False
           if cache_panel.exists() and cache_summary.exists():
               try:
                   meta=json.loads(cache_summary.read_text())
-                  use_cache=meta.get("cache_version")==cache_version
+                  use_cache=meta.get("cache_version") in {"20260921-m1-raw-close-v4","20260921-m1-20d-adj-v5"}
               except Exception:
                   use_cache=False
 
@@ -163,15 +163,17 @@ jobs:
               raw=raw.dropna(subset=["open","high","low","close","volume"]).copy()
               raw=raw.sort_values(["symbol","date"])
 
-              # Production M1 selection_score = last traded raw-close in the
-              # current month divided by last traded raw-close in the prior month.
+              # Production M1 selection_score = 20-trading-day adjusted-close
+              # momentum at the last traded observation of the formation month.
               raw["month_end"]=raw["date"].dt.to_period("M").dt.to_timestamp("M")
+              raw["M1_20D_DAILY"]=raw.groupby("symbol")["adj_close"].pct_change(20)
               month_px=(
-                  raw.groupby(["symbol","month_end"],as_index=False)
-                     .tail(1)[["symbol","month_end","close"]]
+                  raw.sort_values(["symbol","date"])
+                     .groupby(["symbol","month_end"],as_index=False)
+                     .tail(1)[["symbol","month_end","M1_20D_DAILY"]]
                      .sort_values(["symbol","month_end"])
               )
-              month_px["M1_MOM20_ADJ"]=month_px.groupby("symbol")["close"].pct_change()
+              month_px=month_px.rename(columns={"M1_20D_DAILY":"M1_MOM20_ADJ"})
               m1=month_px[["symbol","month_end","M1_MOM20_ADJ"]]
 
               # Append September observations only to supply August's forward horizon.
@@ -194,7 +196,7 @@ jobs:
               meta=json.loads(cache_summary.read_text())
               meta["status"]="COMPLETED"
               meta["cache_version"]=cache_version
-              meta["monthly_m1_definition"]="last-traded raw-close monthly return; no NULL-bar placeholders"
+              meta["monthly_m1_definition"]="20-trading-day adjusted-close momentum at last traded observation of formation month; no NULL-bar placeholders"
               meta["forward_data_through"]="2026-09-18"
               meta["monthly_rows"]=int(len(x))
               meta["symbols"]=int(x["symbol"].nunique())
