@@ -8,6 +8,7 @@ import type {Quote,Signal} from "./types.js";
 const EXECUTION_TEST_VERSION="luna-th1h-execution-test-0.1.0";
 
 let sessionId:string|null=null;
+let sessionDate:string|null=null;
 let auditChain="GENESIS";
 let heartbeatTimer:NodeJS.Timeout|undefined;
 let portfolio:PortfolioState;
@@ -131,6 +132,7 @@ async function startSession(){
   const data=response as {session?:{id?:string}};
   if(!data.session?.id) throw new Error("Supabase did not return a session id");
   sessionId=data.session.id;
+  sessionDate=todayInTimezone(config.timezone);
   await audit("SESSION_STARTED",{
     provider:config.marketDataProvider,
     capital:config.initialCapital,
@@ -310,6 +312,24 @@ async function executeSignal(q:Quote,signal:Signal){
   }
 }
 
+function quoteSessionDate(ts:string){
+  return new Intl.DateTimeFormat("en-CA",{
+    timeZone:config.timezone,year:"numeric",month:"2-digit",day:"2-digit"
+  }).format(new Date(ts));
+}
+
+async function rolloverSessionIfNeeded(q:Quote){
+  const quoteDate=quoteSessionDate(q.ts);
+  if(!sessionDate || quoteDate===sessionDate) return;
+  await audit("SESSION_ROLLOVER",{from_session_date:sessionDate,to_session_date:quoteDate},activeStrategyVersion());
+  await endSession("ROLLOVER");
+  strategyV1.reset();
+  prewarmedSymbols.clear();
+  lastPersistAt=0;
+  lastPersistBySymbol.clear();
+  await startSession();
+}
+
 async function prewarmStrategy(q:Quote){
   if(prewarmedSymbols.has(q.symbol)) return;
   try{
@@ -342,6 +362,7 @@ async function prewarmStrategy(q:Quote){
 }
 
 async function handleQuote(q:Quote){
+  await rolloverSessionIfNeeded(q);
   await prewarmStrategy(q);
   const signal=getSignal(q);
 
@@ -384,6 +405,7 @@ async function endSession(status="CLOSED"){
     console.error(JSON.stringify({event:"SESSION_END_ERROR",error:String(err)}));
   }finally{
     sessionId=null;
+    sessionDate=null;
   }
 }
 
