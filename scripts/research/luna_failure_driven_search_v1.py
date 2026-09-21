@@ -224,3 +224,5 @@ def main():
     print(json.dumps(summary,indent=2,default=str))
 
 if __name__=="__main__": main()
+
+# CI trigger: rerun validated failure-driven search after publish-race fix.
