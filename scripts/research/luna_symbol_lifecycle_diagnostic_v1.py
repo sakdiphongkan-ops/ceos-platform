@@ -23,9 +23,19 @@ def main() -> None:
     ap.add_argument("--min-history-months", type=int, default=12)
     args = ap.parse_args()
 
-    d = pd.read_csv(args.input, usecols=["symbol", "month_end"])
+    d = pd.read_csv(args.input)
+    required = {"symbol", "month_end"}
+    missing = sorted(required - set(d.columns))
+    if missing:
+        raise SystemExit(f"missing required columns: {missing}")
+    keep = [c for c in ["symbol", "month_end", "listed_date", "delist_date"] if c in d.columns]
+    d = d[keep].copy()
     d["symbol"] = d["symbol"].astype(str)
     d["month_end"] = pd.to_datetime(d["month_end"], errors="coerce")
+    if "listed_date" in d.columns:
+        d["listed_date"] = pd.to_datetime(d["listed_date"], errors="coerce")
+    if "delist_date" in d.columns:
+        d["delist_date"] = pd.to_datetime(d["delist_date"], errors="coerce")
     d = d.dropna(subset=["symbol", "month_end"]).drop_duplicates(["symbol", "month_end"])
     if d.empty:
         raise SystemExit("empty symbol/month panel")
@@ -94,6 +104,24 @@ def main() -> None:
         float(d["symbol"].isin(final_survivors).mean()) if len(d) else 0.0
     )
 
+    lifecycle_contract = {
+        "listed_date_present": "listed_date" in d.columns,
+        "delist_date_present": "delist_date" in d.columns,
+        "authoritative_date_contract_available": (
+            "listed_date" in d.columns and "delist_date" in d.columns
+        ),
+        "future_listing_rows": None,
+        "post_delist_rows": None,
+    }
+    if "listed_date" in d.columns:
+        lifecycle_contract["future_listing_rows"] = int(
+            (d["listed_date"].notna() & (d["month_end"] < d["listed_date"])).sum()
+        )
+    if "delist_date" in d.columns:
+        lifecycle_contract["post_delist_rows"] = int(
+            (d["delist_date"].notna() & (d["month_end"] > d["delist_date"])).sum()
+        )
+
     last_observed = []
     for sym in eligible_long_history:
         row = by_symbol.loc[sym]
@@ -141,6 +169,7 @@ def main() -> None:
                 "verified delisting rate and may include missing data or other causes."
             ),
         },
+        "lifecycle_contract": lifecycle_contract,
         "long_history": {
             "minimum_months": int(args.min_history_months),
             "eligible_symbols": int(len(eligible_long_history)),
@@ -151,6 +180,7 @@ def main() -> None:
         },
         "survivorship_guard": {
             "current_survivor_only_is_not_historical_truth": True,
+            "authoritative_lifecycle_dates_are_preferred_when_available": True,
             "current_survivor_only_is_stress_only": True,
             "warning": (
                 "A symbol absent from a later month is not labeled delisted unless "
