@@ -24,14 +24,51 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
   const previous = new Map<string,string>();
 
   while(true){
-    const res = await fetch(`${url}/quotes`,{
-      headers:{"x-luna-gateway":key,"accept":"application/json"},
-      cache:"no-store"
-    });
-    const body = await res.json().catch(()=>({}));
-    if(!res.ok) throw new Error(`SETTRADE_GATEWAY_HTTP_${res.status}: ${JSON.stringify(body)}`);
+    let body:any = {};
+    let ok=false;
+    let lastError:unknown=null;
+
+    for(let attempt=1;attempt<=4;attempt++){
+      try{
+        const res = await fetch(`${url}/quotes`,{
+          headers:{"x-luna-gateway":key,"accept":"application/json"},
+          cache:"no-store",
+          signal:AbortSignal.timeout(5000)
+        });
+        body = await res.json().catch(()=>({}));
+        if(!res.ok) throw new Error(`HTTP_${res.status}: ${JSON.stringify(body)}`);
+        ok=true;
+        break;
+      }catch(err){
+        lastError=err;
+        console.error(JSON.stringify({
+          event:"LUNA_GATEWAY_FETCH_RETRY",
+          attempt,
+          error:String(err)
+        }));
+        await new Promise(r=>setTimeout(r,Math.min(5000,250*2**(attempt-1))));
+      }
+    }
+
+    if(!ok){
+      console.error(JSON.stringify({
+        event:"LUNA_GATEWAY_FETCH_DEGRADED",
+        error:String(lastError)
+      }));
+      await new Promise(r=>setTimeout(r,Math.max(1000,pollMs*4)));
+      continue;
+    }
 
     const quotes = Array.isArray(body?.quotes) ? body.quotes as any[] : [];
+    if(quotes.length===0){
+      console.error(JSON.stringify({
+        event:"LUNA_GATEWAY_EMPTY_QUOTES",
+        target:Number(body?.target ?? 0),
+        collector_started:Boolean(body?.collector_started),
+        collector_error:body?.collector_error ?? null
+      }));
+    }
+
     for(const raw of quotes){
       if(!raw?.symbol || !raw?.ts) continue;
       const q:Quote = {
