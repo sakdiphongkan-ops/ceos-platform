@@ -15,6 +15,7 @@ on:
       - scripts/research/luna_model_registry_v1.py
       - scripts/research/luna_research_quality_gate_v2.py
       - scripts/research/luna_dependent_data_multiple_testing_v1.py
+      - scripts/research/luna_fresh_seed_replication_v1.py
       - research-results/luna-m1-benchmark-locked-20260920.csv
 
 concurrency:
@@ -97,6 +98,23 @@ jobs:
             --block-length 3 \
             --seed 20260921
 
+      - name: Run fresh-seed replication
+        run: |
+          rm -rf research/luna_fresh_seed_replication_v1
+          python scripts/research/luna_fresh_seed_replication_v1.py \
+            --input data/set_2000_2025/monthly_factors_5y_v4.csv \
+            --benchmark research-results/luna-m1-benchmark-locked-20260920.csv \
+            --output research/luna_fresh_seed_replication_v1 \
+            --seeds 20260922,20260923,20260924 \
+            --formula-count 5000 \
+            --k 20 \
+            --cost-bps 20 \
+            --lookback-months 24 \
+            --inner-train-months 12 \
+            --inner-valid-months 6 \
+            --outer-holdout-months 12 \
+            --min-history-months 9
+
       - name: Create model registry entry
         run: |
           python scripts/research/luna_model_registry_v1.py             --search-summary research/luna_failure_driven_search_v1/summary.json             --scorecard research/luna_research_scorecard_v1/scorecard.json             --neutralized research/luna_research_scorecard_v1/neutralized-alpha-crowding.json             --multiple-testing research/luna_research_scorecard_v1/multiple-testing.json             --benchmark research-results/luna-m1-benchmark-locked-20260920.csv             --output research/luna_research_scorecard_v1/model-registry-entry.json
@@ -117,11 +135,14 @@ jobs:
           assert g["status"]=="COMPLETED"
           mt=json.load(open("research/luna_research_scorecard_v1/multiple-testing.json"))
           assert mt["status"]=="COMPLETED"
+          rep=json.load(open("research/luna_fresh_seed_replication_v1/replication.json"))
+          assert rep["status"]=="COMPLETED"
           print(json.dumps({
               "search": x,
               "neutralized": n,
               "promotion_gate": g,
               "multiple_testing": mt,
+              "fresh_seed_replication": rep,
           }, indent=2))
           PY
 
@@ -140,6 +161,7 @@ jobs:
           cp research/luna_research_scorecard_v1/model-registry-entry.json research-results/luna-failure-driven-search-v1/model-registry-entry.json
           cp research/luna_research_scorecard_v1/promotion-gate.json research-results/luna-failure-driven-search-v1/promotion-gate.json
           cp research/luna_research_scorecard_v1/multiple-testing.json research-results/luna-failure-driven-search-v1/multiple-testing.json
+          cp research/luna_fresh_seed_replication_v1/replication.json research-results/luna-failure-driven-search-v1/fresh-seed-replication.json
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add research-results/luna-failure-driven-search-v1
