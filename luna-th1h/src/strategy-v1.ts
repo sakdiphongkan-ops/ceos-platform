@@ -1,7 +1,7 @@
 import type {Quote,Signal} from "./types.js";
 
 export const VERSION="luna-th1h-v1.0.0";
-export const PRICE_ONLY_VERSION="luna-th1h-v1.0.0-price-only-paper";
+export const PRICE_ONLY_VERSION="luna-th1h-v1.0.0-price-only-paper-warm5";
 
 export interface StrategyParams{
   fastPeriod:number;
@@ -129,7 +129,8 @@ export class StrategyV1{
     const previousPrice=st.prices.length>=2?st.prices[st.prices.length-2]:null;
     const momentumBps=previousPrice?((price/previousPrice)-1)*10_000:0;
 
-    if(st.prices.length<this.params.slowPeriod || st.emaFast===null || st.emaSlow===null){
+    const warmupPeriod=this.priceOnlyFallback?Math.min(this.params.fastPeriod,5):this.params.slowPeriod;
+    if(st.prices.length<warmupPeriod || st.emaFast===null || st.emaSlow===null){
       return {symbol:q.symbol,ts:q.ts,action:"HOLD",reason:"WARMUP",strategyVersion:this.version};
     }
 
