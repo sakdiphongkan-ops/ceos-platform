@@ -395,18 +395,6 @@ function quoteSessionDate(ts:string){
   }).format(new Date(ts));
 }
 
-async function rolloverSessionIfNeeded(q:Quote){
-  const quoteDate=quoteSessionDate(q.ts);
-  if(!sessionDate || quoteDate===sessionDate) return;
-  await audit("SESSION_ROLLOVER",{from_session_date:sessionDate,to_session_date:quoteDate},activeStrategyVersion());
-  await endSession("ROLLOVER");
-  strategyV1.reset();
-  prewarmedSymbols.clear();
-  lastPersistAt=0;
-  lastPersistBySymbol.clear();
-  await startSession();
-}
-
 async function prewarmStrategy(q:Quote){
   if(prewarmedSymbols.has(q.symbol)) return;
   try{
