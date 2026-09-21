@@ -3,6 +3,7 @@ name: LUNA Failure-Driven Search v1
 # luna-search-v1 trigger: robustness-bound evidence
 # luna-search-v1 trigger: lifecycle-date audit
 # luna-search-v1 trigger: PIT security-master validation
+# luna-search-v1 trigger: PIT fundamentals + corporate-actions validation
 
 on:
   push:
