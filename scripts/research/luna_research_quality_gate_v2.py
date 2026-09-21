@@ -37,6 +37,7 @@ def main() -> None:
     ap.add_argument("--replication", required=False)
     ap.add_argument("--universe", required=False)
     ap.add_argument("--sector-neutralization", required=False)
+    ap.add_argument("--lifecycle", required=False)
     ap.add_argument("--output", required=True)
     ap.add_argument("--max-crowding-warning", type=float, default=0.90)
     args = ap.parse_args()
@@ -47,6 +48,7 @@ def main() -> None:
     replication = load(args.replication) if args.replication else {}
     universe = load(args.universe) if args.universe else {}
     sector = load(args.sector_neutralization) if args.sector_neutralization else {}
+    lifecycle = load(args.lifecycle) if args.lifecycle else {}
 
     checks = score.get("promotion_checks", {})
     hard = {
@@ -62,6 +64,7 @@ def main() -> None:
             float(universe.get("random_dropout", {}).get("median_holdout_geo", -math.inf)) > 0
         ),
         "sector_neutralization_available": sector.get("status") == "COMPLETED",
+        "symbol_lifecycle_available": lifecycle.get("status") == "COMPLETED",
     }
 
     crowding = neutral.get("crowding_max_abs_corr")
@@ -92,6 +95,7 @@ def main() -> None:
             "fresh_seed_replication": replication.get("runs", []),
             "universe_robustness": universe,
             "sector_industry_neutralization": sector,
+            "symbol_lifecycle": lifecycle,
         },
         "promotion_status": (
             "PROMOTION_ELIGIBLE_PENDING_FRESH_SEED_REPLICATION"
