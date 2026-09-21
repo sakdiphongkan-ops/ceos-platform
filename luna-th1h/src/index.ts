@@ -444,7 +444,10 @@ async function reconcileLiveOrderStates(){
           : next.avgFillPrice;
         const feeRate=config.feeBps/10000+(current.side==="SELL"?config.sellTaxBps/10000:0);
         const notional=next.avgFillPrice*deltaQty;
-        const fee=notional*feeRate;
+        const brokerFee=Number(u.fee);
+        const fee=Number.isFinite(brokerFee) && brokerFee>=0
+          ? brokerFee
+          : notional*feeRate;
         const slippage=Math.abs(next.avgFillPrice-reference)*deltaQty;
         const response=await ingest("",{
           action:"record_fill",
