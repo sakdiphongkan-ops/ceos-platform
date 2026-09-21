@@ -47,3 +47,11 @@ Latency logs therefore distinguish:
 - `prewarm_ms`: blocking prewarm time on the critical path (expected 0 after this change)
 - `prewarm_applied`: whether a completed historical seed was merged
 - `prewarm_fetch_ms`: elapsed time of the background historical lookup
+
+## Bounded execution update — 2026-09-21
+
+The execution path now uses bounded concurrency of four jobs with FIFO ordering per symbol. Different symbols can execute concurrently, while repeated orders for the same symbol remain serialized.
+
+A reservation ledger is applied before the first network await. BUY orders reserve estimated cash and gross exposure; SELL orders reserve sellable quantity. The planner subtracts these reservations when calculating available capacity, preventing concurrent jobs from independently consuming the same portfolio headroom.
+
+Live-order reservations remain held until broker reconciliation reaches a terminal state (`FILLED`, `CANCELED`, or `REJECTED`). Paper reservations are released after the fill is recorded and local portfolio state is updated.
