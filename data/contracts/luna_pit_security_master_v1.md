@@ -34,9 +34,9 @@ A statement/report `asOfDate` is not treated as an availability timestamp by its
 
 ## Thai data-source mapping
 
-SET currently documents SMART Marketplace services covering Reference Data and Corporate Action, including security profile information and corporate actions, and Company Fundamental Data including historical EOD prices/statistics and financial data/ratios. SET also lists PSIMS-Security for historical security details including corporate action and name-change information. citeturn912211search0turn912211search2turn912211search8
+SET currently documents SMART Marketplace services covering Reference Data and Corporate Action, including security profile information and corporate actions, and Company Fundamental Data including historical EOD prices/statistics and financial data/ratios. SET also lists PSIMS-Security for historical security details including corporate action and name-change information. Source: SET Information Services / SMART Marketplace / End-of-Day pages.
 
-SET's financial-statement specification exposes fields such as `symbol`, `fiscalYear`, `quarter`, `statementType`, `asOfDate`, and `adjustmentStatus`; LUNA keeps `asOfDate` conceptually separate from `available_at` to prevent look-ahead leakage. citeturn912211search12
+SET's financial-statement specification exposes fields such as `symbol`, `fiscalYear`, `quarter`, `statementType`, `asOfDate`, and `adjustmentStatus`; LUNA keeps `asOfDate` conceptually separate from `available_at` to prevent look-ahead leakage. Source: SET SMART Marketplace Financial Statement Data Specification v1.0.
 
 ## Required audit fields
 
