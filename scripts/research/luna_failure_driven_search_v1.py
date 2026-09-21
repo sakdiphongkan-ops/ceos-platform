@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """LUNA failure-driven search v1.
 
+Research trigger revision: institutional benchmark path-based CI validation.
+
 The search never chooses a strategy using the frozen holdout. Candidate
 selection is nested walk-forward: inner train -> validation, then outer OOS.
 A locked M1 benchmark CSV is loaded only for reference/reporting.
