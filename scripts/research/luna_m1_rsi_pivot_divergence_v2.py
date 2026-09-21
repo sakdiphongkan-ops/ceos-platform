@@ -292,12 +292,14 @@ def confirmation_date(
         return None
     i = days.index(signal_day)
     limit = min(len(days) - 1, i + int(c["confirm_days"]))
-    sub = w.iloc[i : limit + 1]
+    sub = w.iloc[i : limit + 1].copy()
+    if c.get("adx_max") is not None:
+        sub = sub[sub["ADX14"] <= float(c["adx_max"])]
     mode = c["confirm"]
 
     if mode == "NONE":
-        return signal_day
-    if mode == "HAMMER":
+        hit = sub.head(1)
+    elif mode == "HAMMER":
         hit = sub[sub["HAMMER"] == 1]
     elif mode == "BULL_ENGULF":
         hit = sub[sub["BULL_ENGULF"] == 1]
