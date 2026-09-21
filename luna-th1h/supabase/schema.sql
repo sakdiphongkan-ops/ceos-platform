@@ -42,8 +42,19 @@ create table if not exists public.luna_orders (
   limit_price numeric(18,6),
   status text not null,
   reason text,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  client_order_id text,
+  broker_order_id text,
+  filled_qty bigint not null default 0,
+  avg_fill_price numeric(18,6),
+  updated_at timestamptz not null default now()
 );
+create unique index if not exists luna_orders_client_order_id_uq
+  on public.luna_orders(client_order_id)
+  where client_order_id is not null;
+create unique index if not exists luna_orders_broker_order_id_uq
+  on public.luna_orders(broker_order_id)
+  where broker_order_id is not null;
 create table if not exists public.luna_fills (
   id bigint generated always as identity primary key,
   order_id uuid references public.luna_orders(id),
@@ -51,8 +62,15 @@ create table if not exists public.luna_fills (
   qty bigint not null,
   price numeric(18,6) not null,
   fee numeric(18,6) not null default 0,
-  slippage numeric(18,6) not null default 0
+  slippage numeric(18,6) not null default 0,
+  idempotency_key text,
+  cumulative_filled_qty bigint
 );
+create unique index if not exists luna_fills_idempotency_key_uq
+  on public.luna_fills(idempotency_key)
+  where idempotency_key is not null;
+create index if not exists luna_fills_order_ts
+  on public.luna_fills(order_id,ts);
 create table if not exists public.luna_positions (
   session_id uuid references public.luna_sessions(id),
   symbol text not null,
