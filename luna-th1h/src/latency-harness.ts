@@ -60,6 +60,12 @@ function minIndex(values:number[]){
   return idx;
 }
 
+function maxValue(values:number[]){
+  let max=0;
+  for(const value of values) if(value>max) max=value;
+  return max;
+}
+
 function simulate(s:Scenario,seed:number):Result{
   const rand=rng(seed);
   const interval=s.pollMs;
@@ -100,19 +106,19 @@ function simulate(s:Scenario,seed:number):Result{
       p50:percentile(queueWait,0.50),
       p95:percentile(queueWait,0.95),
       p99:percentile(queueWait,0.99),
-      max:Math.max(0,...queueWait)
+      max:maxValue(queueWait)
     },
     serviceMs:{
       p50:percentile(service,0.50),
       p95:percentile(service,0.95),
       p99:percentile(service,0.99),
-      max:Math.max(0,...service)
+      max:maxValue(service)
     },
     endToEndMs:{
       p50:percentile(endToEnd,0.50),
       p95:percentile(endToEnd,0.95),
       p99:percentile(endToEnd,0.99),
-      max:Math.max(0,...endToEnd)
+      max:maxValue(endToEnd)
     },
     saturated:false,
     status:"SUSTAINED"
