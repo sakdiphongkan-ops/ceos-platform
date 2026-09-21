@@ -26,6 +26,7 @@ jobs:
       - run: npm run test:execution-reservations
       - run: npm run test:execution-scheduler
       - run: npm run test:live-reconciliation
+      - run: npm run test:telemetry-queue
       - run: npm run test:latency
       - run: npm run backtest:fixture
 
