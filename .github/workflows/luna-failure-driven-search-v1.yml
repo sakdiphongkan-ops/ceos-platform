@@ -69,16 +69,6 @@ jobs:
           rm -rf research/luna_failure_driven_search_v1
           python scripts/research/luna_failure_driven_search_v1.py             --input data/set_2000_2025/monthly_factors_5y_v4.csv             --benchmark research-results/luna-m1-benchmark-locked-20260920.csv             --output research/luna_failure_driven_search_v1             --formula-count 5000             --seed 20260921             --k 20             --cost-bps 20             --lookback-months 24             --inner-train-months 12             --inner-valid-months 6             --outer-holdout-months 12             --min-history-months 9
 
-      - name: Run dependent-data multiple-testing diagnostic
-        run: |
-          python scripts/research/luna_dependent_data_multiple_testing_v1.py \
-            --return-matrix research/luna_failure_driven_search_v1/formula_return_matrix.csv.gz \
-            --summary research/luna_failure_driven_search_v1/summary.json \
-            --output research/luna_research_scorecard_v1/multiple-testing.json \
-            --bootstrap-count 500 \
-            --block-length 3 \
-            --seed 20260921
-
       - name: Run institutional scorecard
         run: |
           rm -rf research/luna_research_scorecard_v1
@@ -95,6 +85,16 @@ jobs:
             --scorecard research/luna_research_scorecard_v1/scorecard.json \
             --neutralized research/luna_research_scorecard_v1/neutralized-alpha-crowding.json \
             --output research/luna_research_scorecard_v1/promotion-gate.json
+
+      - name: Run dependent-data multiple-testing diagnostic
+        run: |
+          python scripts/research/luna_dependent_data_multiple_testing_v1.py \
+            --return-matrix research/luna_failure_driven_search_v1/formula_return_matrix.csv.gz \
+            --summary research/luna_failure_driven_search_v1/summary.json \
+            --output research/luna_research_scorecard_v1/multiple-testing.json \
+            --bootstrap-count 500 \
+            --block-length 3 \
+            --seed 20260921
 
       - name: Create model registry entry
         run: |
