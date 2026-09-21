@@ -705,7 +705,10 @@ def _start_marketdata():
 
     print(
         f"LUNA_MARKETDATA starting provider_mode={PROVIDER_MODE} "
-        f"symbols={len(SYMBOLS)} bid_offer={REALTIME_BOOK}",
+        f"symbols={len(SYMBOLS)} bid_offer={REALTIME_BOOK} "
+        f"set_api_configured={set_api_configured()} "
+        f"settrade_configured={settrade_configured()} "
+        f"settrade_missing={missing_settrade_credentials()}",
         flush=True,
     )
     threading.Thread(target=_run_supervisor, daemon=True).start()
