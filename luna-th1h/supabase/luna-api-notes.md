@@ -7,3 +7,6 @@ The live schema adds luna_orders.broker_order_id, luna_fills.idempotency_key, an
 ## RPC security hardening — 2026-09-22
 
 luna_record_fill_v2 is SECURITY DEFINER but EXECUTE is now revoked from public, anon, and authenticated. Only service_role can execute the RPC; the Edge Function reaches it through its server-side service-role client. Supabase security advisor no longer reports luna_record_fill_v2 as publicly executable.
+## Public feed minimization v35 — 2026-09-22
+
+luna-api version 35 keeps the browser-facing GET feed intentionally narrower: public orders omit client_order_id and broker_order_id, fills omit idempotency_key and cumulative_filled_qty, and audit rows omit raw payload. These fields remain available to the authenticated server-side execution path and database ledger.
