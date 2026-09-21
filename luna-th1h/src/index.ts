@@ -951,11 +951,25 @@ async function handleQuote(q:Quote){
         quote:{...q}
       });
       if(signal.action!=="HOLD" || config.executionTest){
-        telemetryQueue.enqueueSignal({
-          action:"signal",
+        const telemetrySignal={
+          action:"signal" as const,
           session_id:activeSessionId,
           signal:{...signal}
-        });
+        };
+        try{
+          telemetryQueue.enqueueSignal(telemetrySignal);
+        }catch(queueError){
+          void ingest("",{
+            action:"signal",
+            session_id:activeSessionId,
+            signal:{...signal}
+          }).catch(fallbackError=>console.error(JSON.stringify({
+            event:"PERSIST_SIGNAL_FALLBACK_ERROR",
+            symbol:q.symbol,
+            queue_error:String(queueError),
+            fallback_error:String(fallbackError)
+          })));
+        }
       }
     }catch(err){
       console.error(JSON.stringify({
