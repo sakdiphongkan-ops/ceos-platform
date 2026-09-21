@@ -8,6 +8,7 @@ import type {Quote,Signal} from "./types.js";
 import {marketPhaseAt,sessionDateAt} from "./market-session.js";
 import {LatestExecutionScheduler} from "./execution-scheduler.js";
 import {compareLiveAccountState} from "./live-account-reconciliation.js";
+import {TelemetryQueue} from "./telemetry-queue.js";
 
 const EXECUTION_TEST_VERSION="luna-th1h-execution-test-0.1.0";
 
@@ -49,6 +50,13 @@ const analysisScheduler=new LatestExecutionScheduler(
 );
 const executionScheduler=new LatestExecutionScheduler(
   Math.max(1,Math.floor(config.maxExecutionConcurrency))
+);
+const telemetryQueue=new TelemetryQueue(
+  items=>ingest("",{action:"telemetry_batch",items}),
+  {
+    maxBatchSize:config.telemetryBatchSize,
+    flushMs:config.telemetryFlushMs
+  }
 );
 
 const lastPersistBySymbol=new Map<string,number>();
@@ -936,17 +944,27 @@ async function handleQuote(q:Quote){
 
   if(shouldPersist){
     lastPersistBySymbol.set(q.symbol,now);
-    const writes:Promise<unknown>[]=[
-      ingest("",{action:"tick",session_id:activeSessionId,quote:q})
-    ];
-    if(signal.action!=="HOLD" || config.executionTest){
-      writes.push(ingest("",{action:"signal",session_id:activeSessionId,signal}));
+    try{
+      telemetryQueue.enqueueTick({
+        action:"tick",
+        session_id:activeSessionId,
+        quote:{...q}
+      });
+      if(signal.action!=="HOLD" || config.executionTest){
+        telemetryQueue.enqueueSignal({
+          action:"signal",
+          session_id:activeSessionId,
+          signal:{...signal}
+        });
+      }
+    }catch(err){
+      console.error(JSON.stringify({
+        event:"PERSIST_SIGNAL_QUEUE_ERROR",
+        symbol:q.symbol,
+        error:String(err),
+        telemetry_queue:telemetryQueue.stats()
+      }));
     }
-    void Promise.all(writes).catch(err=>console.error(JSON.stringify({
-      event:"PERSIST_SIGNAL_ERROR",
-      symbol:q.symbol,
-      error:String(err)
-    })));
   }
 
   if(
@@ -1128,6 +1146,7 @@ async function endSession(status="CLOSED"){
         await reconcileLiveOrderStates();
       }
       await writeSnapshot();
+      await telemetryQueue.flushAll();
       await queueAudit("SESSION_ENDED",{status},activeStrategyVersion());
       await auditQueueTail;
       await ingest("",{action:"end_session",session_id:closingSessionId,status});
@@ -1176,6 +1195,12 @@ async function main(){
   }
   if(!Number.isFinite(config.supabaseRequestTimeoutMs) || config.supabaseRequestTimeoutMs<250){
     throw new Error("LUNA_SUPABASE_REQUEST_TIMEOUT_MS_MUST_BE_AT_LEAST_250");
+  }
+  if(!Number.isInteger(config.telemetryBatchSize) || config.telemetryBatchSize<1 || config.telemetryBatchSize>100){
+    throw new Error("LUNA_TELEMETRY_BATCH_SIZE_MUST_BE_1_TO_100");
+  }
+  if(!Number.isFinite(config.telemetryFlushMs) || config.telemetryFlushMs<5){
+    throw new Error("LUNA_TELEMETRY_FLUSH_MS_MUST_BE_AT_LEAST_5");
   }
   if(config.liveAccountCashDriftTolerance<0 || config.liveAccountQtyDriftTolerance<0){
     throw new Error("LUNA_LIVE_ACCOUNT_DRIFT_TOLERANCE_MUST_BE_NON_NEGATIVE");
