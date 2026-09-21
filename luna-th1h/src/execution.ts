@@ -25,6 +25,8 @@ export type PlannedOrder = {
   side:Side;
   qty:number;
   referencePrice:number;
+  visibleDepth:number;
+  spreadBps:number;
   reason:string;
 } | {
   accepted:false;
@@ -97,6 +99,13 @@ export function planOrder(signal:Signal,q:Quote,state:PortfolioState):PlannedOrd
     if(!priceOnlyPaper && q.askSize && q.askSize>0) qty=Math.min(qty,roundDown(q.askSize));
     if(qty<=0) return {accepted:false,reason:"INSUFFICIENT_CASH_OR_POSITION_HEADROOM"};
 
+    const maxPositionNotional=state.initialCapital*config.maxPositionPct;
+    if(currentNotional+qty*referencePrice>maxPositionNotional+1e-8){
+      const cappedQty=roundDown(Math.max(0,maxPositionNotional-currentNotional)/referencePrice);
+      qty=Math.min(qty,cappedQty);
+    }
+    if(qty<=0) return {accepted:false,reason:"MAX_POSITION_EXPOSURE"};
+
     const notional=qty*referencePrice;
     const risk=validateOrder({
       symbol:q.symbol,side,notional,
@@ -105,7 +114,13 @@ export function planOrder(signal:Signal,q:Quote,state:PortfolioState):PlannedOrd
       cash:state.cash
     });
     if(!risk.ok) return {accepted:false,reason:risk.reason};
-    return {accepted:true,symbol:q.symbol,side,qty,referencePrice,reason:signal.reason};
+    return {
+      accepted:true,symbol:q.symbol,side,qty,referencePrice,
+      visibleDepth:priceOnlyPaper?0:Number(q.askSize??0),
+      spreadBps:(!priceOnlyPaper && Number(q.ask)>0 && Number(q.bid)>0)
+        ? ((Number(q.ask)-Number(q.bid))/Number(q.last||q.ask))*10_000 : 0,
+      reason:signal.reason
+    };
   }
 
   if(pos.qty<=0) return {accepted:false,reason:"NO_LONG_POSITION"};
@@ -121,16 +136,27 @@ export function planOrder(signal:Signal,q:Quote,state:PortfolioState):PlannedOrd
     cash:state.cash
   });
     if(!risk.ok) return {accepted:false,reason:risk.reason};
-  return {accepted:true,symbol:q.symbol,side,qty,referencePrice,reason:signal.reason};
+  return {
+    accepted:true,symbol:q.symbol,side,qty,referencePrice,
+    visibleDepth:priceOnlyPaper?0:Number(q.bidSize??0),
+    spreadBps:(!priceOnlyPaper && Number(q.ask)>0 && Number(q.bid)>0)
+      ? ((Number(q.ask)-Number(q.bid))/Number(q.last||q.bid))*10_000 : 0,
+    reason:signal.reason
+  };
 }
 
 export function simulateFill(order:Extract<PlannedOrder,{accepted:true}>):SimulatedFill{
   const slippageRate=config.slippageBps/10000;
   const feeRate=config.feeBps/10000;
   const taxRate=order.side==="SELL"?config.sellTaxBps/10000:0;
+  const participation=order.visibleDepth>0
+    ? Math.min(1,Math.max(0,order.qty/order.visibleDepth))
+    : 0;
+  const impactRate=(config.marketImpactBps/10000)*Math.sqrt(participation);
+  const totalPricePenalty=slippageRate+impactRate;
   const fillPrice=order.side==="BUY"
-    ? order.referencePrice*(1+slippageRate)
-    : order.referencePrice*(1-slippageRate);
+    ? order.referencePrice*(1+totalPricePenalty)
+    : order.referencePrice*(1-totalPricePenalty);
   const notional=fillPrice*order.qty;
   const fee=notional*(feeRate+taxRate);
   const slippage=Math.abs(fillPrice-order.referencePrice)*order.qty;
