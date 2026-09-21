@@ -1,7 +1,7 @@
 import {config} from "./config.js";
 import {marketQuotes} from "./market/provider.js";
 import {StrategyV1,VERSION as STRATEGY_V1_VERSION} from "./strategy-v1.js";
-import {liveAccountState,liveGatewayDiagnostics,liveGatewayHealth,placeLiveOrder,reconcileLiveOrders} from "./live-gateway.js";
+import {liveAccountState,liveGatewayDiagnostics,liveGatewayHealth,liveOpenOrders,placeLiveOrder,reconcileLiveOrders} from "./live-gateway.js";
 import {transitionBrokerOrder,type BrokerOrderState} from "./broker-state.js";
 import {applyFill,createPortfolio,mark,planOrder,simulateFill,snapshot,type ExecutionReservations,type PortfolioState} from "./execution.js";
 import type {Quote,Signal} from "./types.js";
@@ -263,6 +263,17 @@ async function createInitialPortfolio(){
   }
 
   const broker=await liveAccountState();
+  const openOrders=await liveOpenOrders();
+  if(openOrders.length>0){
+    throw new Error(
+      "LIVE_BROKER_OPEN_ORDERS_PRESENT:"+openOrders.map(x=>[
+        x.order_id||"UNKNOWN",
+        x.symbol||"UNKNOWN",
+        x.side||"UNKNOWN",
+        x.status
+      ].join("/")).join(",")
+    );
+  }
   if(!Number.isFinite(broker.cash) || broker.cash<0){
     throw new Error("LIVE_BROKER_CASH_INVALID");
   }
