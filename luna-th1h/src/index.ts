@@ -148,7 +148,7 @@ function releaseAnalysisSlot(){
   if(waiter) waiter();
 }
 
-const MAX_EXECUTION_CONCURRENCY=4;
+const MAX_EXECUTION_CONCURRENCY=Math.max(1,Math.floor(config.maxExecutionConcurrency));
 
 function reserveExecution(fill:{symbol:string;side:"BUY"|"SELL";qty:number;notional:number;totalCashDelta:number}):ExecutionReservationToken{
   const token:ExecutionReservationToken={
@@ -882,6 +882,9 @@ async function main(){
     marketPhase:currentMarketPhase()
   }));
 
+  if(!Number.isInteger(config.maxExecutionConcurrency) || config.maxExecutionConcurrency<1 || config.maxExecutionConcurrency>16){
+    throw new Error("LUNA_MAX_EXECUTION_CONCURRENCY_MUST_BE_1_TO_16");
+  }
   if(!["paper","live"].includes(config.mode)) throw new Error(`Unknown LUNA_MODE: ${config.mode}`);
   if(config.priceOnlyFallback && (config.mode==="live" || config.executionMode==="live")){
     throw new Error("PRICE_ONLY_FALLBACK_IS_PAPER_ONLY");
