@@ -79,6 +79,26 @@ export class StrategyV1{
     }
   }
 
+  prime(symbol:string,prices:number[]){
+    const st=stateFor(this.states,symbol);
+    st.prices=[];
+    st.emaFast=null;
+    st.emaSlow=null;
+    st.previousFast=null;
+    st.previousSlow=null;
+    st.lastDecisionTs=0;
+    st.entryTs=null;
+    for(const price of prices){
+      if(!finite(price)) continue;
+      st.previousFast=st.emaFast;
+      st.previousSlow=st.emaSlow;
+      st.emaFast=ema(st.emaFast,price,this.params.fastPeriod);
+      st.emaSlow=ema(st.emaSlow,price,this.params.slowPeriod);
+      st.prices.push(price);
+      if(st.prices.length>this.params.slowPeriod*4) st.prices.shift();
+    }
+  }
+
   evaluate(q:Quote,ctx:StrategyContext):Signal{
     if(q.symbol.startsWith("__")){
       return {symbol:q.symbol,ts:q.ts,action:"HOLD",reason:"NON_TRADABLE_SYMBOL",strategyVersion:this.version};
