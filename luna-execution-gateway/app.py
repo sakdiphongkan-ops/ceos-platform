@@ -166,11 +166,10 @@ def _first_number(mapping: Dict[str, Any], keys):
 
 
 def _normalize_open_orders(eq):
-    getter = getattr(eq, "get_orders", None)
-    if not callable(getter):
-        raise ProviderUnavailable("settrade_get_orders_method_unavailable")
-
-    raw = getter()
+    try:
+        raw = eq.get_orders()
+    except AttributeError as exc:
+        raise ProviderUnavailable("settrade_get_orders_method_unavailable") from exc
     data = raw.get("data", []) if isinstance(raw, dict) else []
     if not isinstance(data, list):
         raise ProviderUnavailable("settrade_orders_data_invalid")
