@@ -140,3 +140,25 @@ The next implementation layer is now in the repository:
 - Configurable visible-depth market impact plus max-position enforcement remain active in the execution model.
 
 These changes are motivated by documented platform practices: LEAN treats live fills as asynchronous order events and provides explicit order status/order-event handling; QuantRocket/Alphalens emphasizes factor tear sheets, quantile spreads, IC and turnover analysis; Numerai explicitly evaluates neutralized information coefficients, neutral churn, and model correlations. citeturn342024search0turn250777search3turn342024search1
+
+
+## Addendum — Thai-native data moat and PIT contract
+
+SET currently exposes several native data surfaces through SMART Marketplace / SETSMART, including company fundamental data, financial statements, One Report, ESG, corporate action/reference data, EOD/intraday data, and related feeds. Company fundamental data is available through JSON APIs for SETSMART members, while the financial-statement service supports structured company financial data and a last-update workflow. The official financial-statement specification distinguishes a statement's `asOfDate` from the operational update process; LUNA must therefore never treat `asOfDate` alone as `available_at`. The research contract requires an actual source-availability timestamp before a fundamental observation can enter the point-in-time feature matrix.
+
+This creates a concrete upgrade path:
+
+1. ingest SET/SETSMART raw observations,
+2. ingest the corresponding disclosure/update event timestamp,
+3. normalize to `symbol + available_at + effective_period + value + source`,
+4. merge backward into the decision timestamp,
+5. reject any future-timestamp match,
+6. retain raw-response hash and source metadata for audit.
+
+The official SET documentation also exposes real-time/market-data and news surfaces, making the timestamped disclosure layer a viable future source for reconstructing when information became public rather than merely when the accounting period ended.
+
+Sources:
+- SET Listed Company Fundamental Data: https://www.set.or.th/app/online-data/fundamental-data
+- SET SMART Marketplace: https://www.set.or.th/en/services/connectivity-and-data/data/smart-marketplace
+- SET Financial Statement API specification: https://media.set.or.th/set/Documents/2025/Apr/16_SMART_Marketplace_Financial_Statement_Specification.pdf
+- SET Company Fundamental API specification: https://media.set.or.th/set/Documents/2022/Oct/05_1_Company_Fundamental_Specification.pdf
