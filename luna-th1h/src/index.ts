@@ -305,7 +305,15 @@ function getSignal(q:Quote):Signal{
   });
 }
 
-async function executeSignal(q:Quote,signal:Signal){
+async function executeSignal(
+  q:Quote,
+  signal:Signal,
+  expectedSessionId:string|null=sessionId,
+  expectedSessionGeneration=sessionGeneration
+){
+  if(sessionId!==expectedSessionId || sessionGeneration!==expectedSessionGeneration){
+    throw new Error("EXECUTION_SESSION_GENERATION_MISMATCH");
+  }
   mark(portfolio,q);
   const plan=planOrder(signal,q,portfolio,executionReservations);
   if(!plan.accepted){
@@ -428,7 +436,22 @@ async function executeSignal(q:Quote,signal:Signal){
     const result=(response as {result?:{idempotent?:boolean,order_id?:string,fill_id?:number,position_qty?:number,avg_price?:number,realized_pnl?:number}})?.result;
     if(!result) throw new Error("record_fill returned no result");
 
-    if(!result.idempotent) applyFill(portfolio,fill);
+    if(!result.idempotent){
+      if(sessionId!==expectedSessionId || sessionGeneration!==expectedSessionGeneration){
+        queueAudit("FILL_LOCAL_APPLY_SUPPRESSED_SESSION_GENERATION",{
+          symbol:fill.symbol,
+          side:fill.side,
+          qty:fill.qty,
+          client_order_id:clientOrderId,
+          expected_session_id:expectedSessionId,
+          current_session_id:sessionId,
+          expected_session_generation:expectedSessionGeneration,
+          current_session_generation:sessionGeneration
+        },signal.strategyVersion);
+      }else{
+        applyFill(portfolio,fill);
+      }
+    }
     queueAudit("ORDER_FILLED",{
       client_order_id:clientOrderId,
       order_id:result.order_id,
@@ -726,7 +749,7 @@ async function handleQuote(q:Quote){
           },signal.strategyVersion);
           return;
         }
-        await executeSignal(q,signal);
+        await executeSignal(q,signal,scheduledSessionId,scheduledSessionGeneration);
         const queueWaitMs=Date.now()-executionQueuedAt;
         const endToEndMs=Date.now()-startedAt;
         const executionMs=Math.max(0,endToEndMs-marketLagMs);
