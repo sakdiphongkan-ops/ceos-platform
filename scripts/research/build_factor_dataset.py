@@ -139,45 +139,96 @@ def main() -> None:
              .reset_index(level=0, drop=True)
         )
 
-    # Point-in-time fundamental merge: only values whose publication timestamp is
-    # at or before this row's decision timestamp are eligible.
+    # Point-in-time fundamental merge: join each field independently using only
+    # observations whose source availability timestamp is <= decision_ts. This
+    # avoids losing EOD ratios when financial-statement fields arrive in separate
+    # source records/timestamps.
     pit_fundamental_rows = 0
     pit_future_rows = 0
     pit_fundamental_fields = []
     if args.fundamentals:
         f = pd.read_csv(args.fundamentals)
-        required = {"symbol","available_at"}
+        required = {"symbol", "available_at"}
         if not required.issubset(f.columns):
             raise SystemExit("fundamentals require symbol and available_at")
         f["symbol"] = f["symbol"].astype("string").str.strip().str.upper()
         f["available_at"] = pd.to_datetime(f["available_at"], utc=True)
-        f = f.rename(columns={"available_at":"fund_available_at"})
-        f = f.sort_values(["symbol","fund_available_at"])
-        keep = ["symbol","fund_available_at"] + [c for c in f.columns if c.lower() in set(FUND_COLS.values())]
-        keep = list(dict.fromkeys([c for c in keep if c in f.columns]))
-        f = f[keep].copy()
-        p = pd.merge_asof(
-            p.sort_values(["decision_ts","symbol"]),
-            f.sort_values(["fund_available_at","symbol"]),
-            left_on="decision_ts",
-            right_on="fund_available_at",
-            by="symbol",
-            direction="backward",
-            suffixes=("", "_fund"),
-        )
+        f = f.rename(columns={"available_at": "fund_available_at"})
+        f = f.sort_values(["fund_available_at", "symbol"])
+        source_cols = [c for c in FUND_COLS.values() if c in f.columns]
+        if not source_cols:
+            raise SystemExit("fundamentals contains no recognized LUNA fields")
+
+        base = p[["symbol", "decision_ts"]].copy()
+        base["_row_id"] = np.arange(len(base), dtype=np.int64)
+        base = base.sort_values(["decision_ts", "symbol"]).reset_index(drop=True)
+        latest_field_ts = pd.Series(pd.NaT, index=base["_row_id"].values, dtype="datetime64[ns, UTC]")
+        matched_any = pd.Series(False, index=base["_row_id"].values)
+
         for out_name, src in FUND_COLS.items():
-            if src in p.columns:
-                p[out_name] = pd.to_numeric(p[src], errors="coerce")
-            elif out_name not in p.columns:
+            if src not in f.columns:
+                if out_name not in p.columns:
+                    p[out_name] = np.nan
+                continue
+
+            sf = f[["symbol", "fund_available_at", src]].copy()
+            sf[src] = pd.to_numeric(sf[src], errors="coerce")
+            sf = sf.dropna(subset=[src, "fund_available_at"])
+            if sf.empty:
                 p[out_name] = np.nan
-        p["available_at"] = p[["available_at","fund_available_at"]].max(axis=1)
-        pit_fundamental_rows = int(p["fund_available_at"].notna().sum())
-        pit_future_rows = int((p["fund_available_at"] > p["decision_ts"]).fillna(False).sum())
-        pit_fundamental_fields = [
-            c for c in FUND_COLS if c in p.columns and pd.to_numeric(p[c], errors="coerce").notna().any()
-        ]
+                continue
+
+            sf = sf.sort_values(["fund_available_at", "symbol"])
+            joined = pd.merge_asof(
+                base,
+                sf,
+                left_on="decision_ts",
+                right_on="fund_available_at",
+                by="symbol",
+                direction="backward",
+            ).sort_values("_row_id")
+
+            vals = joined[src].to_numpy()
+            ts = pd.to_datetime(joined["fund_available_at"], utc=True)
+            p[out_name] = vals
+            matched = pd.Series(pd.notna(vals), index=base["_row_id"].values)
+            matched_any = matched_any | matched
+            ts_series = pd.Series(ts.to_numpy(), index=base["_row_id"].values)
+            latest_field_ts = latest_field_ts.where(
+                ~(matched & ts_series.notna()),
+                pd.concat([latest_field_ts, ts_series], axis=1).max(axis=1),
+            )
+            pit_fundamental_fields.append(out_name)
+
+            if (ts.notna() & (ts > base["decision_ts"].reset_index(drop=True))).any():
+                pit_future_rows += int(
+                    (ts.notna() & (ts > base["decision_ts"].reset_index(drop=True))).sum()
+                )
+
+        row_map = base.set_index("_row_id")["symbol"]
+        # Reindex back to the original p order.
+        latest_field_ts = latest_field_ts.reindex(range(len(base))).set_axis(base["_row_id"].to_numpy())
+        matched_any = matched_any.reindex(base["_row_id"].to_numpy())
+        latest_by_row = pd.Series(pd.NaT, index=range(len(p)), dtype="datetime64[ns, UTC]")
+        any_by_row = pd.Series(False, index=range(len(p)))
+        order_ids = base["_row_id"].to_numpy()
+        latest_by_row.iloc[order_ids] = latest_field_ts.to_numpy()
+        any_by_row.iloc[order_ids] = matched_any.to_numpy()
+
+        p["fund_available_at"] = latest_by_row.to_numpy()
+        pit_fundamental_rows = int(any_by_row.sum())
         if pit_future_rows:
-            raise SystemExit(f"point-in-time fundamental leakage detected: {pit_future_rows} rows")
+            raise SystemExit(f"point-in-time fundamental leakage detected: {pit_future_rows} field matches")
+
+        p["available_at"] = pd.concat(
+            [
+                pd.to_datetime(p["available_at"], utc=True),
+                pd.to_datetime(p["fund_available_at"], utc=True),
+            ],
+            axis=1,
+        ).max(axis=1)
+        p = p.drop(columns=["fund_available_at"])
+        pit_fundamental_fields = sorted(set(pit_fundamental_fields))
     else:
         for c in [c for c in OUT_COLS if c.isupper() and c not in p.columns]:
             p[c] = np.nan
