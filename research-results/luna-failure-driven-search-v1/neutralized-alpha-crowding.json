@@ -1,0 +1,176 @@
+{
+  "status": "COMPLETED",
+  "engine": "luna-neutralized-alpha-crowding-v1",
+  "input_sha256": "c2a33f3b1491386dd96a50afe59f38f075fb0d5ff4da65ad3dfeaaedb78f77ff",
+  "search_summary_sha256": "cb5f513a751adbc73c6894306dd71b4d2581ba349a2a7863bad444178f6ebcce",
+  "formula_catalog_sha256": "be05b38ae954534a4ea1189c7f420f3c963acffbfdb2181dfeb6883573632f85",
+  "benchmark_sha256": "067c2412ee4d2b4544a11725ca3e6b5ad88f067cfada8e54aece1e3da178be73",
+  "formula_id": "F00148",
+  "formula": {
+    "id": "F00148",
+    "kind": "blend4",
+    "terms": [
+      [
+        "MOM_40",
+        -0.13139775056526665
+      ],
+      [
+        "DIST_MA20",
+        -0.3125228373835201
+      ],
+      [
+        "REV21",
+        -0.2672082942283092
+      ],
+      [
+        "VOL_10",
+        0.2888711178229041
+      ]
+    ]
+  },
+  "neutralizers": [
+    "MOM_20",
+    "MOM_60",
+    "MOM_120",
+    "VOL_20",
+    "MAXDD_60",
+    "ADV20",
+    "AMOUNT",
+    "DIST_MA20",
+    "DIST_MA60",
+    "DIST_HIGH_252",
+    "RSI14"
+  ],
+  "raw_ic_mean": -0.0395234712420186,
+  "raw_ic_std": 0.1632100498696054,
+  "neutral_ic_mean": -0.014594922598426319,
+  "neutral_ic_std": 0.05766028192772836,
+  "neutral_icir_annualized": -0.8768305193059773,
+  "neutral_churn_mean": 1.0068072653781328,
+  "neutral_churn_month_pairs": 59,
+  "crowding_peers": [
+    {
+      "peer_formula_id": "F01862",
+      "mean_rank_corr": 0.8779027806503131,
+      "max_abs_rank_corr": 0.9540675422965756
+    },
+    {
+      "peer_formula_id": "F01822",
+      "mean_rank_corr": 0.7245388514054664,
+      "max_abs_rank_corr": 0.8990516113827763
+    },
+    {
+      "peer_formula_id": "F02622",
+      "mean_rank_corr": 0.7045307588162493,
+      "max_abs_rank_corr": 0.8885540653364415
+    },
+    {
+      "peer_formula_id": "F00233",
+      "mean_rank_corr": 0.7610416955434239,
+      "max_abs_rank_corr": 0.8584769041435086
+    },
+    {
+      "peer_formula_id": "F04731",
+      "mean_rank_corr": 0.7062118448077986,
+      "max_abs_rank_corr": 0.8582686890087862
+    },
+    {
+      "peer_formula_id": "F01457",
+      "mean_rank_corr": 0.6849796255324856,
+      "max_abs_rank_corr": 0.8489333614396819
+    },
+    {
+      "peer_formula_id": "F03856",
+      "mean_rank_corr": 0.6182331547255445,
+      "max_abs_rank_corr": 0.8421773778898126
+    },
+    {
+      "peer_formula_id": "F01818",
+      "mean_rank_corr": 0.582218436248379,
+      "max_abs_rank_corr": 0.7411895687351318
+    },
+    {
+      "peer_formula_id": "F02759",
+      "mean_rank_corr": 0.4329108660228379,
+      "max_abs_rank_corr": 0.7062893852606084
+    },
+    {
+      "peer_formula_id": "F00800",
+      "mean_rank_corr": 0.3407930329839348,
+      "max_abs_rank_corr": 0.6872442266660376
+    },
+    {
+      "peer_formula_id": "F00152",
+      "mean_rank_corr": 0.327846382715415,
+      "max_abs_rank_corr": 0.677680174228009
+    },
+    {
+      "peer_formula_id": "F01618",
+      "mean_rank_corr": -0.4164854815236167,
+      "max_abs_rank_corr": 0.6649125843749015
+    },
+    {
+      "peer_formula_id": "F01560",
+      "mean_rank_corr": 0.3231803818484817,
+      "max_abs_rank_corr": 0.6547622448224654
+    },
+    {
+      "peer_formula_id": "F01298",
+      "mean_rank_corr": 0.23515692441412966,
+      "max_abs_rank_corr": 0.648341053589949
+    },
+    {
+      "peer_formula_id": "F00831",
+      "mean_rank_corr": 0.26287694352291285,
+      "max_abs_rank_corr": 0.6439536663860828
+    },
+    {
+      "peer_formula_id": "F01568",
+      "mean_rank_corr": 0.33761951233763415,
+      "max_abs_rank_corr": 0.6413355631835307
+    },
+    {
+      "peer_formula_id": "F01890",
+      "mean_rank_corr": 0.3173027486629405,
+      "max_abs_rank_corr": 0.6255230266624047
+    },
+    {
+      "peer_formula_id": "F00442",
+      "mean_rank_corr": -0.44497394283464575,
+      "max_abs_rank_corr": 0.6222151506487216
+    },
+    {
+      "peer_formula_id": "F03401",
+      "mean_rank_corr": 0.2718983453561217,
+      "max_abs_rank_corr": 0.6183908574668521
+    },
+    {
+      "peer_formula_id": "F02496",
+      "mean_rank_corr": 0.12657893348801388,
+      "max_abs_rank_corr": 0.5969969664814503
+    },
+    {
+      "peer_formula_id": "F02570",
+      "mean_rank_corr": 0.19901940819022215,
+      "max_abs_rank_corr": 0.5819338135140925
+    },
+    {
+      "peer_formula_id": "F04024",
+      "mean_rank_corr": 0.1250376332254173,
+      "max_abs_rank_corr": 0.5592127148918731
+    },
+    {
+      "peer_formula_id": "F03869",
+      "mean_rank_corr": 0.060460318688352915,
+      "max_abs_rank_corr": 0.46058834313643426
+    },
+    {
+      "peer_formula_id": "F02117",
+      "mean_rank_corr": 0.09968119129791479,
+      "max_abs_rank_corr": 0.43500163861415264
+    }
+  ],
+  "crowding_max_abs_corr": 0.9540675422965756,
+  "benchmark_months_overlap": 42,
+  "interpretation_guard": "neutralized IC and crowding are diagnostics; no selection or holdout tuning is performed here"
+}

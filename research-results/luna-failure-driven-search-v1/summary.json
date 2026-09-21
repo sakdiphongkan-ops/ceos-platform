@@ -1,0 +1,193 @@
+{
+  "status": "COMPLETED",
+  "engine": "luna-failure-driven-search-v1",
+  "input_sha256": "c2a33f3b1491386dd96a50afe59f38f075fb0d5ff4da65ad3dfeaaedb78f77ff",
+  "formula_count": 5000,
+  "seed": 20260921,
+  "factors": [
+    "REV21",
+    "MOM_5",
+    "MOM_10",
+    "MOM_20",
+    "MOM_40",
+    "MOM_60",
+    "MOM_120",
+    "MOM_252",
+    "VOL_10",
+    "VOL_20",
+    "MAXDD_60",
+    "ATR_PCT",
+    "ADV20",
+    "AMOUNT",
+    "ILLIQ_20",
+    "BREAKOUT20",
+    "BREAKOUT55",
+    "RSI14",
+    "DIST_MA20",
+    "DIST_MA60",
+    "DIST_HIGH_252",
+    "SKEW_20",
+    "SKEW_60"
+  ],
+  "factor_coverage": {
+    "REV21": 0.999931157923723,
+    "MOM_5": 0.9999655789618614,
+    "MOM_10": 0.9999655789618614,
+    "MOM_20": 0.999931157923723,
+    "MOM_40": 0.999862315847446,
+    "MOM_60": 0.9997934737711689,
+    "MOM_120": 0.9994492633897838,
+    "MOM_252": 0.9977626325209968,
+    "REL_MOM": 0.0,
+    "VOL_10": 0.9999655789618614,
+    "VOL_20": 0.999931157923723,
+    "MAXDD_60": 0.9997934737711689,
+    "ATR_PCT": 0.9999655789618614,
+    "ADV20": 0.9999655789618614,
+    "AMOUNT": 0.9999655789618614,
+    "ILLIQ_20": 0.7567121024370095,
+    "BREAKOUT20": 0.999931157923723,
+    "BREAKOUT55": 0.9997934737711689,
+    "RSI14": 0.999931157923723,
+    "DIST_MA20": 0.999931157923723,
+    "DIST_MA60": 0.9997934737711689,
+    "DIST_HIGH_252": 0.9977970535591354,
+    "SKEW_20": 0.9852333746385791,
+    "SKEW_60": 0.9871953738124741
+  },
+  "months_available": 61,
+  "development_months": 49,
+  "holdout_months": 12,
+  "outer_oos_months": 31,
+  "outer_oos_stats": {
+    "months": 31,
+    "geo": 0.009946846025213753,
+    "cum": 0.35910820750128924,
+    "pos": 0.6129032258064516,
+    "dd": -0.0845136007727626,
+    "ge7": 2,
+    "min": -0.08142242716944922,
+    "max": 0.14259087370296222
+  },
+  "final_formula": {
+    "id": "F00148",
+    "kind": "blend4",
+    "terms": [
+      [
+        "MOM_40",
+        -0.13139775056526665
+      ],
+      [
+        "DIST_MA20",
+        -0.3125228373835201
+      ],
+      [
+        "REV21",
+        -0.2672082942283092
+      ],
+      [
+        "VOL_10",
+        0.2888711178229041
+      ]
+    ]
+  },
+  "final_selection": [
+    0.03709039566213633,
+    0.03647942253082839,
+    0.8333333333333334,
+    -0.000473805912740044
+  ],
+  "frozen_holdout": {
+    "months": 11,
+    "geo": -0.026374914935574933,
+    "cum": -0.2547374421945696,
+    "pos": 0.2727272727272727,
+    "dd": -0.2766649564533471,
+    "ge7": 2,
+    "min": -0.11889481788680292,
+    "max": 0.16357872440812302
+  },
+  "holdout_start": "2024-04-30 00:00:00",
+  "holdout_end": "2025-03-31 00:00:00",
+  "benchmark_locked": {
+    "path": "research-results/luna-m1-benchmark-locked-20260920.csv",
+    "sha256": "067c2412ee4d2b4544a11725ca3e6b5ad88f067cfada8e54aece1e3da178be73",
+    "stats": {
+      "months": 59,
+      "geo": 0.006556127881564541,
+      "cum": 0.47042145974674265,
+      "pos": 0.5423728813559322,
+      "dd": -0.47357603634375234,
+      "ge7": 10,
+      "min": -0.1841046986153718,
+      "max": 0.2729953180463912
+    },
+    "months": 59
+  },
+  "top_outer_selected": [
+    {
+      "formula_id": "F04570",
+      "count": 5
+    },
+    {
+      "formula_id": "F01556",
+      "count": 4
+    },
+    {
+      "formula_id": "F02460",
+      "count": 3
+    },
+    {
+      "formula_id": "F03237",
+      "count": 3
+    },
+    {
+      "formula_id": "F04157",
+      "count": 3
+    },
+    {
+      "formula_id": "F04258",
+      "count": 3
+    },
+    {
+      "formula_id": "F04293",
+      "count": 3
+    },
+    {
+      "formula_id": "F00148",
+      "count": 2
+    },
+    {
+      "formula_id": "F00019",
+      "count": 1
+    },
+    {
+      "formula_id": "F01618",
+      "count": 1
+    },
+    {
+      "formula_id": "F01649",
+      "count": 1
+    },
+    {
+      "formula_id": "F01959",
+      "count": 1
+    },
+    {
+      "formula_id": "F03651",
+      "count": 1
+    }
+  ],
+  "selection_rule": "nested walk-forward: inner train -> recent validation -> outer realized month",
+  "holdout_rule": "final formula fixed before holdout; holdout never used for formula search",
+  "leakage_guard": "current-month fwd1 is never part of same-month or future selection history",
+  "formula_search_families": [
+    "single",
+    "pair",
+    "blend3",
+    "blend4",
+    "interaction",
+    "gated"
+  ],
+  "initial_capital_baht": 30000
+}

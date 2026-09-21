@@ -1,0 +1,117 @@
+{
+  "registry_version": "luna-model-registry-v1",
+  "created_at": "2026-09-21T15:37:45.378526+00:00",
+  "git_sha": "3d51d4133c7727a78fb22548e3e425cec630db30",
+  "workflow_run_id": "35619282588",
+  "candidate": {
+    "formula_id": "F00148",
+    "formula": {
+      "id": "F00148",
+      "kind": "blend4",
+      "terms": [
+        [
+          "MOM_40",
+          -0.13139775056526665
+        ],
+        [
+          "DIST_MA20",
+          -0.3125228373835201
+        ],
+        [
+          "REV21",
+          -0.2672082942283092
+        ],
+        [
+          "VOL_10",
+          0.2888711178229041
+        ]
+      ]
+    },
+    "selection": [
+      0.03709039566213633,
+      0.03647942253082839,
+      0.8333333333333334,
+      -0.000473805912740044
+    ]
+  },
+  "lineage": {
+    "input_sha256": "c2a33f3b1491386dd96a50afe59f38f075fb0d5ff4da65ad3dfeaaedb78f77ff",
+    "search_summary_sha256": "cb5f513a751adbc73c6894306dd71b4d2581ba349a2a7863bad444178f6ebcce",
+    "scorecard_sha256": "d7a249295844d55d99a50d379c3d1733c3774d61cdbee68fef5e545112b3c1e0",
+    "neutralized_sha256": "aca783f959bfab43eff177d86664807d9e98b55f0ae4a29345895fc05d7af4ac",
+    "benchmark_sha256": "067c2412ee4d2b4544a11725ca3e6b5ad88f067cfada8e54aece1e3da178be73",
+    "holdout_start": "2024-04-30 00:00:00",
+    "holdout_end": "2025-03-31 00:00:00",
+    "selection_rule": "nested walk-forward: inner train -> recent validation -> outer realized month",
+    "holdout_rule": "final formula fixed before holdout; holdout never used for formula search",
+    "leakage_guard": "current-month fwd1 is never part of same-month or future selection history"
+  },
+  "evidence": {
+    "outer_oos": {
+      "months": 31,
+      "geo": 0.009946846025213753,
+      "cum": 0.35910820750128924,
+      "pos": 0.6129032258064516,
+      "dd": -0.0845136007727626,
+      "ge7": 2,
+      "min": -0.08142242716944922,
+      "max": 0.14259087370296222
+    },
+    "frozen_holdout": {
+      "months": 11,
+      "geo": -0.026374914935574933,
+      "cum": -0.2547374421945696,
+      "pos": 0.2727272727272727,
+      "dd": -0.2766649564533471,
+      "ge7": 2,
+      "min": -0.11889481788680292,
+      "max": 0.16357872440812302
+    },
+    "diagnostics": {
+      "development_ic_mean": -0.02211726849852323,
+      "development_icir_annualized": -0.47922255113809215,
+      "quintile_spread_mean": 0.00596862132388927,
+      "benchmark_overlap": {
+        "sha256": "067c2412ee4d2b4544a11725ca3e6b5ad88f067cfada8e54aece1e3da178be73",
+        "overlap_months": 41,
+        "candidate": {
+          "months": 41,
+          "geo": -0.0009767146179004307,
+          "cum": -0.03927288378820515,
+          "pos": 0.4634146341463415,
+          "dd": -0.2766649564533471,
+          "ge7": 7,
+          "min": -0.11889481788680292,
+          "max": 0.19764873765363866
+        },
+        "m1": {
+          "months": 41,
+          "geo": -0.014986863806386029,
+          "cum": -0.46157785379702054,
+          "pos": 0.4634146341463415,
+          "dd": -0.47357603634375234,
+          "ge7": 4,
+          "min": -0.1841046986153718,
+          "max": 0.2607948596795768
+        },
+        "candidate_minus_m1_geo": 0.014010149188485598
+      },
+      "neutral_ic_mean": -0.014594922598426319,
+      "neutral_icir_annualized": -0.8768305193059773,
+      "neutral_churn_mean": 1.0068072653781328,
+      "crowding_max_abs_corr": 0.9540675422965756
+    },
+    "promotion_checks": {
+      "holdout_geo_positive": false,
+      "outer_oos_geo_positive": true,
+      "ic_mean_positive": false,
+      "icir_positive": false,
+      "cost_45bps_holdout_positive": false,
+      "k10_k20_k30_k50_all_positive_at20bps": false
+    }
+  },
+  "promotion": {
+    "status": "RESEARCH_ONLY",
+    "reason": "Registry entry is immutable evidence of a research candidate; production promotion requires independent human review and additional live/shadow validation."
+  }
+}
