@@ -1,6 +1,6 @@
 # LUNA Corporate Action Ledger Contract v1
 
-SET's current Information Services pages list Security Profile and Corporate Action data as an API-delivered product, separate from historical EOD trading data. citeturn907553search0turn907553search8
+SET's current Information Services pages list Security Profile and Corporate Action data as an API-delivered product, separate from historical EOD trading data. Source: SET Information Services, Security Profile & Corporate Action and End-of-Day/Historical data pages.
 
 LUNA records corporate actions as point-in-time events rather than silently rewriting research history.
 
