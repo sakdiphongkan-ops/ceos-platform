@@ -718,66 +718,70 @@ async function handleQuote(q:Quote){
 
   if(signal.action!=="HOLD"){
     const executionQueuedAt=Date.now();
-    executionChain=executionChain
-      .catch(()=>undefined)
-      .then(async()=>{
-        try{
-          // Re-check the session immediately before execution. A signal may have
-          // waited behind another order long enough to cross REDUCE_ONLY/CLOSED.
-          const executionPhase=currentMarketPhase();
-          const quoteTsMs=Date.parse(q.ts);
-          const quoteAgeMs=Number.isFinite(quoteTsMs)
-            ? Math.max(0,Date.now()-quoteTsMs)
-            : Number.POSITIVE_INFINITY;
-          const blockedByPhase =
-            executionPhase==="CLOSED"
-            || (signal.action==="BUY" && executionPhase!=="ACTIVE")
-            || quoteAgeMs>config.maxQuoteAgeMs;
-          if(blockedByPhase){
-            await queueAudit("ORDER_SUPPRESSED_MARKET_PHASE",{
-              symbol:q.symbol,
-              action:signal.action,
-              market_phase:executionPhase,
-              quote_ts:q.ts,
-              quote_age_ms:quoteAgeMs
-            },signal.strategyVersion);
-            return;
-          }
-          await executeSignal(q,signal);
-          const queueWaitMs=Date.now()-executionQueuedAt;
-          const endToEndMs=Date.now()-startedAt;
-          const executionMs=Math.max(0,endToEndMs-marketLagMs);
-          queueAudit("LATENCY_METRIC",{
+    enqueueSymbolExecution(q.symbol,async()=>{
+      try{
+        // Re-check the session immediately before execution. A signal may have
+        // waited behind another order long enough to cross REDUCE_ONLY/CLOSED.
+        const executionPhase=currentMarketPhase();
+        const quoteTsMs=Date.parse(q.ts);
+        const quoteAgeMs=Number.isFinite(quoteTsMs)
+          ? Math.max(0,Date.now()-quoteTsMs)
+          : Number.POSITIVE_INFINITY;
+        const blockedByPhase =
+          executionPhase==="CLOSED"
+          || (signal.action==="BUY" && executionPhase!=="ACTIVE")
+          || quoteAgeMs>config.maxQuoteAgeMs;
+        if(blockedByPhase){
+          await queueAudit("ORDER_SUPPRESSED_MARKET_PHASE",{
             symbol:q.symbol,
             action:signal.action,
+            market_phase:executionPhase,
             quote_ts:q.ts,
-            market_lag_ms:marketLagMs,
-            prewarm_ms:prewarmMs,
-            analysis_ms:Math.max(0,Date.now()-startedAt-queueWaitMs),
-            queue_wait_ms:queueWaitMs,
-            execution_ms:executionMs,
-            end_to_end_ms:endToEndMs,
-            market_phase:currentMarketPhase(),
-            source:q.source
+            quote_age_ms:quoteAgeMs,
+            execution_queue_depth:executionQueue.length,
+            active_execution_jobs:activeExecutionJobs
           },signal.strategyVersion);
-          console.log(JSON.stringify({
-            event:"EXECUTION_COMPLETE",
-            symbol:q.symbol,
-            action:signal.action,
-            queue_wait_ms:queueWaitMs,
-            end_to_end_ms:endToEndMs,
-            market_lag_ms:marketLagMs
-          }));
-        }catch(err){
-          console.error(JSON.stringify({
-            event:"EXECUTION_ERROR",
-            symbol:q.symbol,
-            action:signal.action,
-            error:String(err),
-            end_to_end_ms:Date.now()-startedAt
-          }));
+          return;
         }
-      });
+        await executeSignal(q,signal);
+        const queueWaitMs=Date.now()-executionQueuedAt;
+        const endToEndMs=Date.now()-startedAt;
+        const executionMs=Math.max(0,endToEndMs-marketLagMs);
+        queueAudit("LATENCY_METRIC",{
+          symbol:q.symbol,
+          action:signal.action,
+          quote_ts:q.ts,
+          market_lag_ms:marketLagMs,
+          prewarm_ms:prewarmMs,
+          analysis_ms:Math.max(0,Date.now()-startedAt-queueWaitMs),
+          queue_wait_ms:queueWaitMs,
+          execution_ms:executionMs,
+          end_to_end_ms:endToEndMs,
+          market_phase:currentMarketPhase(),
+          source:q.source,
+          execution_queue_depth:executionQueue.length,
+          active_execution_jobs:activeExecutionJobs
+        },signal.strategyVersion);
+        console.log(JSON.stringify({
+          event:"EXECUTION_COMPLETE",
+          symbol:q.symbol,
+          action:signal.action,
+          queue_wait_ms:queueWaitMs,
+          end_to_end_ms:endToEndMs,
+          market_lag_ms:marketLagMs,
+          active_execution_jobs:activeExecutionJobs,
+          execution_queue_depth:executionQueue.length
+        }));
+      }catch(err){
+        console.error(JSON.stringify({
+          event:"EXECUTION_ERROR",
+          symbol:q.symbol,
+          action:signal.action,
+          error:String(err),
+          end_to_end_ms:Date.now()-startedAt
+        }));
+      }
+    });
   }
 
   if(!heartbeatTimer){
