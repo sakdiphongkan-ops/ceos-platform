@@ -109,6 +109,8 @@ export class StrategyV1{
     const st=stateFor(this.states,symbol);
     if(st.prices.length>maxLivePrices) return false;
     const livePrices=[...st.prices];
+    const preservedLastDecisionTs=st.lastDecisionTs;
+    const preservedEntryTs=st.entryTs;
     this.prime(symbol,prices);
     const replay=stateFor(this.states,symbol);
     for(const price of livePrices){
@@ -120,6 +122,8 @@ export class StrategyV1{
       replay.prices.push(price);
       if(replay.prices.length>this.params.slowPeriod*4) replay.prices.shift();
     }
+    replay.lastDecisionTs=preservedLastDecisionTs;
+    replay.entryTs=preservedEntryTs;
     return true;
   }
 
