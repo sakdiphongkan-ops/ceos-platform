@@ -79,7 +79,8 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
         last:Number.isFinite(Number(raw.last))?Number(raw.last):null,
         bidSize:Number.isFinite(Number(raw.bid_size))?Number(raw.bid_size):null,
         askSize:Number.isFinite(Number(raw.ask_size))?Number(raw.ask_size):null,
-        source:"settrade-open-api-realtime"
+        source:String(raw.source ?? "unknown-market-data"),
+        dataQuality:raw.data_quality ? String(raw.data_quality) : undefined
       };
       if(q.last===null && q.bid===null && q.ask===null) continue;
       const sig=JSON.stringify([q.ts,q.bid,q.ask,q.last,q.bidSize,q.askSize]);
