@@ -92,7 +92,8 @@ async function ingest(path:string,body:Record<string,unknown>,agentRequired=true
   for(let attempt=1;attempt<=3;attempt++){
     try{
       const res=await fetch(`${config.supabaseFunctionUrl}/${path}`,{
-        method:"POST",headers,body:JSON.stringify(body)
+        method:"POST",headers,body:JSON.stringify(body),
+        signal:AbortSignal.timeout(config.supabaseRequestTimeoutMs)
       });
       const text=await res.text();
       let payload:unknown=text;
@@ -526,32 +527,30 @@ async function executeSignal(
       });
       pendingLiveReservations.set(clientOrderId,reservation);
 
-      try{
-        await ingest("",{
-          action:"record_broker_event",
-          event:{
-            session_id:sessionId,
-            client_order_id:brokerOrder.client_order_id,
-            broker_order_id:brokerOrder.broker_order_id,
-            event_type:"BROKER_ORDER_SUBMITTED",
-            ts:new Date().toISOString(),
-            payload:{
-              symbol:brokerOrder.symbol,
-              side:brokerOrder.side,
-              qty:brokerOrder.qty,
-              price:brokerOrder.price,
-              raw:brokerOrder.raw
-            },
-            idempotency_key:sessionId+":BROKER_ORDER_SUBMITTED:"+brokerOrder.client_order_id
-          }
-        });
-      }catch(bookkeepingError){
+      void ingest("",{
+        action:"record_broker_event",
+        event:{
+          session_id:sessionId,
+          client_order_id:brokerOrder.client_order_id,
+          broker_order_id:brokerOrder.broker_order_id,
+          event_type:"BROKER_ORDER_SUBMITTED",
+          ts:new Date().toISOString(),
+          payload:{
+            symbol:brokerOrder.symbol,
+            side:brokerOrder.side,
+            qty:brokerOrder.qty,
+            price:brokerOrder.price,
+            raw:brokerOrder.raw
+          },
+          idempotency_key:sessionId+":BROKER_ORDER_SUBMITTED:"+brokerOrder.client_order_id
+        }
+      }).catch(bookkeepingError=>{
         queueAudit("BROKER_ORDER_BOOKKEEPING_ERROR",{
           client_order_id:clientOrderId,
           broker_order_id:brokerOrder.broker_order_id,
           error:String(bookkeepingError)
         },signal.strategyVersion);
-      }
+      });
 
       queueAudit("BROKER_ORDER_SUBMITTED",{
         client_order_id:brokerOrder.client_order_id,
@@ -966,16 +965,22 @@ async function handleQuote(q:Quote){
     })));
   }
 
-  console.log(JSON.stringify({
-    event:signal.action==="HOLD"?"DECISION":"SIGNAL",
-    quote:q,
-    signal,
-    market_lag_ms:marketLagMs,
-    prewarm_ms:prewarmMs,
-    prewarm_applied:prewarm.applied,
-    prewarm_fetch_ms:prewarm.fetchMs,
-    analysis_ms:Date.now()-startedAt
-  }));
+  if(
+    config.decisionLogMode==="all"
+    || (config.decisionLogMode==="signals" && signal.action!=="HOLD")
+    || config.executionTest
+  ){
+    console.log(JSON.stringify({
+      event:signal.action==="HOLD"?"DECISION":"SIGNAL",
+      quote:q,
+      signal,
+      market_lag_ms:marketLagMs,
+      prewarm_ms:prewarmMs,
+      prewarm_applied:prewarm.applied,
+      prewarm_fetch_ms:prewarm.fetchMs,
+      analysis_ms:Date.now()-startedAt
+    }));
+  }
 
   if(signal.action!=="HOLD"){
     const executionQueuedAt=Date.now();
@@ -1120,7 +1125,7 @@ async function handleQuote(q:Quote){
         writeSnapshot(),
         brokerMaintenance
       ]).catch(err=>console.error(JSON.stringify({event:"HEARTBEAT_ERROR",error:String(err)})));
-    },1_000);
+    },Math.max(250,config.heartbeatMs));
   }
 }
 
@@ -1174,6 +1179,15 @@ async function main(){
 
   if(!Number.isInteger(config.maxExecutionConcurrency) || config.maxExecutionConcurrency<1 || config.maxExecutionConcurrency>16){
     throw new Error("LUNA_MAX_EXECUTION_CONCURRENCY_MUST_BE_1_TO_16");
+  }
+  if(!Number.isFinite(config.heartbeatMs) || config.heartbeatMs<250){
+    throw new Error("LUNA_HEARTBEAT_MS_MUST_BE_AT_LEAST_250");
+  }
+  if(!["all","signals","off"].includes(config.decisionLogMode)){
+    throw new Error("LUNA_DECISION_LOG_MODE_MUST_BE_ALL_SIGNALS_OR_OFF");
+  }
+  if(!Number.isFinite(config.supabaseRequestTimeoutMs) || config.supabaseRequestTimeoutMs<250){
+    throw new Error("LUNA_SUPABASE_REQUEST_TIMEOUT_MS_MUST_BE_AT_LEAST_250");
   }
   if(config.liveAccountCashDriftTolerance<0 || config.liveAccountQtyDriftTolerance<0){
     throw new Error("LUNA_LIVE_ACCOUNT_DRIFT_TOLERANCE_MUST_BE_NON_NEGATIVE");
