@@ -21,6 +21,8 @@ on:
       - scripts/research/luna_universe_robustness_v1.py
       - scripts/research/luna_sector_industry_neutralization_v1.py
       - scripts/research/luna_symbol_lifecycle_diagnostic_v1.py
+      - scripts/research/validate_pit_security_master_v1.py
+      - data/contracts/luna_pit_security_master_v1.schema.json
       - research-results/luna-m1-benchmark-locked-20260920.csv
 
 concurrency:
@@ -106,6 +108,10 @@ jobs:
             --k 20 \
             --cost-bps 20
 
+      - name: Validate PIT security master contract
+        run: |
+          python scripts/research/validate_pit_security_master_v1.py             --input data/raw/pit_security_master.csv             --output research/luna_research_scorecard_v1             --allow-missing
+
       - name: Run symbol lifecycle survivorship diagnostic
         run: |
           python scripts/research/luna_symbol_lifecycle_diagnostic_v1.py             --input data/set_2000_2025/monthly_factors_5y_v4.csv             --output research/luna_research_scorecard_v1             --min-history-months 12
@@ -165,6 +171,8 @@ jobs:
           assert si["status"] in {"COMPLETED","UNAVAILABLE"}
           lc=json.load(open("research/luna_research_scorecard_v1/symbol-lifecycle.json"))
           assert lc["status"]=="COMPLETED"
+          pit=json.load(open("research/luna_research_scorecard_v1/pit-security-master-validation.json"))
+          assert pit["status"] in {"COMPLETED","UNAVAILABLE"}
           mt=json.load(open("research/luna_research_scorecard_v1/multiple-testing.json"))
           assert mt["status"]=="COMPLETED"
           rep=json.load(open("research/luna_fresh_seed_replication_v1/replication.json"))
@@ -196,6 +204,7 @@ jobs:
           cp research/luna_research_scorecard_v1/universe-robustness.json research-results/luna-failure-driven-search-v1/universe-robustness.json
           cp research/luna_research_scorecard_v1/sector-neutralization.json research-results/luna-failure-driven-search-v1/sector-neutralization.json
           cp research/luna_research_scorecard_v1/symbol-lifecycle.json research-results/luna-failure-driven-search-v1/symbol-lifecycle.json
+          cp research/luna_research_scorecard_v1/pit-security-master-validation.json research-results/luna-failure-driven-search-v1/pit-security-master-validation.json
           cp research/luna_fresh_seed_replication_v1/replication.json research-results/luna-failure-driven-search-v1/fresh-seed-replication.json
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
