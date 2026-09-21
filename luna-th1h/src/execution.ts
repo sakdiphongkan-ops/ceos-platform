@@ -19,6 +19,12 @@ export interface PortfolioState{
   marks:Record<string,Quote>;
 }
 
+export interface ExecutionReservations{
+  reservedBuyCash:number;
+  reservedGrossExposure:number;
+  reservedSellQty:Record<string,number>;
+}
+
 export type PlannedOrder = {
   accepted:true;
   symbol:string;
@@ -68,7 +74,12 @@ export function mark(state:PortfolioState,q:Quote){
   state.marks[q.symbol]=q;
 }
 
-export function planOrder(signal:Signal,q:Quote,state:PortfolioState):PlannedOrder{
+export function planOrder(
+  signal:Signal,
+  q:Quote,
+  state:PortfolioState,
+  reservations:ExecutionReservations={reservedBuyCash:0,reservedGrossExposure:0,reservedSellQty:{}}
+):PlannedOrder{
   if(signal.action==="HOLD") return {accepted:false,reason:"SIGNAL_HOLD"};
 
   const side:Side=signal.action;
@@ -86,11 +97,17 @@ export function planOrder(signal:Signal,q:Quote,state:PortfolioState):PlannedOrd
   if(side==="BUY"){
     const targetFraction=Math.min(1,Math.max(0,Number(signal.targetAllocationPct??5)/100));
     const targetNotional=Math.max(0,state.initialCapital*targetFraction-currentNotional);
-    const grossHeadroom=Math.max(0,state.initialCapital*config.maxGrossExposurePct-currentGrossExposure(state));
+    const grossHeadroom=Math.max(
+      0,
+      state.initialCapital*config.maxGrossExposurePct
+        -currentGrossExposure(state)
+        -Math.max(0,reservations.reservedGrossExposure)
+    );
     const slippageRate=config.slippageBps/10000;
     const feeRate=config.feeBps/10000;
     const estimatedAllInPerShare=referencePrice*(1+slippageRate)*(1+feeRate);
-    const affordable=state.cash/estimatedAllInPerShare;
+    const availableCash=Math.max(0,state.cash-Math.max(0,reservations.reservedBuyCash));
+    const affordable=availableCash/estimatedAllInPerShare;
     let qty=roundDown(Math.min(
       targetNotional/referencePrice,
       grossHeadroom/referencePrice,
@@ -109,9 +126,9 @@ export function planOrder(signal:Signal,q:Quote,state:PortfolioState):PlannedOrd
     const notional=qty*referencePrice;
     const risk=validateOrder({
       symbol:q.symbol,side,notional,
-      grossExposure:currentGrossExposure(state),
+      grossExposure:currentGrossExposure(state)+Math.max(0,reservations.reservedGrossExposure),
       currentPositionNotional:currentNotional,
-      cash:state.cash
+      cash:availableCash
     });
     if(!risk.ok) return {accepted:false,reason:risk.reason};
     return {
@@ -123,17 +140,19 @@ export function planOrder(signal:Signal,q:Quote,state:PortfolioState):PlannedOrd
     };
   }
 
-  if(pos.qty<=0) return {accepted:false,reason:"NO_LONG_POSITION"};
-  let qty=pos.qty;
+  const reservedForSymbol=Math.max(0,Number(reservations.reservedSellQty[q.symbol]??0));
+  const availablePositionQty=Math.max(0,pos.qty-reservedForSymbol);
+  if(availablePositionQty<=0) return {accepted:false,reason:"NO_LONG_POSITION"};
+  let qty=availablePositionQty;
   if(!priceOnlyPaper && q.bidSize && q.bidSize>0) qty=Math.min(qty,roundDown(q.bidSize));
   if(qty<=0) return {accepted:false,reason:"NO_SELLABLE_LIQUIDITY"};
 
   const notional=qty*referencePrice;
   const risk=validateOrder({
     symbol:q.symbol,side,notional,
-    grossExposure:currentGrossExposure(state),
+    grossExposure:currentGrossExposure(state)+Math.max(0,reservations.reservedGrossExposure),
     currentPositionNotional:currentNotional,
-    cash:state.cash
+    cash:Math.max(0,state.cash-Math.max(0,reservations.reservedBuyCash))
   });
     if(!risk.ok) return {accepted:false,reason:risk.reason};
   return {
