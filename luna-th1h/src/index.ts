@@ -1148,6 +1148,9 @@ async function main(){
   if(!Number.isInteger(config.maxExecutionConcurrency) || config.maxExecutionConcurrency<1 || config.maxExecutionConcurrency>16){
     throw new Error("LUNA_MAX_EXECUTION_CONCURRENCY_MUST_BE_1_TO_16");
   }
+  if(config.liveAccountCashDriftTolerance<0 || config.liveAccountQtyDriftTolerance<0){
+    throw new Error("LUNA_LIVE_ACCOUNT_DRIFT_TOLERANCE_MUST_BE_NON_NEGATIVE");
+  }
   if(!["paper","live"].includes(config.mode)) throw new Error(`Unknown LUNA_MODE: ${config.mode}`);
   if(config.priceOnlyFallback && (config.mode==="live" || config.executionMode==="live")){
     throw new Error("PRICE_ONLY_FALLBACK_IS_PAPER_ONLY");
