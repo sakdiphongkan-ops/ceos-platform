@@ -46,6 +46,30 @@ FUNDAMENTAL = [
     "GROWTH_QUALITY","INV_QUALITY"
 ]
 
+def make_tournament_catalog(count: int, seed: int, factors: list[str]) -> list[dict]:
+    """Generate the same candidate family/search space shape for every track."""
+    rng = np.random.default_rng(seed)
+    formulas = []
+    families = ["single", "pair", "blend3", "blend4", "interaction", "gated"]
+    for i in range(count):
+        family = families[i % len(families)]
+        width = {"single":1, "pair":2, "blend3":3,
+                 "blend4":4, "interaction":4, "gated":4}[family]
+        if len(factors) < width:
+            continue
+        fs = list(rng.choice(factors, size=width, replace=False))
+        raw = rng.uniform(0.15, 1.0, size=width)
+        sign = rng.choice([-1.0, 1.0], size=width)
+        weights = raw * sign
+        weights = weights / np.sum(np.abs(weights))
+        formulas.append({
+            "id": f"F{i:05d}",
+            "kind": family,
+            "terms": [[f, float(v)] for f, v in zip(fs, weights)],
+        })
+    return formulas
+
+
 
 def run_track(
     d: pd.DataFrame,
@@ -92,12 +116,6 @@ def run_track(
             "reason": "No PIT fundamental factor reaches the 50% coverage threshold; hybrid track is not silently reduced to technical-only.",
             "coverage": {f: coverage.get(f, 0.0) for f in FUNDAMENTAL},
         }
-    if "REV21" not in factors:
-        return {
-            "status": "UNAVAILABLE",
-            "mode": mode,
-            "reason": "REV21 benchmark-proxy factor unavailable.",
-        }
 
     args = SimpleNamespace(
         interaction_strength=interaction_strength,
@@ -122,7 +140,16 @@ def run_track(
 
     rows = {m: x.index[x["month_end"].eq(m)].to_numpy() for m in months}
     ranks = engine.rank_matrix(x, factors)
-    formulas = engine.make_catalog(formula_count, seed, factors)
+    formulas = make_tournament_catalog(formula_count, seed, factors)
+    if len(formulas) < formula_count:
+        return {
+            "status": "UNAVAILABLE",
+            "mode": mode,
+            "reason": "Not enough eligible factors to construct the locked formula-family catalog at the requested count.",
+            "eligible_factor_count": len(factors),
+            "formula_count_requested": formula_count,
+            "formula_count_constructed": len(formulas),
+        }
 
     candidates = {}
     for fml in formulas:
