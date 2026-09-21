@@ -1,9 +1,13 @@
+import json
 import os
 import threading
 import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
 
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
@@ -13,10 +17,25 @@ try:
 except Exception:  # pragma: no cover
     Investor = None
 
-app = FastAPI(title="LUNA Execution + Market Data Gateway", version="0.3.0")
+APP_VERSION = "0.4.0"
+app = FastAPI(title="LUNA Execution + Market Data Gateway", version=APP_VERSION)
 
 LIVE_ARMED = os.getenv("LIVE_TRADING_ARMED", "false").lower() == "true"
 GATEWAY_KEY = os.getenv("LUNA_GATEWAY_KEY", "")
+
+# Market-data providers are selected automatically unless explicitly forced.
+# Priority in AUTO mode:
+#   1) official SET Market Data API (api-key)
+#   2) Settrade Open API (broker/app credentials)
+PROVIDER_MODE = os.getenv("LUNA_MARKETDATA_PROVIDER", "AUTO").upper()
+SET_API_KEY = os.getenv("SET_MARKETDATA_API_KEY", "")
+SET_API_BASE = os.getenv(
+    "SET_MARKETDATA_API_BASE",
+    "https://marketplace.set.or.th/api/public/realtime-data/stock",
+)
+SET_API_POLL_SEC = max(1.0, float(os.getenv("SET_MARKETDATA_POLL_SEC", "2")))
+SET_API_TIMEOUT_SEC = max(2.0, float(os.getenv("SET_MARKETDATA_TIMEOUT_SEC", "8")))
+
 BROKER_ID = os.getenv("LUNA_SETTRADE_BROKER_ID") or os.getenv("SETTRADE_BROKER_ID", "")
 APP_ID = os.getenv("LUNA_SETTRADE_APP_ID") or os.getenv("SETTRADE_APP_ID", "")
 APP_SECRET = os.getenv("LUNA_SETTRADE_APP_SECRET") or os.getenv("SETTRADE_APP_SECRET", "")
@@ -29,7 +48,7 @@ SYMBOLS = [s.strip().upper() for s in os.getenv("SETTRADE_REALTIME_SYMBOLS", "")
 RECONNECT_BASE_SEC = max(1.0, float(os.getenv("LUNA_MARKET_RECONNECT_BASE_SEC", "2")))
 RECONNECT_MAX_SEC = max(RECONNECT_BASE_SEC, float(os.getenv("LUNA_MARKET_RECONNECT_MAX_SEC", "60")))
 STALE_AFTER_SEC = max(5.0, float(os.getenv("LUNA_MARKET_STALE_AFTER_SEC", "20")))
-CREDENTIAL_RETRY_SEC = max(5.0, float(os.getenv("LUNA_MARKET_CREDENTIAL_RETRY_SEC", "15")))
+CREDENTIAL_RETRY_SEC = max(5.0, float(os.getenv("LUNA_MARKET_CREDENTIAL_RETRY_SEC", "10")))
 
 SETTRADE_MARKETDATA_CREDENTIALS = {
     "SETTRADE_BROKER_ID": BROKER_ID,
@@ -38,8 +57,22 @@ SETTRADE_MARKETDATA_CREDENTIALS = {
     "SETTRADE_APP_CODE": APP_CODE,
 }
 
-def missing_marketdata_credentials():
+
+class ProviderUnavailable(RuntimeError):
+    pass
+
+
+def missing_settrade_credentials():
     return [k for k, v in SETTRADE_MARKETDATA_CREDENTIALS.items() if not v]
+
+
+def set_api_configured() -> bool:
+    return bool(SET_API_KEY)
+
+
+def settrade_configured() -> bool:
+    return not missing_settrade_credentials() and Investor is not None
+
 
 _investor = None
 _investor_lock = threading.Lock()
@@ -49,28 +82,31 @@ _quote_lock = threading.Lock()
 _quotes: Dict[str, Dict[str, Any]] = {}
 
 _feed_lock = threading.Lock()
-_collectors_started = False
+_collector_started = False
 _collector_error: Optional[str] = None
-_feed_threads_started = False
+_supervisor_started = False
+_selected_provider: Optional[str] = None
+_provider_restarts = 0
+_provider_failures: Dict[str, int] = {"SET_API": 0, "SETTRADE": 0}
+
 _channel_status: Dict[str, Dict[str, Any]] = {
     "price": {"running": False, "restarts": 0, "last_start": None, "last_error": None},
     "book": {"running": False, "restarts": 0, "last_start": None, "last_error": None},
 }
 
+
 def auth(x_luna_gateway: Optional[str]):
     if not GATEWAY_KEY or x_luna_gateway != GATEWAY_KEY:
         raise HTTPException(status_code=401, detail="unauthorized")
 
+
 def investor_client():
     global _investor
     if Investor is None:
-        raise HTTPException(status_code=503, detail="settrade_sdk_unavailable")
-    missing = missing_marketdata_credentials()
+        raise ProviderUnavailable("settrade_sdk_unavailable")
+    missing = missing_settrade_credentials()
     if missing:
-        raise HTTPException(
-            status_code=503,
-            detail={"error": "settrade_marketdata_credentials_missing", "missing": missing},
-        )
+        raise ProviderUnavailable(f"settrade_credentials_missing:{','.join(missing)}")
     with _investor_lock:
         if _investor is None:
             _investor = Investor(
@@ -81,6 +117,7 @@ def investor_client():
                 is_auto_queue=False,
             )
         return _investor
+
 
 def live_gate():
     if not LIVE_ARMED:
@@ -100,6 +137,7 @@ def live_gate():
     if Investor is None:
         raise HTTPException(status_code=503, detail="settrade_sdk_unavailable")
 
+
 def client():
     global _equity
     live_gate()
@@ -107,6 +145,7 @@ def client():
         inv = investor_client()
         _equity = inv.Equity(account_no=os.getenv("SETTRADE_ACCOUNT_NO", ""))
     return _equity
+
 
 def _num(value):
     try:
@@ -117,238 +156,428 @@ def _num(value):
     except Exception:
         return None
 
+
 def _now_iso():
     return datetime.now(timezone.utc).isoformat()
+
 
 def _latest_quote_age_sec() -> Optional[float]:
     with _quote_lock:
         timestamps = [
-            datetime.fromisoformat(str(q["ts"])).timestamp()
+            float(q["_ingested_ts"])
             for q in _quotes.values()
-            if q.get("ts")
+            if q.get("_ingested_ts") is not None
         ]
     if not timestamps:
         return None
     return max(0.0, time.time() - max(timestamps))
 
+
 def _channel_snapshot():
     with _feed_lock:
         return {k: dict(v) for k, v in _channel_status.items()}
 
-def _update_quote(symbol: str, data: Dict[str, Any], channel: str):
-    global _collector_error
+
+def _quote_payload(
+    symbol: str,
+    last: Any = None,
+    bid: Any = None,
+    ask: Any = None,
+    bid_size: Any = None,
+    ask_size: Any = None,
+    source: str = "",
+    source_ts: Any = None,
+    raw: Any = None,
+    total_volume: Any = None,
+):
+    now = _now_iso()
     with _quote_lock:
-        quote = dict(_quotes.get(symbol, {
+        prior = dict(_quotes.get(symbol, {}))
+        quote = {
             "symbol": symbol,
-            "ts": _now_iso(),
-            "bid": None,
-            "ask": None,
-            "last": None,
-            "bid_size": None,
-            "ask_size": None,
-            "source": "settrade-open-api-realtime",
-        }))
-        quote["ts"] = _now_iso()
-        quote["source"] = "settrade-open-api-realtime"
-
-        if channel == "price":
-            quote["last"] = _num(data.get("last"))
-        else:
-            quote["bid"] = _num(data.get("bid_price1"))
-            quote["ask"] = _num(data.get("ask_price1"))
-            quote["bid_size"] = _num(data.get("bid_volume1"))
-            quote["ask_size"] = _num(data.get("ask_volume1"))
-
-        quote["raw"] = data
+            "ts": now,
+            "source_ts": source_ts,
+            "bid": _num(bid) if bid is not None else prior.get("bid"),
+            "ask": _num(ask) if ask is not None else prior.get("ask"),
+            "last": _num(last) if last is not None else prior.get("last"),
+            "bid_size": _num(bid_size) if bid_size is not None else prior.get("bid_size"),
+            "ask_size": _num(ask_size) if ask_size is not None else prior.get("ask_size"),
+            "total_volume": _num(total_volume) if total_volume is not None else prior.get("total_volume"),
+            "source": source or prior.get("source"),
+            "raw": raw,
+            "_ingested_ts": time.time(),
+        }
         was_new = symbol not in _quotes
         _quotes[symbol] = quote
+    return was_new
 
+
+def _update_settrade_quote(symbol: str, data: Dict[str, Any], channel: str):
+    global _collector_error
+    if channel == "price":
+        was_new = _quote_payload(
+            symbol=symbol,
+            last=data.get("last"),
+            source="settrade-open-api-realtime",
+            raw=data,
+        )
+    else:
+        was_new = _quote_payload(
+            symbol=symbol,
+            bid=data.get("bid_price1"),
+            ask=data.get("ask_price1"),
+            bid_size=data.get("bid_volume1"),
+            ask_size=data.get("ask_volume1"),
+            source="settrade-open-api-realtime",
+            raw=data,
+        )
     _collector_error = None
     if was_new:
-        print(f"LUNA_MARKETDATA first_quote symbol={symbol}", flush=True)
+        print(f"LUNA_MARKETDATA first_quote provider=SETTRADE symbol={symbol}", flush=True)
 
-def _run_channel(channel: str):
-    global _collector_error
+
+def _extract_rows(payload: Any):
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict):
+        for key in ("data", "result", "results", "items"):
+            value = payload.get(key)
+            if isinstance(value, list):
+                return value
+        # Some APIs return one object for one symbol.
+        if payload.get("symbol"):
+            return [payload]
+    return []
+
+
+def _extract_book_level(value):
+    if not isinstance(value, list):
+        return None, None
+    best = None
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        rank = item.get("rank")
+        if rank == 1:
+            best = item
+            break
+        if best is None:
+            best = item
+    if not best:
+        return None, None
+    return best.get("price"), best.get("volume")
+
+
+def _fetch_set_api():
+    if not SET_API_KEY:
+        raise ProviderUnavailable("set_api_key_missing")
+    if not SYMBOLS:
+        raise ProviderUnavailable("SETTRADE_REALTIME_SYMBOLS is empty")
+
+    query = urlencode({
+        "stockSymbol": ",".join(SYMBOLS),
+        "oddLotFlag": "false",
+    })
+    url = f"{SET_API_BASE}?{query}"
+    req = Request(
+        url,
+        headers={
+            "api-key": SET_API_KEY,
+            "Accept": "application/json",
+            "User-Agent": "LUNA-TH1H/0.4.0",
+        },
+        method="GET",
+    )
+    try:
+        with urlopen(req, timeout=SET_API_TIMEOUT_SEC) as response:
+            body = response.read().decode("utf-8")
+            status = getattr(response, "status", 200)
+    except HTTPError as exc:
+        raise ProviderUnavailable(f"set_api_http_{exc.code}") from exc
+    except URLError as exc:
+        raise ProviderUnavailable(f"set_api_network:{exc.reason}") from exc
+    except Exception as exc:
+        raise ProviderUnavailable(f"set_api_request:{exc}") from exc
+
+    if status >= 400:
+        raise ProviderUnavailable(f"set_api_http_{status}")
+    try:
+        return json.loads(body)
+    except json.JSONDecodeError as exc:
+        raise ProviderUnavailable("set_api_invalid_json") from exc
+
+
+def _run_set_api():
+    global _collector_error, _selected_provider, _provider_restarts
+    if not REALTIME_ENABLED:
+        return
+
+    if not SET_API_KEY:
+        raise ProviderUnavailable("set_api_key_missing")
+    if not SYMBOLS:
+        raise ProviderUnavailable("SETTRADE_REALTIME_SYMBOLS is empty")
+
+    _selected_provider = "SET_API"
+    _provider_restarts += 1
+    with _feed_lock:
+        for channel in ("price", "book"):
+            _channel_status[channel].update(
+                running=True,
+                restarts=_channel_status[channel]["restarts"] + 1,
+                last_start=_now_iso(),
+                last_error=None,
+            )
+
+    print(
+        f"LUNA_MARKETDATA provider_start provider=SET_API symbols={len(SYMBOLS)} "
+        f"bid_offer={REALTIME_BOOK}",
+        flush=True,
+    )
+
+    failures = 0
+    while True:
+        try:
+            payload = _fetch_set_api()
+            rows = _extract_rows(payload)
+            found = 0
+
+            for row in rows:
+                symbol = str(row.get("symbol") or "").upper()
+                if not symbol or symbol not in SYMBOLS:
+                    continue
+
+                bid_price, bid_volume = _extract_book_level(row.get("bid"))
+                ask_price, ask_volume = _extract_book_level(row.get("offer"))
+
+                was_new = _quote_payload(
+                    symbol=symbol,
+                    last=row.get("last"),
+                    bid=bid_price if REALTIME_BOOK else None,
+                    ask=ask_price if REALTIME_BOOK else None,
+                    bid_size=bid_volume if REALTIME_BOOK else None,
+                    ask_size=ask_volume if REALTIME_BOOK else None,
+                    source="set-market-data-api-realtime",
+                    source_ts=row.get("time"),
+                    total_volume=row.get("totalVolume"),
+                    raw=row,
+                )
+                found += 1
+                if was_new:
+                    print(f"LUNA_MARKETDATA first_quote provider=SET_API symbol={symbol}", flush=True)
+
+            if found == 0:
+                failures += 1
+                if failures >= 5:
+                    raise ProviderUnavailable("set_api_no_matching_symbols")
+            else:
+                failures = 0
+                _collector_error = None
+
+            time.sleep(SET_API_POLL_SEC)
+        except ProviderUnavailable:
+            raise
+        except Exception as exc:
+            raise ProviderUnavailable(f"set_api_runtime:{exc}") from exc
+
+
+def _run_settrade_session():
+    global _collector_error, _selected_provider, _provider_restarts
+
+    if not settrade_configured():
+        missing = missing_settrade_credentials()
+        raise ProviderUnavailable(
+            "settrade_unavailable:" + ",".join(missing or ["sdk"])
+        )
+    if not SYMBOLS:
+        raise ProviderUnavailable("SETTRADE_REALTIME_SYMBOLS is empty")
+
+    _selected_provider = "SETTRADE"
+    _provider_restarts += 1
+    inv = investor_client()
+    mqtt = inv.MQTTWebsocket()
+    subscriptions = []
+    threads = []
+
+    with _feed_lock:
+        for channel in ("price", "book"):
+            enabled = channel == "price" or REALTIME_BOOK
+            _channel_status[channel].update(
+                running=enabled,
+                restarts=_channel_status[channel]["restarts"] + 1 if enabled else _channel_status[channel]["restarts"],
+                last_start=_now_iso() if enabled else _channel_status[channel]["last_start"],
+                last_error=None,
+            )
+
+    print(
+        f"LUNA_MARKETDATA provider_start provider=SETTRADE symbols={len(SYMBOLS)} "
+        f"bid_offer={REALTIME_BOOK}",
+        flush=True,
+    )
+
+    for symbol in SYMBOLS:
+        try:
+            price_sub = mqtt.subscribe_price_info(
+                symbol,
+                on_message=lambda result, subscriber, sym=symbol: _update_settrade_quote(
+                    sym,
+                    result.get("data", result) if isinstance(result, dict) else {},
+                    "price",
+                ),
+            )
+            subscriptions.append(("price", price_sub))
+
+            if REALTIME_BOOK:
+                book_sub = mqtt.subscribe_bid_offer(
+                    symbol,
+                    on_message=lambda result, subscriber, sym=symbol: _update_settrade_quote(
+                        sym,
+                        result.get("data", result) if isinstance(result, dict) else {},
+                        "book",
+                    ),
+                )
+                subscriptions.append(("book", book_sub))
+        except Exception as exc:
+            print(
+                f"LUNA_MARKETDATA subscribe_error provider=SETTRADE symbol={symbol} error={exc}",
+                flush=True,
+            )
+
+    for _, sub in subscriptions:
+        thread = threading.Thread(target=sub.start, daemon=True)
+        thread.start()
+        threads.append(thread)
+
+    if not threads:
+        raise ProviderUnavailable("settrade_no_subscriptions_created")
+
+    grace_until = time.monotonic() + 30.0
+    try:
+        while True:
+            time.sleep(5)
+            alive = sum(1 for t in threads if t.is_alive())
+            age = _latest_quote_age_sec()
+
+            if alive == 0:
+                raise ProviderUnavailable("settrade_subscriptions_stopped")
+
+            if time.monotonic() >= grace_until:
+                if age is None:
+                    raise ProviderUnavailable("settrade_no_quotes_after_start")
+                if age > STALE_AFTER_SEC:
+                    raise ProviderUnavailable(f"settrade_quotes_stale_{age:.1f}s")
+    finally:
+        with _feed_lock:
+            _channel_status["price"]["running"] = False
+            if REALTIME_BOOK:
+                _channel_status["book"]["running"] = False
+
+
+def _provider_order():
+    if PROVIDER_MODE == "SET_API":
+        return ["SET_API"]
+    if PROVIDER_MODE == "SETTRADE":
+        return ["SETTRADE"]
+    # AUTO: prefer official SET market-data API, then Settrade.
+    return ["SET_API", "SETTRADE"]
+
+
+def _provider_available(name: str):
+    if name == "SET_API":
+        return set_api_configured()
+    if name == "SETTRADE":
+        return settrade_configured()
+    return False
+
+
+def _run_supervisor():
+    global _collector_started, _collector_error, _selected_provider
     backoff = RECONNECT_BASE_SEC
 
+    with _feed_lock:
+        _collector_started = True
+
     while True:
-        missing = missing_marketdata_credentials()
-        if missing:
-            with _feed_lock:
-                _channel_status[channel].update(
-                    running=False,
-                    last_error=f"credentials_missing:{','.join(missing)}",
-                )
-            _collector_error = f"credentials_missing:{','.join(missing)}"
+        if not REALTIME_ENABLED:
+            _selected_provider = None
             time.sleep(CREDENTIAL_RETRY_SEC)
             continue
-
         if not SYMBOLS:
-            with _feed_lock:
-                _channel_status[channel].update(
-                    running=False,
-                    last_error="SETTRADE_REALTIME_SYMBOLS is empty",
-                )
+            _selected_provider = None
             _collector_error = "SETTRADE_REALTIME_SYMBOLS is empty"
             time.sleep(CREDENTIAL_RETRY_SEC)
             continue
 
-        subscriptions = []
-        threads = []
-        try:
-            inv = investor_client()
-            mqtt = inv.MQTTWebsocket()
+        attempted = []
+        ran = False
 
-            with _feed_lock:
-                state = _channel_status[channel]
-                state["running"] = True
-                state["restarts"] += 1
-                state["last_start"] = _now_iso()
-                state["last_error"] = None
+        for provider in _provider_order():
+            if not _provider_available(provider):
+                continue
 
-            print(
-                f"LUNA_MARKETDATA channel_start channel={channel} symbols={len(SYMBOLS)}",
-                flush=True,
-            )
-
-            for symbol in SYMBOLS:
-                try:
-                    if channel == "price":
-                        sub = mqtt.subscribe_price_info(
-                            symbol,
-                            on_message=lambda result, subscriber, sym=symbol: _update_quote(
-                                sym,
-                                result.get("data", result) if isinstance(result, dict) else {},
-                                "price",
-                            ),
-                        )
-                    else:
-                        sub = mqtt.subscribe_bid_offer(
-                            symbol,
-                            on_message=lambda result, subscriber, sym=symbol: _update_quote(
-                                sym,
-                                result.get("data", result) if isinstance(result, dict) else {},
-                                "book",
-                            ),
-                        )
-                    subscriptions.append(sub)
-                except Exception as exc:
-                    with _feed_lock:
-                        _channel_status[channel]["last_error"] = f"{symbol}:{exc}"
-                    print(
-                        f"LUNA_MARKETDATA subscribe_error channel={channel} symbol={symbol} error={exc}",
-                        flush=True,
-                    )
-
-            for sub in subscriptions:
-                thread = threading.Thread(target=sub.start, daemon=True)
-                thread.start()
-                threads.append(thread)
-
-            if not subscriptions:
-                raise RuntimeError(f"{channel}_no_subscriptions_created")
-
-            _collector_error = None
-
-            # Give the first connection time to establish; afterwards a stale
-            # feed or fully-dead subscription set forces a reconnect cycle.
-            grace_until = time.monotonic() + 30.0
-            while True:
-                time.sleep(5)
-                alive = sum(1 for t in threads if t.is_alive())
-                age = _latest_quote_age_sec()
-
-                if alive == 0:
-                    raise RuntimeError(f"{channel}_subscriptions_stopped")
-
-                if time.monotonic() >= grace_until:
-                    if age is None:
-                        raise RuntimeError(f"{channel}_no_quotes_after_start")
-                    if age > STALE_AFTER_SEC:
-                        raise RuntimeError(f"{channel}_quotes_stale_{age:.1f}s")
-
-        except Exception as exc:
-            with _feed_lock:
-                _channel_status[channel].update(
-                    running=False,
-                    last_error=str(exc),
+            attempted.append(provider)
+            try:
+                if provider == "SET_API":
+                    _run_set_api()
+                else:
+                    _run_settrade_session()
+                ran = True
+                backoff = RECONNECT_BASE_SEC
+                break
+            except ProviderUnavailable as exc:
+                _provider_failures[provider] = _provider_failures.get(provider, 0) + 1
+                _collector_error = str(exc)
+                print(
+                    f"LUNA_MARKETDATA provider_failed provider={provider} "
+                    f"error={exc} fallback_next=True",
+                    flush=True,
                 )
-            _collector_error = str(exc)
-            print(
-                f"LUNA_MARKETDATA reconnect channel={channel} error={exc}",
-                flush=True,
-            )
-            time.sleep(backoff)
+                with _feed_lock:
+                    for channel in ("price", "book"):
+                        _channel_status[channel]["last_error"] = str(exc)
+                        _channel_status[channel]["running"] = False
+
+        if not attempted:
+            _selected_provider = None
+            available_note = {
+                "SET_API": "api-key" if SET_API_KEY else "missing",
+                "SETTRADE": "credentials" if missing_settrade_credentials() == [] else "missing",
+            }
+            _collector_error = f"no_marketdata_provider_available:{available_note}"
+        elif not ran:
+            _selected_provider = None
+
+        time.sleep(1 if ran else backoff)
+        if not ran:
             backoff = min(RECONNECT_MAX_SEC, backoff * 2)
-        else:
-            with _feed_lock:
-                _channel_status[channel]["running"] = False
-            backoff = RECONNECT_BASE_SEC
-            time.sleep(1)
+
 
 def _start_marketdata():
-    global _collectors_started, _feed_threads_started, _collector_error
-
+    global _supervisor_started
     if not REALTIME_ENABLED:
         print("LUNA_MARKETDATA disabled", flush=True)
         return
-
-    print(
-        f"LUNA_MARKETDATA starting symbols={len(SYMBOLS)} bid_offer={REALTIME_BOOK}",
-        flush=True,
-    )
-
-    missing = missing_marketdata_credentials()
-    if missing:
-        _collector_error = f"credentials_missing:{','.join(missing)}"
-        print(
-            f"LUNA_MARKETDATA credentials_missing names={','.join(missing)}",
-            flush=True,
-        )
-        return
-
     if not SYMBOLS:
-        _collector_error = "SETTRADE_REALTIME_SYMBOLS is empty"
+        print("LUNA_MARKETDATA blocked: SETTRADE_REALTIME_SYMBOLS is empty", flush=True)
         return
 
     with _feed_lock:
-        if _feed_threads_started:
+        if _supervisor_started:
             return
-        _feed_threads_started = True
-        _collectors_started = True
-
-    threading.Thread(target=_run_channel, args=("price",), daemon=True).start()
-    if REALTIME_BOOK:
-        threading.Thread(target=_run_channel, args=("book",), daemon=True).start()
+        _supervisor_started = True
 
     print(
-        f"LUNA_MARKETDATA supervisors_started price=True book={REALTIME_BOOK} target={len(SYMBOLS)}",
+        f"LUNA_MARKETDATA starting provider_mode={PROVIDER_MODE} "
+        f"symbols={len(SYMBOLS)} bid_offer={REALTIME_BOOK}",
         flush=True,
     )
+    threading.Thread(target=_run_supervisor, daemon=True).start()
 
-def _credential_watchdog():
-    global _collector_error
-    while True:
-        try:
-            if REALTIME_ENABLED and not missing_marketdata_credentials() and SYMBOLS:
-                _start_marketdata()
-            elif REALTIME_ENABLED:
-                missing = missing_marketdata_credentials()
-                _collector_error = (
-                    f"credentials_missing:{','.join(missing)}"
-                    if missing else
-                    ("SETTRADE_REALTIME_SYMBOLS is empty" if not SYMBOLS else _collector_error)
-                )
-            time.sleep(CREDENTIAL_RETRY_SEC)
-        except Exception as exc:
-            _collector_error = str(exc)
-            time.sleep(CREDENTIAL_RETRY_SEC)
 
 @app.on_event("startup")
 def startup():
     if REALTIME_ENABLED:
         _start_marketdata()
-        threading.Thread(target=_credential_watchdog, daemon=True).start()
+
 
 class PlaceOrder(BaseModel):
     client_order_id: str = Field(min_length=8, max_length=200)
@@ -358,9 +587,11 @@ class PlaceOrder(BaseModel):
     volume: int = Field(gt=0)
     reason: str = ""
 
+
 class CancelOrder(BaseModel):
     client_order_id: str = Field(min_length=8, max_length=200)
     broker_order_id: str = Field(min_length=1, max_length=200)
+
 
 @app.get("/health")
 def health():
@@ -368,48 +599,58 @@ def health():
         quote_count = len(_quotes)
     return {
         "ok": True,
+        "version": APP_VERSION,
         "live_armed": LIVE_ARMED,
-        "provider": "settrade-open-api",
+        "provider_mode": PROVIDER_MODE,
+        "selected_provider": _selected_provider,
+        "provider_candidates": _provider_order(),
+        "set_api_configured": set_api_configured(),
+        "settrade_configured": settrade_configured(),
         "realtime_marketdata_enabled": REALTIME_ENABLED,
         "realtime_bid_offer_enabled": REALTIME_BOOK,
         "realtime_symbol_target": len(SYMBOLS),
         "realtime_quote_count": quote_count,
         "latest_quote_age_sec": _latest_quote_age_sec(),
         "stale_after_sec": STALE_AFTER_SEC,
-        "collector_started": _collectors_started,
+        "collector_started": _collector_started,
         "collector_error": _collector_error,
-        "marketdata_missing_credentials": missing_marketdata_credentials(),
+        "provider_failures": dict(_provider_failures),
         "channel_status": _channel_snapshot(),
         "timestamp": int(time.time()),
     }
+
 
 @app.get("/quotes")
 def quotes(x_luna_gateway: Optional[str] = Header(default=None)):
     auth(x_luna_gateway)
     with _quote_lock:
-        data = list(_quotes.values())
+        data = [
+            {k: v for k, v in q.items() if k != "_ingested_ts"}
+            for q in _quotes.values()
+        ]
         quote_ages = {
-            q["symbol"]: max(
-                0.0,
-                time.time() - datetime.fromisoformat(str(q["ts"])).timestamp(),
-            )
-            for q in data
-            if q.get("ts")
+            q["symbol"]: max(0.0, time.time() - float(q["_ingested_ts"]))
+            for q in _quotes.values()
+            if q.get("_ingested_ts") is not None
         }
     return {
         "ok": True,
         "generated_at": _now_iso(),
         "count": len(data),
         "target": len(SYMBOLS),
-        "collector_started": _collectors_started,
+        "provider_mode": PROVIDER_MODE,
+        "selected_provider": _selected_provider,
+        "collector_started": _collector_started,
         "collector_error": _collector_error,
-        "marketdata_missing_credentials": missing_marketdata_credentials(),
+        "set_api_configured": set_api_configured(),
+        "settrade_configured": settrade_configured(),
         "latest_quote_age_sec": _latest_quote_age_sec(),
         "stale_after_sec": STALE_AFTER_SEC,
         "channel_status": _channel_snapshot(),
         "quote_ages_sec": quote_ages,
         "quotes": data,
     }
+
 
 @app.get("/quote/{symbol}")
 def quote(symbol: str, x_luna_gateway: Optional[str] = Header(default=None)):
@@ -418,13 +659,18 @@ def quote(symbol: str, x_luna_gateway: Optional[str] = Header(default=None)):
         data = _quotes.get(symbol.upper())
     if data is None:
         raise HTTPException(status_code=404, detail="quote_not_found")
-    return {"ok": True, "quote": data}
+    return {
+        "ok": True,
+        "quote": {k: v for k, v in data.items() if k != "_ingested_ts"},
+    }
+
 
 @app.get("/portfolio")
 def portfolio(x_luna_gateway: Optional[str] = Header(default=None)):
     auth(x_luna_gateway)
     eq = client()
     return {"ok": True, "data": eq.get_portfolio()}
+
 
 @app.post("/place")
 def place(payload: PlaceOrder, x_luna_gateway: Optional[str] = Header(default=None)):
@@ -456,6 +702,7 @@ def place(payload: PlaceOrder, x_luna_gateway: Optional[str] = Header(default=No
         "raw": broker_result,
     }
 
+
 @app.post("/cancel")
 def cancel(payload: CancelOrder, x_luna_gateway: Optional[str] = Header(default=None)):
     auth(x_luna_gateway)
@@ -473,6 +720,7 @@ def cancel(payload: CancelOrder, x_luna_gateway: Optional[str] = Header(default=
         "raw": result,
     }
 
+
 @app.get("/diagnostics")
 def diagnostics(x_luna_gateway: Optional[str] = Header(default=None)):
     auth(x_luna_gateway)
@@ -480,10 +728,14 @@ def diagnostics(x_luna_gateway: Optional[str] = Header(default=None)):
         quote_count = len(_quotes)
     return {
         "ok": True,
+        "version": APP_VERSION,
         "live_armed": LIVE_ARMED,
-        "provider": "settrade-open-api",
-        "credentials_present": not missing_marketdata_credentials(),
-        "missing_credentials": missing_marketdata_credentials(),
+        "provider_mode": PROVIDER_MODE,
+        "selected_provider": _selected_provider,
+        "provider_candidates": _provider_order(),
+        "set_api_configured": set_api_configured(),
+        "settrade_configured": settrade_configured(),
+        "settrade_missing_credentials": missing_settrade_credentials(),
         "python_sdk_loaded": Investor is not None,
         "realtime_marketdata_enabled": REALTIME_ENABLED,
         "realtime_bid_offer_enabled": REALTIME_BOOK,
@@ -491,7 +743,9 @@ def diagnostics(x_luna_gateway: Optional[str] = Header(default=None)):
         "realtime_quote_count": quote_count,
         "latest_quote_age_sec": _latest_quote_age_sec(),
         "stale_after_sec": STALE_AFTER_SEC,
-        "collector_started": _collectors_started,
+        "collector_started": _collector_started,
         "collector_error": _collector_error,
+        "provider_failures": dict(_provider_failures),
         "channel_status": _channel_snapshot(),
     }
+}
