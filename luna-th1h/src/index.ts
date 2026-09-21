@@ -566,7 +566,16 @@ async function handleQuote(q:Quote){
 
   const startedAt=Date.now();
   await prewarmStrategy(q);
+
+  // Hard decision gate immediately before analysis. This prevents an in-flight
+  // quote from generating a trade signal after the market session has closed.
+  const decisionPhase=currentMarketPhase();
+  if(decisionPhase==="CLOSED"){
+    return;
+  }
+
   const signal=getSignal(q);
+  const marketLagMs=Math.max(0,Date.now()-Date.parse(q.ts));
 
   const now=Date.now();
   const lastPersist=lastPersistBySymbol.get(q.symbol)??0;
@@ -576,19 +585,21 @@ async function handleQuote(q:Quote){
 
   if(shouldPersist){
     lastPersistBySymbol.set(q.symbol,now);
-    void Promise.all([
-      ingest("",{action:"tick",session_id:sessionId,quote:q}),
-      ingest("",{action:"signal",session_id:sessionId,signal})
-    ]).catch(err=>console.error(JSON.stringify({
+    const writes:Promise<unknown>[]=[
+      ingest("",{action:"tick",session_id:sessionId,quote:q})
+    ];
+    if(signal.action!=="HOLD" || config.executionTest){
+      writes.push(ingest("",{action:"signal",session_id:sessionId,signal}));
+    }
+    void Promise.all(writes).catch(err=>console.error(JSON.stringify({
       event:"PERSIST_SIGNAL_ERROR",
       symbol:q.symbol,
       error:String(err)
     })));
   }
 
-  const marketLagMs=Math.max(0,Date.now()-Date.parse(q.ts));
   console.log(JSON.stringify({
-    event:"SIGNAL",
+    event:signal.action==="HOLD"?"DECISION":"SIGNAL",
     quote:q,
     signal,
     market_lag_ms:marketLagMs,
@@ -601,6 +612,21 @@ async function handleQuote(q:Quote){
       .catch(()=>undefined)
       .then(async()=>{
         try{
+          // Re-check the session immediately before execution. A signal may have
+          // waited behind another order long enough to cross REDUCE_ONLY/CLOSED.
+          const executionPhase=currentMarketPhase();
+          const blockedByPhase =
+            executionPhase==="CLOSED"
+            || (signal.action==="BUY" && executionPhase!=="ACTIVE");
+          if(blockedByPhase){
+            await queueAudit("ORDER_SUPPRESSED_MARKET_PHASE",{
+              symbol:q.symbol,
+              action:signal.action,
+              market_phase:executionPhase,
+              quote_ts:q.ts
+            },signal.strategyVersion);
+            return;
+          }
           await executeSignal(q,signal);
           console.log(JSON.stringify({
             event:"EXECUTION_COMPLETE",
