@@ -105,3 +105,9 @@ On live startup LUNA also checks for broker orders that are still non-terminal. 
 Live risk sizing now uses broker account equity rather than broker cash alone. The gateway computes normalized equity as cash plus explicitly reported position market value, or market price multiplied by quantity when an explicit market value is unavailable. Portfolio cost fields are not treated as market value. This prevents an account that already holds stocks from being sized as though only its idle cash were the entire risk capital.
 
 Settrade's public Python SDK examples/snippets confirm the Equity interface exposes `get_account_info()`, `get_portfolio()`, `get_orders()`, place/cancel/change order functions, and realtime equity order subscription. LUNA therefore uses the SDK's equity order-list capability for restart safety rather than depending on an invented broker method.
+
+## Partial-fill idempotency update — 2026-09-22
+
+Live broker fills are now persisted with both broker order identity and a cumulative-fill idempotency key. An order with submitted quantity Q may transition through PARTIALLY_FILLED states until cumulative filled quantity reaches Q; each delta fill gets its own durable row, while replaying the same cumulative fill returns idempotent without changing portfolio state again.
+
+The Edge Function and worker now pass order_qty, cumulative_filled_qty, broker_order_id, and idempotency_key to the new luna_record_fill_v2 contract. This closes the prior failure mode where the second partial fill on the same client order could be mistaken for a duplicate of the first fill.
