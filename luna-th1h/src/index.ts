@@ -565,7 +565,6 @@ async function handleQuote(q:Quote){
       to_session_date:today
     },activeStrategyVersion(),sessionId);
     await endSession("ROLLOVER");
-    sessionGeneration++;
     strategyV1.reset();
     prewarmedSymbols.clear();
     prewarmCache.clear();
@@ -746,6 +745,10 @@ async function endSession(status="CLOSED"){
       if(sessionId===closingSessionId){
         sessionId=null;
         sessionDate=null;
+        sessionGeneration++;
+        prewarmCache.clear();
+        prewarmInFlight.clear();
+        prewarmedSymbols.clear();
       }
     }
   })().finally(()=>{sessionEndPromise=null});
