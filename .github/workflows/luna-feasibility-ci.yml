@@ -1,0 +1,31 @@
+name: LUNA feasibility research CI
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "scripts/research/luna_feasibility.py"
+      - "scripts/research/test_luna_feasibility.py"
+      - "scripts/research/luna_adaptive_tournament_v2.py"
+      - ".github/workflows/luna-feasibility-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  feasibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install research runtime
+        run: python -m pip install --upgrade pip numpy pandas
+      - name: Compile feasibility scripts
+        run: python -m py_compile scripts/research/luna_feasibility.py scripts/research/luna_adaptive_tournament_v2.py
+      - name: Run feasibility regression tests
+        working-directory: scripts/research
+        run: python -m unittest -v test_luna_feasibility.py
