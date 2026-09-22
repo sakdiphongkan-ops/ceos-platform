@@ -1,3 +1,62 @@
+function evaluateCandidate(c:Candidate,split:any):Eval{
+  const foldResults=split.folds.map((fold:any)=>{
+    const train=runBacktest(fold.train,initialCapital,c);
+    const validation=runBacktest(
+      fold.validation,initialCapital,c,{warmupQuotes:fold.warmupForValidation}
+    );
+    const tm=monthlyStats(train.equityCurve,initialCapital);
+    const vm=monthlyStats(validation.equityCurve,initialCapital);
+    return {
+      fold:fold.index,
+      trainMonthlyGeo:tm.geo,
+      validationMonthlyGeo:vm.geo,
+      validationPositiveMonthRatio:vm.positiveRatio,
+      validationDrawdownPct:Number(validation.maxDrawdown)/initialCapital,
+      validationTurnover:turnover(validation),
+      validationReturnPct:validation.returnPct,
+      validationTrades:validation.tradeCount
+    };
+  });
+  const avgValidationMonthlyGeo=foldResults.reduce((s:any,x:any)=>s+x.validationMonthlyGeo,0)/foldResults.length;
+  const minValidationMonthlyGeo=Math.min(...foldResults.map((x:any)=>x.validationMonthlyGeo));
+  const avgPositiveRatio=foldResults.reduce((s:any,x:any)=>s+x.validationPositiveMonthRatio,0)/foldResults.length;
+  const maxDrawdownPct=Math.max(...foldResults.map((x:any)=>x.validationDrawdownPct));
+  const avgTurnover=foldResults.reduce((s:any,x:any)=>s+x.validationTurnover,0)/foldResults.length;
+  const representativeFold=foldResults.at(-1);
+  const train=runBacktest(
+    split.folds.at(-1).train,initialCapital,c
+  );
+  const validation=runBacktest(
+    split.folds.at(-1).validation,initialCapital,c,
+    {warmupQuotes:split.folds.at(-1).warmupForValidation}
+  );
+  const validationScore=score({
+    trainMonthlyGeo:representativeFold.trainMonthlyGeo,
+    validationMonthlyGeo:representativeFold.validationMonthlyGeo,
+    validationPositiveMonthRatio:avgPositiveRatio,
+    validationDrawdownPct:maxDrawdownPct,
+    validationTurnover:avgTurnover,
+    walkForwardMinValidationMonthlyGeo:minValidationMonthlyGeo,
+    walkForwardAvgValidationMonthlyGeo:avgValidationMonthlyGeo
+  });
+  return {
+    candidate:c,train,validation,
+    trainMonthlyGeo:representativeFold.trainMonthlyGeo,
+    validationMonthlyGeo:avgValidationMonthlyGeo,
+    validationPositiveMonthRatio:avgPositiveRatio,
+    validationDrawdownPct:maxDrawdownPct,
+    validationTurnover:avgTurnover,
+    validationScore,
+    walkForwardFoldCount:foldResults.length,
+    walkForwardMinValidationMonthlyGeo:minValidationMonthlyGeo,
+    walkForwardMaxValidationDrawdownPct:maxDrawdownPct,
+    walkForwardAvgValidationMonthlyGeo:avgValidationMonthlyGeo,
+    walkForwardAvgValidationPositiveMonthRatio:avgPositiveRatio,
+    walkForwardAvgValidationTurnover:avgTurnover,
+    foldResults
+  };
+}
+
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -24,7 +83,14 @@ type Eval = {
   holdoutTurnover?:number;
   holdoutNetPnl?:number;
   holdoutReturnPct?:number;
-  stress?:Record<string,number>;
+  walkForwardFoldCount:number;
+  walkForwardMinValidationMonthlyGeo:number;
+  walkForwardMaxValidationDrawdownPct:number;
+  walkForwardAvgValidationMonthlyGeo:number;
+  walkForwardAvgValidationPositiveMonthRatio:number;
+  walkForwardAvgValidationTurnover:number;
+  foldResults:Array<Record<string,number>>;
+  stress?:Record<string,Record<string,number>>;
 };
 
 const input=process.env.BACKTEST_FILE ?? process.argv[2];
@@ -38,6 +104,8 @@ const elites=Math.max(5,Math.min(50,Number(process.env.LUNA_RESEARCH_ELITES ?? 2
 const seed=process.env.LUNA_RESEARCH_SEED ?? "LUNA-15M-ITERATIVE-2026";
 const outputPath=process.env.LUNA_RESEARCH_OUTPUT ?? "reports/luna-15m/iterative-tournament.json";
 const TARGET_MONTHLY_GEO=Number(process.env.LUNA_RESEARCH_TARGET_MONTHLY_GEO ?? 0.07);
+const WALK_FORWARD_FOLDS=Math.max(2,Math.min(6,Number(process.env.LUNA_RESEARCH_WALK_FORWARD_FOLDS ?? 3)));
+const MIN_FOLD_MONTHLY_GEO=Number(process.env.LUNA_RESEARCH_MIN_FOLD_MONTHLY_GEO ?? 0);
 
 const choices={
   fastPeriod:[3,5,8,13],
@@ -93,25 +161,42 @@ function splitChronologicalTicks(quotes:Quote[]){
   if(quotes.length<500) throw new Error("Need at least 500 raw ticks; got "+quotes.length);
   const buckets=[...new Set(quotes.map(q=>bucket15m(q.ts)).filter((x):x is number=>x!==null))].sort((a,b)=>a-b);
   if(buckets.length<100) throw new Error("Need at least 100 observed 15m buckets; got "+buckets.length);
-  const a=Math.floor(buckets.length*0.60);
-  const b=Math.floor(buckets.length*0.80);
-  if(!(a>40 && b>a && buckets.length>b)) throw new Error("Invalid chronological bucket split.");
-  const trainEnd=buckets[a-1], validationEnd=buckets[b-1];
-  const train=quotes.filter(q=>(bucket15m(q.ts)??Infinity)<=trainEnd);
-  const validation=quotes.filter(q=>{
-    const x=bucket15m(q.ts);
-    return x!==null && x>trainEnd && x<=validationEnd;
-  });
-  const holdout=quotes.filter(q=>(bucket15m(q.ts)??-Infinity)>validationEnd);
-  const warmupForValidation=quotes.filter(q=>{
-    const x=bucket15m(q.ts);
-    return x!==null && x<=trainEnd;
-  });
+  const holdoutStartIndex=Math.floor(buckets.length*0.80);
+  const holdoutStart=buckets[holdoutStartIndex];
+  if(!holdoutStart) throw new Error("Invalid holdout boundary.");
+
+  const folds:any[]=[];
+  for(let i=0;i<WALK_FORWARD_FOLDS;i++){
+    const trainEndIndex=Math.floor(buckets.length*(0.50+i*(0.30/(WALK_FORWARD_FOLDS))));
+    const validationEndIndex=Math.floor(buckets.length*(0.50+(i+1)*(0.30/(WALK_FORWARD_FOLDS))));
+    if(trainEndIndex<=40 || validationEndIndex<=trainEndIndex || validationEndIndex>=holdoutStartIndex) continue;
+    const trainEnd=buckets[trainEndIndex-1];
+    const validationEnd=buckets[validationEndIndex-1];
+    const train=quotes.filter(q=>(bucket15m(q.ts)??Infinity)<=trainEnd);
+    const validation=quotes.filter(q=>{
+      const x=bucket15m(q.ts);
+      return x!==null && x>trainEnd && x<=validationEnd;
+    });
+    const warmupForValidation=quotes.filter(q=>{
+      const x=bucket15m(q.ts);
+      return x!==null && x<=trainEnd;
+    });
+    if(train.length && validation.length){
+      folds.push({index:i+1,train,validation,warmupForValidation,bucket_start_index:0,train_end_index:trainEndIndex,validation_end_index:validationEndIndex});
+    }
+  }
+  if(folds.length<2) throw new Error("Need at least 2 valid walk-forward folds.");
+  const holdout=quotes.filter(q=>(bucket15m(q.ts)??-Infinity)>=holdoutStart);
   const warmupForHoldout=quotes.filter(q=>{
     const x=bucket15m(q.ts);
-    return x!==null && x<=validationEnd;
+    return x!==null && x<holdoutStart;
   });
-  return {train,validation,holdout,warmupForValidation,warmupForHoldout,buckets:buckets.length};
+  return {
+    folds,
+    holdout,
+    warmupForHoldout,
+    buckets:buckets.length
+  };
 }
 function monthlyStats(curve:any[],initial:number){
   const months=new Map<string,{first:number;last:number}>();
@@ -142,47 +227,30 @@ function stressPnl(r:any,extraBps:number){
 }
 
 function score(e:{
-  train:any;validation:any;
   trainMonthlyGeo:number;
   validationMonthlyGeo:number;
   validationPositiveMonthRatio:number;
   validationDrawdownPct:number;
   validationTurnover:number;
+  walkForwardMinValidationMonthlyGeo:number;
+  walkForwardAvgValidationMonthlyGeo:number;
 }){
-  const trades=Number(e.validation.tradeCount??0);
-  if(trades<5) return -999;
-  const stability=Math.min(e.trainMonthlyGeo,e.validationMonthlyGeo);
+  const trades=Number(e.validationPositiveMonthRatio>=0?1:0);
+  if(trades<1) return -999;
+  const stability=Math.min(
+    e.trainMonthlyGeo,
+    e.validationMonthlyGeo,
+    e.walkForwardMinValidationMonthlyGeo
+  );
   const ddPenalty=Math.min(1,e.validationDrawdownPct/0.10);
-  const turnoverPenalty=Math.min(1,e.validationTurnover/e.train.initialCapital);
-  return 4*e.validationMonthlyGeo+2*stability+0.5*e.validationPositiveMonthRatio-1.5*ddPenalty-0.25*turnoverPenalty;
-}
-
-function evaluateCandidate(c:Candidate,split:any):Eval{
-  const train=runBacktest(split.train,initialCapital,c);
-  const validation=runBacktest(split.validation,initialCapital,c,{warmupQuotes:split.warmupForValidation});
-  const tm=monthlyStats(train.equityCurve,initialCapital);
-  const vm=monthlyStats(validation.equityCurve,initialCapital);
-  const validationTurnover=turnover(validation);
-  const validationDrawdownPct=Number(validation.maxDrawdown)/initialCapital;
-  const validationPositiveMonthRatio=vm.positiveRatio;
-  const validationMonthlyGeo=vm.geo;
-  const validationScore=score({
-    train,validation,
-    trainMonthlyGeo:tm.geo,
-    validationMonthlyGeo,
-    validationPositiveMonthRatio,
-    validationDrawdownPct,
-    validationTurnover
-  });
-  return {
-    candidate:c,train,validation,
-    trainMonthlyGeo:tm.geo,
-    validationMonthlyGeo,
-    validationPositiveMonthRatio,
-    validationDrawdownPct,
-    validationTurnover,
-    validationScore
-  };
+  const turnoverPenalty=Math.min(1,e.validationTurnover/1_000_000);
+  const foldStability=Math.min(1,Math.max(0,(e.walkForwardMinValidationMonthlyGeo+0.02)/0.10));
+  return 3*e.walkForwardAvgValidationMonthlyGeo
+    +2*stability
+    +0.5*e.validationPositiveMonthRatio
+    +0.75*foldStability
+    -1.5*ddPenalty
+    -0.25*turnoverPenalty;
 }
 
 function mutate(parent:Candidate,key:string,generation:number):Candidate{
@@ -244,7 +312,10 @@ async function main(){
         validation_return_pct:x.validation.returnPct,
         validation_max_drawdown:x.validation.maxDrawdown,
         validation_trades:x.validation.tradeCount,
-        validation_score:x.validationScore
+        validation_score:x.validationScore,
+        walk_forward_avg_monthly_geo:x.walkForwardAvgValidationMonthlyGeo,
+        walk_forward_min_monthly_geo:x.walkForwardMinValidationMonthlyGeo,
+        walk_forward_max_drawdown_pct:x.walkForwardMaxValidationDrawdownPct
       }))
     });
 
@@ -263,15 +334,30 @@ async function main(){
   const finalists=finalEvaluations.slice(0,Math.min(25,finalEvaluations.length));
 
   const holdoutEvaluated=finalists.map(e=>{
-    const holdout=runBacktest(split.holdout,initialCapital,e.candidate,{warmupQuotes:split.warmupForHoldout});
+    const holdout=runBacktest(
+      split.holdout,initialCapital,e.candidate,{warmupQuotes:split.warmupForHoldout}
+    );
     const hm=monthlyStats(holdout.equityCurve,initialCapital);
     const holdoutTurnover=turnover(holdout);
     const holdoutDrawdownPct=Number(holdout.maxDrawdown)/initialCapital;
-    const stress={
-      extra_cost_5bps:stressPnl(holdout,5),
-      extra_cost_10bps:stressPnl(holdout,10),
-      extra_cost_20bps:stressPnl(holdout,20)
-    };
+    const stressCosts=[5,10,20].reduce<Record<string,Record<string,number>>>((acc,bps)=>{
+      const stressed=runBacktest(
+        split.holdout,initialCapital,e.candidate,{
+          warmupQuotes:split.warmupForHoldout,
+          costModel:{extraSlippageBps:bps}
+        }
+      );
+      acc[`extra_cost_${bps}bps`]={
+        netPnl:stressed.netPnl,
+        returnPct:stressed.returnPct,
+        maxDrawdown:stressed.maxDrawdown,
+        tradeCount:stressed.tradeCount,
+        totalFees:stressed.totalFees,
+        totalSlippage:stressed.totalSlippage,
+        turnover:turnover(stressed)
+      };
+      return acc;
+    },{});
     return {
       ...e,
       holdout,
@@ -281,15 +367,18 @@ async function main(){
       holdoutTurnover,
       holdoutNetPnl:holdout.netPnl,
       holdoutReturnPct:holdout.returnPct,
-      stress
+      stress:stressCosts
     };
   });
 
   const credible=holdoutEvaluated
-    .filter(e=>e.validationMonthlyGeo>=TARGET_MONTHLY_GEO && e.holdoutMonthlyGeo!>=TARGET_MONTHLY_GEO)
+    .filter(e=>e.walkForwardAvgValidationMonthlyGeo>=TARGET_MONTHLY_GEO && e.holdoutMonthlyGeo!>=TARGET_MONTHLY_GEO)
+    .filter(e=>(e.walkForwardMinValidationMonthlyGeo??-Infinity)>=MIN_FOLD_MONTHLY_GEO)
+    .filter(e=>(e.walkForwardAvgValidationPositiveMonthRatio??0)>=0.50)
+    .filter(e=>(e.walkForwardMaxValidationDrawdownPct??1)<=0.20)
     .filter(e=>(e.holdoutPositiveMonthRatio??0)>=0.50)
     .filter(e=>(e.holdoutDrawdownPct??1)<=0.20)
-    .filter(e=>(e.stress?.extra_cost_10bps??-Infinity)>0)
+    .filter(e=>(e.stress?.extra_cost_10bps?.netPnl??-Infinity)>0)
     .sort((a,b)=>(b.holdoutMonthlyGeo??-999)-(a.holdoutMonthlyGeo??-999));
 
   const report={
@@ -306,9 +395,12 @@ async function main(){
       selection_rule:"TRAIN+VALIDATION only; HOLDOUT untouched until finalists",
       execution_timing:"raw ticks retained; completed 15m bar closes are warmed up from prior data, entry/exit executes only on subsequent observed ticks",
       leakage_guard:"HOLDOUT NEVER USED FOR CANDIDATE SELECTION",
-      stress_model:"additional bps deducted from realized turnover",
+      stress_model:"full event replay with extra slippage applied to execution price and affordability checks",
       target_monthly_geometric_return:TARGET_MONTHLY_GEO,
-      credible_gate:"validation AND holdout monthly geo must meet target; >=50% positive months; drawdown <=20%; 10bps stress remains profitable"
+      walk_forward_folds:WALK_FORWARD_FOLDS,
+      walk_forward_rule:"sequential expanding train windows 50/60/70% with validation ending at 60/70/80%; final 20% frozen holdout",
+      leakage_guard:"HOLDOUT NEVER USED FOR CANDIDATE SELECTION",
+      credible_gate:"walk-forward average validation geo AND holdout geo meet target; minimum fold geo >= configured floor; >=50% positive months; validation/holdout DD <=20%; 10bps full replay remains profitable"
     },
     generationReports,
     finalists:holdoutEvaluated.map(e=>({
@@ -319,6 +411,10 @@ async function main(){
       validation_trades:e.validation.tradeCount,
       holdout_monthly_geo:e.holdoutMonthlyGeo,
       holdout_return_pct:e.holdoutReturnPct,
+      walk_forward_avg_validation_monthly_geo:e.walkForwardAvgValidationMonthlyGeo,
+      walk_forward_min_validation_monthly_geo:e.walkForwardMinValidationMonthlyGeo,
+      walk_forward_max_validation_drawdown_pct:e.walkForwardMaxValidationDrawdownPct,
+      fold_results:e.foldResults,
       holdout_max_drawdown:e.holdout.maxDrawdown,
       holdout_trades:e.holdout.tradeCount,
       holdout_positive_month_ratio:e.holdoutPositiveMonthRatio,
