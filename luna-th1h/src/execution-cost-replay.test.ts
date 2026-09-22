@@ -33,6 +33,11 @@ const order:PlannedOrder={
   reason:"COST_REPLAY_TEST"
 };
 const depthOrder:PlannedOrder={...order,qty:150,visibleDepth:150,depthComplete:true,depthLevels:[{price:100,size:100},{price:101,size:50}]};
+const partialDepthOrder:PlannedOrder={...order,qty:150,visibleDepth:100,depthComplete:false,depthLevels:[{price:100,size:100},{price:90,size:50}]};
+const partialDepthFill=simulateFill(partialDepthOrder,{slippageBps:0,marketImpactBps:0});
+if(Math.abs(partialDepthFill.fillPrice-100)>1e-9){
+  throw new Error("partial L2 snapshot must not be replayed as complete depth");
+}
 const depthFill=simulateFill(depthOrder,{slippageBps:0,marketImpactBps:0});
 if(Math.abs(depthFill.fillPrice-(100*100+101*50)/150)>1e-9) throw new Error("depth replay VWAP mismatch");
 const baselineFill=simulateFill(order,{marketImpactBps:8});
