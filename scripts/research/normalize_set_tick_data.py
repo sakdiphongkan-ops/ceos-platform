@@ -22,7 +22,7 @@ def read_csv_text(text: str, delimiter: str) -> list[dict[str, str]]:
     return list(csv.DictReader(text.splitlines(), delimiter=delimiter))
 
 def open_source(path: Path, delimiter: str) -> tuple[list[dict[str, str]], str]:
-    if path.suffix.lower() != ".zip":
+    if not zipfile.is_zipfile(path):
         with path.open("r", encoding="utf-8-sig", newline="") as f:
             return list(csv.DictReader(f, delimiter=delimiter)), path.name
     with zipfile.ZipFile(path) as zf:
@@ -115,7 +115,13 @@ def main() -> None:
             "bid_size": int(bid_size) if bid_size is not None and bid_size.is_integer() else bid_size,
             "ask_size": int(ask_size) if ask_size is not None and ask_size.is_integer() else ask_size,
             "source": args.source_label,
-            "data_quality": args.data_quality,
+            "data_quality": (
+                "verified"
+                if bid is not None and ask is not None and
+                bid_size is not None and ask_size is not None and
+                bid > 0 and ask > 0 and bid_size > 0 and ask_size > 0
+                else "unverified"
+            ),
         })
 
     normalized.sort(key=lambda x: (x["ts"], x["symbol"]))
