@@ -20,7 +20,7 @@ try:
 except Exception:  # pragma: no cover
     Investor = None
 
-APP_VERSION = "0.5.0"
+APP_VERSION = "0.5.1"
 RELEASE_SOURCE_REVISION = (
     os.getenv("LUNA_DEPLOY_SOURCE_SHA")
     or os.getenv("GITHUB_SHA")
@@ -34,9 +34,10 @@ if EXPECTED_SOURCE_REVISION and RELEASE_SOURCE_REVISION != EXPECTED_SOURCE_REVIS
         f"LUNA_SOURCE_REVISION_MISMATCH:expected={EXPECTED_SOURCE_REVISION}:release={RELEASE_SOURCE_REVISION}:railway={RAILWAY_REPORTED_REVISION}"
     )
 app = FastAPI(title="LUNA Execution + Market Data Gateway", version=APP_VERSION)
+PUBLIC_STREAM_RELEASE = "public_quote_stream_v1"
 print(
     f"LUNA_GATEWAY_SOURCE_REVISION revision={RELEASE_SOURCE_REVISION} "
-    f"railway_reported={RAILWAY_REPORTED_REVISION}",
+    f"railway_reported={RAILWAY_REPORTED_REVISION} release={PUBLIC_STREAM_RELEASE}",
     flush=True,
 )
 
@@ -1000,6 +1001,7 @@ def health():
         "ok": True,
         "version": APP_VERSION,
         "source_revision": RELEASE_SOURCE_REVISION,
+        "public_stream_release": PUBLIC_STREAM_RELEASE,
         "live_armed": LIVE_ARMED,
         "provider_mode": PROVIDER_MODE,
         "selected_provider": _selected_provider,
