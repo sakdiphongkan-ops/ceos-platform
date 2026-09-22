@@ -32,6 +32,9 @@ const order:PlannedOrder={
   spreadBps:2,
   reason:"COST_REPLAY_TEST"
 };
+const depthOrder:PlannedOrder={...order,qty:150,visibleDepth:150,depthLevels:[{price:100,size:100},{price:101,size:50}]};
+const depthFill=simulateFill(depthOrder,{slippageBps:0,marketImpactBps:0});
+if(Math.abs(depthFill.fillPrice-(100*100+101*50)/150)>1e-9) throw new Error("depth replay VWAP mismatch");
 const baselineFill=simulateFill(order,{marketImpactBps:8});
 const stressedImpactFill=simulateFill(order,{marketImpactBps:20});
 if(!(stressedImpactFill.fillPrice>baselineFill.fillPrice)){
