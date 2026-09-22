@@ -20,8 +20,12 @@ except Exception:  # pragma: no cover
     Investor = None
 
 APP_VERSION = "0.5.0"
-SOURCE_REVISION = os.getenv("RAILWAY_GIT_COMMIT_SHA") or os.getenv("GITHUB_SHA") or "unknown"
+SOURCE_REVISION = os.getenv("RAILWAY_GIT_COMMIT_SHA") or os.getenv("GITHUB_SHA") or os.getenv("LUNA_DEPLOY_SOURCE_SHA") or "unknown"
+EXPECTED_SOURCE_REVISION = os.getenv("LUNA_EXPECTED_SOURCE_SHA", "").strip()
+if EXPECTED_SOURCE_REVISION and SOURCE_REVISION != EXPECTED_SOURCE_REVISION:
+    raise RuntimeError(f"LUNA_SOURCE_REVISION_MISMATCH:expected={EXPECTED_SOURCE_REVISION}:actual={SOURCE_REVISION}")
 app = FastAPI(title="LUNA Execution + Market Data Gateway", version=APP_VERSION)
+print(f"LUNA_GATEWAY_SOURCE_REVISION revision={SOURCE_REVISION}", flush=True)
 
 LIVE_ARMED = os.getenv("LIVE_TRADING_ARMED", "false").lower() == "true"
 GATEWAY_KEY = os.getenv("LUNA_GATEWAY_KEY", "")
