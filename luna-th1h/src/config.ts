@@ -39,7 +39,7 @@ export const config={
   marketDataGatewayPollMs:num("LUNA_MARKET_GATEWAY_POLL_MS",100),
   maxQuoteAgeMs:num("LUNA_MAX_QUOTE_AGE_MS",2000),
   maxExecutionConcurrency:num("LUNA_MAX_EXECUTION_CONCURRENCY",4),
-  maxAnalysisConcurrency:num("LUNA_MAX_ANALYSIS_CONCURRENCY",16),
+  maxAnalysisConcurrency:num("LUNA_MAX_ANALYSIS_CONCURRENCY",32),
   telemetryBatchSize:num("LUNA_TELEMETRY_BATCH_SIZE",50),
   telemetryFlushMs:num("LUNA_TELEMETRY_FLUSH_MS",50),
   telemetryTickBatchShare:num("LUNA_TELEMETRY_TICK_SHARE",0.25),
