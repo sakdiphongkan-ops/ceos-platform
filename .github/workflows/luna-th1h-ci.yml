@@ -25,6 +25,7 @@ jobs:
       - run: npm run test:strategy-state
       - run: npm run test:execution-reservations
       - run: npm run test:risk-guards
+      - run: npm run test:cost-replay
       - run: npm run test:execution-scheduler
       - run: npm run test:live-reconciliation
       - run: npm run test:telemetry-queue
