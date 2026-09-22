@@ -7,6 +7,20 @@ function parseNumber(value:string|undefined){
   return Number.isFinite(n)?n:null;
 }
 
+function parseLevels(value:string|undefined){
+  if(value===undefined || value.trim()==="") return undefined;
+  try{
+    const parsed=JSON.parse(value);
+    if(!Array.isArray(parsed)) return undefined;
+    const levels=parsed
+      .map((x:any)=>({price:Number(x?.price),size:Number(x?.size)}))
+      .filter((x:{price:number;size:number})=>Number.isFinite(x.price)&&x.price>0&&Number.isFinite(x.size)&&x.size>0);
+    return levels.length?levels:undefined;
+  }catch{
+    return undefined;
+  }
+}
+
 function splitCsvLine(line:string){
   const cells:string[]=[];
   let cell="";
@@ -45,6 +59,11 @@ export async function readNormalizedCsv(path:string):Promise<Quote[]>{
   const iLast=index("last","last_price","price");
   const iBidSize=index("bid_size","best_bid_size","bid_volume");
   const iAskSize=index("ask_size","best_ask_size","offer_volume");
+  const iSourceTs=index("source_ts","source_time","event_ts");
+  const iSource=index("source");
+  const iQuality=index("data_quality","quality");
+  const iBidLevels=index("bid_levels_json","bid_levels");
+  const iAskLevels=index("ask_levels_json","ask_levels");
 
   if(iTs<0 || iSymbol<0) throw new Error("CSV requires ts/time and symbol columns.");
 
@@ -55,15 +74,24 @@ export async function readNormalizedCsv(path:string):Promise<Quote[]>{
     const parsedTs=new Date(rawTs);
     if(!Number.isFinite(parsedTs.getTime())) throw new Error(`INVALID_CSV_TIMESTAMP at line ${n+1}: ${rawTs}`);
 
+    const sourceTsRaw=iSourceTs>=0?c[iSourceTs]:undefined;
+    const sourceTs=sourceTsRaw?new Date(sourceTsRaw):undefined;
+    if(sourceTsRaw && (!sourceTs || !Number.isFinite(sourceTs.getTime()))){
+      throw new Error("INVALID_CSV_SOURCE_TIMESTAMP at line "+(n+1)+": "+sourceTsRaw);
+    }
     rows.push({
       ts:parsedTs.toISOString(),
+      sourceTs:sourceTs?sourceTs.toISOString():undefined,
       symbol:c[iSymbol],
       bid:parseNumber(c[iBid]),
       ask:parseNumber(c[iAsk]),
       last:parseNumber(c[iLast]),
       bidSize:parseNumber(c[iBidSize]),
       askSize:parseNumber(c[iAskSize]),
-      source:"historical-csv"
+      source:iSource>=0 && c[iSource]?c[iSource]:"historical-csv",
+      dataQuality:iQuality>=0 && c[iQuality]?c[iQuality]:undefined,
+      bidLevels:parseLevels(iBidLevels>=0?c[iBidLevels]:undefined),
+      askLevels:parseLevels(iAskLevels>=0?c[iAskLevels]:undefined)
     });
   }
 
