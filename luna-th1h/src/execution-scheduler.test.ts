@@ -45,6 +45,7 @@ if(events.includes("DDD-ran")) throw new Error("canceled pending signal executed
 
 cancelGate.resolve();
 await running;
+gate.resolve();
 await Promise.all([first,latest,other]);
 
 if(events.includes("AAA-2-ran")) throw new Error("superseded AAA task executed");
