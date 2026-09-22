@@ -65,7 +65,7 @@ const prewarmedSymbols=new Set<string>();
 const prewarmInFlight=new Map<string,Promise<void>>();
 const prewarmCache=new Map<string,{prices:number[];fetchedAtMs:number;fetchMs:number}>();
 const liveOrderStates=new Map<string,TrackedLiveOrder>();
-const PERSIST_HOLD_MS=5_000;
+
 const SNAPSHOT_MS=1_000;
 const strategyV1=new StrategyV1({}, {priceOnlyFallback:config.priceOnlyFallback});
 
@@ -941,7 +941,7 @@ async function handleQuote(q:Quote){
   const lastPersist=lastPersistBySymbol.get(q.symbol)??0;
   const shouldPersist=config.executionTest
     || signal.action!=="HOLD"
-    || now-lastPersist>=PERSIST_HOLD_MS;
+    || now-lastPersist>=config.holdTickPersistMs;
 
   if(shouldPersist){
     lastPersistBySymbol.set(q.symbol,now);
@@ -1241,6 +1241,9 @@ async function main(){
   }
   if(!Number.isFinite(config.telemetryFlushMs) || config.telemetryFlushMs<5){
     throw new Error("LUNA_TELEMETRY_FLUSH_MS_MUST_BE_AT_LEAST_5");
+  }
+  if(!Number.isInteger(config.holdTickPersistMs) || config.holdTickPersistMs<50){
+    throw new Error("LUNA_HOLD_TICK_PERSIST_MS_MUST_BE_AT_LEAST_50");
   }
   if(config.liveAccountCashDriftTolerance<0 || config.liveAccountQtyDriftTolerance<0){
     throw new Error("LUNA_LIVE_ACCOUNT_DRIFT_TOLERANCE_MUST_BE_NON_NEGATIVE");
