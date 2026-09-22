@@ -319,7 +319,7 @@ async function main(){
       validation_trades:e.validation.tradeCount,
       holdout_monthly_geo:e.holdoutMonthlyGeo,
       holdout_return_pct:e.holdoutReturnPct,
-      holdout_max_drawdown:e.holdout.holdout?.maxDrawdown??e.holdout.maxDrawdown,
+      holdout_max_drawdown:e.holdout.maxDrawdown,
       holdout_trades:e.holdout.tradeCount,
       holdout_positive_month_ratio:e.holdoutPositiveMonthRatio,
       stress:e.stress
