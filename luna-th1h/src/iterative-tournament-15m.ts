@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import {buildTimeBars} from "./bar-builder.js";
 import {readNormalizedCsv} from "./research-csv.js";
 import {runBacktest} from "./backtest.js";
 import type {Quote} from "./types.js";
@@ -84,19 +83,36 @@ function makeCandidate(key:string,generation:number,base?:Partial<StrategyParams
   return {...c,id:candidateId(c,generation),generation};
 }
 
-function splitChronological(quotes:Quote[]){
-  if(quotes.length<100) throw new Error(`Need at least 100 15m bars/quotes; got ${quotes.length}`);
-  const n=quotes.length;
-  const a=Math.floor(n*0.60);
-  const b=Math.floor(n*0.80);
-  if(!(a>0 && b>a && n>b)) throw new Error("Invalid chronological split.");
-  return {
-    train:quotes.slice(0,a),
-    validation:quotes.slice(a,b),
-    holdout:quotes.slice(b)
-  };
+function bucket15m(ts:string){
+  const ms=Date.parse(ts);
+  if(!Number.isFinite(ms)) return null;
+  return Math.floor(ms/(15*60_000))*(15*60_000);
 }
 
+function splitChronologicalTicks(quotes:Quote[]){
+  if(quotes.length<500) throw new Error("Need at least 500 raw ticks; got "+quotes.length);
+  const buckets=[...new Set(quotes.map(q=>bucket15m(q.ts)).filter((x):x is number=>x!==null))].sort((a,b)=>a-b);
+  if(buckets.length<100) throw new Error("Need at least 100 observed 15m buckets; got "+buckets.length);
+  const a=Math.floor(buckets.length*0.60);
+  const b=Math.floor(buckets.length*0.80);
+  if(!(a>40 && b>a && buckets.length>b)) throw new Error("Invalid chronological bucket split.");
+  const trainEnd=buckets[a-1], validationEnd=buckets[b-1];
+  const train=quotes.filter(q=>(bucket15m(q.ts)??Infinity)<=trainEnd);
+  const validation=quotes.filter(q=>{
+    const x=bucket15m(q.ts);
+    return x!==null && x>trainEnd && x<=validationEnd;
+  });
+  const holdout=quotes.filter(q=>(bucket15m(q.ts)??-Infinity)>validationEnd);
+  const warmupForValidation=quotes.filter(q=>{
+    const x=bucket15m(q.ts);
+    return x!==null && x<=trainEnd;
+  });
+  const warmupForHoldout=quotes.filter(q=>{
+    const x=bucket15m(q.ts);
+    return x!==null && x<=validationEnd;
+  });
+  return {train,validation,holdout,warmupForValidation,warmupForHoldout,buckets:buckets.length};
+}
 function monthlyStats(curve:any[],initial:number){
   const months=new Map<string,{first:number;last:number}>();
   for(const p of curve){
@@ -143,7 +159,7 @@ function score(e:{
 
 function evaluateCandidate(c:Candidate,split:any):Eval{
   const train=runBacktest(split.train,initialCapital,c);
-  const validation=runBacktest(split.validation,initialCapital,c);
+  const validation=runBacktest(split.validation,initialCapital,c,{warmupQuotes:split.warmupForValidation});
   const tm=monthlyStats(train.equityCurve,initialCapital);
   const vm=monthlyStats(validation.equityCurve,initialCapital);
   const validationTurnover=turnover(validation);
@@ -202,8 +218,7 @@ async function main(){
   const sha=crypto.createHash("sha256").update(raw).digest("hex");
   const ticks=await readNormalizedCsv(input);
   if(!ticks.length) throw new Error("No normalized quotes loaded.");
-  const bars=buildTimeBars(ticks,{intervalMinutes});
-  const split=splitChronological(bars);
+  const split=splitChronologicalTicks(ticks);
 
   let population:Candidate[]=Array.from({length:populationSize},(_,i)=>makeCandidate(`g0|${i}`,0));
   const generationReports:any[]=[];
@@ -248,7 +263,7 @@ async function main(){
   const finalists=finalEvaluations.slice(0,Math.min(25,finalEvaluations.length));
 
   const holdoutEvaluated=finalists.map(e=>{
-    const holdout=runBacktest(split.holdout,initialCapital,e.candidate);
+    const holdout=runBacktest(split.holdout,initialCapital,e.candidate,{warmupQuotes:split.warmupForHoldout});
     const hm=monthlyStats(holdout.equityCurve,initialCapital);
     const holdoutTurnover=turnover(holdout);
     const holdoutDrawdownPct=Number(holdout.maxDrawdown)/initialCapital;
@@ -280,8 +295,8 @@ async function main(){
   const report={
     generated_at:new Date().toISOString(),
     dataset:{
-      input,path: path.resolve(input),sha256:sha,input_rows:ticks.length,bar_rows:bars.length,
-      symbols:new Set(bars.map(x=>x.symbol)).size,start_ts:bars[0]?.ts,end_ts:bars.at(-1)?.ts,
+      input,path: path.resolve(input),sha256:sha,input_rows:ticks.length,observed_15m_buckets:split.buckets,
+      symbols:new Set(ticks.map(x=>x.symbol)).size,start_ts:ticks[0]?.ts,end_ts:ticks.at(-1)?.ts,
       interval_minutes:intervalMinutes
     },
     methodology:{
@@ -289,6 +304,7 @@ async function main(){
       generations,populationSize,elites,globalEvaluated,
       split:"chronological 60% TRAIN / 20% VALIDATION / 20% HOLDOUT",
       selection_rule:"TRAIN+VALIDATION only; HOLDOUT untouched until finalists",
+      execution_timing:"raw ticks retained; completed 15m bar closes are warmed up from prior data, entry/exit executes only on subsequent observed ticks",
       leakage_guard:"HOLDOUT NEVER USED FOR CANDIDATE SELECTION",
       stress_model:"additional bps deducted from realized turnover",
       target_monthly_geometric_return:TARGET_MONTHLY_GEO,
