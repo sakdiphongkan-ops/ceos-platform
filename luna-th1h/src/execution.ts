@@ -240,6 +240,7 @@ export function planOrder(
     return {
       accepted:true,symbol:q.symbol,side,qty,referencePrice,
       visibleDepth:verifiedBook?Number(q.askSize??0):0,
+      depthLevels:verifiedBook?q.askLevels:undefined,
       spreadBps:verifiedBook
         ? ((Number(q.ask)-Number(q.bid))/Number(q.last||q.ask))*10_000 : 0,
       reason:signal.reason
@@ -264,6 +265,7 @@ export function planOrder(
   return {
     accepted:true,symbol:q.symbol,side,qty,referencePrice,
     visibleDepth:verifiedBook?Number(q.bidSize??0):0,
+    depthLevels:verifiedBook?q.bidLevels:undefined,
     spreadBps:verifiedBook
       ? ((Number(q.ask)-Number(q.bid))/Number(q.last||q.bid))*10_000 : 0,
     reason:signal.reason
@@ -283,9 +285,23 @@ export function simulateFill(
     : 0;
   const impactRate=(costs.marketImpactBps/10000)*Math.sqrt(participation);
   const totalPricePenalty=slippageRate+impactRate;
-  const fillPrice=order.side==="BUY"
+  let fillPrice=order.side==="BUY"
     ? order.referencePrice*(1+totalPricePenalty)
     : order.referencePrice*(1-totalPricePenalty);
+  if(order.depthLevels?.length){
+    let remaining=order.qty;
+    let cash=0;
+    for(const level of order.depthLevels){
+      if(remaining<=0) break;
+      const take=Math.min(remaining,Math.max(0,level.size));
+      cash+=take*level.price;
+      remaining-=take;
+    }
+    if(remaining<=1e-9){
+      fillPrice=cash/order.qty*(1+slippageRate);
+      if(order.side==="SELL") fillPrice=cash/order.qty*(1-slippageRate);
+    }
+  }
   const notional=fillPrice*order.qty;
   const fee=notional*(feeRate+taxRate);
   const slippage=Math.abs(fillPrice-order.referencePrice)*order.qty;
