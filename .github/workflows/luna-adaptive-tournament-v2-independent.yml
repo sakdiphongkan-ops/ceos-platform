@@ -3,6 +3,23 @@ name: LUNA Adaptive Tournament v2 - Independent SET Data
 
 on:
   workflow_dispatch:
+    inputs:
+      pit_membership_url:
+        description: "PIT membership CSV URL"
+        required: true
+        type: string
+      pit_membership_sha256:
+        description: "SHA-256 of PIT membership CSV"
+        required: true
+        type: string
+      pit_membership_manifest_url:
+        description: "PIT membership provenance manifest JSON URL"
+        required: true
+        type: string
+      pit_membership_manifest_sha256:
+        description: "SHA-256 of PIT membership provenance manifest"
+        required: true
+        type: string
 concurrency:
   group: luna-adaptive-tournament-v2-independent
   cancel-in-progress: true
@@ -16,6 +33,20 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Download and verify PIT membership provenance
+        env:
+          PIT_URL: ${{ inputs.pit_membership_url }}
+          PIT_SHA: ${{ inputs.pit_membership_sha256 }}
+          MANIFEST_URL: ${{ inputs.pit_membership_manifest_url }}
+          MANIFEST_SHA: ${{ inputs.pit_membership_manifest_sha256 }}
+        run: |
+          mkdir -p data/raw/pit
+          curl -fL --retry 3 --retry-delay 2 "$PIT_URL" -o data/raw/pit/pit_membership.csv
+          curl -fL --retry 3 --retry-delay 2 "$MANIFEST_URL" -o data/raw/pit/pit_membership.manifest.json
+          test "$(sha256sum data/raw/pit/pit_membership.csv | awk '{print $1}')" = "$PIT_SHA"
+          test "$(sha256sum data/raw/pit/pit_membership.manifest.json | awk '{print $1}')" = "$MANIFEST_SHA"
+          python scripts/research/verify_pit_membership_manifest.py             --membership data/raw/pit/pit_membership.csv             --manifest data/raw/pit/pit_membership.manifest.json
 
       - uses: actions/setup-python@v5
         with:
