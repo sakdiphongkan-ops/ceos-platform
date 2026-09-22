@@ -93,6 +93,7 @@ type Eval = {
   walkForwardFoldCount:number;
   walkForwardMinValidationMonthlyGeo:number;
   walkForwardMaxValidationDrawdownPct:number;
+  walkForwardMinValidationTrades:number;
   walkForwardAvgValidationMonthlyGeo:number;
   walkForwardAvgValidationPositiveMonthRatio:number;
   walkForwardAvgValidationTurnover:number;
