@@ -1,4 +1,4 @@
-import {applyFill,createPortfolio,mark,planOrder,simulateFill,snapshot,type PortfolioState} from "./execution.js";
+import {applyFill,createPortfolio,mark,planOrder,simulateFill,snapshot,type ExecutionCostOverrides,type PortfolioState} from "./execution.js";
 import {DEFAULT_PARAMS,StrategyV1,type StrategyParams} from "./strategy-v1.js";
 import type {Quote} from "./types.js";
 
@@ -62,6 +62,7 @@ function maxDrawdown(curve:BacktestEquityPoint[]){
 
 export interface BacktestOptions{
   warmupQuotes?:Quote[];
+  costModel?:ExecutionCostOverrides;
 }
 
 function primeStrategyFromQuotes(strategy:StrategyV1,quotes:Quote[]){
@@ -110,9 +111,9 @@ export function runBacktest(
       nowMs
     });
 
-    const order=planOrder(signal,q,state);
+    const order=planOrder(signal,q,state,undefined,options.costModel);
     if(order.accepted){
-      const fill=simulateFill(order);
+      const fill=simulateFill(order,options.costModel);
       const beforeRealized=state.positions[q.symbol]?.realizedPnl??0;
       applyFill(state,fill);
       const afterRealized=state.positions[q.symbol]?.realizedPnl??beforeRealized;
