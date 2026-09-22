@@ -1,41 +1,58 @@
 import {StrategyV1} from "./strategy-v1.js";
 
-const strategy=new StrategyV1();
-const prices=Array.from({length:25},(_,i)=>100+i*0.1);
-strategy.prime("AAA",prices);
-
-const sparse=new StrategyV1();
-let qts="2026-09-21T03:00:00.000Z";
-const base={
-  symbol:"AAA",
-  ts:qts,
-  bid:102,
-  ask:102.02,
-  last:102.01,
-  bidSize:1000,
-  askSize:500,
-  source:"test"
-};
-const first=sparse.evaluate(base,{positionQty:0,avgPrice:0,nowMs:Date.now()});
-if(first.reason!=="WARMUP") throw new Error("expected live warmup before seed");
-
-const applied=sparse.primeIfSparse("AAA",prices,2);
-if(!applied) throw new Error("expected sparse seed to apply");
-
-const second=sparse.evaluate({...base,last:102.3,bid:102.29,ask:102.31},{positionQty:0,avgPrice:0,nowMs:Date.now()});
-if(second.reason==="WARMUP") throw new Error("seed did not remove warmup");
-
-const mature=new StrategyV1();
-for(let i=0;i<5;i++){
-  mature.evaluate({
-    ...base,
-    ts:new Date(Date.parse(qts)+i*1000).toISOString(),
-    last:102+i*0.1,
-    bid:102+i*0.1-0.01,
-    ask:102+i*0.1+0.01
-  },{positionQty:0,avgPrice:0,nowMs:Date.now()});
+function quote(ts:string,last:number,book=true){
+  return {
+    symbol:"AAA",ts,last,
+    bid:book?last-0.01:null,
+    ask:book?last+0.01:null,
+    bidSize:book?1000:null,
+    askSize:book?500:null,
+    source:"test",
+    dataQuality:book?"verified":"unverified"
+  };
 }
-const ignored=mature.primeIfSparse("AAA",prices,2);
-if(ignored) throw new Error("mature live state must not be overwritten");
 
-console.log("strategy sparse-seed tests: PASS");
+const strategy=new StrategyV1();
+const start=Date.parse("2026-09-21T03:00:00.000Z");
+
+for(let i=0;i<20;i++){
+  const ts=new Date(start+i*15*60_000).toISOString();
+  const signal=strategy.evaluate(
+    quote(ts,100+i*0.10),
+    {positionQty:0,avgPrice:0,nowMs:start+i*15*60_000+1000}
+  );
+  if(signal.action==="BUY") throw new Error("must not enter before 20 completed bars");
+}
+
+const entryTs=start+20*15*60_000+1000;
+const entry=strategy.evaluate(
+  quote(new Date(entryTs).toISOString(),102.20),
+  {positionQty:0,avgPrice:0,nowMs:entryTs}
+);
+if(entry.action!=="BUY") throw new Error("expected 15m BUY after completed-bar warmup");
+
+const blocked=new StrategyV1();
+for(let i=0;i<20;i++){
+  blocked.evaluate(
+    quote(new Date(start+i*15*60_000).toISOString(),100+i*0.10),
+    {positionQty:0,avgPrice:0,nowMs:start+i*15*60_000+1000}
+  );
+}
+const noBook=blocked.evaluate(
+  {
+    ...quote(new Date(entryTs).toISOString(),102.20,false),
+    bid:0,ask:0,bidSize:0,askSize:0,last:102.20
+  },
+  {positionQty:0,avgPrice:0,nowMs:entryTs}
+);
+if(noBook.action==="BUY") throw new Error("unverified book must block BUY");
+
+const exitStrategy=new StrategyV1();
+exitStrategy.prime("AAA",Array.from({length:20},(_,i)=>100+i*0.10));
+const exit=exitStrategy.evaluate(
+  quote(new Date(entryTs).toISOString(),99.0),
+  {positionQty:10,avgPrice:100,nowMs:entryTs+1000}
+);
+if(exit.action!=="SELL" || exit.reason!=="STOP_LOSS") throw new Error("stop-loss exit failed");
+
+console.log("15m strategy tests: PASS");
