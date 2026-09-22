@@ -107,6 +107,7 @@ def main() -> None:
 
         normalized.append({
             "ts": ts,
+            "source_ts": ts,
             "symbol": symbol.upper().replace(".BK", ""),
             "market": args.market,
             "bid": bid,
@@ -153,6 +154,7 @@ def main() -> None:
             "no_synthetic_depth": True,
             "no_price_only_entry_evidence": True,
             "timestamp_and_symbol_required": True,
+            "source_timestamp_preserved": True,
             "duplicate_symbol_timestamp_rejected": True,
         },
     }
