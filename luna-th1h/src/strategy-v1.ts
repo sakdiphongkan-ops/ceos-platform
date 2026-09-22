@@ -1,7 +1,7 @@
 import type {Quote,Signal} from "./types.js";
 import {computeSignalSizing} from "./sizing.js";
 
-export const VERSION="luna-th1h-v1.3.0-15m-riskgated";
+export const VERSION="luna-th1h-v1.4.0-15m-riskgated";
 export const PRICE_ONLY_VERSION="luna-th1h-v1.0.0-price-only-paper-warm5";
 
 const BAR_INTERVAL_MS=15*60_000;
@@ -138,19 +138,20 @@ export class StrategyV1{
   private evaluatePosition(q:Quote,ctx:StrategyContext,st:SymbolState):Signal|null{
     if(ctx.positionQty<=0) return null;
     if(st.entryTs===null) st.entryTs=ctx.nowMs;
+    const executableSellPrice=finite(q.bid)?Number(q.bid):(finite(q.last)?Number(q.last):0);
     const stopLoss=ctx.avgPrice*(1-this.params.stopLossBps/10_000);
     const takeProfit=ctx.avgPrice*(1+this.params.takeProfitBps/10_000);
     const trendBroken=st.emaFast!==null && st.emaSlow!==null && st.emaFast<st.emaSlow;
     const timedOut=ctx.nowMs-st.entryTs>=this.params.maxHoldMs;
+    if(executableSellPrice>0 && executableSellPrice<=stopLoss){
+      st.lastDecisionTs=ctx.nowMs; st.entryTs=null;
+      return {symbol:q.symbol,ts:q.ts,action:"SELL",reason:"STOP_LOSS_EXECUTABLE_BID",strategyVersion:this.version};
+    }
+    if(executableSellPrice>0 && executableSellPrice>=takeProfit){
+      st.lastDecisionTs=ctx.nowMs; st.entryTs=null;
+      return {symbol:q.symbol,ts:q.ts,action:"SELL",reason:"TAKE_PROFIT_EXECUTABLE_BID",strategyVersion:this.version};
+    }
     if(trendBroken){
-      st.lastDecisionTs=ctx.nowMs; st.entryTs=null;
-      return {symbol:q.symbol,ts:q.ts,action:"SELL",reason:"15M_EMA_TREND_BREAK",strategyVersion:this.version};
-    }
-    if(finite(q.last) && q.last<=stopLoss){
-      st.lastDecisionTs=ctx.nowMs; st.entryTs=null;
-      return {symbol:q.symbol,ts:q.ts,action:"SELL",reason:"STOP_LOSS",strategyVersion:this.version};
-    }
-    if(finite(q.last) && q.last>=takeProfit){
       st.lastDecisionTs=ctx.nowMs; st.entryTs=null;
       return {symbol:q.symbol,ts:q.ts,action:"SELL",reason:"TAKE_PROFIT",strategyVersion:this.version};
     }
