@@ -31,7 +31,7 @@ export const config={
   liveGatewayUrl:process.env.LUNA_LIVE_GATEWAY_URL ?? "",
   liveGatewayKey:process.env.LUNA_LIVE_GATEWAY_KEY ?? "",
   timezone:MARKET_TIMEZONE,
-  marketDataProvider:process.env.MARKET_DATA_PROVIDER ?? "mock",
+  // Fail closed to the real gateway when no provider is explicitly configured.\n  // Mock data must be opt-in via MARKET_DATA_PROVIDER=mock.\n  marketDataProvider:process.env.MARKET_DATA_PROVIDER ?? "settrade-gateway",
   marketDataGatewayUrl:process.env.LUNA_MARKET_GATEWAY_URL ?? "",
   marketDataGatewayKey:process.env.LUNA_MARKET_GATEWAY_KEY ?? "",
   marketDataGatewayPollMs:num("LUNA_MARKET_GATEWAY_POLL_MS",100),
