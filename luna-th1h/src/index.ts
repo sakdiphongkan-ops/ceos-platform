@@ -13,7 +13,8 @@ import {latencyMetrics,type LatencyLedger} from "./latency-ledger.js";
 
 const EXECUTION_TEST_VERSION="luna-th1h-execution-test-0.1.0";
 
-// Release source revision for this production-ready source baseline.\nconst EMBEDDED_SOURCE_REVISION="6391c95620865d560e3eaadf25a70456d0d67d3e";
+// Release source revision for this production-ready source baseline.
+const EMBEDDED_SOURCE_REVISION="6391c95620865d560e3eaadf25a70456d0d67d3e";
 
 let sessionId:string|null=null;
 let sessionDate:string|null=null;
