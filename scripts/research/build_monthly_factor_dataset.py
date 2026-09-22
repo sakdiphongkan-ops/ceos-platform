@@ -67,6 +67,7 @@ def main() -> None:
 
     out = pd.DataFrame({
         "symbol": m["symbol"],
+        "snapshot_date": m["date"],
         "month_end": m["month_end"],
         "adj_close": m["adj_close"],
     })
@@ -122,6 +123,7 @@ def main() -> None:
             "avg_amount20": "AMOUNT",
         },
         "month_snapshot_rule": "last available trading day per symbol and calendar month",
+        "pit_date_column": "snapshot_date",
         "forward_return_rule": "computed downstream from adjacent calendar-month snapshots only",
     }
     Path(str(args.output) + ".manifest.json").write_text(
