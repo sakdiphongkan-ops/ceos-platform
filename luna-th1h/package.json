@@ -27,7 +27,8 @@
     "research:15m-iterative": "tsx src/iterative-tournament-15m.ts",
     "test:risk-guards": "tsx src/execution-risk-guards.test.ts",
     "test:cost-replay": "tsx src/execution-cost-replay.test.ts",
-    "qa:verified-15m": "python3 ../scripts/research/qa_verified_15m.py"
+    "qa:verified-15m": "python3 ../scripts/research/qa_verified_15m.py",
+    "test:latency-ledger": "tsx src/latency-ledger.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.0"
