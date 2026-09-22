@@ -28,10 +28,11 @@ jobs:
 
       - name: Download subscriber-provided SET tick file
         env:
-          SOURCE_URL: ${ inputs.source_url }}
+          SOURCE_URL: ${{ inputs.source_url }}
         run: |
           mkdir -p data/raw/set_tick
-          curl -fL --retry 3 --retry-delay 2 "$SOURCE_URL"             -o data/raw/set_tick/source.bin
+          curl -fL --retry 3 --retry-delay 2 "$SOURCE_URL" \
+            -o data/raw/set_tick/source.bin
           test -s data/raw/set_tick/source.bin
           sha256sum data/raw/set_tick/source.bin
 
@@ -42,15 +43,22 @@ jobs:
 
       - name: Normalize official SET tick data
         run: |
-          python scripts/research/normalize_set_tick_data.py             --input data/raw/set_tick/source.bin             --output data/raw/set_tick/normalized.csv             --mapping-json '${ inputs.mapping_json }}'
+          python scripts/research/normalize_set_tick_data.py \
+            --input data/raw/set_tick/source.bin \
+            --output data/raw/set_tick/normalized.csv \
+            --mapping-json '${{ inputs.mapping_json }}'
 
       - name: Verify 15m research readiness
         run: |
-          python scripts/research/qa_verified_15m.py             --input data/raw/set_tick/normalized.csv             --output data/raw/set_tick/qa.json             --min-symbols '${ inputs.min_symbols }}'             --min-verified-book-ratio 0.95
+          python scripts/research/qa_verified_15m.py \
+            --input data/raw/set_tick/normalized.csv \
+            --output data/raw/set_tick/qa.json \
+            --min-symbols '${{ inputs.min_symbols }}' \
+            --min-verified-book-ratio 0.95
 
       - name: Upload auditable QA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: luna-set-verified-15m-${ github.run_id }}
+          name: luna-set-verified-15m-${{ github.run_id }}
           path: data/raw/set_tick/
           retention-days: 30
