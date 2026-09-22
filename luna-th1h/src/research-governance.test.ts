@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import crypto from "node:crypto";
 import {assertFrozenHoldoutAllowed,assertPitMembershipProvenance,digestQuotes,writeHoldoutExposureLedger} from "./research-governance.js";
 
 const dir=fs.mkdtempSync(path.join(os.tmpdir(),"luna-governance-"));
@@ -39,7 +40,4 @@ try{assertFrozenHoldoutAllowed({lockFile:lock,exposureLedger:ledger,datasetSha25
 if(!blocked) throw new Error("holdout replay was not blocked");
 console.log("research governance tests: PASS");
 
-function requireSha(file:string){
-  const {createHash}=require("node:crypto") as typeof import("node:crypto");
-  return createHash("sha256").update(fs.readFileSync(file)).digest("hex");
-}
+const requireSha=(file:string)=>crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
