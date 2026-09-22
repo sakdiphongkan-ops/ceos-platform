@@ -178,7 +178,7 @@ export class StrategyV1{
     const positionBeforeBar=this.evaluatePosition(q,ctx,st);
     if(positionBeforeBar?.action==="SELL") return positionBeforeBar;
 
-    const bucket=bucketStartMs(q.ts);
+    const bucket=bucketStartMs(q.sourceTs ?? q.ts);
     let completedNewBar=false;
     if(bucket!==null){
       if(st.currentBarStartMs===null){
