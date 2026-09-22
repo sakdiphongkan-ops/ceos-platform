@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import argparse, json, os, sys
+import argparse, json, os, subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -24,6 +24,12 @@ def main():
 
     if marker.exists():
         fail(f"HOLDOUT_ALREADY_SEALED:{marker}")
+    try:
+        hist=subprocess.run(["git","log","--all","--format=%H","--",str(result)],capture_output=True,text=True,check=False)
+        if hist.stdout.strip():
+            fail(f"HOLDOUT_RESULT_EXISTS_IN_GIT_HISTORY:{result}")
+    except FileNotFoundError:
+        pass
     if result.exists() and args.mode=="check":
         fail(f"HOLDOUT_RESULT_ALREADY_EXISTS:{result}")
 
