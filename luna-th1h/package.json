@@ -23,7 +23,8 @@
     "test:execution-reservations": "tsx src/execution-reservation.test.ts",
     "test:execution-scheduler": "tsx src/execution-scheduler.test.ts",
     "test:live-reconciliation": "tsx src/live-account-reconciliation.test.ts",
-    "test:telemetry-queue": "tsx src/telemetry-queue.test.ts"
+    "test:telemetry-queue": "tsx src/telemetry-queue.test.ts",
+    "research:15m-iterative": "tsx src/iterative-tournament-15m.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.0"
