@@ -63,7 +63,8 @@ jobs:
           fetch-depth: 2
       - id: changed
         name: Enable manual PIT research run
-        run: echo "run=true" >> "$GITHUB_OUTPUT"      - name: Setup Python
+        run: echo "run=true" >> "$GITHUB_OUTPUT"
+      - name: Setup Python
         if: steps.changed.outputs.run == 'true'
         uses: actions/setup-python@v5
         with:
