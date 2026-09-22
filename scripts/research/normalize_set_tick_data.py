@@ -73,7 +73,7 @@ def main() -> None:
 
     rows, inner_name = open_source(source, args.delimiter)
     normalized: list[dict[str, Any]] = []
-    seen: set[tuple[str, str]] = set()
+    seen: set[tuple[Any, ...]] = set()
 
     for i, row in enumerate(rows, start=2):
         ts = val(row, "ts", mapping)
@@ -89,9 +89,11 @@ def main() -> None:
 
         if last is None or last <= 0:
             raise SystemExit(f"Row {i}: last must be > 0")
-        key = (symbol.upper(), ts)
+        key = (
+            symbol.upper(), ts, bid, ask, last, bid_size, ask_size
+        )
         if key in seen:
-            raise SystemExit(f"Duplicate symbol/timestamp: {key}")
+            raise SystemExit(f"Duplicate market event: {key}")
         seen.add(key)
 
         if bid is not None and bid < 0:
@@ -155,7 +157,7 @@ def main() -> None:
             "no_price_only_entry_evidence": True,
             "timestamp_and_symbol_required": True,
             "source_timestamp_preserved": True,
-            "duplicate_symbol_timestamp_rejected": True,
+            "exact_duplicate_market_event_rejected": True,
         },
     }
     out.with_suffix(out.suffix + ".manifest.json").write_text(
