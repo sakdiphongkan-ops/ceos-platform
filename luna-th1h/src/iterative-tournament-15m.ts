@@ -118,6 +118,19 @@ const MIN_FOLD_TRADES=Math.max(1,Number(process.env.LUNA_RESEARCH_MIN_FOLD_TRADE
 const AUDIT_STRESS_BPS=Math.max(0,Number(process.env.LUNA_RESEARCH_AUDIT_STRESS_BPS ?? 10));
 const MIN_AUDIT_TRADES=Math.max(1,Number(process.env.LUNA_RESEARCH_MIN_AUDIT_TRADES ?? MIN_FOLD_TRADES));
 
+function assertResearchNumber(name:string,value:number,min:number,max:number){
+  if(!Number.isFinite(value) || value<min || value>max){
+    throw new Error(`INVALID_RESEARCH_CONFIG:${name}=${value};expected=[${min},${max}]`);
+  }
+}
+assertResearchNumber("LUNA_INITIAL_CAPITAL",initialCapital,1,1e12);
+assertResearchNumber("LUNA_RESEARCH_TARGET_MONTHLY_GEO",TARGET_MONTHLY_GEO,-1,10);
+assertResearchNumber("LUNA_RESEARCH_MIN_FOLD_MONTHLY_GEO",MIN_FOLD_MONTHLY_GEO,-1,10);
+assertResearchNumber("LUNA_RESEARCH_MIN_FOLD_TRADES",MIN_FOLD_TRADES,1,1e6);
+assertResearchNumber("LUNA_RESEARCH_AUDIT_STRESS_BPS",AUDIT_STRESS_BPS,0,10000);
+assertResearchNumber("LUNA_RESEARCH_MIN_AUDIT_TRADES",MIN_AUDIT_TRADES,1,1e6);
+
+
 const choices={
   fastPeriod:[3,5,8,13],
   slowPeriod:[12,20,30,40],
