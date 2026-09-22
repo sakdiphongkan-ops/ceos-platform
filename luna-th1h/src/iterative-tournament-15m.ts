@@ -38,6 +38,7 @@ const generations=Math.max(1,Number(process.env.LUNA_RESEARCH_GENERATIONS ?? 5))
 const elites=Math.max(5,Math.min(50,Number(process.env.LUNA_RESEARCH_ELITES ?? 20)));
 const seed=process.env.LUNA_RESEARCH_SEED ?? "LUNA-15M-ITERATIVE-2026";
 const outputPath=process.env.LUNA_RESEARCH_OUTPUT ?? "reports/luna-15m/iterative-tournament.json";
+const TARGET_MONTHLY_GEO=Number(process.env.LUNA_RESEARCH_TARGET_MONTHLY_GEO ?? 0.07);
 
 const choices={
   fastPeriod:[3,5,8,13],
@@ -270,9 +271,10 @@ async function main(){
   });
 
   const credible=holdoutEvaluated
-    .filter(e=>e.validationMonthlyGeo>0 && e.holdoutMonthlyGeo!>0)
+    .filter(e=>e.validationMonthlyGeo>=TARGET_MONTHLY_GEO && e.holdoutMonthlyGeo!>=TARGET_MONTHLY_GEO)
     .filter(e=>(e.holdoutPositiveMonthRatio??0)>=0.50)
     .filter(e=>(e.holdoutDrawdownPct??1)<=0.20)
+    .filter(e=>(e.stress?.extra_cost_10bps??-Infinity)>0)
     .sort((a,b)=>(b.holdoutMonthlyGeo??-999)-(a.holdoutMonthlyGeo??-999));
 
   const report={
@@ -288,7 +290,9 @@ async function main(){
       split:"chronological 60% TRAIN / 20% VALIDATION / 20% HOLDOUT",
       selection_rule:"TRAIN+VALIDATION only; HOLDOUT untouched until finalists",
       leakage_guard:"HOLDOUT NEVER USED FOR CANDIDATE SELECTION",
-      stress_model:"additional bps deducted from realized turnover"
+      stress_model:"additional bps deducted from realized turnover",
+      target_monthly_geometric_return:TARGET_MONTHLY_GEO,
+      credible_gate:"validation AND holdout monthly geo must meet target; >=50% positive months; drawdown <=20%; 10bps stress remains profitable"
     },
     generationReports,
     finalists:holdoutEvaluated.map(e=>({
