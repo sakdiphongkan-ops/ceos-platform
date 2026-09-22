@@ -73,6 +73,8 @@ APP_CODE = os.getenv("LUNA_SETTRADE_APP_CODE") or os.getenv("SETTRADE_APP_CODE",
 
 REALTIME_ENABLED = os.getenv("REALTIME_MARKETDATA_ENABLED", "false").lower() == "true"
 REALTIME_BOOK = os.getenv("REALTIME_BID_OFFER_ENABLED", "true").lower() == "true"
+PUBLIC_STREAM_ENABLED = os.getenv("LUNA_PUBLIC_STREAM_ENABLED", "true").lower() == "true"
+PUBLIC_STREAM_MAX_CLIENTS = max(1, int(os.getenv("LUNA_PUBLIC_STREAM_MAX_CLIENTS", "50")))
 SYMBOLS = [s.strip().upper() for s in os.getenv("SETTRADE_REALTIME_SYMBOLS", "").split(",") if s.strip()]
 
 RECONNECT_BASE_SEC = max(1.0, float(os.getenv("LUNA_MARKET_RECONNECT_BASE_SEC", "2")))
@@ -112,6 +114,8 @@ _quote_lock = threading.Lock()
 _quotes: Dict[str, Dict[str, Any]] = {}
 _stream_lock = threading.Lock()
 _stream_clients: Dict[str, tuple[asyncio.AbstractEventLoop, asyncio.Queue]] = {}
+_public_stream_lock = threading.Lock()
+_public_stream_clients: Dict[str, tuple[asyncio.AbstractEventLoop, asyncio.Queue]] = {}
 
 _feed_lock = threading.Lock()
 _collector_started = False
@@ -414,6 +418,27 @@ def _publish_stream_quote(quote: Dict[str, Any]):
             loop.call_soon_threadsafe(_enqueue_stream, client_id, payload)
         except Exception:
             pass
+    with _public_stream_lock:
+        public_clients = list(_public_stream_clients.items())
+    for client_id, (loop, _) in public_clients:
+        try:
+            loop.call_soon_threadsafe(_enqueue_public_stream, client_id, payload)
+        except Exception:
+            pass
+
+
+def _enqueue_public_stream(client_id: str, payload: Dict[str, Any]):
+    with _public_stream_lock:
+        client = _public_stream_clients.get(client_id)
+    if client is None:
+        return
+    _, queue = client
+    try:
+        if queue.full():
+            queue.get_nowait()
+        queue.put_nowait(payload)
+    except Exception:
+        pass
 
 
 def _quote_payload(
@@ -992,6 +1017,9 @@ def health():
         "collector_error": _collector_error,
         "provider_failures": dict(_provider_failures),
         "channel_status": _channel_snapshot(),
+        "public_stream_enabled": PUBLIC_STREAM_ENABLED,
+        "public_stream_clients": len(_public_stream_clients),
+        "public_stream_max_clients": PUBLIC_STREAM_MAX_CLIENTS,
         "market_phase": market_phase_now(),
         "timestamp": int(time.time()),
     }
@@ -1037,6 +1065,57 @@ async def quotes_stream(websocket: WebSocket):
     finally:
         with _stream_lock:
             _stream_clients.pop(client_id, None)
+
+
+@app.websocket("/quotes/public-stream")
+async def public_quotes_stream(websocket: WebSocket):
+    if not PUBLIC_STREAM_ENABLED:
+        await websocket.close(code=4403)
+        return
+
+    with _public_stream_lock:
+        if len(_public_stream_clients) >= PUBLIC_STREAM_MAX_CLIENTS:
+            await websocket.accept()
+            await websocket.close(code=4429)
+            return
+
+    await websocket.accept()
+    client_id = uuid.uuid4().hex
+    queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
+    loop = asyncio.get_running_loop()
+    with _public_stream_lock:
+        _public_stream_clients[client_id] = (loop, queue)
+
+    try:
+        with _quote_lock:
+            snapshot = [
+                {k: v for k, v in q.items() if k not in ("raw", "_ingested_ts")}
+                for q in _quotes.values()
+            ]
+        await websocket.send_json({
+            "type": "snapshot",
+            "generated_at": _now_iso(),
+            "count": len(snapshot),
+            "quotes": snapshot,
+            "public": True,
+        })
+
+        while True:
+            try:
+                payload = await asyncio.wait_for(queue.get(), timeout=15.0)
+                await websocket.send_json({"type": "quote", "quote": payload, "public": True})
+            except asyncio.TimeoutError:
+                await websocket.send_json({
+                    "type": "heartbeat",
+                    "ts": _now_iso(),
+                    "quote_count": len(_quotes),
+                    "public": True,
+                })
+    except (WebSocketDisconnect, asyncio.CancelledError):
+        pass
+    finally:
+        with _public_stream_lock:
+            _public_stream_clients.pop(client_id, None)
 
 
 @app.get("/quotes")
