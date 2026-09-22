@@ -5,6 +5,8 @@ from collections import Counter
 from pathlib import Path
 import numpy as np
 import pandas as pd
+import os
+from apply_pit_universe import filter_dataframe_by_date
 
 FACTORS=["REV21","MOM_5","MOM_10","MOM_20","MOM_60","MOM_120","VOL_10","VOL_20",
 "MAXDD_60","ADV20","RSI14","HIGH52_RATIO","DIST_MA20","DIST_MA60","BREAKOUT20",
@@ -46,10 +48,17 @@ def main():
     ap.add_argument("--formula-count",type=int,default=1000);ap.add_argument("--seed",type=int,default=20260920)
     ap.add_argument("--lookback-months",type=int,default=24);ap.add_argument("--min-history-months",type=int,default=12)
     ap.add_argument("--cost-bps",type=float,default=20);ap.add_argument("--k",type=int,default=20)
-    a=ap.parse_args(); out=Path(a.output); out.mkdir(parents=True,exist_ok=True)
+    ap.add_argument("--membership",default=os.getenv("LUNA_PIT_UNIVERSE_MEMBERSHIP"))
+    a=ap.parse_args()
+    if not a.membership:
+        raise SystemExit("PIT_UNIVERSE_MEMBERSHIP_REQUIRED")
+    out=Path(a.output); out.mkdir(parents=True,exist_ok=True)
     d=pd.read_csv(a.input); need={"symbol","month_end","adj_close","fwd1",*FACTORS}; miss=sorted(need-set(d.columns))
     if miss: raise SystemExit(f"missing columns: {miss}")
     d["month_end"]=pd.to_datetime(d.month_end);d["symbol"]=d.symbol.astype(str)
+    d, pit_excluded_rows, pit_active_symbols = filter_dataframe_by_date(
+        d, a.membership, "month_end"
+    )
     for c in ["adj_close","fwd1",*FACTORS]: d[c]=pd.to_numeric(d[c],errors="coerce")
     d=d.sort_values(["month_end","symbol"]).drop_duplicates(["month_end","symbol"])
     available_factors=[f for f in FACTORS if float(d[f].notna().mean()) >= 0.20]
@@ -102,7 +111,11 @@ def main():
     for fid,fr in cand.items(): full.append({"formula_id":fid,**perf(fr.net_return.tolist())})
     full.sort(key=lambda z:(-z["geometric_monthly_return"],-z["positive_month_pct"],z["formula_id"]))
     pd.DataFrame(full).to_csv(out/"full_period_formula_stats.csv",index=False)
-    summary={"status":"COMPLETED","engine":"luna-adaptive-tournament-v3","dataset_sha256":hashlib.sha256(Path(a.input).read_bytes()).hexdigest(),
+    summary={"status":"COMPLETED","engine":"luna-adaptive-tournament-v3",
+      "pit_membership":a.membership,"pit_excluded_rows":int(pit_excluded_rows),
+      "pit_active_symbols":int(pit_active_symbols),
+      "pit_universe_required":True,
+      "dataset_sha256":hashlib.sha256(Path(a.input).read_bytes()).hexdigest(),
       "formula_count":len(fs),"seed":a.seed,"k":a.k,"cost_bps":a.cost_bps,"lookback_months":a.lookback_months,
       "min_history_months":a.min_history_months,"months_available":len(months),"months_traded":int(len(led)),
       "available_factors":available_factors,
