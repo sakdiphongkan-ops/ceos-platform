@@ -10,10 +10,12 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from apply_pit_universe import filter_dataframe_by_date
 
 FACTORS = [
     "mom1", "mom2", "mom3", "mom4", "mom6", "mom12",
@@ -37,7 +39,10 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--input", required=True)
     ap.add_argument("--output", required=True)
+    ap.add_argument("--membership", default=os.getenv("LUNA_PIT_UNIVERSE_MEMBERSHIP"))
     args = ap.parse_args()
+    if not args.membership:
+        raise SystemExit("PIT_UNIVERSE_MEMBERSHIP_REQUIRED")
 
     df = pd.read_csv(args.input)
     required = {"date", "symbol", "adj_close", "DIST_HIGH_252", *SOURCE_MAP.values()}
@@ -46,6 +51,9 @@ def main() -> None:
         raise SystemExit(f"missing columns: {missing}")
 
     df["date"] = pd.to_datetime(df["date"], errors="raise")
+    df, pit_excluded_rows, pit_active_symbols = filter_dataframe_by_date(
+        df, args.membership, "date"
+    )
     df["symbol"] = df["symbol"].astype(str).str.strip().str.upper()
     df["adj_close"] = pd.to_numeric(df["adj_close"], errors="coerce")
     for c in SOURCE_MAP.values():
@@ -66,6 +74,16 @@ def main() -> None:
         out[dst] = m[src]
     out["high52_ratio"] = 1.0 + m["DIST_HIGH_252"]
 
+    out["_next_month"] = out.groupby("symbol")["month_end"].shift(-1)
+    out["_next_adj_close"] = out.groupby("symbol")["adj_close"].shift(-1)
+    expected = out["month_end"] + pd.offsets.MonthEnd(1)
+    out["fwd1"] = np.where(
+        out["_next_month"].eq(expected),
+        out["_next_adj_close"] / out["adj_close"] - 1.0,
+        np.nan,
+    )
+    out = out.drop(columns=["_next_month", "_next_adj_close"])
+
     out = (
         out.replace([np.inf, -np.inf], np.nan)
         .sort_values(["month_end", "symbol"])
@@ -84,6 +102,9 @@ def main() -> None:
         "input_sha256": hashlib.sha256(Path(args.input).read_bytes()).hexdigest(),
         "output_sha256": hashlib.sha256(Path(args.output).read_bytes()).hexdigest(),
         "rows": int(len(out)),
+        "pit_membership": args.membership,
+        "pit_excluded_rows": int(pit_excluded_rows),
+        "pit_active_symbols": int(pit_active_symbols),
         "symbols": int(out["symbol"].nunique()),
         "months": int(out["month_end"].nunique()),
         "min_month": str(out["month_end"].min()) if len(out) else None,
