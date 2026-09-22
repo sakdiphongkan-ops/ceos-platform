@@ -191,30 +191,7 @@ function splitChronologicalTicks(quotes:Quote[]){
   const warmupForHoldout=quotes.filter(q=>{const x=bucket15m(q.sourceTs??q.ts);return x!==null&&x<holdoutStart;});
   return {folds,selectionEndIndex,auditEndIndex,holdoutStartIndex,selectionEnd,auditEnd,holdoutStart,audit,warmupForAudit,holdout,warmupForHoldout,buckets:buckets.length};
 }
-function monthlyStats(curve:any[],initial:number){
-  const months=new Map<string,{first:number;last:number}>();
-  for(const p of curve){
-    const d=new Date(p.ts);
-    const parts=new Intl.DateTimeFormat("en-CA",{
-      timeZone:"Asia/Bangkok",year:"numeric",month:"2-digit"
-    }).formatToParts(d);
-    const year=parts.find(x=>x.type==="year")?.value;
-    const month=parts.find(x=>x.type==="month")?.value;
-    const key=`${year}-${month}`;
-    const x=months.get(key);
-    if(!x) months.set(key,{first:p.equity,last:p.equity});
-    else x.last=p.equity;
-  }
-  const returns=[...months.values()].map(x=>x.first>0?x.last/x.first-1:0);
-  if(!returns.length) return {geo:0,positiveRatio:0,returns:[] as number[]};
-  let logSum=0;
-  for(const r of returns) logSum+=Math.log(Math.max(1e-9,1+r));
-  return {
-    geo:Math.exp(logSum/returns.length)-1,
-    positiveRatio:returns.filter(r=>r>0).length/returns.length,
-    returns
-  };
-}
+
 
 function turnover(r:any){
   return (r.trades??[]).reduce((s:number,t:any)=>s+Number(t.notional??0),0);
@@ -293,6 +270,12 @@ async function main(){
   let pitExcludedRows=0;
   let pitActiveSymbols=new Set<string>();
   if(pitUniverseFile){
+    const manifestFile=process.env.LUNA_PIT_MEMBERSHIP_MANIFEST_FILE;
+    const requirePitProvenance=String(process.env.LUNA_RESEARCH_REQUIRE_PIT_PROVENANCE??"true").toLowerCase()!=="false";
+    if(requirePitProvenance && !manifestFile){
+      throw new Error("PIT_MEMBERSHIP_PROVENANCE_REQUIRED_SET_LUNA_PIT_MEMBERSHIP_MANIFEST_FILE");
+    }
+    if(manifestFile) assertPitMembershipProvenance(pitUniverseFile,manifestFile);
     const membership=await readPitMembershipCsv(pitUniverseFile);
     const filtered=applyPitUniverse(ticks,membership);
     ticks=filtered.quotes;
@@ -354,57 +337,20 @@ async function main(){
   const finalEvaluations=population.map(c=>evaluateCandidate(c,split)).sort(rank);
   const finalists=finalEvaluations.slice(0,Math.min(25,finalEvaluations.length));
 
-  const holdoutEvaluated=finalists.map(e=>{
+  // Development + audit decide the finalists. Final holdout is locked away from normal iteration.
+  const auditEvaluated=finalists.map(e=>{
     const audit=runBacktest(
       split.audit,initialCapital,e.candidate,{warmupQuotes:split.warmupForAudit}
     );
     const am=monthlyStats(audit.equityCurve,initialCapital);
-    const auditTurnover=turnover(audit);
-    const holdout=runBacktest(
-      split.holdout,initialCapital,e.candidate,{warmupQuotes:split.warmupForHoldout}
-    );
-    const hm=monthlyStats(holdout.equityCurve,initialCapital);
-    const holdoutTurnover=turnover(holdout);
-    const holdoutDrawdownPct=Number(holdout.maxDrawdown)/initialCapital;
-    const stressCosts=[5,10,20].reduce<Record<string,Record<string,number>>>((acc,bps)=>{
-      const stressed=runBacktest(
-        split.holdout,initialCapital,e.candidate,{
-          warmupQuotes:split.warmupForHoldout,
-          costModel:{extraSlippageBps:bps}
-        }
-      );
-      acc[`extra_cost_${bps}bps`]={
-        netPnl:stressed.netPnl,
-        returnPct:stressed.returnPct,
-        maxDrawdown:stressed.maxDrawdown,
-        tradeCount:stressed.tradeCount,
-        totalFees:stressed.totalFees,
-        totalSlippage:stressed.totalSlippage,
-        turnover:turnover(stressed)
-      };
-      return acc;
-    },{});
-    return {
-      ...e,
-      audit,
+    return {...e,audit,
       auditMonthlyGeo:am.geo,
       auditPositiveMonthRatio:am.positiveRatio,
       auditDrawdownPct:Number(audit.maxDrawdown)/initialCapital,
-      auditTurnover,
-      holdout,
-      holdoutMonthlyGeo:hm.geo,
-      holdoutPositiveMonthRatio:hm.positiveRatio,
-      holdoutDrawdownPct,
-      holdoutTurnover,
-      holdoutNetPnl:holdout.netPnl,
-      holdoutReturnPct:holdout.returnPct,
-      stress:stressCosts
-    };
+      auditTurnover:turnover(audit)};
   });
 
-  // Holdout is frozen for confirmation only. Never rank or choose candidates by
-  // holdout performance; selection uses development + audit metrics only.
-  const credible=holdoutEvaluated
+  const credible=auditEvaluated
     .filter(e=>e.walkForwardAvgValidationMonthlyGeo>=TARGET_MONTHLY_GEO)
     .filter(e=>(e.walkForwardMinValidationMonthlyGeo??-Infinity)>=MIN_FOLD_MONTHLY_GEO)
     .filter(e=>(e.walkForwardAvgValidationPositiveMonthRatio??0)>=0.50)
@@ -412,25 +358,66 @@ async function main(){
     .filter(e=>(e.auditMonthlyGeo??-Infinity)>=TARGET_MONTHLY_GEO)
     .filter(e=>(e.auditPositiveMonthRatio??0)>=0.50)
     .filter(e=>(e.auditDrawdownPct??1)<=0.20)
-    .sort((a,b)=>{
-      const aScore=(a.auditMonthlyGeo??-999)*100+(a.walkForwardAvgValidationMonthlyGeo??-999)*10+(a.auditPositiveMonthRatio??0);
-      const bScore=(b.auditMonthlyGeo??-999)*100+(b.walkForwardAvgValidationMonthlyGeo??-999)*10+(b.auditPositiveMonthRatio??0);
-      return bScore-aScore;
+    .sort((x,y)=>{
+      const xScore=(x.auditMonthlyGeo??-999)*100+(x.walkForwardAvgValidationMonthlyGeo??-999)*10+(x.auditPositiveMonthRatio??0);
+      const yScore=(y.auditMonthlyGeo??-999)*100+(y.walkForwardAvgValidationMonthlyGeo??-999)*10+(y.auditPositiveMonthRatio??0);
+      return yScore-xScore;
     });
 
-  const holdoutConfirmation=credible.map(e=>({
-    candidate:e.candidate,
-    holdoutMonthlyGeo:e.holdoutMonthlyGeo,
-    holdoutPositiveMonthRatio:e.holdoutPositiveMonthRatio,
-    holdoutDrawdownPct:e.holdoutDrawdownPct,
-    holdout10bpsNetPnl:e.stress?.extra_cost_10bps?.netPnl??null,
-    holdoutPass:
-      (e.holdoutMonthlyGeo??-Infinity)>=TARGET_MONTHLY_GEO
-      && (e.holdoutPositiveMonthRatio??0)>=0.50
-      && (e.holdoutDrawdownPct??1)<=0.20
-      && (e.stress?.extra_cost_10bps?.netPnl??-Infinity)>0
-  }));
+  let holdoutConfirmation:any[]=[];
+  let holdoutEvaluation:any={status:"NOT_RUN_FROZEN_REQUIRED"};
+  const runFrozenHoldout=String(process.env.LUNA_RUN_FROZEN_HOLDOUT??"false").toLowerCase()==="true";
+  if(runFrozenHoldout){
+    const lockFile=process.env.LUNA_HOLDOUT_LOCK_FILE;
+    const exposureLedger=process.env.LUNA_HOLDOUT_EXPOSURE_LEDGER_FILE;
+    if(!lockFile||!exposureLedger) throw new Error("FROZEN_HOLDOUT_REQUIRES_LOCK_AND_EXPOSURE_LEDGER");
+    const holdoutDigest=digestQuotes(split.holdout);
+    assertFrozenHoldoutAllowed({
+      lockFile,exposureLedger,datasetSha256:sha,
+      holdoutStart:split.holdoutStart,holdoutDigest
+    });
 
+    const holdoutEvaluated=credible.map(e=>{
+      const holdout=runBacktest(split.holdout,initialCapital,e.candidate,{warmupQuotes:split.warmupForHoldout});
+      const hm=monthlyStats(holdout.equityCurve,initialCapital);
+      const holdoutDrawdownPct=Number(holdout.maxDrawdown)/initialCapital;
+      const stress=[5,10,20].reduce<Record<string,Record<string,number>>>((acc,bps)=>{
+        const stressed=runBacktest(split.holdout,initialCapital,e.candidate,{
+          warmupQuotes:split.warmupForHoldout,
+          costModel:{extraSlippageBps:bps}
+        });
+        acc[`extra_cost_${bps}bps`]={
+          netPnl:stressed.netPnl,returnPct:stressed.returnPct,maxDrawdown:stressed.maxDrawdown,
+          tradeCount:stressed.tradeCount,totalFees:stressed.totalFees,
+          totalSlippage:stressed.totalSlippage,turnover:turnover(stressed)
+        };
+        return acc;
+      },{});
+      return {...e,holdout,holdoutMonthlyGeo:hm.geo,
+        holdoutPositiveMonthRatio:hm.positiveRatio,holdoutDrawdownPct,
+        holdoutNetPnl:holdout.netPnl,holdoutReturnPct:holdout.returnPct,stress};
+    });
+    holdoutConfirmation=holdoutEvaluated.map(e=>({
+      candidate:e.candidate,
+      holdoutMonthlyGeo:e.holdoutMonthlyGeo,
+      holdoutPositiveMonthRatio:e.holdoutPositiveMonthRatio,
+      holdoutDrawdownPct:e.holdoutDrawdownPct,
+      holdout10bpsNetPnl:e.stress?.extra_cost_10bps?.netPnl??null,
+      holdoutPass:
+        (e.holdoutMonthlyGeo??-Infinity)>=TARGET_MONTHLY_GEO &&
+        (e.holdoutPositiveMonthRatio??0)>=0.50 &&
+        (e.holdoutDrawdownPct??1)<=0.20 &&
+        (e.stress?.extra_cost_10bps?.netPnl??-Infinity)>0
+    }));
+    writeHoldoutExposureLedger(exposureLedger,{
+      protocolVersion:"LUNA-15M-HOLDOUT-V1",datasetSha256:sha,
+      holdoutStart:split.holdoutStart,holdoutDigest,exposedAt:new Date().toISOString(),
+      candidateCount:holdoutEvaluated.length,selectionBasis:"development+audit_only"
+    });
+    holdoutEvaluation={
+      status:"EXPOSED_ONCE",holdoutDigest,exposureLedger,candidateCount:holdoutEvaluated.length
+    };
+  }
   const report={
     generated_at:new Date().toISOString(),
     dataset:{
@@ -441,6 +428,8 @@ async function main(){
       pit_universe_file:pitUniverseFile??null,
       pit_excluded_rows:pitExcludedRows,
       pit_active_symbols:pitActiveSymbols.size,
+      pit_membership_manifest:process.env.LUNA_PIT_MEMBERSHIP_MANIFEST_FILE??null,
+      pit_provenance_required:String(process.env.LUNA_RESEARCH_REQUIRE_PIT_PROVENANCE??"true").toLowerCase()!=="false",
       preflight
     },
     methodology:{
@@ -451,14 +440,16 @@ async function main(){
       execution_timing:"raw ticks retained; completed 15m bar closes are warmed up from prior data, entry/exit executes only on subsequent observed ticks",
       leakage_guard:"HOLDOUT NEVER USED FOR CANDIDATE SELECTION",
       holdout_selection_forbidden:true,
+      holdout_exposure_rule:"FINAL HOLDOUT MAY BE OPENED ONLY ONCE WITH AN IMMUTABLE LOCK AND EXPOSURE LEDGER",
+      pit_provenance_rule:"PIT membership must carry a SHA-256-pinned provenance manifest from an allowed authoritative domain",
       stress_model:"full event replay with extra slippage applied to execution price and affordability checks",
       acceptance_hurdle_monthly_geometric_return:TARGET_MONTHLY_GEO,
       walk_forward_folds:WALK_FORWARD_FOLDS,
       walk_forward_rule:"inner expanding train windows inside first 60%; 20% audit and final 20% holdout remain unseen during candidate evolution",
-      credible_gate:"candidate selection uses development+audit only; frozen final holdout is confirmation-only and never used for ranking/selection; 7% monthly is an acceptance hurdle; >=50% positive months; audit DD <=20%; holdout is reported separately with 10bps stress confirmation"
+      credible_gate:"candidate selection uses development+audit only; frozen final holdout is confirmation-only and never used for ranking/selection; 7% monthly is an acceptance hurdle; >=50% positive months; audit DD <=20%; holdout is inaccessible during normal iteration and can be opened only once with an immutable lock + exposure ledger"
     },
     generationReports,
-    finalists:holdoutEvaluated.map(e=>({
+    finalists:auditEvaluated.map(e=>({
       id:e.candidate.id,params:e.candidate,
       validation_monthly_geo:e.validationMonthlyGeo,
       validation_return_pct:e.validation.returnPct,
@@ -467,27 +458,19 @@ async function main(){
       audit_monthly_geo:e.auditMonthlyGeo,
       audit_positive_month_ratio:e.auditPositiveMonthRatio,
       audit_drawdown_pct:e.auditDrawdownPct,
-      holdout_monthly_geo:e.holdoutMonthlyGeo,
-      holdout_return_pct:e.holdoutReturnPct,
       walk_forward_avg_validation_monthly_geo:e.walkForwardAvgValidationMonthlyGeo,
       walk_forward_min_validation_monthly_geo:e.walkForwardMinValidationMonthlyGeo,
       walk_forward_max_validation_drawdown_pct:e.walkForwardMaxValidationDrawdownPct,
-      fold_results:e.foldResults,
-      holdout_max_drawdown:e.holdout.maxDrawdown,
-      holdout_trades:e.holdout.tradeCount,
-      holdout_positive_month_ratio:e.holdoutPositiveMonthRatio,
-      stress:e.stress
+      fold_results:e.foldResults
     })),
     credibleCandidates:credible.slice(0,10).map(e=>({
       id:e.candidate.id,params:e.candidate,
       validationMonthlyGeo:e.validationMonthlyGeo,
-      holdoutMonthlyGeo:e.holdoutMonthlyGeo,
-      holdoutReturnPct:e.holdoutReturnPct,
-      holdoutMaxDrawdown:e.holdout.maxDrawdown,
-      holdoutTrades:e.holdout.tradeCount,
-      holdoutPositiveMonthRatio:e.holdoutPositiveMonthRatio,
-      stress:e.stress
+      auditMonthlyGeo:e.auditMonthlyGeo,
+      auditPositiveMonthRatio:e.auditPositiveMonthRatio,
+      auditDrawdownPct:e.auditDrawdownPct
     })),
+    holdoutEvaluation,
     holdoutConfirmation
   };
   fs.mkdirSync(path.dirname(outputPath),{recursive:true});
