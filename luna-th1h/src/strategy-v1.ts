@@ -1,7 +1,7 @@
 import type {Quote,Signal} from "./types.js";
 import {computeSignalSizing} from "./sizing.js";
 
-export const VERSION="luna-th1h-v1.0.0";
+export const VERSION="luna-th1h-v1.2.0-riskgated";
 export const PRICE_ONLY_VERSION="luna-th1h-v1.0.0-price-only-paper-warm5";
 
 export interface StrategyParams{
@@ -22,10 +22,10 @@ export const DEFAULT_PARAMS:StrategyParams={
   minMomentumBps:8,
   maxSpreadBps:25,
   minImbalance:0.05,
-  cooldownMs:30_000,
-  maxHoldMs:10*60_000,
-  stopLossBps:50,
-  takeProfitBps:100
+  cooldownMs:5*60_000,
+  maxHoldMs:15*60_000,
+  stopLossBps:75,
+  takeProfitBps:125
 };
 
 interface SymbolState{
@@ -137,8 +137,22 @@ export class StrategyV1{
       return {symbol:q.symbol,ts:q.ts,action:"HOLD",reason:"INVALID_QUOTE_LAST",strategyVersion:this.version};
     }
     const hasBook=finite(q.bid) && finite(q.ask) && Number(q.bid)<=Number(q.ask);
-    if(!hasBook && !this.priceOnlyFallback){
-      return {symbol:q.symbol,ts:q.ts,action:"HOLD",reason:"INVALID_QUOTE_BOOK_REQUIRED",strategyVersion:this.version};
+    const hasDepth=hasBook
+      && Number(q.bidSize??0)>0
+      && Number(q.askSize??0)>0;
+    const verifiedBook=hasDepth
+      && !String(q.dataQuality??"").toLowerCase().includes("unverified");
+
+    // Existing positions may still exit on last price during degraded quotes,
+    // but a new BUY requires a verified bid/ask + depth feed.
+    if(ctx.positionQty<=0 && !verifiedBook){
+      return {
+        symbol:q.symbol,
+        ts:q.ts,
+        action:"HOLD",
+        reason:"ENTRY_BLOCKED_BOOK_UNVERIFIED",
+        strategyVersion:this.version
+      };
     }
 
     const st=stateFor(this.states,q.symbol);
@@ -150,8 +164,8 @@ export class StrategyV1{
     st.emaFast=ema(st.emaFast,price,this.params.fastPeriod);
     st.emaSlow=ema(st.emaSlow,price,this.params.slowPeriod);
 
-    const spreadBps=hasBook?((Number(q.ask)-Number(q.bid))/price)*10_000:0;
-    const imbalance=hasBook && (Number(q.bidSize??0)+Number(q.askSize??0))>0
+    const spreadBps=verifiedBook?((Number(q.ask)-Number(q.bid))/price)*10_000:0;
+    const imbalance=verifiedBook
       ? (Number(q.bidSize??0)-Number(q.askSize??0))/(Number(q.bidSize??0)+Number(q.askSize??0))
       : 0;
     const previousPrice=st.prices.length>=2?st.prices[st.prices.length-2]:null;
@@ -196,9 +210,11 @@ export class StrategyV1{
     const trendUp=st.emaFast>st.emaSlow;
     const trendGapBps=st.emaSlow>0?((st.emaFast/st.emaSlow)-1)*10_000:0;
 
-    const entryOk = trendUp
+    const entryOk = verifiedBook
+      && trendUp
       && momentumBps>=this.params.minMomentumBps
-      && (this.priceOnlyFallback ? true : spreadBps<=this.params.maxSpreadBps && imbalance>=this.params.minImbalance);
+      && spreadBps<=this.params.maxSpreadBps
+      && imbalance>=this.params.minImbalance;
 
     if(entryOk){
       st.lastDecisionTs=ctx.nowMs;
@@ -212,8 +228,7 @@ export class StrategyV1{
       });
       return {
         symbol:q.symbol,ts:q.ts,action:"BUY",
-        reason:(this.priceOnlyFallback && !hasBook ? "PRICE_ONLY_FALLBACK " : "")
-          + "EMA_TREND_UP momentum="+momentumBps.toFixed(2)+"bps"
+        reason:"VERIFIED_BOOK EMA_TREND_UP momentum="+momentumBps.toFixed(2)+"bps"
           + " spread="+spreadBps.toFixed(2)+"bps"
           + " imbalance="+imbalance.toFixed(3)
           + " strength="+sizing.strength.toFixed(3)
@@ -226,7 +241,7 @@ export class StrategyV1{
     }
     return {
       symbol:q.symbol,ts:q.ts,action:"HOLD",
-      reason:`${this.priceOnlyFallback && !hasBook ? "PRICE_ONLY_FALLBACK " : ""}NO_ENTRY momentum=${momentumBps.toFixed(2)}bps spread=${spreadBps.toFixed(2)}bps imbalance=${imbalance.toFixed(3)}`,
+      reason:`NO_ENTRY momentum=${momentumBps.toFixed(2)}bps spread=${spreadBps.toFixed(2)}bps imbalance=${imbalance.toFixed(3)}`,
       strategyVersion:this.version
     };
   }
