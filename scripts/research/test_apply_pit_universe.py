@@ -10,4 +10,11 @@ with tempfile.TemporaryDirectory() as d:
     assert not eligible(idx,"AAA",__import__("datetime").date(2023,12,31))
     assert eligible(idx,"AAA",__import__("datetime").date(2026,1,1))
     assert not eligible(idx,"BBB",__import__("datetime").date(2025,7,1))
+
+    # Market-date boundary is Asia/Bangkok, not UTC.
+    import datetime as dt
+    from zoneinfo import ZoneInfo
+    boundary=dt.datetime.fromisoformat("2024-12-31T17:30:00+00:00").astimezone(ZoneInfo("Asia/Bangkok")).date()
+    assert boundary == dt.date(2025,1,1)
+    assert eligible(idx,"AAA",boundary)
 print("PIT universe test: PASS")
