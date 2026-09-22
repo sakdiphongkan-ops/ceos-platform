@@ -31,18 +31,32 @@ function toQuote(row:SetStock):Quote|null{
   if(!row.symbol || !row.time) return null;
   const bid=(row.bid ?? []).find(x=>x?.rank===1) ?? row.bid?.[0];
   const offer=(row.offer ?? []).find(x=>x?.rank===1) ?? row.offer?.[0];
-  const last=numberOrNull(row.last);
+  const sourceTs=normalizeTime(row.time);
+  const bidLevels=(row.bid ?? [])
+    .map(x=>({price:numberOrNull(x?.price),size:numberOrNull(x?.volume)}))
+    .filter((x):x is {price:number;size:number}=>x.price!==null&&x.price>0&&x.size!==null&&x.size>0);
+  const askLevels=(row.offer ?? [])
+    .map(x=>({price:numberOrNull(x?.price),size:numberOrNull(x?.volume)}))
+    .filter((x):x is {price:number;size:number}=>x.price!==null&&x.price>0&&x.size!==null&&x.size>0);
   const bidPrice=numberOrNull(bid?.price);
   const askPrice=numberOrNull(offer?.price);
+  const last=numberOrNull(row.last);
+  const verified = bidPrice!==null && askPrice!==null
+    && bidPrice>0 && askPrice>0 && askPrice>=bidPrice
+    && Number(bid?.volume??0)>0 && Number(offer?.volume??0)>0;
   return {
     symbol:row.symbol,
-    ts:normalizeTime(row.time),
+    ts:new Date().toISOString(),
+    sourceTs,
     bid:bidPrice,
     ask:askPrice,
     last,
     bidSize:numberOrNull(bid?.volume),
     askSize:numberOrNull(offer?.volume),
-    source:"set-marketplace"
+    bidLevels,
+    askLevels,
+    source:"set-marketplace",
+    dataQuality:verified?"VERIFIED_BOOK":"UNVERIFIED_BOOK"
   };
 }
 
