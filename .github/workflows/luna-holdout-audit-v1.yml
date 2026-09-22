@@ -9,22 +9,26 @@ concurrency:
 
 jobs:
   audit:
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_branch == 'master')
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: master
       - name: Block repeated holdout exposure
         run: |
           python scripts/research/guard_holdout_once.py --marker research-results/luna-holdout-audit-v1-sealed.json --result research-results/luna-holdout-audit-v1-summary.json --protocol LUNA-HOLDOUT-AUDIT-V1
 
-        with:
-          ref: master
+      - name: Verify committed PIT membership provenance
+        run: |
+          test -s research-results/pit-membership/pit_membership.csv
+          test -s research-results/pit-membership/pit_membership.manifest.json
+          python scripts/research/verify_pit_membership_manifest.py \
+            --membership research-results/pit-membership/pit_membership.csv \
+            --manifest research-results/pit-membership/pit_membership.manifest.json
 
       - uses: actions/setup-python@v5
         with:
@@ -52,7 +56,7 @@ jobs:
         run: |
           rm -rf data/luna_monthly
           mkdir -p data/luna_monthly
-          python scripts/research/build_monthly_luna_factors_from_daily.py             --input data/set_2000_2025/factors.csv             --output data/luna_monthly/monthly_price_factors.csv             --lookback-years 5
+          python scripts/research/build_monthly_luna_factors_from_daily.py             --input data/set_2000_2025/factors.csv             --output data/luna_monthly/monthly_price_factors.csv             --lookback-years 5             --membership research-results/pit-membership/pit_membership.csv
           test -s data/luna_monthly/monthly_price_factors.csv
 
       - name: Run frozen holdout audit
