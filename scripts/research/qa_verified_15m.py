@@ -24,7 +24,7 @@ def main() -> None:
     if not rows:
         raise SystemExit("empty dataset")
 
-    required = {"ts","symbol","bid","ask","last","bid_size","ask_size","source","data_quality"}
+    required = {"ts","source_ts","symbol","bid","ask","last","bid_size","ask_size","source","data_quality"}
     missing = required - set(rows[0])
     if missing:
         raise SystemExit(f"missing columns: {sorted(missing)}")
@@ -32,6 +32,7 @@ def main() -> None:
     by_symbol = Counter()
     verified = 0
     timestamps = []
+    source_timestamps = []
     duplicates = set()
     seen = set()
 
@@ -42,7 +43,11 @@ def main() -> None:
         if key in seen:
             duplicates.add(key)
         seen.add(key)
+        source_ts = parse_ts(r["source_ts"])
+        if source_ts > ts:
+            raise ValueError("source_ts after ingest ts")
         timestamps.append(ts)
+        source_timestamps.append(source_ts)
         by_symbol[symbol] += 1
 
         ok = all(r[k] not in ("", "null", "None") for k in ("bid","ask","bid_size","ask_size"))
@@ -72,6 +77,9 @@ def main() -> None:
         "symbols": len(by_symbol),
         "verified_book_rows": verified,
         "verified_book_ratio": verified_ratio,
+        "source_timestamp_coverage": len(source_timestamps) / len(rows),
+        "source_start_ts": min(source_timestamps).isoformat(),
+        "source_end_ts": max(source_timestamps).isoformat(),
         "start_ts": start.isoformat(),
         "end_ts": end.isoformat(),
         "duplicate_rows": len(duplicates),
