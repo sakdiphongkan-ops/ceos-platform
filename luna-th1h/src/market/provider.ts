@@ -25,6 +25,7 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
   const previous = new Map<string,string>();
   let lastGatewayCount=-1;
   let emptyBackoffMs=Math.max(500,Math.min(5000,pollMs));
+  const requireVerifiedBook=String(process.env.LUNA_REQUIRE_VERIFIED_BOOK ?? "true").toLowerCase()==="true";
 
   while(true){
     const cycleStarted=Date.now();
@@ -97,6 +98,17 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
         dataQuality:raw.data_quality ? String(raw.data_quality) : undefined
       };
       if(q.last===null && q.bid===null && q.ask===null) continue;
+      if(requireVerifiedBook){
+        const verifiedBook =
+          Number.isFinite(Number(q.bid))
+          && Number.isFinite(Number(q.ask))
+          && Number(q.bid)>0
+          && Number(q.ask)>=Number(q.bid)
+          && Number(q.bidSize)>0
+          && Number(q.askSize)>0
+          && !String(q.dataQuality??"").toLowerCase().includes("unverified");
+        if(!verifiedBook) continue;
+      }
       const freshnessTs=q.sourceTs ?? q.ts;
       const parsedTs=Date.parse(freshnessTs);
       if(!Number.isFinite(parsedTs)) continue;
