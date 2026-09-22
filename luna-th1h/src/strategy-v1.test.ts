@@ -53,6 +53,6 @@ const exit=exitStrategy.evaluate(
   quote(new Date(entryTs).toISOString(),99.0),
   {positionQty:10,avgPrice:100,nowMs:entryTs+1000}
 );
-if(exit.action!=="SELL" || exit.reason!=="STOP_LOSS") throw new Error("stop-loss exit failed");
+if(exit.action!=="SELL" || exit.reason!=="STOP_LOSS_EXECUTABLE_BID") throw new Error("stop-loss exit failed");
 
 console.log("15m strategy tests: PASS");
