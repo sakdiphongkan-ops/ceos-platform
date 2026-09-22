@@ -1,6 +1,5 @@
 import {config} from "./config.js";
 import {validateOrder} from "./risk.js";
-import {PRICE_ONLY_VERSION} from "./strategy-v1.js";
 import type {Quote,Signal,Side} from "./types.js";
 
 export interface PositionState{
@@ -69,6 +68,13 @@ function usablePrice(...values:Array<number|null|undefined>){
   return 0;
 }
 
+const recentBuyTimestamps:number[]=[];
+
+function pruneRecentBuys(nowMs:number){
+  const cutoff=nowMs-60_000;
+  while(recentBuyTimestamps.length && recentBuyTimestamps[0]<cutoff) recentBuyTimestamps.shift();
+}
+
 
 export function mark(state:PortfolioState,q:Quote){
   state.marks[q.symbol]=q;
@@ -83,20 +89,53 @@ export function planOrder(
   if(signal.action==="HOLD") return {accepted:false,reason:"SIGNAL_HOLD"};
 
   const side:Side=signal.action;
-  const priceOnlyPaper=signal.strategyVersion===PRICE_ONLY_VERSION;
-  const referencePrice=priceOnlyPaper
-    ? (Number.isFinite(Number(q.last)) && Number(q.last)>0 ? Number(q.last) : 0)
-    : (side==="BUY"?q.ask:q.bid);
-  if(!referencePrice || referencePrice<=0){
-    return {accepted:false,reason:priceOnlyPaper?"NO_LAST_PRICE":"NO_EXECUTABLE_PRICE"};
+  const hasBook=Number.isFinite(Number(q.bid))
+    && Number(q.bid)>0
+    && Number.isFinite(Number(q.ask))
+    && Number(q.ask)>0
+    && Number(q.ask)>=Number(q.bid);
+  const hasDepth=Number(q.bidSize??0)>0 && Number(q.askSize??0)>0;
+  const verifiedBook=hasBook
+    && hasDepth
+    && !String(q.dataQuality??"").toLowerCase().includes("unverified");
+
+  // Entries require a verified executable book. Risk-reducing SELLs may fall
+  // back to last price during a degraded feed so positions can still be closed.
+  const referencePrice=side==="BUY"
+    ? (verifiedBook?Number(q.ask):0)
+    : (verifiedBook?Number(q.bid):usablePrice(q.last,q.bid,q.ask));
+  if(side==="BUY" && !referencePrice){
+    return {accepted:false,reason:"BUY_BLOCKED_NO_VERIFIED_BOOK"};
+  }
+  if(side==="SELL" && !referencePrice){
+    return {accepted:false,reason:"NO_EXIT_PRICE"};
   }
 
   const pos=position(state,q.symbol);
   const currentNotional=pos.qty*referencePrice;
 
   if(side==="BUY"){
-    const targetFraction=Math.min(1,Math.max(0,Number(signal.targetAllocationPct??5)/100));
+    pruneRecentBuys(Date.now());
+    if(recentBuyTimestamps.length>=Math.max(1,Math.floor(config.maxOrdersPerMinute))){
+      return {accepted:false,reason:"MAX_ORDERS_PER_MINUTE_LOCAL"};
+    }
+
+    const accountPnl=snapshot(state).realized_pnl+snapshot(state).unrealized_pnl;
+    if(accountPnl<=-Math.abs(config.maxDailyLoss)){
+      return {accepted:false,reason:"MAX_DAILY_LOSS_LOCAL"};
+    }
+
+    const requestedTargetFraction=Math.max(
+      0,
+      Number(signal.targetAllocationPct??(config.entryNotionalPct*100))/100
+    );
+    const targetFraction=Math.min(
+      config.maxPositionPct,
+      requestedTargetFraction
+    );
     const targetNotional=Math.max(0,state.initialCapital*targetFraction-currentNotional);
+    const entryCapNotional=Math.max(0,state.initialCapital*config.entryNotionalPct);
+    const orderNotionalCap=Math.min(targetNotional,entryCapNotional);
     const grossHeadroom=Math.max(
       0,
       state.initialCapital*config.maxGrossExposurePct
@@ -109,11 +148,11 @@ export function planOrder(
     const availableCash=Math.max(0,state.cash-Math.max(0,reservations.reservedBuyCash));
     const affordable=availableCash/estimatedAllInPerShare;
     let qty=roundDown(Math.min(
-      targetNotional/referencePrice,
+      orderNotionalCap/referencePrice,
       grossHeadroom/referencePrice,
       affordable
     ));
-    if(!priceOnlyPaper && q.askSize && q.askSize>0) qty=Math.min(qty,roundDown(q.askSize));
+    if(verifiedBook && q.askSize && q.askSize>0) qty=Math.min(qty,roundDown(q.askSize));
     if(qty<=0) return {accepted:false,reason:"INSUFFICIENT_CASH_OR_POSITION_HEADROOM"};
 
     const maxPositionNotional=state.initialCapital*config.maxPositionPct;
@@ -131,10 +170,11 @@ export function planOrder(
       cash:availableCash
     });
     if(!risk.ok) return {accepted:false,reason:risk.reason};
+    recentBuyTimestamps.push(Date.now());
     return {
       accepted:true,symbol:q.symbol,side,qty,referencePrice,
-      visibleDepth:priceOnlyPaper?0:Number(q.askSize??0),
-      spreadBps:(!priceOnlyPaper && Number(q.ask)>0 && Number(q.bid)>0)
+      visibleDepth:verifiedBook?Number(q.askSize??0):0,
+      spreadBps:verifiedBook
         ? ((Number(q.ask)-Number(q.bid))/Number(q.last||q.ask))*10_000 : 0,
       reason:signal.reason
     };
@@ -144,7 +184,7 @@ export function planOrder(
   const availablePositionQty=Math.max(0,pos.qty-reservedForSymbol);
   if(availablePositionQty<=0) return {accepted:false,reason:"NO_LONG_POSITION"};
   let qty=availablePositionQty;
-  if(!priceOnlyPaper && q.bidSize && q.bidSize>0) qty=Math.min(qty,roundDown(q.bidSize));
+  if(verifiedBook && q.bidSize && q.bidSize>0) qty=Math.min(qty,roundDown(q.bidSize));
   if(qty<=0) return {accepted:false,reason:"NO_SELLABLE_LIQUIDITY"};
 
   const notional=qty*referencePrice;
@@ -157,8 +197,8 @@ export function planOrder(
     if(!risk.ok) return {accepted:false,reason:risk.reason};
   return {
     accepted:true,symbol:q.symbol,side,qty,referencePrice,
-    visibleDepth:priceOnlyPaper?0:Number(q.bidSize??0),
-    spreadBps:(!priceOnlyPaper && Number(q.ask)>0 && Number(q.bid)>0)
+    visibleDepth:verifiedBook?Number(q.bidSize??0):0,
+    spreadBps:verifiedBook
       ? ((Number(q.ask)-Number(q.bid))/Number(q.last||q.bid))*10_000 : 0,
     reason:signal.reason
   };

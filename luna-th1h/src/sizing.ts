@@ -33,9 +33,9 @@ export function computeSignalSizing(input:SignalSizingInput):SignalSizing{
   const rawStrength=0.60*momentumScore+0.40*trendScore;
   const strength=clamp(rawStrength*qualityPenalty);
 
-  // Non-linear sizing: weak signals stay small; exceptional signals can consume
-  // nearly all available portfolio capacity. There is no fixed 20% per-symbol cap.
-  const targetFraction=clamp(0.05 + 0.95*Math.pow(strength,1.7));
+  // Preserve confidence-based sizing, but keep the strategy output inside the
+  // paper risk envelope. Execution applies the final portfolio caps as well.
+  const targetFraction=clamp(0.02 + 0.055*Math.pow(strength,1.5),0.02,0.075);
 
   return {
     strength,

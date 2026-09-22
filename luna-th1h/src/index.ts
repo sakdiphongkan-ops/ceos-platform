@@ -1257,6 +1257,24 @@ async function main(){
   if(config.priceOnlyFallback && (config.mode==="live" || config.executionMode==="live")){
     throw new Error("PRICE_ONLY_FALLBACK_IS_PAPER_ONLY");
   }
+  if(config.maxPositionPct<=0 || config.maxPositionPct>1){
+    throw new Error("LUNA_MAX_POSITION_PCT_MUST_BE_0_TO_1");
+  }
+  if(config.maxGrossExposurePct<=0 || config.maxGrossExposurePct>1){
+    throw new Error("LUNA_MAX_GROSS_EXPOSURE_PCT_MUST_BE_0_TO_1");
+  }
+  if(config.entryNotionalPct<=0 || config.entryNotionalPct>config.maxPositionPct){
+    throw new Error("LUNA_ENTRY_NOTIONAL_PCT_MUST_BE_POSITIVE_AND_NOT_EXCEED_MAX_POSITION");
+  }
+  if(config.maxDailyLoss<=0){
+    throw new Error("LUNA_MAX_DAILY_LOSS_MUST_BE_POSITIVE");
+  }
+  if(!Number.isInteger(config.maxOrdersPerMinute) || config.maxOrdersPerMinute<1){
+    throw new Error("LUNA_MAX_ORDERS_PER_MINUTE_MUST_BE_AT_LEAST_1");
+  }
+  if(config.priceOnlyFallback){
+    throw new Error("PRICE_ONLY_FALLBACK_DISABLED_AFTER_RISK_HARDENING");
+  }
   if(config.mode==="live" || config.executionMode==="live") await preflightLive();
   if(!["mock","set-marketplace","settrade-gateway"].includes(config.marketDataProvider)){
     throw new Error(`Unknown MARKET_DATA_PROVIDER: ${config.marketDataProvider}`);
