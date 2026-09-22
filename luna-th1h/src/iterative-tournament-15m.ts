@@ -401,17 +401,34 @@ async function main(){
     };
   });
 
+  // Holdout is frozen for confirmation only. Never rank or choose candidates by
+  // holdout performance; selection uses development + audit metrics only.
   const credible=holdoutEvaluated
-    .filter(e=>e.walkForwardAvgValidationMonthlyGeo>=TARGET_MONTHLY_GEO && (e.auditMonthlyGeo??-Infinity)>=TARGET_MONTHLY_GEO && e.holdoutMonthlyGeo!>=TARGET_MONTHLY_GEO)
+    .filter(e=>e.walkForwardAvgValidationMonthlyGeo>=TARGET_MONTHLY_GEO)
     .filter(e=>(e.walkForwardMinValidationMonthlyGeo??-Infinity)>=MIN_FOLD_MONTHLY_GEO)
     .filter(e=>(e.walkForwardAvgValidationPositiveMonthRatio??0)>=0.50)
     .filter(e=>(e.walkForwardMaxValidationDrawdownPct??1)<=0.20)
+    .filter(e=>(e.auditMonthlyGeo??-Infinity)>=TARGET_MONTHLY_GEO)
     .filter(e=>(e.auditPositiveMonthRatio??0)>=0.50)
     .filter(e=>(e.auditDrawdownPct??1)<=0.20)
-    .filter(e=>(e.holdoutPositiveMonthRatio??0)>=0.50)
-    .filter(e=>(e.holdoutDrawdownPct??1)<=0.20)
-    .filter(e=>(e.stress?.extra_cost_10bps?.netPnl??-Infinity)>0)
-    .sort((a,b)=>(b.holdoutMonthlyGeo??-999)-(a.holdoutMonthlyGeo??-999));
+    .sort((a,b)=>{
+      const aScore=(a.auditMonthlyGeo??-999)*100+(a.walkForwardAvgValidationMonthlyGeo??-999)*10+(a.auditPositiveMonthRatio??0);
+      const bScore=(b.auditMonthlyGeo??-999)*100+(b.walkForwardAvgValidationMonthlyGeo??-999)*10+(b.auditPositiveMonthRatio??0);
+      return bScore-aScore;
+    });
+
+  const holdoutConfirmation=credible.map(e=>({
+    candidate:e.candidate,
+    holdoutMonthlyGeo:e.holdoutMonthlyGeo,
+    holdoutPositiveMonthRatio:e.holdoutPositiveMonthRatio,
+    holdoutDrawdownPct:e.holdoutDrawdownPct,
+    holdout10bpsNetPnl:e.stress?.extra_cost_10bps?.netPnl??null,
+    holdoutPass:
+      (e.holdoutMonthlyGeo??-Infinity)>=TARGET_MONTHLY_GEO
+      && (e.holdoutPositiveMonthRatio??0)>=0.50
+      && (e.holdoutDrawdownPct??1)<=0.20
+      && (e.stress?.extra_cost_10bps?.netPnl??-Infinity)>0
+  }));
 
   const report={
     generated_at:new Date().toISOString(),
