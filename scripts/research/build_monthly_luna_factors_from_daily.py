@@ -22,15 +22,22 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from apply_pit_universe import filter_dataframe_by_date
+
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--input", required=True)
     ap.add_argument("--output", required=True)
     ap.add_argument("--lookback-years", type=int, default=5)
+    ap.add_argument("--membership", default=None)
     args = ap.parse_args()
 
     df = pd.read_csv(args.input)
+    pit_excluded_rows=0
+    pit_active_symbols=0
+    if args.membership:
+        df, pit_excluded_rows, pit_active_symbols = filter_dataframe_by_date(df,args.membership,"date")
     required = {"date", "symbol", "adj_close", "MOM_20", "VOL_20", "MAXDD_60", "AMOUNT"}
     missing = sorted(required - set(df.columns))
     if missing:
@@ -109,6 +116,9 @@ def main() -> None:
             "avg_amount20": "daily AMOUNT (20-day average traded value) at month-end",
         },
         "no_forward_data_in_factors": True,
+        "pit_membership": args.membership,
+        "pit_excluded_rows": int(pit_excluded_rows),
+        "pit_active_symbols": int(pit_active_symbols),
     }
     out_path.with_suffix(".manifest.json").write_text(
         json.dumps(manifest, indent=2),
