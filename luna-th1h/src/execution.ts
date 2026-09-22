@@ -169,6 +169,7 @@ export function planOrder(
     );
     const targetNotional=Math.max(0,state.initialCapital*targetFraction-currentNotional);
     const entryCapNotional=Math.max(0,state.initialCapital*config.entryNotionalPct);
+    const slippageRate=config.slippageBps/10_000;
     const conservativeImpactRate=config.marketImpactBps/10_000;
     const conservativeExecutionRate=Math.max(0,slippageRate+conservativeImpactRate);
     const hardOrderReferenceCap=Math.max(
@@ -187,7 +188,6 @@ export function planOrder(
         -currentGrossExposure(state)
         -Math.max(0,reservations.reservedGrossExposure)
     );
-    const slippageRate=config.slippageBps/10000;
     const feeRate=config.feeBps/10000;
     const estimatedAllInPerShare=referencePrice*(1+slippageRate)*(1+feeRate);
     const availableCash=Math.max(0,state.cash-Math.max(0,reservations.reservedBuyCash));
