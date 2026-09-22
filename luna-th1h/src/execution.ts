@@ -169,7 +169,17 @@ export function planOrder(
     );
     const targetNotional=Math.max(0,state.initialCapital*targetFraction-currentNotional);
     const entryCapNotional=Math.max(0,state.initialCapital*config.entryNotionalPct);
-    const orderNotionalCap=Math.min(targetNotional,entryCapNotional,Math.max(0,config.maxOrderNotional));
+    const conservativeImpactRate=config.marketImpactBps/10_000;
+    const conservativeExecutionRate=Math.max(0,slippageRate+conservativeImpactRate);
+    const hardOrderReferenceCap=Math.max(
+      0,
+      config.maxOrderNotional/(1+conservativeExecutionRate)
+    );
+    const orderNotionalCap=Math.min(
+      targetNotional,
+      entryCapNotional,
+      hardOrderReferenceCap
+    );
     const dailyTurnoverHeadroom=Math.max(0,config.maxDailyTurnover-Number(state.dailyTurnover??0));
     const grossHeadroom=Math.max(
       0,
