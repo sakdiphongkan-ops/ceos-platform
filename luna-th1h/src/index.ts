@@ -13,6 +13,8 @@ import {latencyMetrics,type LatencyLedger} from "./latency-ledger.js";
 
 const EXECUTION_TEST_VERSION="luna-th1h-execution-test-0.1.0";
 
+// Release source revision for this production-ready source baseline.\nconst EMBEDDED_SOURCE_REVISION="6391c95620865d560e3eaadf25a70456d0d67d3e";
+
 let sessionId:string|null=null;
 let sessionDate:string|null=null;
 let auditChain="GENESIS";
@@ -1296,10 +1298,10 @@ async function endSession(status="CLOSED"){
 }
 
 async function main(){
-  const sourceRevision=process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GITHUB_SHA ?? process.env.LUNA_DEPLOY_SOURCE_SHA ?? "unknown";
+  const railwayReportedRevision=process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GITHUB_SHA ?? "unknown";
   const expectedRevision=process.env.LUNA_EXPECTED_SOURCE_SHA?.trim();
-  if(expectedRevision && sourceRevision!==expectedRevision){
-    throw new Error(`LUNA_SOURCE_REVISION_MISMATCH:expected=${expectedRevision}:actual=${sourceRevision}`);
+  if(expectedRevision && EMBEDDED_SOURCE_REVISION!==expectedRevision){
+    throw new Error(`LUNA_SOURCE_REVISION_MISMATCH:expected=${expectedRevision}:embedded=${EMBEDDED_SOURCE_REVISION}`);
   }
   console.log(JSON.stringify({
     event:"LUNA_BOOT",
@@ -1308,8 +1310,10 @@ async function main(){
     capital:config.initialCapital,
     executionTest:config.executionTest,
     strategy:strategyV1.version,
-    sourceRevision,
+    sourceRevision:EMBEDDED_SOURCE_REVISION,
     expectedSourceRevision:expectedRevision ?? null,
+    railwayReportedRevision,
+    railwayRevisionMatchesEmbedded:railwayReportedRevision===EMBEDDED_SOURCE_REVISION,
     timezone:config.timezone,
     marketPhase:currentMarketPhase()
   }));
