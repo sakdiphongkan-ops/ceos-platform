@@ -56,6 +56,7 @@ export type PlannedOrder = {
   spreadBps:number;
   reason:string;
   depthLevels?:Array<{price:number;size:number}>;
+  depthComplete?:boolean;
 } | {
   accepted:false;
   reason:string;
@@ -221,7 +222,7 @@ export function planOrder(
       dailyTurnoverHeadroom/referencePrice
     ));
     if(verifiedBook){
-      const availableAskDepth=q.askLevels?.length
+      const availableAskDepth=q.depthComplete && q.askLevels?.length
         ? q.askLevels.reduce((s,l)=>s+Math.max(0,l.size),0)
         : Number(q.askSize??0);
       if(availableAskDepth>0) qty=Math.min(qty,roundDown(availableAskDepth));
@@ -247,7 +248,8 @@ export function planOrder(
     return {
       accepted:true,symbol:q.symbol,side,qty,referencePrice,
       visibleDepth:verifiedBook?(q.askLevels?.length?q.askLevels.reduce((s,l)=>s+Math.max(0,l.size),0):Number(q.askSize??0)):0,
-      depthLevels:verifiedBook?q.askLevels:undefined,
+      depthLevels:verifiedBook && q.depthComplete ? q.askLevels:undefined,
+      depthComplete:verifiedBook && q.depthComplete===true,
       spreadBps:verifiedBook
         ? ((Number(q.ask)-Number(q.bid))/Number(q.last||q.ask))*10_000 : 0,
       reason:signal.reason
@@ -259,7 +261,7 @@ export function planOrder(
   if(availablePositionQty<=0) return {accepted:false,reason:"NO_LONG_POSITION"};
   let qty=availablePositionQty;
   if(verifiedBook){
-    const availableBidDepth=q.bidLevels?.length
+    const availableBidDepth=q.depthComplete && q.bidLevels?.length
       ? q.bidLevels.reduce((s,l)=>s+Math.max(0,l.size),0)
       : Number(q.bidSize??0);
     if(availableBidDepth>0) qty=Math.min(qty,roundDown(availableBidDepth));
@@ -277,7 +279,8 @@ export function planOrder(
   return {
     accepted:true,symbol:q.symbol,side,qty,referencePrice,
     visibleDepth:verifiedBook?(q.bidLevels?.length?q.bidLevels.reduce((s,l)=>s+Math.max(0,l.size),0):Number(q.bidSize??0)):0,
-    depthLevels:verifiedBook?q.bidLevels:undefined,
+    depthLevels:verifiedBook && q.depthComplete ? q.bidLevels:undefined,
+    depthComplete:verifiedBook && q.depthComplete===true,
     spreadBps:verifiedBook
       ? ((Number(q.ask)-Number(q.bid))/Number(q.last||q.bid))*10_000 : 0,
     reason:signal.reason
