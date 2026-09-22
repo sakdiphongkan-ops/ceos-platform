@@ -65,6 +65,7 @@ import {readNormalizedCsv} from "./research-csv.js";
 import {runBacktest} from "./backtest.js";
 import {validateResearchQuotes} from "./research-preflight.js";
 import {applyPitUniverse,readPitMembershipCsv} from "./pit-universe.js";
+import {monthlyStats} from "./research-metrics.js";
 import {assertPitMembershipProvenance,assertFrozenHoldoutAllowed,writeHoldoutExposureLedger,digestQuotes} from "./research-governance.js";
 import type {Quote} from "./types.js";
 import type {StrategyParams} from "./strategy-v1.js";
