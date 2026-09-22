@@ -43,6 +43,7 @@ jobs:
           python -m py_compile ../scripts/research/monthly_walk_forward_adaptive_search.py
           python -m py_compile ../scripts/research/luna_adaptive_tournament_v2.py
           cd ../scripts/research && python test_apply_pit_universe.py
+          python test_set_data_contract.py
 
   research_repaired_tournament_v3:
     if: github.event_name == 'push'
