@@ -4,4 +4,5 @@ COPY luna-th1h/package*.json ./
 RUN npm install
 COPY luna-th1h/tsconfig.json ./
 COPY luna-th1h/src ./src
+RUN npm run build
 CMD ["npm","start"]
