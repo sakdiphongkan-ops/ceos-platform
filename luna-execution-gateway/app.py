@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import threading
@@ -10,7 +11,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 from broker_timing import extract_broker_native_submitted_at_ms
 
@@ -97,6 +98,8 @@ _equity = None
 
 _quote_lock = threading.Lock()
 _quotes: Dict[str, Dict[str, Any]] = {}
+_stream_lock = threading.Lock()
+_stream_clients: Dict[str, tuple[asyncio.AbstractEventLoop, asyncio.Queue]] = {}
 
 _feed_lock = threading.Lock()
 _collector_started = False
@@ -376,6 +379,31 @@ def _channel_snapshot():
         return {k: dict(v) for k, v in _channel_status.items()}
 
 
+def _enqueue_stream(client_id: str, payload: Dict[str, Any]):
+    with _stream_lock:
+        client = _stream_clients.get(client_id)
+    if client is None:
+        return
+    _, queue = client
+    try:
+        if queue.full():
+            queue.get_nowait()
+        queue.put_nowait(payload)
+    except Exception:
+        pass
+
+
+def _publish_stream_quote(quote: Dict[str, Any]):
+    payload = {k: v for k, v in quote.items() if k not in ("raw", "_ingested_ts")}
+    with _stream_lock:
+        clients = list(_stream_clients.items())
+    for client_id, (loop, _) in clients:
+        try:
+            loop.call_soon_threadsafe(_enqueue_stream, client_id, payload)
+        except Exception:
+            pass
+
+
 def _quote_payload(
     symbol: str,
     last: Any = None,
@@ -405,8 +433,13 @@ def _quote_payload(
             "raw": raw,
             "_ingested_ts": time.time(),
         }
+        prior_public = {k: v for k, v in prior.items() if k not in ("raw", "_ingested_ts")}
+        current_public = {k: v for k, v in quote.items() if k not in ("raw", "_ingested_ts")}
         was_new = symbol not in _quotes
+        changed = was_new or prior_public != current_public
         _quotes[symbol] = quote
+    if changed:
+        _publish_stream_quote(quote)
     return was_new
 
 
@@ -950,6 +983,48 @@ def health():
         "market_phase": market_phase_now(),
         "timestamp": int(time.time()),
     }
+
+
+@app.websocket("/quotes/stream")
+async def quotes_stream(websocket: WebSocket):
+    await websocket.accept()
+    client_id = uuid.uuid4().hex
+    try:
+        raw_auth = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
+        auth_payload = json.loads(raw_auth)
+        if (
+            auth_payload.get("type") != "auth"
+            or not GATEWAY_KEY
+            or auth_payload.get("key") != GATEWAY_KEY
+        ):
+            await websocket.close(code=4401)
+            return
+
+        queue: asyncio.Queue = asyncio.Queue(maxsize=2000)
+        loop = asyncio.get_running_loop()
+        with _stream_lock:
+            _stream_clients[client_id] = (loop, queue)
+
+        with _quote_lock:
+            snapshot = [
+                {k: v for k, v in q.items() if k not in ("raw", "_ingested_ts")}
+                for q in _quotes.values()
+            ]
+        await websocket.send_json({
+            "type": "snapshot",
+            "generated_at": _now_iso(),
+            "count": len(snapshot),
+            "quotes": snapshot,
+        })
+
+        while True:
+            payload = await queue.get()
+            await websocket.send_json({"type": "quote", "quote": payload})
+    except (WebSocketDisconnect, asyncio.TimeoutError, json.JSONDecodeError):
+        pass
+    finally:
+        with _stream_lock:
+            _stream_clients.pop(client_id, None)
 
 
 @app.get("/quotes")
