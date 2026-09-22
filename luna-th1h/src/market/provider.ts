@@ -85,6 +85,7 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
       const q:Quote = {
         symbol:String(raw.symbol),
         ts:String(raw.ts),
+        sourceTs: raw.source_ts ? String(raw.source_ts) : undefined,
         bid:Number.isFinite(Number(raw.bid))?Number(raw.bid):null,
         ask:Number.isFinite(Number(raw.ask))?Number(raw.ask):null,
         last:Number.isFinite(Number(raw.last))?Number(raw.last):null,
@@ -94,7 +95,8 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
         dataQuality:raw.data_quality ? String(raw.data_quality) : undefined
       };
       if(q.last===null && q.bid===null && q.ask===null) continue;
-      const parsedTs=Date.parse(q.ts);
+      const freshnessTs=q.sourceTs ?? q.ts;
+      const parsedTs=Date.parse(freshnessTs);
       if(!Number.isFinite(parsedTs)) continue;
       const quoteAgeMs=Math.max(0,Date.now()-parsedTs);
       if(quoteAgeMs>Number(process.env.LUNA_MAX_QUOTE_AGE_MS ?? 3000)) continue;
