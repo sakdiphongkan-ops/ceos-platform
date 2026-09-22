@@ -36,6 +36,7 @@ function evaluateCandidate(c:Candidate,split:any):Eval{
     validationPositiveMonthRatio:avgPositiveRatio,
     validationDrawdownPct:maxDrawdownPct,
     validationTurnover:avgTurnover,
+    validationTrades:representativeFold.validationTrades,
     walkForwardMinValidationMonthlyGeo:minValidationMonthlyGeo,
     walkForwardAvgValidationMonthlyGeo:avgValidationMonthlyGeo
   });
@@ -232,11 +233,11 @@ function score(e:{
   validationPositiveMonthRatio:number;
   validationDrawdownPct:number;
   validationTurnover:number;
+  validationTrades:number;
   walkForwardMinValidationMonthlyGeo:number;
   walkForwardAvgValidationMonthlyGeo:number;
 }){
-  const trades=Number(e.validationPositiveMonthRatio>=0?1:0);
-  if(trades<1) return -999;
+  if(e.validationTrades<5 || !Number.isFinite(e.walkForwardAvgValidationMonthlyGeo)) return -999;
   const stability=Math.min(
     e.trainMonthlyGeo,
     e.validationMonthlyGeo,
