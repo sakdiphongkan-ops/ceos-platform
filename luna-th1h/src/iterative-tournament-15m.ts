@@ -63,6 +63,8 @@ import path from "node:path";
 import crypto from "node:crypto";
 import {readNormalizedCsv} from "./research-csv.js";
 import {runBacktest} from "./backtest.js";
+import {validateResearchQuotes} from "./research-preflight.js";
+import {applyPitUniverse,readPitMembershipCsv} from "./pit-universe.js";
 import type {Quote} from "./types.js";
 import type {StrategyParams} from "./strategy-v1.js";
 
@@ -192,7 +194,12 @@ function monthlyStats(curve:any[],initial:number){
   const months=new Map<string,{first:number;last:number}>();
   for(const p of curve){
     const d=new Date(p.ts);
-    const key=`${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,"0")}`;
+    const parts=new Intl.DateTimeFormat("en-CA",{
+      timeZone:"Asia/Bangkok",year:"numeric",month:"2-digit"
+    }).formatToParts(d);
+    const year=parts.find(x=>x.type==="year")?.value;
+    const month=parts.find(x=>x.type==="month")?.value;
+    const key=`${year}-${month}`;
     const x=months.get(key);
     if(!x) months.set(key,{first:p.equity,last:p.equity});
     else x.last=p.equity;
@@ -235,9 +242,12 @@ function score(e:{
   const ddPenalty=Math.min(1,e.validationDrawdownPct/0.10);
   const turnoverPenalty=Math.min(1,e.validationTurnover/1_000_000);
   const foldStability=Math.min(1,Math.max(0,(e.walkForwardMinValidationMonthlyGeo+0.02)/0.10));
-  return 3*e.walkForwardAvgValidationMonthlyGeo
-    +2*stability
-    +0.5*e.validationPositiveMonthRatio
+  const returnComponent=3*Math.tanh(10*e.walkForwardAvgValidationMonthlyGeo);
+  const stabilityComponent=2*Math.tanh(10*stability);
+  const consistencyComponent=0.5*e.validationPositiveMonthRatio;
+  return returnComponent
+    +stabilityComponent
+    +consistencyComponent
     +0.75*foldStability
     -1.5*ddPenalty
     -0.25*turnoverPenalty;
@@ -274,8 +284,28 @@ function rank(a:Eval,b:Eval){
 async function main(){
   const raw=fs.readFileSync(input);
   const sha=crypto.createHash("sha256").update(raw).digest("hex");
-  const ticks=await readNormalizedCsv(input);
+  let ticks=await readNormalizedCsv(input);
   if(!ticks.length) throw new Error("No normalized quotes loaded.");
+
+  const pitUniverseFile=process.env.LUNA_PIT_UNIVERSE_FILE;
+  const requirePit=String(process.env.LUNA_RESEARCH_REQUIRE_PIT??"true").toLowerCase()!=="false";
+  let pitExcludedRows=0;
+  let pitActiveSymbols=new Set<string>();
+  if(pitUniverseFile){
+    const membership=await readPitMembershipCsv(pitUniverseFile);
+    const filtered=applyPitUniverse(ticks,membership);
+    ticks=filtered.quotes;
+    pitExcludedRows=filtered.excludedRows;
+    pitActiveSymbols=new Set(ticks.map(q=>q.symbol));
+  }else if(requirePit){
+    throw new Error("PIT_UNIVERSE_REQUIRED_SET_LUNA_PIT_UNIVERSE_FILE");
+  }
+
+  const preflight=validateResearchQuotes(ticks,{
+    requireSourceTs:true,
+    requireVerifiedBook:true,
+    minSymbols:Number(process.env.LUNA_RESEARCH_MIN_SYMBOLS??1)
+  });
   const split=splitChronologicalTicks(ticks);
 
   let population:Candidate[]=Array.from({length:populationSize},(_,i)=>makeCandidate(`g0|${i}`,0));
@@ -388,7 +418,12 @@ async function main(){
     dataset:{
       input,path: path.resolve(input),sha256:sha,input_rows:ticks.length,observed_15m_buckets:split.buckets,
       symbols:new Set(ticks.map(x=>x.symbol)).size,start_ts:ticks[0]?.ts,end_ts:ticks.at(-1)?.ts,
-      interval_minutes:intervalMinutes
+      interval_minutes:intervalMinutes,
+      pit_universe_required:requirePit,
+      pit_universe_file:pitUniverseFile??null,
+      pit_excluded_rows:pitExcludedRows,
+      pit_active_symbols:pitActiveSymbols.size,
+      preflight
     },
     methodology:{
       search:"deterministic evolutionary parameter tournament",
@@ -398,10 +433,10 @@ async function main(){
       execution_timing:"raw ticks retained; completed 15m bar closes are warmed up from prior data, entry/exit executes only on subsequent observed ticks",
       leakage_guard:"HOLDOUT NEVER USED FOR CANDIDATE SELECTION",
       stress_model:"full event replay with extra slippage applied to execution price and affordability checks",
-      target_monthly_geometric_return:TARGET_MONTHLY_GEO,
+      acceptance_hurdle_monthly_geometric_return:TARGET_MONTHLY_GEO,
       walk_forward_folds:WALK_FORWARD_FOLDS,
       walk_forward_rule:"inner expanding train windows inside first 60%; 20% audit and final 20% holdout remain unseen during candidate evolution",
-      credible_gate:"inner walk-forward passes; audit geo and final holdout geo meet target; >=50% positive months; audit/holdout DD <=20%; 10bps final holdout replay remains profitable"
+      credible_gate:"7% monthly is acceptance-only, never the optimization score; inner walk-forward passes; audit and frozen final holdout meet the hurdle; >=50% positive months; audit/holdout DD <=20%; 10bps final holdout replay remains profitable"
     },
     generationReports,
     finalists:holdoutEvaluated.map(e=>({
