@@ -44,3 +44,25 @@ if(!(stressedImpactFill.slippage>baselineFill.slippage)){
   throw new Error("market impact override did not increase stressed slippage");
 }
 console.log("execution cost replay tests: PASS");
+
+
+{
+  const unsortedSell = simulateFill({
+    accepted:true,
+    symbol:"ZZZ",
+    side:"SELL",
+    qty:15,
+    referencePrice:100,
+    visibleDepth:20,
+    depthLevels:[
+      {price:98,size:10},
+      {price:100,size:10}
+    ],
+    spreadBps:0,
+    reason:"TEST"
+  },{slippageBps:0,marketImpactBps:0});
+  if(Math.abs(unsortedSell.fillPrice-(98*10+100*5)/15)>1e-9){
+    throw new Error("unsorted SELL depth was not executed best-price-first");
+  }
+  console.log("unsorted SELL depth replay: PASS");
+}
