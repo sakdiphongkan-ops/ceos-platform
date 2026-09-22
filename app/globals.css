@@ -316,3 +316,13 @@ tbody tr:hover,tbody tr.selected-row{background:rgba(121,214,160,.035)}
   .live-operating-strip{grid-template-columns:1fr}.live-operating-note{grid-column:auto}
   .research-grid{grid-template-columns:1fr}
 }
+
+
+.luna-shell button:focus-visible,.luna-shell input:focus-visible{
+  outline:2px solid var(--accent);
+  outline-offset:2px;
+}
+.luna-shell ::selection{background:rgba(121,214,160,.22);color:var(--text)}
+@media (prefers-reduced-motion:reduce){
+  .luna-shell *{scroll-behavior:auto!important;transition:none!important;animation:none!important}
+}
