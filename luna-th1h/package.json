@@ -32,7 +32,8 @@
     "test:research-preflight": "tsx src/research-preflight.test.ts",
     "test:pit-universe": "tsx src/pit-universe.test.ts",
     "test:research-governance": "tsx src/research-governance.test.ts",
-    "test:research-monthly-stats": "tsx src/research-monthly-stats.test.ts"
+    "test:research-monthly-stats": "tsx src/research-monthly-stats.test.ts",
+    "freeze:holdout": "tsx src/freeze-holdout.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.0"
