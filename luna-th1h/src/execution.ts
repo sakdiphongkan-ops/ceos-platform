@@ -303,7 +303,7 @@ export function simulateFill(
   let fillPrice=order.side==="BUY"
     ? order.referencePrice*(1+totalPricePenalty)
     : order.referencePrice*(1-totalPricePenalty);
-  if(order.depthLevels?.length){
+  if(order.depthComplete===true && order.depthLevels?.length){
     let remaining=order.qty;
     let cash=0;
     const orderedDepth=[...order.depthLevels].sort((a,b)=>
