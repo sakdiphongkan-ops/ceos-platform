@@ -339,6 +339,48 @@ def _normalize_account_state(eq):
     }
 
 
+def _broker_native_time_ms(value):
+    if value is None or value == "":
+        return None
+    if isinstance(value,(int,float)):
+        n=float(value)
+        if n > 10_000_000_000_000:
+            n /= 1000
+        return int(n) if n == n and n > 0 else None
+    if isinstance(value,str):
+        s=value.strip()
+        try:
+            n=float(s)
+            if n > 10_000_000_000_000:
+                n /= 1000
+            if n == n and n > 0:
+                return int(n)
+        except ValueError:
+            pass
+        try:
+            parsed=datetime.fromisoformat(s.replace("Z","+00:00"))
+            return int(parsed.timestamp()*1000)
+        except ValueError:
+            return None
+    return None
+
+
+def _extract_broker_native_submitted_at_ms(payload):
+    if not isinstance(payload,dict):
+        return None
+    roots=[]
+    data=payload.get("data")
+    if isinstance(data,dict):
+        roots.append(data)
+    roots.append(payload)
+    keys=("submitted_at_ms","submittedAtMs","submitted_at","submittedAt","created_at_ms","createdAtMs","created_at","createdAt","timestamp_ms","timestamp")
+    for root in roots:
+        for key in keys:
+            parsed=_broker_native_time_ms(root.get(key))
+            if parsed is not None:
+                return parsed
+    return None
+
 def _num(value):
     try:
         if value is None or value == "":
@@ -1046,12 +1088,16 @@ def place(payload: PlaceOrder, x_luna_gateway: Optional[str] = Header(default=No
         or (broker_result or {}).get("order_no")
         or uuid.uuid4()
     )
+    gateway_received_ms=int(time.time() * 1000)
+    broker_native_submitted_at_ms=_extract_broker_native_submitted_at_ms(broker_result)
 
     return {
         "ok": True,
         "client_order_id": payload.client_order_id,
         "broker_order_id": broker_id,
-        "submitted_at_ms": int(time.time() * 1000),
+        "submitted_at_ms": gateway_received_ms,
+        "broker_native_submitted_at_ms": broker_native_submitted_at_ms,
+        "ack_kind": "broker_native" if broker_native_submitted_at_ms is not None else "gateway_response",
         "raw": broker_result,
     }
 
