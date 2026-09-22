@@ -974,7 +974,7 @@ def health():
     return {
         "ok": True,
         "version": APP_VERSION,
-        "source_revision": SOURCE_REVISION,
+        "source_revision": RELEASE_SOURCE_REVISION,
         "live_armed": LIVE_ARMED,
         "provider_mode": PROVIDER_MODE,
         "selected_provider": _selected_provider,
