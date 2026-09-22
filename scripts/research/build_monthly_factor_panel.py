@@ -19,6 +19,7 @@ def main():
     ap.add_argument("--factors",required=True)
     ap.add_argument("--prices",required=True)
     ap.add_argument("--output",required=True)
+    ap.add_argument("--membership",default=None)
     args=ap.parse_args()
 
     f=pd.read_csv(args.factors)
@@ -41,6 +42,12 @@ def main():
     m=f[keep].merge(p,on=["symbol","month_end"],how="inner")
     m=m.sort_values(["symbol","month_end"]).drop_duplicates(["symbol","month_end"])
 
+    pit_excluded_rows=0
+    pit_active_symbols=0
+    if args.membership:
+        from apply_pit_universe import filter_dataframe_by_date
+        m, pit_excluded_rows, pit_active_symbols = filter_dataframe_by_date(m,args.membership,"month_end")
+
     # Strict one-calendar-month forward return.
     m["_next_month"]=m.groupby("symbol")["month_end"].shift(-1)
     m["_next_adj_close"]=m.groupby("symbol")["adj_close"].shift(-1)
@@ -59,6 +66,9 @@ def main():
         "price_source":price_col,
         "forward_return":"next calendar month-end only",
         "point_in_time":"last daily decision observation within month",
+        "pit_membership":args.membership,
+        "pit_excluded_rows":int(pit_excluded_rows),
+        "pit_active_symbols":int(pit_active_symbols),
     }
     out.with_suffix(".manifest.json").write_text(json.dumps(manifest,indent=2),encoding="utf-8")
     print(json.dumps(manifest,indent=2))
