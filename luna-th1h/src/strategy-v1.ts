@@ -135,7 +135,8 @@ export class StrategyV1{
     return true;
   }
 
-  private evaluatePosition(q:Quote,ctx:StrategyContext,st:SymbolState):Signal{
+  private evaluatePosition(q:Quote,ctx:StrategyContext,st:SymbolState):Signal|null{
+    if(ctx.positionQty<=0) return null;
     if(st.entryTs===null) st.entryTs=ctx.nowMs;
     const stopLoss=ctx.avgPrice*(1-this.params.stopLossBps/10_000);
     const takeProfit=ctx.avgPrice*(1+this.params.takeProfitBps/10_000);
