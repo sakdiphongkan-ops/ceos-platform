@@ -16,6 +16,7 @@ export interface PortfolioState{
   slippageCost:number;
   positions:Record<string,PositionState>;
   marks:Record<string,Quote>;
+  recentBuyTimestamps?:number[];
 }
 
 export interface ExecutionReservations{
@@ -51,7 +52,7 @@ export interface SimulatedFill{
 }
 
 export function createPortfolio(initialCapital:number):PortfolioState{
-  return {cash:initialCapital,initialCapital,fees:0,slippageCost:0,positions:{},marks:{}};
+  return {cash:initialCapital,initialCapital,fees:0,slippageCost:0,positions:{},marks:{},recentBuyTimestamps:[]};
 }
 
 function position(state:PortfolioState,symbol:string):PositionState{
@@ -68,11 +69,15 @@ function usablePrice(...values:Array<number|null|undefined>){
   return 0;
 }
 
-const recentBuyTimestamps:number[]=[];
+function recentBuys(state:PortfolioState){
+  if(!state.recentBuyTimestamps) state.recentBuyTimestamps=[];
+  return state.recentBuyTimestamps;
+}
 
-function pruneRecentBuys(nowMs:number){
+function pruneRecentBuys(state:PortfolioState,nowMs:number){
+  const timestamps=recentBuys(state);
   const cutoff=nowMs-60_000;
-  while(recentBuyTimestamps.length && recentBuyTimestamps[0]<cutoff) recentBuyTimestamps.shift();
+  while(timestamps.length && timestamps[0]<cutoff) timestamps.shift();
 }
 
 
@@ -115,8 +120,11 @@ export function planOrder(
   const currentNotional=pos.qty*referencePrice;
 
   if(side==="BUY"){
-    pruneRecentBuys(Date.now());
-    if(recentBuyTimestamps.length>=Math.max(1,Math.floor(config.maxOrdersPerMinute))){
+    const simulatedNowMs=Date.parse(signal.ts);
+    const orderNowMs=Number.isFinite(simulatedNowMs)?simulatedNowMs:Date.now();
+    pruneRecentBuys(state,orderNowMs);
+    const recent=recentBuys(state);
+    if(recent.length>=Math.max(1,Math.floor(config.maxOrdersPerMinute))){
       return {accepted:false,reason:"MAX_ORDERS_PER_MINUTE_LOCAL"};
     }
 
@@ -170,7 +178,7 @@ export function planOrder(
       cash:availableCash
     });
     if(!risk.ok) return {accepted:false,reason:risk.reason};
-    recentBuyTimestamps.push(Date.now());
+    recent.push(orderNowMs);
     return {
       accepted:true,symbol:q.symbol,side,qty,referencePrice,
       visibleDepth:verifiedBook?Number(q.askSize??0):0,
