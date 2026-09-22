@@ -1279,3 +1279,4 @@ def diagnostics(x_luna_gateway: Optional[str] = Header(default=None)):
         "provider_failures": dict(_provider_failures),
         "channel_status": _channel_snapshot(),
     }
+# LUNA production release marker: public quote stream
