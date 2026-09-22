@@ -1296,6 +1296,11 @@ async function endSession(status="CLOSED"){
 }
 
 async function main(){
+  const sourceRevision=process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GITHUB_SHA ?? "unknown";
+  const expectedRevision=process.env.LUNA_EXPECTED_SOURCE_SHA?.trim();
+  if(expectedRevision && sourceRevision!==expectedRevision){
+    throw new Error(`LUNA_SOURCE_REVISION_MISMATCH:expected=${expectedRevision}:actual=${sourceRevision}`);
+  }
   console.log(JSON.stringify({
     event:"LUNA_BOOT",
     mode:config.mode,
@@ -1303,6 +1308,8 @@ async function main(){
     capital:config.initialCapital,
     executionTest:config.executionTest,
     strategy:strategyV1.version,
+    sourceRevision,
+    expectedSourceRevision:expectedRevision ?? null,
     timezone:config.timezone,
     marketPhase:currentMarketPhase()
   }));
