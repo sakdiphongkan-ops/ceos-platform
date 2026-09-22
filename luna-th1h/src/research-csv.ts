@@ -64,6 +64,7 @@ export async function readNormalizedCsv(path:string):Promise<Quote[]>{
   const iQuality=index("data_quality","quality");
   const iBidLevels=index("bid_levels_json","bid_levels");
   const iAskLevels=index("ask_levels_json","ask_levels");
+  const iDepthComplete=index("depth_complete","l2_complete","book_complete");
 
   if(iTs<0 || iSymbol<0) throw new Error("CSV requires ts/time and symbol columns.");
 
@@ -91,7 +92,8 @@ export async function readNormalizedCsv(path:string):Promise<Quote[]>{
       source:iSource>=0 && c[iSource]?c[iSource]:"historical-csv",
       dataQuality:iQuality>=0 && c[iQuality]?c[iQuality]:undefined,
       bidLevels:parseLevels(iBidLevels>=0?c[iBidLevels]:undefined),
-      askLevels:parseLevels(iAskLevels>=0?c[iAskLevels]:undefined)
+      askLevels:parseLevels(iAskLevels>=0?c[iAskLevels]:undefined),
+      depthComplete:iDepthComplete>=0 ? ["1","true","yes","y"].includes(String(c[iDepthComplete]).trim().toLowerCase()) : undefined
     });
   }
 
