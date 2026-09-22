@@ -51,8 +51,6 @@ def main() -> None:
         p = p[p["date"] >= pd.Timestamp(args.start)]
     if args.end:
         p = p[p["date"] <= pd.Timestamp(args.end)]
-    if args.membership:
-        p, pit_excluded_rows, pit_active_symbols = filter_dataframe_by_date(p,args.membership,"date")
 
     g = p.groupby("symbol", group_keys=False)
     p["mom1"] = g[px].pct_change(21)
@@ -94,6 +92,11 @@ def main() -> None:
         "high52_ratio", "vol20", "maxdd60", "avg_amount20",
     ]
     out = month_end[cols].rename(columns={px: "adj_close"}).copy()
+
+    if args.membership:
+        out["snapshot_date"] = out["month_end"]
+        out, pit_excluded_rows, pit_active_symbols = filter_dataframe_by_date(out,args.membership,"snapshot_date")
+        out = out.drop(columns=["snapshot_date"])
 
     # Strictly require a complete next calendar month.
     next_month = out[["symbol", "month_end", "adj_close"]].copy()
