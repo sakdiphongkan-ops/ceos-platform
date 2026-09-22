@@ -1,18 +1,8 @@
 name: LUNA Adaptive Tournament v2 - Public Research Route
+# Manual-only: research execution requires an explicitly verified PIT dataset/provenance.
 
 on:
   workflow_dispatch:
-  push:
-    branches: [master]
-    paths:
-      - "scripts/research/luna_adaptive_tournament_v2.py"
-      - "scripts/research/luna_holdout_audit_v1.py"
-      - "scripts/research/build_monthly_factor_dataset.py"
-      - "scripts/research/filter_last_5y.py"
-      - "scripts/research/download_mendeley_set.py"
-      - "scripts/research/build_factor_dataset.py"
-      - ".github/workflows/luna-adaptive-tournament-v2-public.yml"
-
 concurrency:
   group: luna-adaptive-tournament-v2-public
   cancel-in-progress: true
