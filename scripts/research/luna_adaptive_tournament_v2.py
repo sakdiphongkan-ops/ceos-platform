@@ -9,8 +9,10 @@ No future return is used in selecting month t.
 from __future__ import annotations
 import argparse, hashlib, json
 from pathlib import Path
+import os
 import numpy as np
 import pandas as pd
+from apply_pit_universe import filter_dataframe_by_date
 
 FACTORS=["mom1","mom3","mom6","mom12","high52_ratio","vol20","maxdd60","avg_amount20"]
 
@@ -26,12 +28,19 @@ def main():
     ap.add_argument("--lookback-months",type=int,default=24)
     ap.add_argument("--min-history-months",type=int,default=12)
     ap.add_argument("--cost-bps",type=float,default=20)
+    ap.add_argument("--membership",default=os.getenv("LUNA_PIT_UNIVERSE_MEMBERSHIP"))
     ap.add_argument("--formula-count",type=int,default=1000)
     ap.add_argument("--k",type=int,default=20)
     ap.add_argument("--seed",type=int,default=20260920)
     args=ap.parse_args()
+    if not args.membership:
+        raise SystemExit("PIT_UNIVERSE_MEMBERSHIP_REQUIRED")
     out=Path(args.output); out.mkdir(parents=True,exist_ok=True)
     df=pd.read_csv(args.input)
+    df["month_end"]=pd.to_datetime(df["month_end"])
+    df, pit_excluded_rows, pit_active_symbols = filter_dataframe_by_date(
+        df, args.membership, "month_end"
+    )
     req={"symbol","month_end","adj_close",*FACTORS}
     miss=sorted(req-set(df.columns))
     if miss: raise SystemExit(f"missing columns: {miss}")
@@ -156,6 +165,9 @@ def main():
 
     summary={
       "status":"COMPLETED","engine":"luna-adaptive-tournament-v2",
+      "pit_membership":args.membership,
+      "pit_excluded_rows":int(pit_excluded_rows),
+      "pit_active_symbols":int(pit_active_symbols),
       "dataset_sha256":hashlib.sha256(Path(args.input).read_bytes()).hexdigest(),
       "formula_count":len(formulas),"months_traded":len(r),
       "factor_coverage":factor_coverage,"active_factors":active_factors,
