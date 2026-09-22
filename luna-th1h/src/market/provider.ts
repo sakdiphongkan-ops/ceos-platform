@@ -100,7 +100,8 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
       const freshnessTs=q.sourceTs ?? q.ts;
       const parsedTs=Date.parse(freshnessTs);
       if(!Number.isFinite(parsedTs)) continue;
-      const quoteAgeMs=Math.max(0,Date.now()-parsedTs);
+      const quoteAgeMs=Date.now()-parsedTs;
+      if(quoteAgeMs<0) continue;
       if(quoteAgeMs>Number(process.env.LUNA_MAX_QUOTE_AGE_MS ?? 3000)) continue;
       const sig=JSON.stringify([q.ts,q.bid,q.ask,q.last,q.bidSize,q.askSize]);
       if(previous.get(q.symbol)===sig) continue;
