@@ -1,0 +1,64 @@
+name: LUNA production pinned deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type DEPLOY to deploy the checked-out master commit to Railway production"
+        required: true
+        type: string
+      service:
+        description: "Railway service ID"
+        required: true
+        default: "213d7bc4-8734-40ec-a419-6931f9c63573"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: ${{ inputs.confirm == 'DEPLOY' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify source revision
+        run: |
+          echo "Deploying commit: $GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+      - name: Pin source revision guards without intermediate deploy
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          SERVICE_ID: ${{ inputs.service }}
+          ENV_ID: "a0a04144-e4d8-4352-a578-27ef8fb56e5c"
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          test -n "$RAILWAY_TOKEN"
+          railway variable set -s "$SERVICE_ID" -e "$ENV_ID" --skip-deploys LUNA_DEPLOY_SOURCE_SHA="$COMMIT_SHA" LUNA_EXPECTED_SOURCE_SHA="$COMMIT_SHA"
+      - name: Deploy exact checked-out source
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          SERVICE_ID: ${{ inputs.service }}
+          ENV_ID: "a0a04144-e4d8-4352-a578-27ef8fb56e5c"
+          PROJECT_ID: "26e44379-04ed-4132-b1d8-fbde42a45d9a"
+        run: |
+          railway up --project "$PROJECT_ID" --environment "$ENV_ID" --service "$SERVICE_ID" --ci --message "LUNA pinned production deploy $GITHUB_SHA"
+      - name: Verify latest deployment
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          SERVICE_ID: ${{ inputs.service }}
+          ENV_ID: "a0a04144-e4d8-4352-a578-27ef8fb56e5c"
+        run: |
+          railway deployment list --service "$SERVICE_ID" --environment "$ENV_ID" --limit 1 --json | tee deployment.json
+          python - <<'PY'
+          import json
+          x=json.load(open("deployment.json"))
+          if not x: raise SystemExit("No Railway deployment returned")
+          d=x[0]
+          print(d)
+          if d.get("status") not in {"SUCCESS","DEPLOYING","BUILDING"}:
+              raise SystemExit(f"Unexpected deployment status: {d.get('status')}")
+          PY
