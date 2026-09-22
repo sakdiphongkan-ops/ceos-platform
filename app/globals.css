@@ -360,3 +360,24 @@ tbody tr:hover,tbody tr.selected-row{background:rgba(121,214,160,.035)}
 
 .main-card .table-wrap{border-radius:0 0 15px 15px}
 .filter-wrap{z-index:10}
+
+.research-panel .research-banner{
+  border:1px solid var(--line);background:linear-gradient(180deg,#121914,#0d120f);color:var(--text);
+}
+.research-panel .research-banner p{color:var(--muted)}
+.research-panel .research-grid>div{
+  border:1px solid var(--line);background:#0b100d;color:var(--text)
+}
+.research-panel .research-grid strong{color:#6d7a72}
+.research-panel .research-grid span{color:#dce5df}
+.research-panel .research-note{
+  border-left-color:var(--accent);background:rgba(121,214,160,.035);color:#8d9a92;
+}
+.research-panel .research-source{
+  border:1px solid var(--line);background:#0b100d;color:#dce5df;
+}
+.research-panel .research-source span{color:#68756d}
+.research-panel .research-pipeline{
+  border:1px solid var(--line);background:#0c120e;color:#b5c1ba;
+}
+.research-panel .research-pipeline b{color:#4d5b52}
