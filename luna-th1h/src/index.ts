@@ -998,7 +998,14 @@ async function handleQuote(q:Quote){
   }
 
   const signal=getSignal(q);
-  const marketLagMs=Math.max(0,Date.now()-Date.parse(q.ts));
+  const decisionTs=new Date().toISOString();
+  const sourceTs=q.sourceTs??q.ts;
+  const sourceMs=Date.parse(sourceTs);
+  const ingestMs=Date.parse(q.ts);
+  const sourceToIngestMs=Number.isFinite(sourceMs)&&Number.isFinite(ingestMs)
+    ? Math.max(0,ingestMs-sourceMs)
+    : null;
+  const marketLagMs=Math.max(0,Date.now()-ingestMs);
 
   if(sessionId!==activeSessionId || sessionGeneration!==activeSessionGeneration) return;
 
