@@ -15,6 +15,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from apply_pit_universe import filter_dataframe_by_date
+
 
 def main() -> None:
     ap = argparse.ArgumentParser()
@@ -22,9 +24,12 @@ def main() -> None:
     ap.add_argument("--output", required=True)
     ap.add_argument("--start", default=None)
     ap.add_argument("--end", default=None)
+    ap.add_argument("--membership", default=None)
     args = ap.parse_args()
 
     p = pd.read_csv(args.prices)
+    pit_excluded_rows=0
+    pit_active_symbols=0
     required = {"date", "symbol", "close", "volume"}
     missing = sorted(required - set(p.columns))
     if missing:
@@ -46,6 +51,8 @@ def main() -> None:
         p = p[p["date"] >= pd.Timestamp(args.start)]
     if args.end:
         p = p[p["date"] <= pd.Timestamp(args.end)]
+    if args.membership:
+        p, pit_excluded_rows, pit_active_symbols = filter_dataframe_by_date(p,args.membership,"date")
 
     g = p.groupby("symbol", group_keys=False)
     p["mom1"] = g[px].pct_change(21)
@@ -112,6 +119,9 @@ def main() -> None:
         "source_price_column": px,
         "month_end_definition": "last available trading observation per symbol per calendar month",
         "forward_return_definition": "next calendar month-end only; missing month => NaN",
+        "pit_membership": args.membership,
+        "pit_excluded_rows": int(pit_excluded_rows),
+        "pit_active_symbols": int(pit_active_symbols),
     }
     Path(args.output).with_suffix(".manifest.json").write_text(
         json.dumps(manifest, indent=2), encoding="utf-8"
