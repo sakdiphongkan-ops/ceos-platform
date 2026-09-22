@@ -324,6 +324,11 @@ async function main(){
   const finalists=finalEvaluations.slice(0,Math.min(25,finalEvaluations.length));
 
   const holdoutEvaluated=finalists.map(e=>{
+    const audit=runBacktest(
+      split.audit,initialCapital,e.candidate,{warmupQuotes:split.warmupForAudit}
+    );
+    const am=monthlyStats(audit.equityCurve,initialCapital);
+    const auditTurnover=turnover(audit);
     const holdout=runBacktest(
       split.holdout,initialCapital,e.candidate,{warmupQuotes:split.warmupForHoldout}
     );
@@ -350,6 +355,11 @@ async function main(){
     },{});
     return {
       ...e,
+      audit,
+      auditMonthlyGeo:am.geo,
+      auditPositiveMonthRatio:am.positiveRatio,
+      auditDrawdownPct:Number(audit.maxDrawdown)/initialCapital,
+      auditTurnover,
       holdout,
       holdoutMonthlyGeo:hm.geo,
       holdoutPositiveMonthRatio:hm.positiveRatio,
@@ -362,10 +372,12 @@ async function main(){
   });
 
   const credible=holdoutEvaluated
-    .filter(e=>e.walkForwardAvgValidationMonthlyGeo>=TARGET_MONTHLY_GEO && e.holdoutMonthlyGeo!>=TARGET_MONTHLY_GEO)
+    .filter(e=>e.walkForwardAvgValidationMonthlyGeo>=TARGET_MONTHLY_GEO && (e.auditMonthlyGeo??-Infinity)>=TARGET_MONTHLY_GEO && e.holdoutMonthlyGeo!>=TARGET_MONTHLY_GEO)
     .filter(e=>(e.walkForwardMinValidationMonthlyGeo??-Infinity)>=MIN_FOLD_MONTHLY_GEO)
     .filter(e=>(e.walkForwardAvgValidationPositiveMonthRatio??0)>=0.50)
     .filter(e=>(e.walkForwardMaxValidationDrawdownPct??1)<=0.20)
+    .filter(e=>(e.auditPositiveMonthRatio??0)>=0.50)
+    .filter(e=>(e.auditDrawdownPct??1)<=0.20)
     .filter(e=>(e.holdoutPositiveMonthRatio??0)>=0.50)
     .filter(e=>(e.holdoutDrawdownPct??1)<=0.20)
     .filter(e=>(e.stress?.extra_cost_10bps?.netPnl??-Infinity)>0)
@@ -398,6 +410,9 @@ async function main(){
       validation_return_pct:e.validation.returnPct,
       validation_max_drawdown:e.validation.maxDrawdown,
       validation_trades:e.validation.tradeCount,
+      audit_monthly_geo:e.auditMonthlyGeo,
+      audit_positive_month_ratio:e.auditPositiveMonthRatio,
+      audit_drawdown_pct:e.auditDrawdownPct,
       holdout_monthly_geo:e.holdoutMonthlyGeo,
       holdout_return_pct:e.holdoutReturnPct,
       walk_forward_avg_validation_monthly_geo:e.walkForwardAvgValidationMonthlyGeo,
