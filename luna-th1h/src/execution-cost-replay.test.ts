@@ -61,7 +61,7 @@ console.log("execution cost replay tests: PASS");
     spreadBps:0,
     reason:"TEST"
   },{slippageBps:0,marketImpactBps:0});
-  if(Math.abs(unsortedSell.fillPrice-(98*10+100*5)/15)>1e-9){
+  if(Math.abs(unsortedSell.fillPrice-(100*10+98*5)/15)>1e-9){
     throw new Error("unsorted SELL depth was not executed best-price-first");
   }
   console.log("unsorted SELL depth replay: PASS");
