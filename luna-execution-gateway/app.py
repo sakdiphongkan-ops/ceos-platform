@@ -20,7 +20,7 @@ try:
 except Exception:  # pragma: no cover
     Investor = None
 
-APP_VERSION = "0.5.1"
+APP_VERSION = "0.5.2"
 RELEASE_SOURCE_REVISION = (
     os.getenv("LUNA_DEPLOY_SOURCE_SHA")
     or os.getenv("GITHUB_SHA")
