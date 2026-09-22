@@ -376,7 +376,7 @@ async function main(){
     const holdoutStartIso=new Date(split.holdoutStart).toISOString();
     assertFrozenHoldoutAllowed({
       lockFile,exposureLedger,datasetSha256:sha,
-      holdoutStart:split.holdoutStart,holdoutDigest
+      holdoutStart:holdoutStartIso,holdoutDigest
     });
 
     const holdoutEvaluated=credible.map(e=>{
