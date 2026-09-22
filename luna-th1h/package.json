@@ -30,7 +30,9 @@
     "qa:verified-15m": "python3 ../scripts/research/qa_verified_15m.py",
     "test:latency-ledger": "tsx src/latency-ledger.test.ts",
     "test:research-preflight": "tsx src/research-preflight.test.ts",
-    "test:pit-universe": "tsx src/pit-universe.test.ts"
+    "test:pit-universe": "tsx src/pit-universe.test.ts",
+    "test:research-governance": "tsx src/research-governance.test.ts",
+    "test:research-monthly-stats": "tsx src/research-monthly-stats.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.0"
