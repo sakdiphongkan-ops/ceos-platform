@@ -1242,6 +1242,9 @@ async function main(){
   if(!Number.isFinite(config.telemetryFlushMs) || config.telemetryFlushMs<5){
     throw new Error("LUNA_TELEMETRY_FLUSH_MS_MUST_BE_AT_LEAST_5");
   }
+  if(!Number.isFinite(config.telemetryTickBatchShare) || config.telemetryTickBatchShare<0.05 || config.telemetryTickBatchShare>0.95){
+    throw new Error("LUNA_TELEMETRY_TICK_SHARE_MUST_BE_0_05_TO_0_95");
+  }
   if(!Number.isInteger(config.holdTickPersistMs) || config.holdTickPersistMs<50){
     throw new Error("LUNA_HOLD_TICK_PERSIST_MS_MUST_BE_AT_LEAST_50");
   }
