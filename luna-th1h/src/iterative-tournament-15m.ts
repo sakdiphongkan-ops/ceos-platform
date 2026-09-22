@@ -116,6 +116,7 @@ const WALK_FORWARD_FOLDS=Math.max(2,Math.min(6,Number(process.env.LUNA_RESEARCH_
 const MIN_FOLD_MONTHLY_GEO=Number(process.env.LUNA_RESEARCH_MIN_FOLD_MONTHLY_GEO ?? 0);
 const MIN_FOLD_TRADES=Math.max(1,Number(process.env.LUNA_RESEARCH_MIN_FOLD_TRADES ?? 5));
 const AUDIT_STRESS_BPS=Math.max(0,Number(process.env.LUNA_RESEARCH_AUDIT_STRESS_BPS ?? 10));
+const MIN_AUDIT_TRADES=Math.max(1,Number(process.env.LUNA_RESEARCH_MIN_AUDIT_TRADES ?? MIN_FOLD_TRADES));
 
 const choices={
   fastPeriod:[3,5,8,13],
@@ -375,7 +376,9 @@ async function main(){
     .filter(e=>(e.walkForwardMaxValidationDrawdownPct??1)<=0.20)
     .filter(e=>(e.walkForwardMinValidationTrades??0)>=MIN_FOLD_TRADES)
     .filter(e=>(e.auditMonthlyGeo??-Infinity)>=TARGET_MONTHLY_GEO)
+    .filter(e=>(e.audit.tradeCount??0)>=MIN_AUDIT_TRADES)
     .filter(e=>(e.auditStressMonthlyGeo??-Infinity)>=0)
+    .filter(e=>(e.auditStressTrades??0)>=MIN_AUDIT_TRADES)
     .filter(e=>(e.auditStressNetPnl??-Infinity)>0)
     .filter(e=>(e.auditPositiveMonthRatio??0)>=0.50)
     .filter(e=>(e.auditDrawdownPct??1)<=0.20)
@@ -465,6 +468,7 @@ async function main(){
       holdout_exposure_rule:"FINAL HOLDOUT MAY BE OPENED ONLY ONCE WITH AN IMMUTABLE LOCK AND EXPOSURE LEDGER",
       audit_stress_bps:AUDIT_STRESS_BPS,
       minimum_trades_per_walk_forward_fold:MIN_FOLD_TRADES,
+      minimum_audit_trades:MIN_AUDIT_TRADES,
       pit_provenance_rule:"PIT membership must carry a SHA-256-pinned provenance manifest from an allowed authoritative domain",
       stress_model:"full event replay with extra slippage applied to execution price and affordability checks; audit selection also requires positive stressed PnL",
       acceptance_hurdle_monthly_geometric_return:TARGET_MONTHLY_GEO,
