@@ -1,64 +1,115 @@
 name: LUNA production pinned deploy
 
 on:
+  push:
+    branches: [master]
   workflow_dispatch:
     inputs:
       confirm:
-        description: "Type DEPLOY to deploy the checked-out master commit to Railway production"
+        description: "Type DEPLOY for a manual pinned production deploy"
         required: true
-        type: string
-      service:
-        description: "Railway service ID"
-        required: true
-        default: "213d7bc4-8734-40ec-a419-6931f9c63573"
         type: string
 
 permissions:
   contents: read
+  checks: read
 
 jobs:
   deploy:
-    if: ${{ inputs.confirm == 'DEPLOY' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[LUNA-PROD-DEPLOY]') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+      - name: Verify manual confirmation when dispatching
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: test "${{ inputs.confirm }}" = "DEPLOY"
       - name: Verify source revision
         run: |
           echo "Deploying commit: $GITHUB_SHA"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Wait for primary CI on this exact commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          deadline=$(( $(date +%s) + 1800 ))
+          while true; do
+            rows=$(gh api repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs --paginate --jq '.check_runs[] | [.name,.status,.conclusion] | @tsv' || true)
+            echo "$rows"
+            luna=$(printf '%s\n' "$rows" | awk -F '\t' '$1=="LUNA-TH1H CI"{print $2" "$3; exit}')
+            ceos=$(printf '%s\n' "$rows" | awk -F '\t' '$1=="CEOS Platform Build"{print $2" "$3; exit}')
+            if printf '%s' "$luna" | grep -q '^completed success$' && printf '%s' "$ceos" | grep -q '^completed success$'; then
+              echo "Primary CI passed for $GITHUB_SHA"
+              break
+            fi
+            if printf '%s' "$luna" | grep -q 'completed failure\|completed cancelled\|completed timed_out' || printf '%s' "$ceos" | grep -q 'completed failure\|completed cancelled\|completed timed_out'; then
+              echo "Primary CI failed on $GITHUB_SHA"
+              exit 1
+            fi
+            if [ $(date +%s) -ge $deadline ]; then
+              echo "Timed out waiting for primary CI"
+              exit 1
+            fi
+            sleep 15
+          done
       - name: Install Railway CLI
         run: npm install -g @railway/cli
       - name: Pin source revision guards without intermediate deploy
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          SERVICE_ID: ${{ inputs.service }}
+          WORKER_ID: "213d7bc4-8734-40ec-a419-6931f9c63573"
+          GATEWAY_ID: "222fea4d-3900-49ac-b375-92e522d15ffa"
           ENV_ID: "a0a04144-e4d8-4352-a578-27ef8fb56e5c"
           COMMIT_SHA: ${{ github.sha }}
         run: |
           test -n "$RAILWAY_TOKEN"
-          railway variable set -s "$SERVICE_ID" -e "$ENV_ID" --skip-deploys LUNA_DEPLOY_SOURCE_SHA="$COMMIT_SHA" LUNA_EXPECTED_SOURCE_SHA="$COMMIT_SHA"
-      - name: Deploy exact checked-out source
+          for SERVICE_ID in "$WORKER_ID" "$GATEWAY_ID"; do
+            railway variable set -s "$SERVICE_ID" -e "$ENV_ID" --skip-deploys LUNA_DEPLOY_SOURCE_SHA="$COMMIT_SHA" LUNA_EXPECTED_SOURCE_SHA="$COMMIT_SHA"
+          done
+      - name: Deploy worker exact checked-out source
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          SERVICE_ID: ${{ inputs.service }}
+          SERVICE_ID: "213d7bc4-8734-40ec-a419-6931f9c63573"
           ENV_ID: "a0a04144-e4d8-4352-a578-27ef8fb56e5c"
           PROJECT_ID: "26e44379-04ed-4132-b1d8-fbde42a45d9a"
         run: |
-          railway up --project "$PROJECT_ID" --environment "$ENV_ID" --service "$SERVICE_ID" --ci --message "LUNA pinned production deploy $GITHUB_SHA"
-      - name: Verify latest deployment
+          railway up --project "$PROJECT_ID" --environment "$ENV_ID" --service "$SERVICE_ID" --ci --message "LUNA worker pinned deploy $GITHUB_SHA"
+      - name: Deploy gateway exact checked-out source
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          SERVICE_ID: ${{ inputs.service }}
+          SERVICE_ID: "222fea4d-3900-49ac-b375-92e522d15ffa"
+          ENV_ID: "a0a04144-e4d8-4352-a578-27ef8fb56e5c"
+          PROJECT_ID: "26e44379-04ed-4132-b1d8-fbde42a45d9a"
+        run: |
+          railway up --project "$PROJECT_ID" --environment "$ENV_ID" --service "$SERVICE_ID" --ci --message "LUNA gateway pinned deploy $GITHUB_SHA"
+      - name: Verify latest worker deployment
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          SERVICE_ID: "213d7bc4-8734-40ec-a419-6931f9c63573"
           ENV_ID: "a0a04144-e4d8-4352-a578-27ef8fb56e5c"
         run: |
-          railway deployment list --service "$SERVICE_ID" --environment "$ENV_ID" --limit 1 --json | tee deployment.json
+          railway deployment list --service "$SERVICE_ID" --environment "$ENV_ID" --limit 1 --json | tee worker-deployment.json
           python - <<'PY'
           import json
-          x=json.load(open("deployment.json"))
-          if not x: raise SystemExit("No Railway deployment returned")
-          d=x[0]
+          d=json.load(open('worker-deployment.json'))[0]
           print(d)
-          if d.get("status") not in {"SUCCESS","DEPLOYING","BUILDING"}:
-              raise SystemExit(f"Unexpected deployment status: {d.get('status')}")
+          assert d.get('status') == 'SUCCESS', d
           PY
+          railway service logs --service "$SERVICE_ID" --environment "$ENV_ID" --latest -n 250 | tee worker.log
+          grep -F 'LUNA_BOOT' worker.log | tail -n 20
+          grep -F "sourceRevision=$GITHUB_SHA" worker.log
+      - name: Verify latest gateway deployment
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          SERVICE_ID: "222fea4d-3900-49ac-b375-92e522d15ffa"
+          ENV_ID: "a0a04144-e4d8-4352-a578-27ef8fb56e5c"
+        run: |
+          railway deployment list --service "$SERVICE_ID" --environment "$ENV_ID" --limit 1 --json | tee gateway-deployment.json
+          python - <<'PY'
+          import json
+          d=json.load(open('gateway-deployment.json'))[0]
+          print(d)
+          assert d.get('status') == 'SUCCESS', d
+          PY
+          railway service logs --service "$SERVICE_ID" --environment "$ENV_ID" --latest -n 250 | tee gateway.log
+          grep -F "LUNA_GATEWAY_SOURCE_REVISION revision=$GITHUB_SHA" gateway.log
