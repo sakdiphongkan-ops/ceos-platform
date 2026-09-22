@@ -73,7 +73,33 @@ type LunaFeed = {
 const money = (n: number) =>
   new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n) || 0);
 
+type UiMarketPhase = "PRE_OPEN" | "ACTIVE" | "BREAK" | "REDUCE_ONLY" | "FORCE_CLOSE" | "CLOSED";
+
 const signed = (n: number) => `${n >= 0 ? "+" : "-"}฿${money(Math.abs(n))}`;
+
+function bangkokParts(date: Date) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Bangkok", weekday: "short", year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+  }).formatToParts(date);
+  const value = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return { weekday:value("weekday"), year:Number(value("year")), month:Number(value("month")), day:Number(value("day")), hour:Number(value("hour")), minute:Number(value("minute")), second:Number(value("second")) };
+}
+function bangkokDate(date: Date) { const p=bangkokParts(date); return `${p.year}-${String(p.month).padStart(2,"0")}-${String(p.day).padStart(2,"0")}`; }
+function bangkokClock(date: Date) { const p=bangkokParts(date); return `${String(p.hour).padStart(2,"0")}:${String(p.minute).padStart(2,"0")}:${String(p.second).padStart(2,"0")}`; }
+function uiMarketPhase(date: Date): UiMarketPhase {
+  const p=bangkokParts(date); if(p.weekday==="Sat"||p.weekday==="Sun") return "CLOSED";
+  const mins=p.hour*60+p.minute;
+  if(mins<600) return "PRE_OPEN";
+  if(mins<750) return "ACTIVE";
+  if(mins<840) return "BREAK";
+  if(mins<980) return "ACTIVE";
+  if(mins<985) return "REDUCE_ONLY";
+  if(mins<990) return "FORCE_CLOSE";
+  return "CLOSED";
+}
+function marketPhaseLabel(phase:UiMarketPhase) { return ({PRE_OPEN:"PRE-OPEN",ACTIVE:"MARKET OPEN",BREAK:"MIDDAY BREAK",REDUCE_ONLY:"REDUCE ONLY",FORCE_CLOSE:"FORCE CLOSE",CLOSED:"MARKET CLOSED"})[phase]; }
+function marketPhaseHint(phase:UiMarketPhase) { return ({PRE_OPEN:"Entry locked until 10:00",ACTIVE:"New entries enabled",BREAK:"Entry locked · afternoon pre-open",REDUCE_ONLY:"BUY locked · SELL allowed",FORCE_CLOSE:"Closing positions only",CLOSED:"No new execution"})[phase]; }
 
 export default function LunaPortfolioPage() {
   const [tab,setTab]=useState<"holdings"|"trades"|"closed"|"research">("holdings");
@@ -87,6 +113,7 @@ export default function LunaPortfolioPage() {
   const [profitOnly,setProfitOnly]=useState(false);
   const [error,setError]=useState("");
   const [live,setLive]=useState(false);
+  const [clock,setClock]=useState(()=>new Date());
 
   const load=useCallback(async()=>{
     setRefreshing(true); setError("");
@@ -105,34 +132,41 @@ export default function LunaPortfolioPage() {
   },[]);
 
   useEffect(()=>{ load(); const id=setInterval(load,2000); return()=>clearInterval(id); },[load]);
+  useEffect(()=>{ const id=setInterval(()=>setClock(new Date()),1000); return()=>clearInterval(id); },[]);
 
+  const marketPhase=uiMarketPhase(clock);
+  const todaySessionDate=bangkokDate(clock);
   const sessions=[...(feed?.sessions??[])].sort((a,b)=>{
     const ad=new Date(a.created_at??a.started_at??a.session_date??0).getTime();
     const bd=new Date(b.created_at??b.started_at??b.session_date??0).getTime();
     return bd-ad;
   });
-  const openSession=sessions.find(s=>s.status==="OPEN");
-  const session=openSession??sessions[0];
-  const sessionId=session?.id;
-  const sessionPositions=(feed?.positions??[]).filter(p=>!sessionId||p.session_id===sessionId);
-  const sessionOrders=(feed?.orders??[]).filter(o=>!sessionId||o.session_id===sessionId);
-  const sessionSignals=[...(feed?.signals??[])].filter(s=>!sessionId||s.session_id===sessionId).sort((a,b)=>{
+  const openSession=sessions.find(s=>s.status==="OPEN" && s.session_date===todaySessionDate);
+  const session=openSession??sessions.find(s=>s.session_date===todaySessionDate)??sessions[0];
+  const sessionIsToday=session?.session_date===todaySessionDate;
+  const sessionId=sessionIsToday?session?.id:undefined;
+  const sessionPositions=sessionId ? (feed?.positions??[]).filter(p=>p.session_id===sessionId) : [];
+  const sessionOrders=sessionId ? (feed?.orders??[]).filter(o=>o.session_id===sessionId) : [];
+  const sessionSignals=[...(feed?.signals??[])].filter(s=>sessionId && s.session_id===sessionId).sort((a,b)=>{
     return new Date(b.ts??b.created_at??0).getTime()-new Date(a.ts??a.created_at??0).getTime();
   });
-  const sessionSnapshot=[...(feed?.snapshots??[])].filter(s=>!sessionId||s.session_id===sessionId).sort((a,b)=>{
+  const sessionSnapshot=sessionId ? [...(feed?.snapshots??[])].filter(s=>s.session_id===sessionId).sort((a,b)=>{
     return new Date(b.ts??b.created_at??0).getTime()-new Date(a.ts??a.created_at??0).getTime();
-  })[0];
-  const sessionTicks=(feed?.ticks??[]).filter(t=>!sessionId||t.session_id===sessionId);
+  })[0] : undefined;
+  const sessionTicks=sessionId ? (feed?.ticks??[]).filter(t=>t.session_id===sessionId) : [];
 
   const positions:Position[]=sessionPositions.filter(p=>Number(p.qty)>0).map(p=>{
     const tick=sessionTicks.find(t=>t.symbol===p.symbol);
     const signal=sessionSignals.find(s=>s.symbol===p.symbol);
+    const signalTs=signal?.ts??signal?.created_at;
+    const signalAgeMs=signalTs ? Math.max(0,Date.now()-Date.parse(signalTs)) : Number.POSITIVE_INFINITY;
+    const signalIsCurrent=sessionIsToday && ["ACTIVE","REDUCE_ONLY","FORCE_CLOSE"].includes(marketPhase) && Number.isFinite(signalAgeMs) && signalAgeMs<=15_000;
     const last=Number(tick?.last??tick?.bid??tick?.ask??p.avg_price);
+    const action=(signalIsCurrent && (signal?.action==="BUY"||signal?.action==="SELL"||signal?.action==="HOLD")) ? signal.action : "HOLD";
     return {
       symbol:p.symbol,name:p.symbol,qty:Number(p.qty),avgCost:Number(p.avg_price),last,
-      dayChange:0,realized:Number(p.realized_pnl??0),
-      signal:(signal?.action==="BUY"||signal?.action==="SELL"||signal?.action==="HOLD"?signal.action:"HOLD"),
-      signalReason:signal?.reason??"No current signal recorded"
+      dayChange:0,realized:Number(p.realized_pnl??0),signal:action,
+      signalReason:signalIsCurrent ? (signal?.reason??"No current signal recorded") : marketPhaseHint(marketPhase)
     };
   });
 
@@ -190,20 +224,20 @@ export default function LunaPortfolioPage() {
         <button className={tab==="research"?"active":""} onClick={()=>setTab("research")}>Research</button>
       </nav>
       <div className="top-actions">
-        <div className="market-status"><CircleDot size={11}/> SET / {executionMode}</div><div className="timeframe-chip"><BarChart3 size={13}/> {TIMEFRAME}</div>
+        <div className={`market-status phase-${marketPhase.toLowerCase()}`}><CircleDot size={11}/> SET · {marketPhaseLabel(marketPhase)}</div><div className="timeframe-chip"><BarChart3 size={13}/> {TIMEFRAME}</div>
         <button className={"icon-button "+(refreshing?"refreshing":"")} title="Refresh" onClick={load}><RefreshCw size={17}/></button>
-        <div className="session-chip"><Clock3 size={14}/> {session?.session_date??"—"} · {live?"UPDATED "+updatedAt:"OFFLINE"}</div>
+        <div className="session-chip"><Clock3 size={14}/> {todaySessionDate} · {bangkokClock(clock)} · {live?"UPDATED "+updatedAt:"OFFLINE"}</div>
       </div>
     </header>
     <div className="page">
-      <section className="hero-row"><div><div className="eyebrow">INTRADAY CONTROL · OPERATIONAL OVERVIEW</div><h2>LUNA command center</h2><p>See capital, risk, execution and research state at a glance.</p></div><div className="hero-meta"><div className="data-chip"><span className="data-dot"/> {live ? "LIVE DATA" : "DATA OFFLINE"}</div><div className="safe-badge"><ShieldCheck size={15}/> {liveExecution ? "LIVE EXECUTION" : "PAPER EXECUTION"} / {killSwitch ? "KILL SWITCH ON" : "GATED"}</div></div></section>
-      <SystemControlRoom strategy={session?.strategy_version ?? LUNA_STRATEGY} asOf={session?.session_date ?? new Date().toISOString().slice(0,10)} />
+      <section className="hero-row"><div><div className="eyebrow">INTRADAY CONTROL · OPERATIONAL OVERVIEW</div><h2>LUNA command center</h2><p>See capital, risk, execution and research state at a glance.</p></div><div className="hero-meta"><div className="data-chip"><span className="data-dot"/> {live ? "LIVE DATA" : "DATA OFFLINE"}</div><div className="safe-badge"><ShieldCheck size={15}/> {liveExecution ? "LIVE EXECUTION" : "PAPER EXECUTION"} / {killSwitch ? "KILL SWITCH ON" : liveExecution && marketPhase==="ACTIVE" ? "GATE OPEN" : "MARKET LOCKED"}</div></div></section>
+      <SystemControlRoom strategy={session?.strategy_version ?? LUNA_STRATEGY} asOf={todaySessionDate} />
       <section className="live-operating-strip">
-        <div><span>MARKET DATA</span><strong>{live ? "LIVE FEED" : "OFFLINE"}</strong><small>2s UI refresh · gateway ≥100ms · SET</small></div>
+        <div className={`market-phase-cell phase-${marketPhase.toLowerCase()}`}><span>MARKET / SET</span><strong>{marketPhaseLabel(marketPhase)}</strong><small>{bangkokClock(clock)} · {marketPhaseHint(marketPhase)}</small></div>
         <div><span>EXECUTION MODE</span><strong>{executionMode}</strong><small>{liveExecution ? "live gate open" : "paper only"}</small></div>
         <div><span>KILL SWITCH</span><strong>{killSwitch ? "ON" : "OFF"}</strong><small>{armed ? "armed" : "disarmed"}</small></div>
         <div><span>LIVE ORDER GATE</span><strong>{liveExecution ? "READY" : "LOCKED"}</strong><small>broker bridge status</small></div>
-        <div className="live-operating-note"><ShieldCheck size={15}/><span>ระบบนี้ยังไม่ส่งคำสั่งซื้อขาย SET อัตโนมัติจากหน้าเว็บ — ใช้ signal/paper execution เป็นหลักจนกว่า gate จะผ่าน</span></div>
+        <div className="live-operating-note"><ShieldCheck size={15}/><span>{marketPhase==="ACTIVE" ? "Market session active — backend re-checks phase immediately before every execution." : "Market execution is locked at this phase; stale signals are shown as HOLD until a fresh in-session signal arrives."}</span></div>
       </section>
       {error&&<div className="error-banner"><span>{error}</span><button onClick={load}>Retry</button></div>}
       <section className="summary-grid"><Metric label="Market ticks" value={String(sessionTicks.length)} sub="Latest session feed"/><Metric label="Signals" value={String(sessionSignals.length)} sub="15m strategy signals"/><Metric label="Orders" value={String(sessionOrders.length)} sub="Recorded this session"/>
@@ -238,7 +272,7 @@ export default function LunaPortfolioPage() {
 </div></div>
           <div className="tabs"><button className={tab==="holdings"?"active":""} onClick={()=>setTab("holdings")}>Holdings <span>{positions.length}</span></button><button className={tab==="trades"?"active":""} onClick={()=>setTab("trades")}>Today's Trades <span>{trades.length}</span></button><button className={tab==="closed"?"active":""} onClick={()=>setTab("closed")}>Closed Positions <span>{closedPositions.length}</span></button><button className={tab==="research"?"active":""} onClick={()=>setTab("research")}>Research <span>WF</span></button></div>
           {loading&&!feed?<div className="loading-state"><RefreshCw size={18}/> Loading live portfolio feed…</div>:
-          tab==="holdings"?<div className="table-wrap"><table><thead><tr><th>SYMBOL</th><th>QTY</th><th>AVG COST</th><th>LAST</th><th>MARKET VALUE</th><th>UNREALIZED P&amp;L</th><th>WEIGHT</th><th>SIGNAL</th></tr></thead><tbody>{filteredPositions.length?filteredPositions.map(p=>{const value=p.qty*p.last;const weight=equity?value/equity*100:0;const pnl=p.qty*(p.last-p.avgCost);return <tr key={p.symbol} className={selectedPos?.symbol===p.symbol?"selected-row":""} onClick={()=>setSelected(p)}><td><div className="symbol-cell"><strong>{p.symbol}</strong><span>{p.name}</span></div></td><td>{money(p.qty).replace(".00","")}</td><td>฿{p.avgCost.toFixed(2)}</td><td><strong>฿{p.last.toFixed(2)}</strong></td><td>฿{money(value)}</td><td className={pnl>=0?"positive":"negative"}>{signed(pnl)}</td><td><div className="weight-cell"><span>{weight.toFixed(1)}%</span><i><b style={{width:`${Math.min(weight,100)}%`}}/></i></div></td><td><SignalBadge signal={p.signal}/></td></tr>;}):<tr><td colSpan={8} className="empty-table"><div>No open positions currently — positions are removed from Holdings after execution closes them.</div>{trades.length>0&&<button className="filter-button" style={{marginTop:8}} onClick={()=>setTab("trades")}>View today\'s executed trades ({trades.length})</button>}</td></tr>}</tbody></table></div>:
+          tab==="holdings"?<div className="table-wrap"><table><thead><tr><th>SYMBOL</th><th>QTY</th><th>AVG COST</th><th>LAST</th><th>MARKET VALUE</th><th>UNREALIZED P&amp;L</th><th>WEIGHT</th><th>SIGNAL</th></tr></thead><tbody>{filteredPositions.length?filteredPositions.map(p=>{const value=p.qty*p.last;const weight=equity?value/equity*100:0;const pnl=p.qty*(p.last-p.avgCost);return <tr key={p.symbol} className={selectedPos?.symbol===p.symbol?"selected-row":""} onClick={()=>setSelected(p)}><td><div className="symbol-cell"><strong>{p.symbol}</strong><span>{p.name}</span></div></td><td>{money(p.qty).replace(".00","")}</td><td>฿{p.avgCost.toFixed(2)}</td><td><strong>฿{p.last.toFixed(2)}</strong></td><td>฿{money(value)}</td><td className={pnl>=0?"positive":"negative"}>{signed(pnl)}</td><td><div className="weight-cell"><span>{weight.toFixed(1)}%</span><i><b style={{width:`${Math.min(weight,100)}%`}}/></i></div></td><td><SignalBadge signal={p.signal}/></td></tr>;}):<tr><td colSpan={8} className="empty-table"><div>{sessionIsToday ? "No open positions currently — positions are removed from Holdings after execution closes them." : `No current trading session yet for ${todaySessionDate}. LUNA is ${marketPhaseLabel(marketPhase).toLowerCase()} and execution is locked.`}</div>{trades.length>0&&<button className="filter-button" style={{marginTop:8}} onClick={()=>setTab("trades")}>View today\'s executed trades ({trades.length})</button>}</td></tr>}</tbody></table></div>:
           tab==="research"?<ResearchPanel/>:tab==="trades"?<div className="table-wrap"><table><thead><tr><th>TIME</th><th>SYMBOL</th><th>SIDE</th><th>QTY</th><th>PRICE</th><th>VALUE</th><th>STATUS</th><th>STRATEGY</th></tr></thead><tbody>{trades.length?trades.map(t=><tr key={`${t.time}-${t.symbol}-${t.qty}`}><td className="muted">{t.time}</td><td><strong>{t.symbol}</strong></td><td><SideBadge side={t.side}/></td><td>{money(t.qty).replace(".00","")}</td><td>฿{t.price.toFixed(2)}</td><td>฿{money(t.value)}</td><td><StatusBadge status={t.status}/></td><td className="muted">{t.strategy}</td></tr>):<tr><td colSpan={8} className="empty-table">No orders recorded for this session.</td></tr>}</tbody></table></div>:
           <div className="table-wrap"><table><thead><tr><th>SYMBOL</th><th>ENTRY</th><th>EXIT</th><th>QTY</th><th>REALIZED P&amp;L</th><th>HOLD TIME</th></tr></thead><tbody>{closedPositions.length?closedPositions.map(p=><tr key={p.symbol}><td><strong>{p.symbol}</strong></td><td>฿{p.entry.toFixed(2)}</td><td>฿{p.exit.toFixed(2)}</td><td>{money(p.qty).replace(".00","")}</td><td className={p.pnl>=0?"positive":"negative"}>{signed(p.pnl)}</td><td className="muted">{p.duration}</td></tr>):<tr><td colSpan={6} className="empty-table">No closed positions reconstructed from fills.</td></tr>}</tbody></table></div>}
         </div>

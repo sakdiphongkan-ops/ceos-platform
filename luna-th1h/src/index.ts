@@ -565,7 +565,7 @@ async function executeSignal(
               clientOrderId,
               brokerOrderId:recovered.broker_order_id??null,
               symbol:signal.symbol,
-              side:signal.action,
+              side:plan.side,
               qty:plan.qty,
               sessionId:expectedSessionId!,
               sessionGeneration:expectedSessionGeneration,
@@ -821,7 +821,7 @@ function kickoffPrewarm(q:Quote){
   const generation=sessionGeneration;
   if(prewarmedSymbols.has(q.symbol) || prewarmInFlight.has(q.symbol) || prewarmCache.has(q.symbol)) return;
   const startedAt=Date.now();
-  let promise:Promise<void>;
+  let promise:Promise<void>|null=null;
   promise=(async()=>{
     try{
       const response=await ingest("",{
@@ -860,7 +860,7 @@ function kickoffPrewarm(q:Quote){
       }
     }
   })();
-  prewarmInFlight.set(q.symbol,promise);
+  if(promise) prewarmInFlight.set(q.symbol,promise);
   void promise;
 }
 
@@ -1252,6 +1252,8 @@ async function main(){
     throw new Error("LUNA_LIVE_ACCOUNT_DRIFT_TOLERANCE_MUST_BE_NON_NEGATIVE");
   }
   if(!["paper","live"].includes(config.mode)) throw new Error(`Unknown LUNA_MODE: ${config.mode}`);
+  if(!["paper","live"].includes(config.executionMode)) throw new Error(`Unknown LUNA_EXECUTION_MODE: ${config.executionMode}`);
+  if(config.executionTest && (config.mode==="live" || config.executionMode==="live")) throw new Error("EXECUTION_TEST_IS_PAPER_ONLY");
   if(config.priceOnlyFallback && (config.mode==="live" || config.executionMode==="live")){
     throw new Error("PRICE_ONLY_FALLBACK_IS_PAPER_ONLY");
   }

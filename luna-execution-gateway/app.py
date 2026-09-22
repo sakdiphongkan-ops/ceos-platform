@@ -4,6 +4,7 @@ import threading
 import time
 import uuid
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from typing import Any, Dict, Optional
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -146,6 +147,24 @@ def live_gate():
         raise HTTPException(status_code=503, detail={"missing_credentials": missing})
     if Investor is None:
         raise HTTPException(status_code=503, detail="settrade_sdk_unavailable")
+
+
+def market_phase_now() -> str:
+    local = datetime.now(ZoneInfo("Asia/Bangkok"))
+    if local.weekday() >= 5:
+        return "CLOSED"
+    minutes = local.hour * 60 + local.minute
+    if minutes < 10 * 60:
+        return "CLOSED"
+    if 12 * 60 + 30 <= minutes < 14 * 60:
+        return "CLOSED"
+    if minutes >= 16 * 60 + 30:
+        return "CLOSED"
+    if minutes >= 16 * 60 + 25:
+        return "FORCE_CLOSE"
+    if minutes >= 16 * 60 + 20:
+        return "REDUCE_ONLY"
+    return "ACTIVE"
 
 
 def client():
@@ -921,6 +940,7 @@ def health():
         "collector_error": _collector_error,
         "provider_failures": dict(_provider_failures),
         "channel_status": _channel_snapshot(),
+        "market_phase": market_phase_now(),
         "timestamp": int(time.time()),
     }
 
@@ -1005,6 +1025,12 @@ def place(payload: PlaceOrder, x_luna_gateway: Optional[str] = Header(default=No
     eq = client()
     if payload.side not in {"BUY", "SELL"}:
         raise HTTPException(status_code=400, detail="invalid_side")
+
+    phase = market_phase_now()
+    if phase == "CLOSED":
+        raise HTTPException(status_code=423, detail={"code": "market_closed", "market_phase": phase})
+    if payload.side == "BUY" and phase != "ACTIVE":
+        raise HTTPException(status_code=423, detail={"code": "buy_locked_by_market_phase", "market_phase": phase})
 
     broker_result = eq.place_order(
         symbol=payload.symbol,
