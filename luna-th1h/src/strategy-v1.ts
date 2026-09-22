@@ -1,8 +1,10 @@
 import type {Quote,Signal} from "./types.js";
 import {computeSignalSizing} from "./sizing.js";
 
-export const VERSION="luna-th1h-v1.2.0-riskgated";
+export const VERSION="luna-th1h-v1.3.0-15m-riskgated";
 export const PRICE_ONLY_VERSION="luna-th1h-v1.0.0-price-only-paper-warm5";
+
+const BAR_INTERVAL_MS=15*60_000;
 
 export interface StrategyParams{
   fastPeriod:number;
@@ -29,11 +31,13 @@ export const DEFAULT_PARAMS:StrategyParams={
 };
 
 interface SymbolState{
-  prices:number[];
+  completedBars:number[];
   emaFast:number|null;
   emaSlow:number|null;
   previousFast:number|null;
   previousSlow:number|null;
+  currentBarStartMs:number|null;
+  currentBarClose:number|null;
   lastDecisionTs:number;
   entryTs:number|null;
 }
@@ -54,8 +58,15 @@ function stateFor(states:Map<string,SymbolState>,symbol:string){
   const existing=states.get(symbol);
   if(existing) return existing;
   const created:SymbolState={
-    prices:[],emaFast:null,emaSlow:null,previousFast:null,previousSlow:null,
-    lastDecisionTs:0,entryTs:null
+    completedBars:[],
+    emaFast:null,
+    emaSlow:null,
+    previousFast:null,
+    previousSlow:null,
+    currentBarStartMs:null,
+    currentBarClose:null,
+    lastDecisionTs:0,
+    entryTs:null
   };
   states.set(symbol,created);
   return created;
@@ -63,6 +74,22 @@ function stateFor(states:Map<string,SymbolState>,symbol:string){
 
 function finite(value:number|null|undefined):value is number{
   return typeof value==="number" && Number.isFinite(value) && value>0;
+}
+
+function bucketStartMs(ts:string){
+  const ms=Date.parse(ts);
+  if(!Number.isFinite(ms)) return null;
+  return Math.floor(ms/BAR_INTERVAL_MS)*BAR_INTERVAL_MS;
+}
+
+function pushCompletedBar(st:SymbolState,close:number,params:StrategyParams){
+  if(!finite(close)) return;
+  st.previousFast=st.emaFast;
+  st.previousSlow=st.emaSlow;
+  st.emaFast=ema(st.emaFast,close,params.fastPeriod);
+  st.emaSlow=ema(st.emaSlow,close,params.slowPeriod);
+  st.completedBars.push(close);
+  if(st.completedBars.length>80) st.completedBars.shift();
 }
 
 export class StrategyV1{
@@ -84,134 +111,117 @@ export class StrategyV1{
     this.states.clear();
   }
 
-  prime(symbol:string,prices:number[]){
+  prime(symbol:string,barCloses:number[]){
     const st=stateFor(this.states,symbol);
-    st.prices=[];
+    st.completedBars=[];
     st.emaFast=null;
     st.emaSlow=null;
     st.previousFast=null;
     st.previousSlow=null;
+    st.currentBarStartMs=null;
+    st.currentBarClose=null;
     st.lastDecisionTs=0;
     st.entryTs=null;
-    for(const price of prices){
-      if(!finite(price)) continue;
-      st.previousFast=st.emaFast;
-      st.previousSlow=st.emaSlow;
-      st.emaFast=ema(st.emaFast,price,this.params.fastPeriod);
-      st.emaSlow=ema(st.emaSlow,price,this.params.slowPeriod);
-      st.prices.push(price);
-      if(st.prices.length>this.params.slowPeriod*4) st.prices.shift();
+    for(const price of barCloses.slice(-80)){
+      if(finite(price)) pushCompletedBar(st,price,this.params);
     }
   }
 
-  primeIfSparse(symbol:string,prices:number[],maxLivePrices=2){
-    if(!prices.length) return false;
+  primeIfSparse(symbol:string,barCloses:number[],maxLiveBars=2){
+    if(!barCloses.length) return false;
     const st=stateFor(this.states,symbol);
-    if(st.prices.length>maxLivePrices) return false;
-    const livePrices=[...st.prices];
-    const preservedLastDecisionTs=st.lastDecisionTs;
-    const preservedEntryTs=st.entryTs;
-    this.prime(symbol,prices);
-    const replay=stateFor(this.states,symbol);
-    for(const price of livePrices){
-      if(!finite(price)) continue;
-      replay.previousFast=replay.emaFast;
-      replay.previousSlow=replay.emaSlow;
-      replay.emaFast=ema(replay.emaFast,price,this.params.fastPeriod);
-      replay.emaSlow=ema(replay.emaSlow,price,this.params.slowPeriod);
-      replay.prices.push(price);
-      if(replay.prices.length>this.params.slowPeriod*4) replay.prices.shift();
-    }
-    replay.lastDecisionTs=preservedLastDecisionTs;
-    replay.entryTs=preservedEntryTs;
+    if(st.completedBars.length>maxLiveBars || st.currentBarStartMs!==null) return false;
+    this.prime(symbol,barCloses);
     return true;
+  }
+
+  private evaluatePosition(q:Quote,ctx:StrategyContext,st:SymbolState):Signal{
+    if(st.entryTs===null) st.entryTs=ctx.nowMs;
+    const stopLoss=ctx.avgPrice*(1-this.params.stopLossBps/10_000);
+    const takeProfit=ctx.avgPrice*(1+this.params.takeProfitBps/10_000);
+    const trendBroken=st.emaFast!==null && st.emaSlow!==null && st.emaFast<st.emaSlow;
+    const timedOut=ctx.nowMs-st.entryTs>=this.params.maxHoldMs;
+    if(trendBroken){
+      st.lastDecisionTs=ctx.nowMs; st.entryTs=null;
+      return {symbol:q.symbol,ts:q.ts,action:"SELL",reason:"15M_EMA_TREND_BREAK",strategyVersion:this.version};
+    }
+    if(finite(q.last) && q.last<=stopLoss){
+      st.lastDecisionTs=ctx.nowMs; st.entryTs=null;
+      return {symbol:q.symbol,ts:q.ts,action:"SELL",reason:"STOP_LOSS",strategyVersion:this.version};
+    }
+    if(finite(q.last) && q.last>=takeProfit){
+      st.lastDecisionTs=ctx.nowMs; st.entryTs=null;
+      return {symbol:q.symbol,ts:q.ts,action:"SELL",reason:"TAKE_PROFIT",strategyVersion:this.version};
+    }
+    if(timedOut){
+      st.lastDecisionTs=ctx.nowMs; st.entryTs=null;
+      return {symbol:q.symbol,ts:q.ts,action:"SELL",reason:"MAX_HOLD_TIME",strategyVersion:this.version};
+    }
+    return {symbol:q.symbol,ts:q.ts,action:"HOLD",reason:"HOLD_POSITION_15M",strategyVersion:this.version};
   }
 
   evaluate(q:Quote,ctx:StrategyContext):Signal{
     if(q.symbol.startsWith("__")){
       return {symbol:q.symbol,ts:q.ts,action:"HOLD",reason:"NON_TRADABLE_SYMBOL",strategyVersion:this.version};
     }
-
-    const price=q.last;
-    if(!finite(price)){
+    if(!finite(q.last)){
       return {symbol:q.symbol,ts:q.ts,action:"HOLD",reason:"INVALID_QUOTE_LAST",strategyVersion:this.version};
     }
-    const hasBook=finite(q.bid) && finite(q.ask) && Number(q.bid)<=Number(q.ask);
-    const hasDepth=hasBook
-      && Number(q.bidSize??0)>0
-      && Number(q.askSize??0)>0;
-    const verifiedBook=hasDepth
-      && !String(q.dataQuality??"").toLowerCase().includes("unverified");
 
-    // Existing positions may still exit on last price during degraded quotes,
-    // but a new BUY requires a verified bid/ask + depth feed.
-    if(ctx.positionQty<=0 && !verifiedBook){
-      return {
-        symbol:q.symbol,
-        ts:q.ts,
-        action:"HOLD",
-        reason:"ENTRY_BLOCKED_BOOK_UNVERIFIED",
-        strategyVersion:this.version
-      };
-    }
+    const hasBook=finite(q.bid) && finite(q.ask) && Number(q.bid)<=Number(q.ask);
+    const hasDepth=hasBook && Number(q.bidSize??0)>0 && Number(q.askSize??0)>0;
+    const verifiedBook=hasDepth && !String(q.dataQuality??"").toLowerCase().includes("unverified");
 
     const st=stateFor(this.states,q.symbol);
-    st.prices.push(price);
-    if(st.prices.length>this.params.slowPeriod*4) st.prices.shift();
+    const positionBeforeBar=this.evaluatePosition(q,ctx,st);
+    if(ctx.positionQty>0 && positionBeforeBar.action==="SELL") return positionBeforeBar;
 
-    st.previousFast=st.emaFast;
-    st.previousSlow=st.emaSlow;
-    st.emaFast=ema(st.emaFast,price,this.params.fastPeriod);
-    st.emaSlow=ema(st.emaSlow,price,this.params.slowPeriod);
-
-    const spreadBps=verifiedBook?((Number(q.ask)-Number(q.bid))/price)*10_000:0;
-    const imbalance=verifiedBook
-      ? (Number(q.bidSize??0)-Number(q.askSize??0))/(Number(q.bidSize??0)+Number(q.askSize??0))
-      : 0;
-    const previousPrice=st.prices.length>=2?st.prices[st.prices.length-2]:null;
-    const momentumBps=previousPrice?((price/previousPrice)-1)*10_000:0;
-
-    const warmupPeriod=this.priceOnlyFallback?Math.min(this.params.fastPeriod,5):this.params.slowPeriod;
-    if(st.prices.length<warmupPeriod || st.emaFast===null || st.emaSlow===null){
-      return {symbol:q.symbol,ts:q.ts,action:"HOLD",reason:"WARMUP",strategyVersion:this.version};
+    const bucket=bucketStartMs(q.ts);
+    let completedNewBar=false;
+    if(bucket!==null){
+      if(st.currentBarStartMs===null){
+        st.currentBarStartMs=bucket;
+        st.currentBarClose=q.last;
+      }else if(bucket>st.currentBarStartMs){
+        if(finite(st.currentBarClose)){
+          pushCompletedBar(st,st.currentBarClose,this.params);
+          completedNewBar=true;
+        }
+        st.currentBarStartMs=bucket;
+        st.currentBarClose=q.last;
+      }else if(bucket===st.currentBarStartMs){
+        st.currentBarClose=q.last;
+      }
     }
 
     if(ctx.positionQty>0){
-      if(st.entryTs===null) st.entryTs=ctx.nowMs;
-      const stopLoss=ctx.avgPrice*(1-this.params.stopLossBps/10_000);
-      const takeProfit=ctx.avgPrice*(1+this.params.takeProfitBps/10_000);
-      const trendBroken=st.emaFast<st.emaSlow;
-      const timedOut=ctx.nowMs-st.entryTs>=this.params.maxHoldMs;
-
-      if(trendBroken){
-        st.lastDecisionTs=ctx.nowMs; st.entryTs=null;
-        return {symbol:q.symbol,ts:q.ts,action:"SELL",reason:"EMA_TREND_BREAK",strategyVersion:this.version};
-      }
-      if(price<=stopLoss){
-        st.lastDecisionTs=ctx.nowMs; st.entryTs=null;
-        return {symbol:q.symbol,ts:q.ts,action:"SELL",reason:"STOP_LOSS",strategyVersion:this.version};
-      }
-      if(price>=takeProfit){
-        st.lastDecisionTs=ctx.nowMs; st.entryTs=null;
-        return {symbol:q.symbol,ts:q.ts,action:"SELL",reason:"TAKE_PROFIT",strategyVersion:this.version};
-      }
-      if(timedOut){
-        st.lastDecisionTs=ctx.nowMs; st.entryTs=null;
-        return {symbol:q.symbol,ts:q.ts,action:"SELL",reason:"MAX_HOLD_TIME",strategyVersion:this.version};
-      }
-
-      return {symbol:q.symbol,ts:q.ts,action:"HOLD",reason:"HOLD_POSITION",strategyVersion:this.version};
+      if(positionBeforeBar.action==="HOLD" && !completedNewBar) return positionBeforeBar;
+      return this.evaluatePosition(q,ctx,st);
     }
 
+    if(!verifiedBook){
+      return {symbol:q.symbol,ts:q.ts,action:"HOLD",reason:"ENTRY_BLOCKED_BOOK_UNVERIFIED",strategyVersion:this.version};
+    }
+    if(!completedNewBar || st.completedBars.length<Math.max(this.params.slowPeriod,2) || st.emaFast===null || st.emaSlow===null){
+      return {
+        symbol:q.symbol,ts:q.ts,action:"HOLD",
+        reason:completedNewBar?"WARMUP_15M":"WAIT_15M_BAR_CLOSE",
+        strategyVersion:this.version
+      };
+    }
     if(ctx.nowMs-st.lastDecisionTs<this.params.cooldownMs){
-      return {symbol:q.symbol,ts:q.ts,action:"HOLD",reason:"COOLDOWN",strategyVersion:this.version};
+      return {symbol:q.symbol,ts:q.ts,action:"HOLD",reason:"COOLDOWN_15M",strategyVersion:this.version};
     }
 
+    const previousBar=st.completedBars.at(-1)!;
+    const priorBar=st.completedBars.at(-2)!;
+    const momentumBps=((previousBar/priorBar)-1)*10_000;
     const trendUp=st.emaFast>st.emaSlow;
     const trendGapBps=st.emaSlow>0?((st.emaFast/st.emaSlow)-1)*10_000:0;
+    const spreadBps=((Number(q.ask)-Number(q.bid))/Number(q.last))*10_000;
+    const imbalance=(Number(q.bidSize??0)-Number(q.askSize??0))/(Number(q.bidSize??0)+Number(q.askSize??0));
 
-    const entryOk = verifiedBook
-      && trendUp
+    const entryOk=trendUp
       && momentumBps>=this.params.minMomentumBps
       && spreadBps<=this.params.maxSpreadBps
       && imbalance>=this.params.minImbalance;
@@ -228,25 +238,27 @@ export class StrategyV1{
       });
       return {
         symbol:q.symbol,ts:q.ts,action:"BUY",
-        reason:"VERIFIED_BOOK EMA_TREND_UP momentum="+momentumBps.toFixed(2)+"bps"
-          + " spread="+spreadBps.toFixed(2)+"bps"
-          + " imbalance="+imbalance.toFixed(3)
-          + " strength="+sizing.strength.toFixed(3)
-          + " target="+(sizing.targetFraction*100).toFixed(1)+"%",
+        reason:"15M_CLOSED_BAR VERIFIED_BOOK EMA5>EMA20"
+          +" momentum="+momentumBps.toFixed(2)+"bps"
+          +" spread="+spreadBps.toFixed(2)+"bps"
+          +" imbalance="+imbalance.toFixed(3)
+          +" strength="+sizing.strength.toFixed(3)
+          +" target="+(sizing.targetFraction*100).toFixed(1)+"%",
         strategyVersion:this.version,
         signalStrength:sizing.strength,
         targetAllocationPct:sizing.targetFraction*100,
-        sizingReason:sizing.reason
+        sizingReason:"timeframe=15m "+sizing.reason
       };
     }
+
     return {
       symbol:q.symbol,ts:q.ts,action:"HOLD",
-      reason:`NO_ENTRY momentum=${momentumBps.toFixed(2)}bps spread=${spreadBps.toFixed(2)}bps imbalance=${imbalance.toFixed(3)}`,
+      reason:"NO_ENTRY_15M momentum="+momentumBps.toFixed(2)
+        +"bps spread="+spreadBps.toFixed(2)
+        +"bps imbalance="+imbalance.toFixed(3),
       strategyVersion:this.version
     };
   }
 }
 
-export function strategyCodeHash(){
-  return VERSION;
-}
+export function strategyCodeHash(){return VERSION;}
