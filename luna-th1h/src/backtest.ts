@@ -60,12 +60,40 @@ function maxDrawdown(curve:BacktestEquityPoint[]){
   return max;
 }
 
+export interface BacktestOptions{
+  warmupQuotes?:Quote[];
+}
+
+function primeStrategyFromQuotes(strategy:StrategyV1,quotes:Quote[]){
+  if(!quotes.length) return;
+  const bySymbol=new Map<string,Map<number,{ts:number;close:number}>>();
+  for(const q of quotes){
+    const ts=Date.parse(q.ts);
+    const close=Number(q.last);
+    if(!Number.isFinite(ts)||!Number.isFinite(close)||close<=0||!q.symbol) continue;
+    const bucket=Math.floor(ts/(15*60_000))*(15*60_000);
+    const m=bySymbol.get(q.symbol)??new Map<number,{ts:number;close:number}>();
+    const prior=m.get(bucket);
+    if(!prior || ts>prior.ts) m.set(bucket,{ts,close});
+    bySymbol.set(q.symbol,m);
+  }
+  for(const [symbol,buckets] of bySymbol){
+    const closes=[...buckets.entries()]
+      .sort((a,b)=>a[0]-b[0])
+      .slice(-80)
+      .map(([,x])=>x.close);
+    strategy.prime(symbol,closes);
+  }
+}
+
 export function runBacktest(
   quotes:Quote[],
   initialCapital:number,
-  params:Partial<StrategyParams> = DEFAULT_PARAMS
+  params:Partial<StrategyParams> = DEFAULT_PARAMS,
+  options:BacktestOptions = {}
 ):BacktestResult{
   const strategy=new StrategyV1(params);
+  primeStrategyFromQuotes(strategy,options.warmupQuotes??[]);
   const state=createPortfolio(initialCapital);
   const trades:BacktestTrade[]=[];
   const equityCurve:BacktestEquityPoint[]=[];
