@@ -15,6 +15,14 @@ on:
         description: "SHA-256 of the PIT membership CSV"
         required: true
         type: string
+      pit_membership_manifest_url:
+        description: "HTTPS URL of the PIT membership provenance manifest JSON"
+        required: true
+        type: string
+      pit_membership_manifest_sha256:
+        description: "SHA-256 of the PIT membership provenance manifest JSON"
+        required: true
+        type: string
 
 jobs:
   typecheck:
@@ -56,6 +64,7 @@ jobs:
           python -m py_compile ../scripts/research/luna_adaptive_tournament_v2.py
           python -m py_compile ../scripts/research/build_monthly_factor_dataset.py
           python -m py_compile ../scripts/research/luna_adaptive_tournament_v3.py
+          python -m py_compile ../scripts/research/verify_pit_membership_manifest.py
           cd ../scripts/research && python test_apply_pit_universe.py
           python test_set_data_contract.py
 
@@ -86,6 +95,17 @@ jobs:
           mkdir -p data/raw
           curl -fL --retry 3 --retry-delay 2 "https://data.mendeley.com/public-api/zip/gybmm9t3mr/download/1" -o data/raw/gybmm9t3mr-1.zip
           test -s data/raw/gybmm9t3mr-1.zip
+      - name: Download PIT universe provenance manifest
+        if: steps.changed.outputs.run == 'true'
+        env:
+          PIT_MANIFEST_URL: ${{ inputs.pit_membership_manifest_url }}
+          EXPECTED_MANIFEST_SHA256: ${{ inputs.pit_membership_manifest_sha256 }}
+        run: |
+          curl -fL --retry 3 --retry-delay 2 "$PIT_MANIFEST_URL" -o data/raw/pit_membership.manifest.json
+          test -s data/raw/pit_membership.manifest.json
+          actual_manifest=$(sha256sum data/raw/pit_membership.manifest.json | awk '{print $1}')
+          test "$actual_manifest" = "$EXPECTED_MANIFEST_SHA256"
+
       - name: Download PIT universe membership
         if: steps.changed.outputs.run == 'true'
         env:
@@ -97,6 +117,11 @@ jobs:
           actual=$(sha256sum data/raw/pit_membership.csv | awk '{print $1}')
           test "$actual" = "$EXPECTED_SHA256"
           head -n 1 data/raw/pit_membership.csv
+      - name: Verify PIT membership provenance
+        if: steps.changed.outputs.run == 'true'
+        run: |
+          python scripts/research/verify_pit_membership_manifest.py             --membership data/raw/pit_membership.csv             --manifest data/raw/pit_membership.manifest.json
+
       - name: Normalize SET history
         if: steps.changed.outputs.run == 'true'
         run: |
