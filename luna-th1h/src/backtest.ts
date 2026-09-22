@@ -69,7 +69,7 @@ function primeStrategyFromQuotes(strategy:StrategyV1,quotes:Quote[]){
   if(!quotes.length) return;
   const bySymbol=new Map<string,Map<number,{ts:number;close:number}>>();
   for(const q of quotes){
-    const ts=Date.parse(q.ts);
+    const ts=Date.parse(q.sourceTs??q.ts);
     const close=Number(q.last);
     if(!Number.isFinite(ts)||!Number.isFinite(close)||close<=0||!q.symbol) continue;
     const bucket=Math.floor(ts/(15*60_000))*(15*60_000);
