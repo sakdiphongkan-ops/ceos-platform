@@ -2,9 +2,6 @@ name: LUNA Frozen Holdout v2
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows: ["LUNA Adaptive Tournament v3 - Public SET"]
-    types: [completed]
 
 concurrency:
   group: luna-frozen-holdout-v2
@@ -19,6 +16,10 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+      - name: Block repeated holdout exposure
+        run: |
+          python scripts/research/guard_holdout_once.py --marker research-results/luna-holdout-audit-v1-sealed.json --result research-results/luna-holdout-audit-v1-summary.json --protocol LUNA-HOLDOUT-AUDIT-V1
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -55,6 +56,7 @@ jobs:
           mkdir -p research-results/luna-frozen-holdout-v2
           cp research/luna_frozen_holdout_v2/summary.json research-results/luna-frozen-holdout-v2-summary.json
           cp research/luna_frozen_holdout_v2/holdout_ranked.csv research-results/luna-frozen-holdout-v2/holdout-ranked.csv
+          python scripts/research/guard_holdout_once.py --marker research-results/luna-frozen-holdout-v2-sealed.json --result research-results/luna-frozen-holdout-v2-summary.json --protocol LUNA-FROZEN-HOLDOUT-V2 --mode seal
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add research-results/luna-frozen-holdout-v2-summary.json research-results/luna-frozen-holdout-v2
