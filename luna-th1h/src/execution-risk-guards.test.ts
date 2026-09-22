@@ -42,14 +42,13 @@ if(fill.notional>config.maxOrderNotional+1e-8){
 applyFill(state,fill);
 
 const unverified=createPortfolio(config.initialCapital);
-const degraded={...q(nextTs="2026-09-22T03:02:00.000Z"),bid:null,ask:null,bidSize:0,askSize:0,dataQuality:"unverified"};
+const nextTs="2026-09-22T03:02:00.000Z";
+const degraded={...q(nextTs,"UNVERIFIED"),bid:null,ask:null,bidSize:0,askSize:0,dataQuality:"unverified"};
 mark(unverified,degraded);
 const blockedByBook=planOrder(buySignal(degraded.ts,"UNVERIFIED"),degraded,unverified);
 if(blockedByBook.accepted || blockedByBook.reason!=="BUY_BLOCKED_NO_VERIFIED_BOOK"){
   throw new Error("BUY must be blocked when executable book/depth is unverified");
 }
-
-const nextTs="2026-09-22T03:02:00.000Z";
 const tooLargePosition=createPortfolio(config.initialCapital);
 tooLargePosition.positions.AAA={
   qty:Math.floor((config.initialCapital*config.maxPositionPct)/quote.ask),
