@@ -281,7 +281,7 @@ export function simulateFill(
   const participation=order.visibleDepth>0
     ? Math.min(1,Math.max(0,order.qty/order.visibleDepth))
     : 0;
-  const impactRate=(config.marketImpactBps/10000)*Math.sqrt(participation);
+  const impactRate=(costs.marketImpactBps/10000)*Math.sqrt(participation);
   const totalPricePenalty=slippageRate+impactRate;
   const fillPrice=order.side==="BUY"
     ? order.referencePrice*(1+totalPricePenalty)
