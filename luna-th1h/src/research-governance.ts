@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import crypto from "node:crypto";
+import path from "node:path";
 
 function sha256File(file:string){
   const h=crypto.createHash("sha256");
@@ -100,7 +101,7 @@ export function assertFrozenHoldoutAllowed(input:{
 
 export function writeHoldoutExposureLedger(file:string,payload:Record<string,unknown>){
   if(fs.existsSync(file)) throw new Error("HOLDOUT_EXPOSURE_LEDGER_ALREADY_EXISTS");
-  fs.mkdirSync(require("node:path").dirname(file),{recursive:true});
+  fs.mkdirSync(path.dirname(file),{recursive:true});
   const body={
     schemaVersion:"LUNA-HOLDOUT-EXPOSURE-V1",
     ...payload
