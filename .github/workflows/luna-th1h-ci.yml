@@ -42,6 +42,8 @@ jobs:
       - run: npm run test:latency
       - run: npm run test:latency-ledger
       - run: npm run test:research-preflight
+      - run: npm run test:research-monthly-stats
+      - run: npm run test:research-governance
       - run: npm run test:pit-universe
       - run: npm run backtest:fixture
       - name: Compile execution gateway and SET data QA tools
