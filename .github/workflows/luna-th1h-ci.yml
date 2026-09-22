@@ -5,6 +5,12 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
+  workflow_dispatch:
+    inputs:
+      pit_membership_url:
+        description: "Auditable point-in-time membership CSV URL (symbol,start_date,end_date)"
+        required: true
+        type: string
 
 jobs:
   typecheck:
@@ -46,7 +52,7 @@ jobs:
           python test_set_data_contract.py
 
   research_repaired_tournament_v3:
-    if: github.event_name == 'push'
+    if: github.event_name == 'workflow_dispatch' && inputs.pit_membership_url != ''
     runs-on: ubuntu-latest
     timeout-minutes: 120
     permissions:
@@ -56,16 +62,8 @@ jobs:
         with:
           fetch-depth: 2
       - id: changed
-        name: Detect research changes
-        run: |
-          changed=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
-          echo "$changed"
-          if echo "$changed" | grep -Eq '^(scripts/research/build_monthly_factor_dataset.py|scripts/research/luna_adaptive_tournament_v3.py|scripts/research/filter_last_5y.py|scripts/research/download_mendeley_set.py|\.github/workflows/luna-adaptive-tournament-v3-rerun.yml)$'; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "run=false" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Setup Python
+        name: Enable manual PIT research run
+        run: echo "run=true" >> "$GITHUB_OUTPUT"      - name: Setup Python
         if: steps.changed.outputs.run == 'true'
         uses: actions/setup-python@v5
         with:
@@ -79,6 +77,14 @@ jobs:
           mkdir -p data/raw
           curl -fL --retry 3 --retry-delay 2 "https://data.mendeley.com/public-api/zip/gybmm9t3mr/download/1" -o data/raw/gybmm9t3mr-1.zip
           test -s data/raw/gybmm9t3mr-1.zip
+      - name: Download PIT universe membership
+        if: steps.changed.outputs.run == 'true'
+        env:
+          PIT_MEMBERSHIP_URL: ${{ inputs.pit_membership_url }}
+        run: |
+          curl -fL --retry 3 --retry-delay 2 "$PIT_MEMBERSHIP_URL" -o data/raw/pit_membership.csv
+          test -s data/raw/pit_membership.csv
+          head -n 1 data/raw/pit_membership.csv
       - name: Normalize SET history
         if: steps.changed.outputs.run == 'true'
         run: |
@@ -95,13 +101,21 @@ jobs:
       - name: Build monthly panel
         if: steps.changed.outputs.run == 'true'
         run: |
-          python scripts/research/build_monthly_factor_dataset.py --input data/set_2000_2025/factors_5y.csv --output data/set_2000_2025/monthly_factors_5y.csv
+          python scripts/research/build_monthly_factor_dataset.py \
+            --input data/set_2000_2025/factors_5y.csv \
+            --output data/set_2000_2025/monthly_factors_5y.csv \
+            --membership data/raw/pit_membership.csv
           test -s data/set_2000_2025/monthly_factors_5y.csv
       - name: Run repaired 1000-formula tournament
         if: steps.changed.outputs.run == 'true'
         run: |
           rm -rf research/luna_adaptive_tournament_v3
-          python scripts/research/luna_adaptive_tournament_v3.py --input data/set_2000_2025/monthly_factors_5y.csv --output research/luna_adaptive_tournament_v3 --formula-count 1000 --seed 20260920 --lookback-months 24 --min-history-months 12 --cost-bps 20 --k 20
+          python scripts/research/luna_adaptive_tournament_v3.py \
+            --input data/set_2000_2025/monthly_factors_5y.csv \
+            --output research/luna_adaptive_tournament_v3 \
+            --membership data/raw/pit_membership.csv \
+            --formula-count 1000 --seed 20260920 --lookback-months 24 \
+            --min-history-months 12 --cost-bps 20 --k 20
       - name: Validate research result
         if: steps.changed.outputs.run == 'true'
         run: |
@@ -114,6 +128,8 @@ jobs:
           assert x["months_traded"] >= 24
           assert x["leakage_guard"]
           assert x["benchmark_m1_rev21_k20"]
+          assert x["pit_universe_required"] is True
+          assert x["pit_membership"]
           print(json.dumps(x, indent=2))
           PY
       - name: Save repaired research result
