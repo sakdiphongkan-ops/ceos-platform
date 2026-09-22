@@ -36,6 +36,9 @@ const reservedGross=Math.max(0,fill.notional);
 reservations.reservedBuyCash+=reservedCash;
 reservations.reservedGrossExposure+=reservedGross;
 
+// Simulate another in-flight reservation consuming the remaining cash.
+reservations.reservedBuyCash=state.cash;
+
 const second=planOrder(signal("BBB"),q("BBB",10),state,reservations);
 if(second.accepted) throw new Error("second order must be blocked by reservations");
 
