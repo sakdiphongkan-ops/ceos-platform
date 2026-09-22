@@ -28,7 +28,9 @@
     "test:risk-guards": "tsx src/execution-risk-guards.test.ts",
     "test:cost-replay": "tsx src/execution-cost-replay.test.ts",
     "qa:verified-15m": "python3 ../scripts/research/qa_verified_15m.py",
-    "test:latency-ledger": "tsx src/latency-ledger.test.ts"
+    "test:latency-ledger": "tsx src/latency-ledger.test.ts",
+    "test:research-preflight": "tsx src/research-preflight.test.ts",
+    "test:pit-universe": "tsx src/pit-universe.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.0"
