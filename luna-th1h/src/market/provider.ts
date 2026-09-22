@@ -15,11 +15,165 @@ export function marketQuotes(provider:string):AsyncGenerator<Quote>{
   }
 }
 
+function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVerifiedBook:boolean, priceOnlyFallback:boolean, paperMode:boolean, liveTradingArmed:boolean):Quote|null{
+  if(!raw?.symbol || !raw?.ts) return null;
+  const q:Quote = {
+    symbol:String(raw.symbol),
+    ts:String(raw.ts),
+    sourceTs: raw.source_ts ? String(raw.source_ts) : undefined,
+    bid:Number.isFinite(Number(raw.bid))?Number(raw.bid):null,
+    ask:Number.isFinite(Number(raw.ask))?Number(raw.ask):null,
+    last:Number.isFinite(Number(raw.last))?Number(raw.last):null,
+    bidSize:Number.isFinite(Number(raw.bid_size))?Number(raw.bid_size):null,
+    askSize:Number.isFinite(Number(raw.ask_size))?Number(raw.ask_size):null,
+    bidLevels:Array.isArray(raw.bid_levels)?raw.bid_levels.map((x:any)=>({price:Number(x.price),size:Number(x.size)})).filter((x:any)=>Number.isFinite(x.price)&&x.price>0&&Number.isFinite(x.size)&&x.size>0):undefined,
+    askLevels:Array.isArray(raw.ask_levels)?raw.ask_levels.map((x:any)=>({price:Number(x.price),size:Number(x.size)})).filter((x:any)=>Number.isFinite(x.price)&&x.price>0&&Number.isFinite(x.size)&&x.size>0):undefined,
+    source:String(raw.source ?? "unknown-market-data"),
+    dataQuality:raw.data_quality ? String(raw.data_quality) : undefined
+  };
+  if(q.last===null && q.bid===null && q.ask===null) return null;
+
+  const sourceName=String(q.source??"").toLowerCase();
+  const allowPublicPriceOnly =
+    priceOnlyFallback
+    && paperMode
+    && !liveTradingArmed
+    && sourceName.includes("tradingview-public-screener")
+    && q.bid===null
+    && q.ask===null;
+
+  if(requireVerifiedBook){
+    const verifiedBook =
+      Number.isFinite(Number(q.bid))
+      && Number.isFinite(Number(q.ask))
+      && Number(q.bid)>0
+      && Number(q.ask)>=Number(q.bid)
+      && Number(q.bidSize)>0
+      && Number(q.askSize)>0
+      && !String(q.dataQuality??"").toLowerCase().includes("unverified");
+    if(!verifiedBook && !allowPublicPriceOnly) return null;
+  }
+
+  const freshnessTs=q.sourceTs ?? q.ts;
+  const parsedTs=Date.parse(freshnessTs);
+  if(!Number.isFinite(parsedTs)) return null;
+  const quoteAgeMs=Date.now()-parsedTs;
+  if(quoteAgeMs<0 || quoteAgeMs>(allowPublicPriceOnly ? Math.max(1000,maxQuoteAgeMs) : maxQuoteAgeMs)) return null;
+  return q;
+}
+
+async function fetchGatewaySnapshot(url:string,key:string,timeoutMs:number){
+  const res = await fetch(`${url}/quotes`,{
+    headers:{"x-luna-gateway":key,"accept":"application/json"},
+    cache:"no-store",
+    signal:AbortSignal.timeout(timeoutMs)
+  });
+  const body = await res.json().catch(()=>({}));
+  if(!res.ok) throw new Error(`HTTP_${res.status}: ${JSON.stringify(body)}`);
+  return body;
+}
+
+async function* gatewayWebSocketMessages(streamUrl:string,key:string):AsyncGenerator<any>{
+  const WS = globalThis.WebSocket;
+  if(typeof WS!=="function") throw new Error("NODE_WEBSOCKET_UNAVAILABLE");
+
+  while(true){
+    const ws = new WS(streamUrl);
+    const messages:string[]=[];
+    let waiter:((value:string)=>void)|null=null;
+    let waiterReject:((reason?:unknown)=>void)|null=null;
+    let streamError:Error|null=null;
+
+    const nextMessage=()=>new Promise<string>((resolve,reject)=>{
+      if(messages.length>0){
+        resolve(messages.shift()!);
+        return;
+      }
+      if(streamError){
+        reject(streamError);
+        return;
+      }
+      waiter=resolve;
+      waiterReject=reject;
+    });
+
+    ws.onopen=()=>{
+      try{
+        ws.send(JSON.stringify({type:"auth",key}));
+      }catch(err){
+        streamError=err instanceof Error?err:new Error(String(err));
+        waiterReject?.(streamError);
+      }
+    };
+    ws.onmessage=(event)=>{
+      let textData:string;
+      if(typeof event.data==="string") textData=event.data;
+      else if(event.data instanceof ArrayBuffer) textData=new TextDecoder().decode(event.data);
+      else textData=String(event.data);
+      if(waiter){
+        const resolve=waiter;
+        waiter=null;
+        waiterReject=null;
+        resolve(textData);
+      }else{
+        messages.push(textData);
+      }
+    };
+    ws.onerror=()=>{
+      streamError=new Error("LUNA_GATEWAY_WEBSOCKET_ERROR");
+      waiterReject?.(streamError);
+      waiter=null;
+      waiterReject=null;
+    };
+    ws.onclose=()=>{
+      if(!streamError) streamError=new Error("LUNA_GATEWAY_WEBSOCKET_CLOSED");
+      waiterReject?.(streamError);
+      waiter=null;
+      waiterReject=null;
+    };
+
+    try{
+      // Give the gateway enough time for a cold/restarted deployment, but do not
+      // let a dead socket stall the trading loop indefinitely.
+      await new Promise<void>((resolve,reject)=>{
+        const deadline=setTimeout(()=>reject(new Error("LUNA_GATEWAY_WEBSOCKET_OPEN_TIMEOUT")),5000);
+        const opened=()=>{
+          clearTimeout(deadline);
+          resolve();
+        };
+        if(ws.readyState===1) opened();
+        else{
+          const prior=ws.onopen;
+          ws.onopen=()=>{
+            if(typeof prior==="function") prior(new Event("open") as any);
+            opened();
+          };
+        }
+      });
+
+      while(true){
+        const textData=await nextMessage();
+        const payload=JSON.parse(textData);
+        if(payload?.type==="snapshot" && Array.isArray(payload.quotes)){
+          for(const raw of payload.quotes) yield raw;
+        }else if(payload?.type==="quote" && payload.quote){
+          yield payload.quote;
+        }
+      }
+    }finally{
+      try{ws.close()}catch{}
+    }
+  }
+}
+
 async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
   const url = process.env.LUNA_MARKET_GATEWAY_URL ?? "";
   const key = process.env.LUNA_MARKET_GATEWAY_KEY ?? "";
   const pollMs = Math.max(50,Number(process.env.LUNA_MARKET_GATEWAY_POLL_MS ?? 100));
   const timeoutMs = Math.max(200,Number(process.env.LUNA_MARKET_GATEWAY_TIMEOUT_MS ?? 750));
+  const streamEnabled=String(process.env.LUNA_MARKET_GATEWAY_STREAM_ENABLED ?? "true").toLowerCase()==="true";
+  const configuredStreamUrl=String(process.env.LUNA_MARKET_GATEWAY_STREAM_URL ?? "").trim();
+  const streamUrl = configuredStreamUrl || url.replace(/^http:/i,"ws:").replace(/^https:/i,"wss:")+"/quotes/stream";
   if(!url || !key) throw new Error("LUNA_MARKET_GATEWAY_URL and LUNA_MARKET_GATEWAY_KEY are required.");
 
   const previous = new Map<string,string>();
@@ -30,20 +184,49 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
   const paperMode=String(process.env.LUNA_MODE ?? "paper").toLowerCase()==="paper";
   const liveTradingArmed=String(process.env.LIVE_TRADING_ARMED ?? "false").toLowerCase()==="true";
   const publicFallbackMaxQuoteAgeMs=Math.max(1000,Number(process.env.LUNA_PUBLIC_FALLBACK_MAX_QUOTE_AGE_MS ?? 6500));
+  const maxQuoteAgeMs=Number(process.env.LUNA_MAX_QUOTE_AGE_MS ?? 3000);
+  let nextStreamRetryAt=0;
 
   while(true){
+    if(streamEnabled && Date.now()>=nextStreamRetryAt){
+      try{
+        console.log(JSON.stringify({
+          event:"LUNA_GATEWAY_STREAM_CONNECT",
+          stream_url:streamUrl,
+          mode:"websocket"
+        }));
+        for await(const raw of gatewayWebSocketMessages(streamUrl,key)){
+          const q=normalizeGatewayQuote(
+            raw,
+            maxQuoteAgeMs,
+            requireVerifiedBook,
+            priceOnlyFallback,
+            paperMode,
+            liveTradingArmed
+          );
+          if(!q) continue;
+          const sig=JSON.stringify([q.ts,q.bid,q.ask,q.last,q.bidSize,q.askSize]);
+          if(previous.get(q.symbol)===sig) continue;
+          previous.set(q.symbol,sig);
+          yield q;
+        }
+      }catch(err){
+        console.error(JSON.stringify({
+          event:"LUNA_GATEWAY_STREAM_FAILED",
+          error:String(err),
+          stream_url:streamUrl,
+          fallback:"http_poll"
+        }));
+        nextStreamRetryAt=Date.now()+15000;
+      }
+    }
+
     const cycleStarted=Date.now();
     let body:any = {};
     let ok=false;
 
     try{
-      const res = await fetch(`${url}/quotes`,{
-        headers:{"x-luna-gateway":key,"accept":"application/json"},
-        cache:"no-store",
-        signal:AbortSignal.timeout(timeoutMs)
-      });
-      body = await res.json().catch(()=>({}));
-      if(!res.ok) throw new Error(`HTTP_${res.status}: ${JSON.stringify(body)}`);
+      body=await fetchGatewaySnapshot(url,key,timeoutMs);
       ok=true;
     }catch(err){
       console.error(JSON.stringify({
@@ -73,6 +256,7 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
       }));
       lastGatewayCount=quotes.length;
     }
+
     if(quotes.length===0){
       console.warn(JSON.stringify({
         event:"LUNA_GATEWAY_EMPTY_QUOTES",
@@ -86,50 +270,15 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
     }
 
     for(const raw of quotes){
-      if(!raw?.symbol || !raw?.ts) continue;
-      const q:Quote = {
-        symbol:String(raw.symbol),
-        ts:String(raw.ts),
-        sourceTs: raw.source_ts ? String(raw.source_ts) : undefined,
-        bid:Number.isFinite(Number(raw.bid))?Number(raw.bid):null,
-        ask:Number.isFinite(Number(raw.ask))?Number(raw.ask):null,
-        last:Number.isFinite(Number(raw.last))?Number(raw.last):null,
-        bidSize:Number.isFinite(Number(raw.bid_size))?Number(raw.bid_size):null,
-        askSize:Number.isFinite(Number(raw.ask_size))?Number(raw.ask_size):null,
-        bidLevels:Array.isArray(raw.bid_levels)?raw.bid_levels.map((x:any)=>({price:Number(x.price),size:Number(x.size)})).filter((x:any)=>Number.isFinite(x.price)&&x.price>0&&Number.isFinite(x.size)&&x.size>0):undefined,
-        askLevels:Array.isArray(raw.ask_levels)?raw.ask_levels.map((x:any)=>({price:Number(x.price),size:Number(x.size)})).filter((x:any)=>Number.isFinite(x.price)&&x.price>0&&Number.isFinite(x.size)&&x.size>0):undefined,
-        source:String(raw.source ?? "unknown-market-data"),
-        dataQuality:raw.data_quality ? String(raw.data_quality) : undefined
-      };
-      if(q.last===null && q.bid===null && q.ask===null) continue;
-      const sourceName=String(q.source??"").toLowerCase();
-      const allowPublicPriceOnly =
-        priceOnlyFallback
-        && paperMode
-        && !liveTradingArmed
-        && sourceName.includes("tradingview-public-screener")
-        && q.bid===null
-        && q.ask===null;
-      if(requireVerifiedBook){
-        const verifiedBook =
-          Number.isFinite(Number(q.bid))
-          && Number.isFinite(Number(q.ask))
-          && Number(q.bid)>0
-          && Number(q.ask)>=Number(q.bid)
-          && Number(q.bidSize)>0
-          && Number(q.askSize)>0
-          && !String(q.dataQuality??"").toLowerCase().includes("unverified");
-        if(!verifiedBook && !allowPublicPriceOnly) continue;
-      }
-      const freshnessTs=q.sourceTs ?? q.ts;
-      const parsedTs=Date.parse(freshnessTs);
-      if(!Number.isFinite(parsedTs)) continue;
-      const quoteAgeMs=Date.now()-parsedTs;
-      if(quoteAgeMs<0) continue;
-      const maxQuoteAgeMs=allowPublicPriceOnly
-        ? publicFallbackMaxQuoteAgeMs
-        : Number(process.env.LUNA_MAX_QUOTE_AGE_MS ?? 3000);
-      if(quoteAgeMs>maxQuoteAgeMs) continue;
+      const q=normalizeGatewayQuote(
+        raw,
+        maxQuoteAgeMs,
+        requireVerifiedBook,
+        priceOnlyFallback,
+        paperMode,
+        liveTradingArmed
+      );
+      if(!q) continue;
       const sig=JSON.stringify([q.ts,q.bid,q.ask,q.last,q.bidSize,q.askSize]);
       if(previous.get(q.symbol)===sig) continue;
       previous.set(q.symbol,sig);
@@ -144,3 +293,4 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
     if(quotes.length===0) emptyBackoffMs=Math.min(5000,Math.max(emptyBackoffMs*2,pollMs));
   }
 }
+
