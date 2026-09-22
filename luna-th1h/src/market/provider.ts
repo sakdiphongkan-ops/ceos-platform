@@ -24,6 +24,7 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
 
   const previous = new Map<string,string>();
   let lastGatewayCount=-1;
+  let emptyBackoffMs=Math.max(500,Math.min(5000,pollMs));
 
   while(true){
     const cycleStarted=Date.now();
@@ -44,12 +45,14 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
         event:"LUNA_GATEWAY_FETCH_FAILED",
         error:String(err),
         timeout_ms:timeoutMs,
-        poll_ms:pollMs
+        poll_ms:pollMs,
+        retry_backoff_ms:emptyBackoffMs
       }));
     }
 
     if(!ok){
-      await new Promise(r=>setTimeout(r,pollMs));
+      await new Promise(r=>setTimeout(r,emptyBackoffMs));
+      emptyBackoffMs=Math.min(5000,Math.max(emptyBackoffMs*2,pollMs));
       continue;
     }
 
@@ -66,12 +69,15 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
       lastGatewayCount=quotes.length;
     }
     if(quotes.length===0){
-      console.error(JSON.stringify({
+      console.warn(JSON.stringify({
         event:"LUNA_GATEWAY_EMPTY_QUOTES",
         target:Number(body?.target ?? 0),
         collector_started:Boolean(body?.collector_started),
-        collector_error:body?.collector_error ?? null
+        collector_error:body?.collector_error ?? null,
+        retry_backoff_ms:emptyBackoffMs
       }));
+    }else{
+      emptyBackoffMs=Math.max(500,Math.min(5000,pollMs));
     }
 
     for(const raw of quotes){
@@ -99,6 +105,10 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
     }
 
     const elapsed=Date.now()-cycleStarted;
-    await new Promise(r=>setTimeout(r,Math.max(0,pollMs-elapsed)));
+    const delay = quotes.length===0
+      ? Math.max(emptyBackoffMs, pollMs-elapsed)
+      : Math.max(0,pollMs-elapsed);
+    await new Promise(r=>setTimeout(r,delay));
+    if(quotes.length===0) emptyBackoffMs=Math.min(5000,Math.max(emptyBackoffMs*2,pollMs));
   }
 }
