@@ -400,7 +400,6 @@ async function main(){
       target_monthly_geometric_return:TARGET_MONTHLY_GEO,
       walk_forward_folds:WALK_FORWARD_FOLDS,
       walk_forward_rule:"sequential expanding train windows 50/60/70% with validation ending at 60/70/80%; final 20% frozen holdout",
-      leakage_guard:"HOLDOUT NEVER USED FOR CANDIDATE SELECTION",
       credible_gate:"walk-forward average validation geo AND holdout geo meet target; minimum fold geo >= configured floor; >=50% positive months; validation/holdout DD <=20%; 10bps full replay remains profitable"
     },
     generationReports,
