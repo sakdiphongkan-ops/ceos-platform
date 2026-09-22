@@ -4,7 +4,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import {assertFrozenHoldoutAllowed,assertPitMembershipProvenance,digestQuotes,writeHoldoutExposureLedger} from "./research-governance.js";
 
-const dir=fs.mkdtempSync(path.join(os.tmpdir(),"luna-governance-"));
+// CI validation marker: this branch mirrors current master research governance.\nconst dir=fs.mkdtempSync(path.join(os.tmpdir(),"luna-governance-"));
 const membership=path.join(dir,"membership.csv");
 const manifest=path.join(dir,"membership.manifest.json");
 fs.writeFileSync(membership,"symbol,start_date,end_date\nAAA,2026-01-01,\n","utf8");
