@@ -35,6 +35,19 @@ def build_index(rows):
 def eligible(index,symbol,day):
     return any(start<=day and (end is None or day<=end) for start,end in index.get(symbol,()))
 
+def filter_dataframe_by_date(df, membership_path, date_column):
+    members=load_membership(membership_path)
+    index=build_index(members)
+    dates=df[date_column].dt.date if hasattr(df[date_column].dtype,"tz") is False else df[date_column].dt.tz_convert("UTC").dt.date
+    mask=[
+        eligible(index,str(symbol),day)
+        for symbol,day in zip(df["symbol"],dates)
+    ]
+    out=df.loc[mask].copy()
+    if out.empty:
+        raise ValueError("PIT_UNIVERSE_FILTER_REMOVED_ALL_ROWS")
+    return out, len(df)-len(out), len(set(out["symbol"]))
+
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--quotes",required=True)
