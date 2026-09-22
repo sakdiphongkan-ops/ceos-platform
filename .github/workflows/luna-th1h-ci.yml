@@ -11,6 +11,10 @@ on:
         description: "Auditable point-in-time membership CSV URL (symbol,start_date,end_date)"
         required: true
         type: string
+      pit_membership_sha256:
+        description: "SHA-256 of the PIT membership CSV"
+        required: true
+        type: string
 
 jobs:
   typecheck:
@@ -54,7 +58,7 @@ jobs:
           python test_set_data_contract.py
 
   research_repaired_tournament_v3:
-    if: github.event_name == 'workflow_dispatch' && inputs.pit_membership_url != ''
+    if: github.event_name == 'workflow_dispatch' && inputs.pit_membership_url != '' && inputs.pit_membership_sha256 != ''
     runs-on: ubuntu-latest
     timeout-minutes: 120
     permissions:
@@ -84,9 +88,12 @@ jobs:
         if: steps.changed.outputs.run == 'true'
         env:
           PIT_MEMBERSHIP_URL: ${{ inputs.pit_membership_url }}
+          EXPECTED_SHA256: ${{ inputs.pit_membership_sha256 }}
         run: |
           curl -fL --retry 3 --retry-delay 2 "$PIT_MEMBERSHIP_URL" -o data/raw/pit_membership.csv
           test -s data/raw/pit_membership.csv
+          actual=$(sha256sum data/raw/pit_membership.csv | awk '{print $1}')
+          test "$actual" = "$EXPECTED_SHA256"
           head -n 1 data/raw/pit_membership.csv
       - name: Normalize SET history
         if: steps.changed.outputs.run == 'true'
