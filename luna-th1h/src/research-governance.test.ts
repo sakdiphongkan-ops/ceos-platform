@@ -4,6 +4,8 @@ import path from "node:path";
 import crypto from "node:crypto";
 import {assertFrozenHoldoutAllowed,assertPitMembershipProvenance,digestQuotes,writeHoldoutExposureLedger} from "./research-governance.js";
 
+const requireSha=(file:string)=>crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+
 const dir=fs.mkdtempSync(path.join(os.tmpdir(),"luna-governance-"));
 const membership=path.join(dir,"membership.csv");
 const manifest=path.join(dir,"membership.manifest.json");
@@ -40,4 +42,3 @@ try{assertFrozenHoldoutAllowed({lockFile:lock,exposureLedger:ledger,datasetSha25
 if(!blocked) throw new Error("holdout replay was not blocked");
 console.log("research governance tests: PASS");
 
-const requireSha=(file:string)=>crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
