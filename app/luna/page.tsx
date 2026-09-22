@@ -58,6 +58,15 @@ type LunaFeed = {
   execution_control:any;
   counts:any;
   errors:any[];
+  market_feed?: {
+    status:string;
+    verified_realtime:boolean;
+    public_fallback:boolean;
+    latest_source?:string|null;
+    latest_ts?:string|null;
+    latest_age_ms?:number|null;
+    sources?:string[];
+  };
   latency?: {
     summary?: {
       sample_count:number;
@@ -213,6 +222,22 @@ export default function LunaPortfolioPage() {
   const killSwitch=Boolean(feed?.execution_control?.kill_switch??true);
   const armed=Boolean(feed?.execution_control?.armed??false);
   const liveExecution=executionMode==="LIVE" && !killSwitch && armed;
+  const marketFeed=feed?.market_feed??{
+    status:"NO_TICKS",verified_realtime:false,public_fallback:false,latest_source:null,latest_age_ms:null,sources:[]
+  };
+  const marketFeedLabel=marketFeed.verified_realtime
+    ? "VERIFIED REALTIME"
+    : marketFeed.public_fallback
+      ? "PUBLIC FALLBACK"
+      : marketFeed.status==="UNVERIFIED_RECENT"
+        ? "UNVERIFIED RECENT"
+        : marketFeed.status==="STALE_OR_UNKNOWN"
+          ? "STALE / UNKNOWN"
+          : "NO MARKET TICKS";
+  const marketFeedSource=marketFeed.latest_source ? String(marketFeed.latest_source) : "no source";
+  const marketFeedAge=Number.isFinite(Number(marketFeed.latest_age_ms))
+    ? `${Math.max(0,Math.round(Number(marketFeed.latest_age_ms)))} ms old`
+    : "age unavailable";
 
   return <main className="luna-shell">
     <header className="topbar">
@@ -230,14 +255,14 @@ export default function LunaPortfolioPage() {
       </div>
     </header>
     <div className="page">
-      <section className="hero-row"><div><div className="eyebrow">INTRADAY CONTROL · OPERATIONAL OVERVIEW</div><h2>LUNA command center</h2><p>See capital, risk, execution and research state at a glance.</p></div><div className="hero-meta"><div className="data-chip"><span className="data-dot"/> {live ? "LIVE DATA" : "DATA OFFLINE"}</div><div className="safe-badge"><ShieldCheck size={15}/> {liveExecution ? "LIVE EXECUTION" : "PAPER EXECUTION"} / {killSwitch ? "KILL SWITCH ON" : liveExecution && marketPhase==="ACTIVE" ? "GATE OPEN" : "MARKET LOCKED"}</div></div></section>
+      <section className="hero-row"><div><div className="eyebrow">INTRADAY CONTROL · OPERATIONAL OVERVIEW</div><h2>LUNA command center</h2><p>See capital, risk, execution and research state at a glance.</p></div><div className="hero-meta"><div className="data-chip"><span className="data-dot"/> {live ? "API CONNECTED" : "API OFFLINE"}</div><div className="safe-badge"><ShieldCheck size={15}/> {liveExecution ? "LIVE EXECUTION" : "PAPER EXECUTION"} / {killSwitch ? "KILL SWITCH ON" : liveExecution && marketPhase==="ACTIVE" ? "GATE OPEN" : "MARKET LOCKED"}</div></div></section>
       <SystemControlRoom strategy={session?.strategy_version ?? LUNA_STRATEGY} asOf={todaySessionDate} />
       <section className="live-operating-strip">
         <div className={`market-phase-cell phase-${marketPhase.toLowerCase()}`}><span>MARKET / SET</span><strong>{marketPhaseLabel(marketPhase)}</strong><small>{bangkokClock(clock)} · {marketPhaseHint(marketPhase)}</small></div>
         <div><span>EXECUTION MODE</span><strong>{executionMode}</strong><small>{liveExecution ? "live gate open" : "paper only"}</small></div>
         <div><span>KILL SWITCH</span><strong>{killSwitch ? "ON" : "OFF"}</strong><small>{armed ? "armed" : "disarmed"}</small></div>
         <div><span>LIVE ORDER GATE</span><strong>{liveExecution ? "READY" : "LOCKED"}</strong><small>broker bridge status</small></div>
-        <div className="live-operating-note"><ShieldCheck size={15}/><span>{marketPhase==="ACTIVE" ? "Market session active — backend re-checks phase immediately before every execution." : "Market execution is locked at this phase; stale signals are shown as HOLD until a fresh in-session signal arrives."}</span></div>
+        <div><span>MARKET FEED</span><strong>{marketFeedLabel}</strong><small>{marketFeedSource} · {marketFeedAge}</small></div><div className="live-operating-note"><ShieldCheck size={15}/><span>{marketPhase==="ACTIVE" ? "Market session active — backend re-checks phase immediately before every execution." : "Market execution is locked at this phase; stale signals are shown as HOLD until a fresh in-session signal arrives."}</span></div>
       </section>
       {error&&<div className="error-banner"><span>{error}</span><button onClick={load}>Retry</button></div>}
       <section className="summary-grid"><Metric label="Market ticks" value={String(sessionTicks.length)} sub="Latest session feed"/><Metric label="Signals" value={String(sessionSignals.length)} sub="15m strategy signals"/><Metric label="Orders" value={String(sessionOrders.length)} sub="Recorded this session"/>
@@ -278,7 +303,7 @@ export default function LunaPortfolioPage() {
         </div>
         <aside className="side-card">{selectedPos?<><div className="detail-head"><div><div className="detail-symbol">{selectedPos.symbol}</div><div className="muted">{selectedPos.name}</div></div><button className="close-button" onClick={()=>setSelected(null)}><X size={15}/></button></div><div className="price-block"><div>฿{selectedPos.last.toFixed(2)}</div><span className={selectedPos.last>=selectedPos.avgCost?"positive":"negative"}>{selectedPos.last>=selectedPos.avgCost?<ArrowUpRight size={14}/>:<ArrowDownRight size={14}/>} {((selectedPos.last/selectedPos.avgCost-1)*100).toFixed(2)}%</span></div><div className="detail-grid"><Detail label="Position" value={`${money(selectedPos.qty).replace(".00","")} shares`}/><Detail label="Avg Cost" value={`฿${selectedPos.avgCost.toFixed(2)}`}/><Detail label="Market Value" value={`฿${money(selectedPos.qty*selectedPos.last)}`}/><Detail label="Unrealized P&L" value={signed(selectedPos.qty*(selectedPos.last-selectedPos.avgCost))} positive={selectedPos.last>=selectedPos.avgCost}/><Detail label="Portfolio Weight" value={`${(equity?(selectedPos.qty*selectedPos.last/equity*100):0).toFixed(1)}%`}/><Detail label="Sizing" value="Dynamic · signal strength"/></div><div className="section-label">CURRENT SIGNAL</div><div className="signal-panel"><SignalBadge signal={selectedPos.signal} large/><p>{selectedPos.signalReason}</p></div><div className="section-label">EXECUTION TIMELINE</div><div className="timeline">{trades.filter(t=>t.symbol===selectedPos.symbol).map(t=><div className="timeline-item" key={t.time}><div className={`timeline-dot ${t.side.toLowerCase()}`}/><div><strong>{t.side} {money(t.qty).replace(".00","")} @ ฿{t.price.toFixed(2)}</strong><span>{t.time} · {t.reason}</span></div></div>)}<div className="timeline-item future"><div className="timeline-dot"/><div><strong>Position currently open</strong><span>Latest feed mark</span></div></div></div><div className="audit-strip"><Layers3 size={15}/><span>Execution → Position → Snapshot → Audit event</span></div></>:<div className="empty-detail"><strong>Select a position</strong><span>Click any holding to inspect its live execution history.</span></div>}</aside>
       </section>
-      <section className="bottom-grid"><div className="mini-card"><div className="mini-title"><BarChart3 size={16}/> Exposure by position</div><div className="bars">{positions.map(p=><div className="bar-row" key={p.symbol}><span>{p.symbol}</span><i><b style={{width:`${Math.min((equity?(p.qty*p.last/equity*100):0)*5,100)}%`}}/></i><strong>{(equity?p.qty*p.last/equity*100:0).toFixed(1)}%</strong></div>)}</div></div><div className="mini-card"><div className="mini-title"><History size={16}/> Session controls</div><div className="control-list"><div><span>Strategy</span><strong>{session?.strategy_version??"—"}</strong></div><div><span>Initial capital</span><strong>฿{money(initial)}</strong></div><div><span>Gross exposure</span><strong>{exposure.toFixed(1)}% / 100%</strong></div><div><span>End of day</span><strong>FORCE CLOSE</strong></div></div><div className={`live-toggle ${live ? "on" : "off"}`}><CircleDot size={13}/>{live ? "API feed connected · 2s refresh" : "Feed unavailable"}</div></div><div className="mini-card"><div className="mini-title"><WalletCards size={16}/> Audit integrity</div><div className="audit-score"><strong>{feed?.counts?.audits?"READY":"WAITING"}</strong><span>{feed?.counts?.audits??0} audit events · {feed?.counts?.fills??0} fills · {feed?.counts?.snapshots??0} snapshots</span></div><div className="hash-line">universe loaded · quote coverage tracked · real latency ledger · API-backed</div></div></section>
+      <section className="bottom-grid"><div className="mini-card"><div className="mini-title"><BarChart3 size={16}/> Exposure by position</div><div className="bars">{positions.map(p=><div className="bar-row" key={p.symbol}><span>{p.symbol}</span><i><b style={{width:`${Math.min((equity?(p.qty*p.last/equity*100):0)*5,100)}%`}}/></i><strong>{(equity?p.qty*p.last/equity*100:0).toFixed(1)}%</strong></div>)}</div></div><div className="mini-card"><div className="mini-title"><History size={16}/> Session controls</div><div className="control-list"><div><span>Strategy</span><strong>{session?.strategy_version??"—"}</strong></div><div><span>Initial capital</span><strong>฿{money(initial)}</strong></div><div><span>Gross exposure</span><strong>{exposure.toFixed(1)}% / 100%</strong></div><div><span>End of day</span><strong>FORCE CLOSE</strong></div></div><div className={`live-toggle ${live ? "on" : "off"}`}><CircleDot size={13}/>{live ? `API connected · feed: ${marketFeedLabel}` : "Feed unavailable"}</div></div><div className="mini-card"><div className="mini-title"><WalletCards size={16}/> Audit integrity</div><div className="audit-score"><strong>{feed?.counts?.audits?"READY":"WAITING"}</strong><span>{feed?.counts?.audits??0} audit events · {feed?.counts?.fills??0} fills · {feed?.counts?.snapshots??0} snapshots</span></div><div className="hash-line">universe loaded · quote coverage tracked · real latency ledger · API-backed</div></div></section>
     </div>
   </main>
 }
