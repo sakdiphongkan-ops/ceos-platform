@@ -302,7 +302,10 @@ export function simulateFill(
   if(order.depthLevels?.length){
     let remaining=order.qty;
     let cash=0;
-    for(const level of order.depthLevels){
+    const orderedDepth=[...order.depthLevels].sort((a,b)=>
+      order.side==="BUY" ? a.price-b.price : b.price-a.price
+    );
+    for(const level of orderedDepth){
       if(remaining<=0) break;
       const take=Math.min(remaining,Math.max(0,level.size));
       cash+=take*level.price;
