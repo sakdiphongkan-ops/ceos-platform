@@ -81,11 +81,15 @@ export default function LunaPortfolioPage() {
   const [selected,setSelected]=useState<Position|null>(null);
   const [feed,setFeed]=useState<LunaFeed|null>(null);
   const [loading,setLoading]=useState(true);
+  const [refreshing,setRefreshing]=useState(false);
+  const [filterOpen,setFilterOpen]=useState(false);
+  const [signalFilter,setSignalFilter]=useState<"ALL"|"BUY"|"SELL"|"HOLD">("ALL");
+  const [profitOnly,setProfitOnly]=useState(false);
   const [error,setError]=useState("");
   const [live,setLive]=useState(false);
 
   const load=useCallback(async()=>{
-    setLoading(true); setError("");
+    setRefreshing(true); setError("");
     try{
       const res=await fetch(`${LUNA_API}?limit=100`,{cache:"no-store"});
       if(!res.ok) throw new Error(`API ${res.status}`);
@@ -94,7 +98,10 @@ export default function LunaPortfolioPage() {
       if(data.errors?.length) setError("Feed returned partial data");
       setLive(true);
     }catch(e){ setLive(false); setError(e instanceof Error?e.message:"Unable to load LUNA feed"); }
-    finally{ setLoading(false); }
+    finally{
+      setLoading(false);
+      setRefreshing(false);
+    }
   },[]);
 
   useEffect(()=>{ load(); const id=setInterval(load,2000); return()=>clearInterval(id); },[load]);
@@ -151,7 +158,14 @@ export default function LunaPortfolioPage() {
     return Array.from(bySymbol.values()).filter(x=>x.exit>0);
   },[sessionOrders,feed?.fills]);
 
-  const filteredPositions=positions.filter(p=>`${p.symbol} ${p.name}`.toLowerCase().includes(query.toLowerCase()));
+  const filteredPositions=positions.filter(p=>{
+    const matchesQuery=(p.symbol+" "+p.name).toLowerCase().includes(query.toLowerCase());
+    const matchesSignal=signalFilter==="ALL" || p.signal===signalFilter;
+    const matchesProfit=!profitOnly || (p.last-p.avgCost)>=0;
+    return matchesQuery && matchesSignal && matchesProfit;
+  });
+  const filterCount=(signalFilter!=="ALL"?1:0)+(profitOnly?1:0);
+  const updatedAt=feed?.generated_at ? new Date(feed.generated_at).toLocaleTimeString("en-GB",{hour12:false}) : "—";
   const initial=Number(session?.initial_capital??1000000);
   const marketValue=Number(sessionSnapshot?.market_value??positions.reduce((s,p)=>s+p.qty*p.last,0));
   const cash=Number(sessionSnapshot?.cash??Math.max(0,initial-marketValue));
@@ -177,8 +191,8 @@ export default function LunaPortfolioPage() {
       </nav>
       <div className="top-actions">
         <div className="market-status"><CircleDot size={11}/> SET / {executionMode}</div><div className="timeframe-chip"><BarChart3 size={13}/> {TIMEFRAME}</div>
-        <button className="icon-button" title="Refresh" onClick={load}><RefreshCw size={17}/></button>
-        <div className="session-chip"><Clock3 size={14}/> {session?.session_date??"—"} · {live?"FEED OK":"OFFLINE"}</div>
+        <button className={"icon-button "+(refreshing?"refreshing":"")} title="Refresh" onClick={load}><RefreshCw size={17}/></button>
+        <div className="session-chip"><Clock3 size={14}/> {session?.session_date??"—"} · {live?"UPDATED "+updatedAt:"OFFLINE"}</div>
       </div>
     </header>
     <div className="page">
@@ -204,7 +218,24 @@ export default function LunaPortfolioPage() {
       </section>
       <section className="content-grid">
         <div className="main-card">
-          <div className="card-head"><div><div className="card-title">Portfolio positions</div><div className="card-subtitle">{positions.length} open positions · dynamic sizing from signal strength</div></div><div className="toolbar"><div className="search-box"><Search size={15}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search symbol"/></div><button className="filter-button"><Filter size={15}/> Filter <ChevronDown size={13}/></button></div></div>
+          <div className="card-head"><div><div className="card-title">Portfolio positions</div><div className="card-subtitle">{positions.length} open positions · {filteredPositions.length} visible · dynamic sizing from signal strength</div></div><div className="toolbar">
+  <div className="search-box"><Search size={15}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search symbol"/></div>
+  <div className="filter-wrap">
+    <button className={"filter-button "+(filterCount?"filter-active":"")} onClick={()=>setFilterOpen(v=>!v)} aria-expanded={filterOpen}>
+      <Filter size={15}/> Filter {filterCount ? "· "+filterCount : ""} <ChevronDown size={13}/>
+    </button>
+    {filterOpen&&<div className="filter-menu">
+      <div className="filter-menu-label">SIGNAL</div>
+      <div className="filter-options">
+        {(["ALL","BUY","SELL","HOLD"] as const).map(option=><button key={option} className={signalFilter===option?"selected":""} onClick={()=>setSignalFilter(option)}>{option}</button>)}
+      </div>
+      <button className={"filter-check "+(profitOnly?"selected":"")} onClick={()=>setProfitOnly(v=>!v)}>
+        <span className="filter-check-box">{profitOnly?"✓":""}</span> Profit only
+      </button>
+      <div className="filter-menu-footer"><span>{filteredPositions.length} positions</span><button onClick={()=>{setSignalFilter("ALL");setProfitOnly(false);}}>Clear</button></div>
+    </div>}
+  </div>
+</div></div>
           <div className="tabs"><button className={tab==="holdings"?"active":""} onClick={()=>setTab("holdings")}>Holdings <span>{positions.length}</span></button><button className={tab==="trades"?"active":""} onClick={()=>setTab("trades")}>Today's Trades <span>{trades.length}</span></button><button className={tab==="closed"?"active":""} onClick={()=>setTab("closed")}>Closed Positions <span>{closedPositions.length}</span></button><button className={tab==="research"?"active":""} onClick={()=>setTab("research")}>Research <span>WF</span></button></div>
           {loading?<div className="loading-state"><RefreshCw size={18}/> Loading live portfolio feed…</div>:
           tab==="holdings"?<div className="table-wrap"><table><thead><tr><th>SYMBOL</th><th>QTY</th><th>AVG COST</th><th>LAST</th><th>MARKET VALUE</th><th>UNREALIZED P&amp;L</th><th>WEIGHT</th><th>SIGNAL</th></tr></thead><tbody>{filteredPositions.length?filteredPositions.map(p=>{const value=p.qty*p.last;const weight=equity?value/equity*100:0;const pnl=p.qty*(p.last-p.avgCost);return <tr key={p.symbol} className={selectedPos?.symbol===p.symbol?"selected-row":""} onClick={()=>setSelected(p)}><td><div className="symbol-cell"><strong>{p.symbol}</strong><span>{p.name}</span></div></td><td>{money(p.qty).replace(".00","")}</td><td>฿{p.avgCost.toFixed(2)}</td><td><strong>฿{p.last.toFixed(2)}</strong></td><td>฿{money(value)}</td><td className={pnl>=0?"positive":"negative"}>{signed(pnl)}</td><td><div className="weight-cell"><span>{weight.toFixed(1)}%</span><i><b style={{width:`${Math.min(weight,100)}%`}}/></i></div></td><td><SignalBadge signal={p.signal}/></td></tr>;}):<tr><td colSpan={8} className="empty-table"><div>No open positions currently — positions are removed from Holdings after execution closes them.</div>{trades.length>0&&<button className="filter-button" style={{marginTop:8}} onClick={()=>setTab("trades")}>View today\'s executed trades ({trades.length})</button>}</td></tr>}</tbody></table></div>:
