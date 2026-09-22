@@ -86,6 +86,8 @@ def main() -> None:
         last = num(val(row, "last", mapping), "last", i)
         bid_size = num(val(row, "bid_size", mapping), "bid_size", i)
         ask_size = num(val(row, "ask_size", mapping), "ask_size", i)
+        depth_complete_raw = row.get(mapping.get("depth_complete",""), "") if mapping.get("depth_complete") else ""
+        depth_complete = str(depth_complete_raw).strip().lower() in {"1","true","yes","y"}
 
         if last is None or last <= 0:
             raise SystemExit(f"Row {i}: last must be > 0")
@@ -118,6 +120,7 @@ def main() -> None:
             "bid_size": int(bid_size) if bid_size is not None and bid_size.is_integer() else bid_size,
             "ask_size": int(ask_size) if ask_size is not None and ask_size.is_integer() else ask_size,
             "source": args.source_label,
+            "depth_complete": depth_complete,
             "data_quality": (
                 "verified"
                 if bid is not None and ask is not None and
@@ -157,6 +160,7 @@ def main() -> None:
             "no_price_only_entry_evidence": True,
             "timestamp_and_symbol_required": True,
             "source_timestamp_preserved": True,
+            "depth_complete_is_explicit": True,
             "exact_duplicate_market_event_rejected": True,
         },
     }
