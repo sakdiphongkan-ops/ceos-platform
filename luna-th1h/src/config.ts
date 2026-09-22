@@ -1,3 +1,4 @@
+// LUNA_SOURCE_REFRESH_2026_09_22
 const num=(name:string, fallback:number)=>Number(process.env[name] ?? fallback);
 const bool=(name:string, fallback:boolean)=>String(process.env[name] ?? fallback).toLowerCase()==="true";
 
