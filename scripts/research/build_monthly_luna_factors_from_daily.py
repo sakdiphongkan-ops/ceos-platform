@@ -36,8 +36,6 @@ def main() -> None:
     df = pd.read_csv(args.input)
     pit_excluded_rows=0
     pit_active_symbols=0
-    if args.membership:
-        df, pit_excluded_rows, pit_active_symbols = filter_dataframe_by_date(df,args.membership,"date")
     required = {"date", "symbol", "adj_close", "MOM_20", "VOL_20", "MAXDD_60", "AMOUNT"}
     missing = sorted(required - set(df.columns))
     if missing:
@@ -80,6 +78,11 @@ def main() -> None:
         "high52_ratio", "vol20", "maxdd60", "avg_amount20",
     ]
     out = eom[cols].sort_values(["month_end", "symbol"]).reset_index(drop=True)
+
+    if args.membership:
+        out["snapshot_date"] = pd.to_datetime(out["month_end"], errors="raise")
+        out, pit_excluded_rows, pit_active_symbols = filter_dataframe_by_date(out,args.membership,"snapshot_date")
+        out = out.drop(columns=["snapshot_date"])
 
     max_month = out["month_end"].max()
     min_allowed = max_month - pd.DateOffset(years=args.lookback_years)
