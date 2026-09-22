@@ -55,6 +55,7 @@ export type PlannedOrder = {
   visibleDepth:number;
   spreadBps:number;
   reason:string;
+  depthLevels?:Array<{price:number;size:number}>;
 } | {
   accepted:false;
   reason:string;
