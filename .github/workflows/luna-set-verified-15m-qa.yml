@@ -1,0 +1,56 @@
+name: LUNA SET verified 15m data QA
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_url:
+        description: "SET-subscribed raw tick-file HTTPS URL"
+        required: true
+        type: string
+      mapping_json:
+        description: "Exact SET column mapping JSON"
+        required: true
+        type: string
+      min_symbols:
+        description: "Minimum symbols required"
+        required: false
+        default: "50"
+        type: string
+
+jobs:
+  ingest-and-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download subscriber-provided SET tick file
+        env:
+          SOURCE_URL: ${ inputs.source_url }}
+        run: |
+          mkdir -p data/raw/set_tick
+          curl -fL --retry 3 --retry-delay 2 "$SOURCE_URL"             -o data/raw/set_tick/source.bin
+          test -s data/raw/set_tick/source.bin
+          sha256sum data/raw/set_tick/source.bin
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+
+      - name: Normalize official SET tick data
+        run: |
+          python scripts/research/normalize_set_tick_data.py             --input data/raw/set_tick/source.bin             --output data/raw/set_tick/normalized.csv             --mapping-json '${ inputs.mapping_json }}'
+
+      - name: Verify 15m research readiness
+        run: |
+          python scripts/research/qa_verified_15m.py             --input data/raw/set_tick/normalized.csv             --output data/raw/set_tick/qa.json             --min-symbols '${ inputs.min_symbols }}'             --min-verified-book-ratio 0.95
+
+      - name: Upload auditable QA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: luna-set-verified-15m-${ github.run_id }}
+          path: data/raw/set_tick/
+          retention-days: 30
