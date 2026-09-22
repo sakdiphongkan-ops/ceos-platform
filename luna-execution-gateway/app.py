@@ -19,6 +19,7 @@ except Exception:  # pragma: no cover
     Investor = None
 
 APP_VERSION = "0.5.0"
+SOURCE_REVISION = os.getenv("RAILWAY_GIT_COMMIT_SHA") or os.getenv("GITHUB_SHA") or "unknown"
 app = FastAPI(title="LUNA Execution + Market Data Gateway", version=APP_VERSION)
 
 LIVE_ARMED = os.getenv("LIVE_TRADING_ARMED", "false").lower() == "true"
@@ -965,6 +966,7 @@ def health():
     return {
         "ok": True,
         "version": APP_VERSION,
+        "source_revision": SOURCE_REVISION,
         "live_armed": LIVE_ARMED,
         "provider_mode": PROVIDER_MODE,
         "selected_provider": _selected_provider,
