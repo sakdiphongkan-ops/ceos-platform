@@ -47,6 +47,33 @@ const noBook=blocked.evaluate(
 );
 if(noBook.action==="BUY") throw new Error("unverified book must block BUY");
 
+
+const priceOnlyStrategy=new StrategyV1({}, {priceOnlyFallback:true});
+for(let i=0;i<20;i++){
+  const ts=new Date(start+i*15*60_000).toISOString();
+  priceOnlyStrategy.evaluate(
+    {
+      ...quote(ts,100+i*0.10,false),
+      bid:0,ask:0,bidSize:0,askSize:0,last:100+i*0.10,
+      source:"tradingview-public-screener",
+      dataQuality:"public_screener_unverified_latency"
+    },
+    {positionQty:0,avgPrice:0,nowMs:start+i*15*60_000+1000}
+  );
+}
+const priceOnlyEntry=priceOnlyStrategy.evaluate(
+  {
+    ...quote(new Date(entryTs).toISOString(),102.20,false),
+    bid:0,ask:0,bidSize:0,askSize:0,last:102.20,
+    source:"tradingview-public-screener",
+    dataQuality:"public_screener_unverified_latency"
+  },
+  {positionQty:0,avgPrice:0,nowMs:entryTs}
+);
+if(priceOnlyEntry.action!=="BUY") throw new Error("paper price-only fallback should allow BUY after warmup");
+if(priceOnlyEntry.strategyVersion!=="luna-th1h-v1.0.0-price-only-paper-warm5") throw new Error("price-only strategy version mismatch");
+if(Number(priceOnlyEntry.targetAllocationPct??0)>=7.5) throw new Error("price-only fallback must remain inside reduced sizing envelope");
+
 const exitStrategy=new StrategyV1();
 exitStrategy.prime("AAA",Array.from({length:20},(_,i)=>100+i*0.10));
 const exit=exitStrategy.evaluate(

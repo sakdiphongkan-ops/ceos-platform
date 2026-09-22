@@ -173,6 +173,11 @@ export class StrategyV1{
     const hasBook=finite(q.bid) && finite(q.ask) && Number(q.bid)<=Number(q.ask);
     const hasDepth=hasBook && Number(q.bidSize??0)>0 && Number(q.askSize??0)>0;
     const verifiedBook=hasDepth && !String(q.dataQuality??"").toLowerCase().includes("unverified");
+    const allowPaperPriceOnly =
+      this.priceOnlyFallback
+      && String(process.env.LUNA_MODE ?? "paper").toLowerCase()==="paper"
+      && String(process.env.LIVE_TRADING_ARMED ?? "false").toLowerCase()!=="true"
+      && String(q.source ?? "").toLowerCase().includes("tradingview-public-screener");
 
     const st=stateFor(this.states,q.symbol);
     const positionBeforeBar=this.evaluatePosition(q,ctx,st);
@@ -207,7 +212,7 @@ export class StrategyV1{
       };
     }
 
-    if(!verifiedBook){
+    if(!verifiedBook && !allowPaperPriceOnly){
       return {symbol:q.symbol,ts:q.ts,action:"HOLD",reason:"ENTRY_BLOCKED_BOOK_UNVERIFIED",strategyVersion:this.version};
     }
     if(!completedNewBar || st.completedBars.length<Math.max(this.params.slowPeriod,2) || st.emaFast===null || st.emaSlow===null){
@@ -226,13 +231,19 @@ export class StrategyV1{
     const momentumBps=((previousBar/priorBar)-1)*10_000;
     const trendUp=st.emaFast>st.emaSlow;
     const trendGapBps=st.emaSlow>0?((st.emaFast/st.emaSlow)-1)*10_000:0;
-    const spreadBps=((Number(q.ask)-Number(q.bid))/Number(q.last))*10_000;
-    const imbalance=(Number(q.bidSize??0)-Number(q.askSize??0))/(Number(q.bidSize??0)+Number(q.askSize??0));
+    const spreadBps=hasBook
+      ? ((Number(q.ask)-Number(q.bid))/Number(q.last))*10_000
+      : Number.POSITIVE_INFINITY;
+    const imbalance=hasDepth
+      ? (Number(q.bidSize??0)-Number(q.askSize??0))/(Number(q.bidSize??0)+Number(q.askSize??0))
+      : 0;
 
     const entryOk=trendUp
       && momentumBps>=this.params.minMomentumBps
-      && spreadBps<=this.params.maxSpreadBps
-      && imbalance>=this.params.minImbalance;
+      && (allowPaperPriceOnly || (
+        spreadBps<=this.params.maxSpreadBps
+        && imbalance>=this.params.minImbalance
+      ));
 
     if(entryOk){
       st.lastDecisionTs=ctx.nowMs;
@@ -246,10 +257,12 @@ export class StrategyV1{
       });
       return {
         symbol:q.symbol,ts:q.ts,action:"BUY",
-        reason:"15M_CLOSED_BAR VERIFIED_BOOK EMA5>EMA20"
+        reason:(allowPaperPriceOnly
+          ?"15M_CLOSED_BAR PRICE_ONLY_PAPER EMA5>EMA20"
+          :"15M_CLOSED_BAR VERIFIED_BOOK EMA5>EMA20")
           +" momentum="+momentumBps.toFixed(2)+"bps"
-          +" spread="+spreadBps.toFixed(2)+"bps"
-          +" imbalance="+imbalance.toFixed(3)
+          +" spread="+(Number.isFinite(spreadBps)?spreadBps.toFixed(2)+"bps":"NA")
+          +" imbalance="+(allowPaperPriceOnly?"NA":imbalance.toFixed(3))
           +" strength="+sizing.strength.toFixed(3)
           +" target="+(sizing.targetFraction*100).toFixed(1)+"%",
         strategyVersion:this.version,
