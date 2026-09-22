@@ -30,7 +30,7 @@ jobs:
       - run: npm run test:latency
       - run: npm run backtest:fixture
       - name: Compile execution gateway
-        run: python -m py_compile luna-execution-gateway/app.py
+        run: python -m py_compile ../luna-execution-gateway/app.py
 
   research_repaired_tournament_v3:
     if: github.event_name == 'push'
