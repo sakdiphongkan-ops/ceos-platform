@@ -55,9 +55,11 @@ def main():
     out=Path(a.output); out.mkdir(parents=True,exist_ok=True)
     d=pd.read_csv(a.input); need={"symbol","month_end","adj_close","fwd1",*FACTORS}; miss=sorted(need-set(d.columns))
     if miss: raise SystemExit(f"missing columns: {miss}")
-    d["month_end"]=pd.to_datetime(d.month_end);d["symbol"]=d.symbol.astype(str)
+    if "snapshot_date" not in d.columns:
+        raise SystemExit("PIT_SNAPSHOT_DATE_REQUIRED")
+    d["snapshot_date"]=pd.to_datetime(d.snapshot_date);d["month_end"]=pd.to_datetime(d.month_end);d["symbol"]=d.symbol.astype(str)
     d, pit_excluded_rows, pit_active_symbols = filter_dataframe_by_date(
-        d, a.membership, "month_end"
+        d, a.membership, "snapshot_date"
     )
     for c in ["adj_close","fwd1",*FACTORS]: d[c]=pd.to_numeric(d[c],errors="coerce")
     d=d.sort_values(["month_end","symbol"]).drop_duplicates(["month_end","symbol"])
@@ -115,6 +117,7 @@ def main():
       "pit_membership":a.membership,"pit_excluded_rows":int(pit_excluded_rows),
       "pit_active_symbols":int(pit_active_symbols),
       "pit_universe_required":True,
+      "pit_date_column":"snapshot_date",
       "dataset_sha256":hashlib.sha256(Path(a.input).read_bytes()).hexdigest(),
       "formula_count":len(fs),"seed":a.seed,"k":a.k,"cost_bps":a.cost_bps,"lookback_months":a.lookback_months,
       "min_history_months":a.min_history_months,"months_available":len(months),"months_traded":int(len(led)),
