@@ -43,7 +43,7 @@ SET_API_TIMEOUT_SEC = max(2.0, float(os.getenv("SET_MARKETDATA_TIMEOUT_SEC", "8"
 TRADINGVIEW_URL = os.getenv("TRADINGVIEW_SCANNER_URL", "https://scanner.tradingview.com/thailand/scan")
 TRADINGVIEW_POLL_SEC = max(2.0, float(os.getenv("TRADINGVIEW_POLL_SEC", "5")))
 PUBLIC_FALLBACK_ENABLED = (
-    os.getenv("LUNA_PUBLIC_MARKETDATA_FALLBACK", "true").lower() == "true"
+    os.getenv("LUNA_PUBLIC_MARKETDATA_FALLBACK", "false").lower() == "true"
     and not LIVE_ARMED
 )
 
