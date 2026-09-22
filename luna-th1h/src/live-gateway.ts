@@ -9,6 +9,8 @@ export interface LiveBrokerOrder{
   qty:number;
   price:number;
   submitted_at_ms:number;
+  broker_native_submitted_at_ms:number|null;
+  ack_kind:"broker_native"|"gateway_response";
   raw:unknown;
 }
 
@@ -167,6 +169,8 @@ export async function placeLiveOrder(order:{
     qty:order.qty,
     price:order.price,
     submitted_at_ms:Number(body.submitted_at_ms ?? Date.now()),
+    broker_native_submitted_at_ms:body.broker_native_submitted_at_ms==null?null:Number(body.broker_native_submitted_at_ms),
+    ack_kind:body.ack_kind==="broker_native"?"broker_native":"gateway_response",
     raw:body.raw
   };
 }
