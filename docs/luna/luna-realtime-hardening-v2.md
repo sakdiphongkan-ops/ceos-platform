@@ -11,6 +11,7 @@ Date: 2026-09-22
 - When no signals are waiting, the queue drains available ticks at full batch capacity.
 - Queue diagnostics now expose coalesced ticks, flushed batches/items, and failed flushes.
 - Configuration: `LUNA_TELEMETRY_TICK_SHARE`, default 0.25.
+- HOLD quotes are now persisted at most 250 ms apart by default (configurable with `LUNA_HOLD_TICK_PERSIST_MS`) instead of the previous 5 s throttle, keeping the fast state near real time without writing every raw quote.
 
 ### Session-close reliability
 Session shutdown now treats reconciliation, snapshot, telemetry flush, audit, and database session-close as independent stages. A telemetry failure is recorded but does not prevent the final `end_session` request.
