@@ -1365,9 +1365,6 @@ async function main(){
   if(!Number.isInteger(config.maxOrdersPerMinute) || config.maxOrdersPerMinute<1){
     throw new Error("LUNA_MAX_ORDERS_PER_MINUTE_MUST_BE_AT_LEAST_1");
   }
-  if(config.priceOnlyFallback){
-    throw new Error("PRICE_ONLY_FALLBACK_DISABLED_AFTER_RISK_HARDENING");
-  }
   if(config.mode==="live" || config.executionMode==="live") await preflightLive();
   if(!["mock","set-marketplace","settrade-gateway"].includes(config.marketDataProvider)){
     throw new Error(`Unknown MARKET_DATA_PROVIDER: ${config.marketDataProvider}`);
