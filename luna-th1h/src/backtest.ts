@@ -1,6 +1,7 @@
 import {applyFill,createPortfolio,mark,planOrder,simulateFill,snapshot,type ExecutionCostOverrides,type PortfolioState} from "./execution.js";
 import {DEFAULT_PARAMS,StrategyV1,type StrategyParams} from "./strategy-v1.js";
-import type {Quote} from "./types.js";
+import {marketPhaseAt} from "./market-session.js";
+import type {Quote,Signal} from "./types.js";
 
 export interface BacktestTrade{
   ts:string;
@@ -102,14 +103,38 @@ export function runBacktest(
   for(const q of quotes){
     const nowMs=Date.parse(q.ts);
     if(!Number.isFinite(nowMs)) throw new Error(`INVALID_TIMESTAMP ${q.ts}`);
+    const eventTs=q.sourceTs??q.ts;
+    const phase=marketPhaseAt(eventTs);
+
+    if(phase==="CLOSED") continue;
     mark(state,q);
 
     const pos=state.positions[q.symbol];
-    const signal=strategy.evaluate(q,{
-      positionQty:pos?.qty??0,
-      avgPrice:pos?.avgPrice??0,
-      nowMs
-    });
+    let signal:Signal;
+    if(phase==="FORCE_CLOSE" && (pos?.qty??0)>0){
+      signal={
+        symbol:q.symbol,
+        ts:q.ts,
+        action:"SELL",
+        reason:"MARKET_FORCE_CLOSE",
+        strategyVersion:strategy.version
+      };
+    }else{
+      signal=strategy.evaluate(q,{
+        positionQty:pos?.qty??0,
+        avgPrice:pos?.avgPrice??0,
+        nowMs
+      });
+      if(signal.action==="BUY" && phase!=="ACTIVE"){
+        signal={
+          symbol:q.symbol,
+          ts:q.ts,
+          action:"HOLD",
+          reason:"ENTRY_BLOCKED_MARKET_PHASE_"+phase,
+          strategyVersion:strategy.version
+        };
+      }
+    }
 
     const order=planOrder(signal,q,state,undefined,options.costModel);
     if(order.accepted){
