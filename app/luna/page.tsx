@@ -43,8 +43,23 @@ type Trade = {
 };
 
 const LUNA_API = "https://wigzicwgcsrhdummrbjx.supabase.co/functions/v1/luna-api";
+const LUNA_PUBLIC_MARKET_STREAM =
+  process.env.NEXT_PUBLIC_LUNA_PUBLIC_MARKET_STREAM_URL ??
+  "wss://luna-execution-gateway-production.up.railway.app/quotes/public-stream";
 const LUNA_STRATEGY = "luna-th1h-v1.0.0";
 const TIMEFRAME = "15m";
+
+type RealtimeQuote = {
+  symbol: string;
+  ts?: string;
+  source_ts?: string | null;
+  bid?: number | null;
+  ask?: number | null;
+  last?: number | null;
+  bid_size?: number | null;
+  ask_size?: number | null;
+  source?: string | null;
+};
 
 type LunaFeed = {
   generated_at:string;
@@ -122,6 +137,9 @@ export default function LunaPortfolioPage() {
   const [profitOnly,setProfitOnly]=useState(false);
   const [error,setError]=useState("");
   const [live,setLive]=useState(false);
+  const [realtimeQuotes,setRealtimeQuotes]=useState<Record<string,RealtimeQuote>>({});
+  const [realtimeConnected,setRealtimeConnected]=useState(false);
+  const [lastRealtimeTickAt,setLastRealtimeTickAt]=useState<number|null>(null);
   const [clock,setClock]=useState(()=>new Date());
 
   const load=useCallback(async()=>{
@@ -140,7 +158,75 @@ export default function LunaPortfolioPage() {
     }
   },[]);
 
-  useEffect(()=>{ load(); const id=setInterval(load,2000); return()=>clearInterval(id); },[load]);
+  useEffect(()=>{ load(); const id=setInterval(load,5000); return()=>clearInterval(id); },[load]);
+
+  useEffect(()=>{
+    let socket: WebSocket | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let retryMs = 1000;
+    let stopped = false;
+
+    const connect = () => {
+      if (stopped) return;
+      try {
+        socket = new WebSocket(LUNA_PUBLIC_MARKET_STREAM);
+      } catch {
+        setRealtimeConnected(false);
+        retryTimer = setTimeout(connect, retryMs);
+        retryMs = Math.min(15000, retryMs * 2);
+        return;
+      }
+
+      socket.onopen = () => {
+        retryMs = 1000;
+        setRealtimeConnected(true);
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data) as {
+            type?: string;
+            quotes?: RealtimeQuote[];
+            quote?: RealtimeQuote;
+          };
+          if (message.type === "snapshot" && Array.isArray(message.quotes)) {
+            const next: Record<string,RealtimeQuote> = {};
+            for (const quote of message.quotes) {
+              if (quote?.symbol) next[quote.symbol] = quote;
+            }
+            setRealtimeQuotes(next);
+            if (message.quotes.length) setLastRealtimeTickAt(Date.now());
+          } else if (message.type === "quote" && message.quote?.symbol) {
+            const quote = message.quote;
+            setRealtimeQuotes((prev) => ({...prev, [quote.symbol]: quote}));
+            setLastRealtimeTickAt(Date.now());
+          }
+        } catch {
+          // Ignore malformed public-stream frames; HTTP remains the source of record.
+        }
+      };
+
+      socket.onclose = () => {
+        if (stopped) return;
+        setRealtimeConnected(false);
+        retryTimer = setTimeout(connect, retryMs);
+        retryMs = Math.min(15000, retryMs * 2);
+      };
+
+      socket.onerror = () => {
+        setRealtimeConnected(false);
+      };
+    };
+
+    connect();
+
+    return () => {
+      stopped = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      socket?.close();
+    };
+  },[]);
+
   useEffect(()=>{ const id=setInterval(()=>setClock(new Date()),1000); return()=>clearInterval(id); },[]);
 
   const marketPhase=uiMarketPhase(clock);
@@ -165,7 +251,8 @@ export default function LunaPortfolioPage() {
   const sessionTicks=sessionId ? (feed?.ticks??[]).filter(t=>t.session_id===sessionId) : [];
 
   const positions:Position[]=sessionPositions.filter(p=>Number(p.qty)>0).map(p=>{
-    const tick=sessionTicks.find(t=>t.symbol===p.symbol);
+    const realtimeTick=realtimeQuotes[p.symbol];
+    const tick=realtimeTick ?? sessionTicks.find(t=>t.symbol===p.symbol);
     const signal=sessionSignals.find(s=>s.symbol===p.symbol);
     const signalTs=signal?.ts??signal?.created_at;
     const signalAgeMs=signalTs ? Math.max(0,Date.now()-Date.parse(signalTs)) : Number.POSITIVE_INFINITY;
@@ -210,10 +297,12 @@ export default function LunaPortfolioPage() {
   const filterCount=(signalFilter!=="ALL"?1:0)+(profitOnly?1:0);
   const updatedAt=feed?.generated_at ? new Date(feed.generated_at).toLocaleTimeString("en-GB",{hour12:false}) : "—";
   const initial=Number(session?.initial_capital??1000000);
-  const marketValue=Number(sessionSnapshot?.market_value??positions.reduce((s,p)=>s+p.qty*p.last,0));
+  const liveMarketValue=positions.reduce((s,p)=>s+p.qty*p.last,0);
+  const marketValue=positions.length ? liveMarketValue : Number(sessionSnapshot?.market_value??0);
   const cash=Number(sessionSnapshot?.cash??Math.max(0,initial-marketValue));
   const equity=cash+marketValue;
-  const unrealized=Number(sessionSnapshot?.unrealized_pnl??positions.reduce((s,p)=>s+p.qty*(p.last-p.avgCost),0));
+  const liveUnrealized=positions.reduce((s,p)=>s+p.qty*(p.last-p.avgCost),0);
+  const unrealized=positions.length ? liveUnrealized : Number(sessionSnapshot?.unrealized_pnl??0);
   const realized=Number(sessionSnapshot?.realized_pnl??positions.reduce((s,p)=>s+p.realized,0));
   const fees=Number(sessionSnapshot?.fees??0);
   const exposure=equity?Number(sessionSnapshot?.gross_exposure??marketValue)/equity*100:0;
@@ -235,9 +324,13 @@ export default function LunaPortfolioPage() {
           ? "STALE / UNKNOWN"
           : "NO MARKET TICKS";
   const marketFeedSource=marketFeed.latest_source ? String(marketFeed.latest_source) : "no source";
-  const marketFeedAge=Number.isFinite(Number(marketFeed.latest_age_ms))
-    ? `${Math.max(0,Math.round(Number(marketFeed.latest_age_ms)))} ms old`
-    : "age unavailable";
+  const realtimeAgeMs=lastRealtimeTickAt==null ? null : Math.max(0,Date.now()-lastRealtimeTickAt);
+  const marketFeedAge=realtimeConnected && realtimeAgeMs!=null
+    ? Math.round(realtimeAgeMs) + " ms since UI tick"
+    : Number.isFinite(Number(marketFeed.latest_age_ms))
+      ? Math.max(0,Math.round(Number(marketFeed.latest_age_ms))) + " ms old"
+      : "age unavailable";
+
 
   return <main className="luna-shell">
     <header className="topbar">
@@ -251,7 +344,7 @@ export default function LunaPortfolioPage() {
       <div className="top-actions">
         <div className={`market-status phase-${marketPhase.toLowerCase()}`}><CircleDot size={11}/> SET · {marketPhaseLabel(marketPhase)}</div><div className="timeframe-chip"><BarChart3 size={13}/> {TIMEFRAME}</div>
         <button className={"icon-button "+(refreshing?"refreshing":"")} title="Refresh" onClick={load}><RefreshCw size={17}/></button>
-        <div className="session-chip"><Clock3 size={14}/> {todaySessionDate} · {bangkokClock(clock)} · {live?"UPDATED "+updatedAt:"OFFLINE"}</div>
+        <div className="session-chip"><Clock3 size={14}/> {todaySessionDate} · {bangkokClock(clock)} · {realtimeConnected ? "REALTIME TICK" : live ? "UPDATED "+updatedAt : "OFFLINE"}</div>
       </div>
     </header>
     <div className="page">
@@ -262,7 +355,7 @@ export default function LunaPortfolioPage() {
         <div><span>EXECUTION MODE</span><strong>{executionMode}</strong><small>{liveExecution ? "live gate open" : "paper only"}</small></div>
         <div><span>KILL SWITCH</span><strong>{killSwitch ? "ON" : "OFF"}</strong><small>{armed ? "armed" : "disarmed"}</small></div>
         <div><span>LIVE ORDER GATE</span><strong>{liveExecution ? "READY" : "LOCKED"}</strong><small>broker bridge status</small></div>
-        <div><span>MARKET FEED</span><strong>{marketFeedLabel}</strong><small>{marketFeedSource} · {marketFeedAge}</small></div><div className="live-operating-note"><ShieldCheck size={15}/><span>{marketPhase==="ACTIVE" ? "Market session active — backend re-checks phase immediately before every execution." : "Market execution is locked at this phase; stale signals are shown as HOLD until a fresh in-session signal arrives."}</span></div>
+        <div><span>MARKET FEED</span><strong>{realtimeConnected ? "REALTIME STREAM" : marketFeedLabel}</strong><small>{realtimeConnected ? "public WS · " + marketFeedAge : marketFeedSource + " · " + marketFeedAge}</small></div><div className="live-operating-note"><ShieldCheck size={15}/><span>{marketPhase==="ACTIVE" ? "Market session active — backend re-checks phase immediately before every execution." : "Market execution is locked at this phase; stale signals are shown as HOLD until a fresh in-session signal arrives."}</span></div>
       </section>
       {error&&<div className="error-banner"><span>{error}</span><button onClick={load}>Retry</button></div>}
       <section className="summary-grid"><Metric label="Market ticks" value={String(sessionTicks.length)} sub="Latest session feed"/><Metric label="Signals" value={String(sessionSignals.length)} sub="15m strategy signals"/><Metric label="Orders" value={String(sessionOrders.length)} sub="Recorded this session"/>
