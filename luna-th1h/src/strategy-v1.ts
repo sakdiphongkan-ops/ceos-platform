@@ -153,7 +153,7 @@ export class StrategyV1{
     }
     if(trendBroken){
       st.lastDecisionTs=ctx.nowMs; st.entryTs=null;
-      return {symbol:q.symbol,ts:q.ts,action:"SELL",reason:"TAKE_PROFIT",strategyVersion:this.version};
+      return {symbol:q.symbol,ts:q.ts,action:"SELL",reason:"15M_EMA_TREND_BREAK",strategyVersion:this.version};
     }
     if(timedOut){
       st.lastDecisionTs=ctx.nowMs; st.entryTs=null;
