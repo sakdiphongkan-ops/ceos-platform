@@ -10,9 +10,11 @@ if(requestedTimezone!==MARKET_TIMEZONE){
 export const config={
   mode:process.env.LUNA_MODE ?? "paper",
   initialCapital:num("LUNA_INITIAL_CAPITAL",1_000_000),
-  maxPositionPct:num("LUNA_MAX_POSITION_PCT",1.00),
-  maxGrossExposurePct:num("LUNA_MAX_GROSS_EXPOSURE_PCT",1),
-  entryNotionalPct:num("LUNA_ENTRY_NOTIONAL_PCT",0.20),
+  maxPositionPct:num("LUNA_MAX_POSITION_PCT",0.075),
+  maxGrossExposurePct:num("LUNA_MAX_GROSS_EXPOSURE_PCT",0.50),
+  entryNotionalPct:num("LUNA_ENTRY_NOTIONAL_PCT",0.05)
+  ,maxDailyLoss:num("LUNA_MAX_DAILY_LOSS",5_000)
+  ,maxOrdersPerMinute:num("LUNA_MAX_ORDERS_PER_MINUTE",2),
   feeBps:num("LUNA_FEE_BPS",25),
   sellTaxBps:num("LUNA_SELL_TAX_BPS",10),
   slippageBps:num("LUNA_SLIPPAGE_BPS",5),
@@ -31,7 +33,7 @@ export const config={
   marketDataGatewayUrl:process.env.LUNA_MARKET_GATEWAY_URL ?? "",
   marketDataGatewayKey:process.env.LUNA_MARKET_GATEWAY_KEY ?? "",
   marketDataGatewayPollMs:num("LUNA_MARKET_GATEWAY_POLL_MS",100),
-  maxQuoteAgeMs:num("LUNA_MAX_QUOTE_AGE_MS",3000),
+  maxQuoteAgeMs:num("LUNA_MAX_QUOTE_AGE_MS",2000),
   maxExecutionConcurrency:num("LUNA_MAX_EXECUTION_CONCURRENCY",4),
   maxAnalysisConcurrency:num("LUNA_MAX_ANALYSIS_CONCURRENCY",16),
   telemetryBatchSize:num("LUNA_TELEMETRY_BATCH_SIZE",50),
