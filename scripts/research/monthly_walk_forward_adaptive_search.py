@@ -98,9 +98,12 @@ def main() -> None:
     out = Path(args.output)
     out.mkdir(parents=True, exist_ok=True)
     raw = pd.read_csv(args.input)
+    if "snapshot_date" not in raw.columns:
+        raise SystemExit("PIT_SNAPSHOT_DATE_REQUIRED")
+    raw["snapshot_date"] = pd.to_datetime(raw["snapshot_date"])
     raw["month_end"] = pd.to_datetime(raw["month_end"])
     raw, pit_excluded_rows, pit_active_symbols = filter_dataframe_by_date(
-        raw, args.membership, "month_end"
+        raw, args.membership, "snapshot_date"
     )
 
     required = {"symbol", "month_end", "adj_close", *FACTORS}
