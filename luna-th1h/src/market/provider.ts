@@ -83,6 +83,13 @@ async function* gatewayWebSocketMessages(streamUrl:string,key:string):AsyncGener
     let waiter:((value:string)=>void)|null=null;
     let waiterReject:((reason?:unknown)=>void)|null=null;
     let streamError:Error|null=null;
+    let opened=false;
+    let resolveOpen:(value?:void)=>void=()=>{};
+    let rejectOpen:(reason?:unknown)=>void=()=>{};
+    const openPromise=new Promise<void>((resolve,reject)=>{
+      resolveOpen=resolve;
+      rejectOpen=reject;
+    });
 
     const nextMessage=()=>new Promise<string>((resolve,reject)=>{
       if(messages.length>0){
@@ -100,8 +107,11 @@ async function* gatewayWebSocketMessages(streamUrl:string,key:string):AsyncGener
     ws.onopen=()=>{
       try{
         ws.send(JSON.stringify({type:"auth",key}));
+        opened=true;
+        resolveOpen();
       }catch(err){
         streamError=err instanceof Error?err:new Error(String(err));
+        rejectOpen(streamError);
         waiterReject?.(streamError);
       }
     };
@@ -120,8 +130,10 @@ async function* gatewayWebSocketMessages(streamUrl:string,key:string):AsyncGener
       }
     };
     ws.onerror=()=>{
-      streamError=new Error("LUNA_GATEWAY_WEBSOCKET_ERROR");
-      waiterReject?.(streamError);
+      const err=new Error("LUNA_GATEWAY_WEBSOCKET_ERROR");
+      if(!opened) rejectOpen(err);
+      streamError=err;
+      waiterReject?.(err);
       waiter=null;
       waiterReject=null;
     };
@@ -135,21 +147,13 @@ async function* gatewayWebSocketMessages(streamUrl:string,key:string):AsyncGener
     try{
       // Give the gateway enough time for a cold/restarted deployment, but do not
       // let a dead socket stall the trading loop indefinitely.
-      await new Promise<void>((resolve,reject)=>{
-        const deadline=setTimeout(()=>reject(new Error("LUNA_GATEWAY_WEBSOCKET_OPEN_TIMEOUT")),5000);
-        const opened=()=>{
-          clearTimeout(deadline);
-          resolve();
-        };
-        if(ws.readyState===1) opened();
-        else{
-          const prior=ws.onopen;
-          ws.onopen=()=>{
-            if(typeof prior==="function") prior(new Event("open") as any);
-            opened();
-          };
-        }
-      });
+      await Promise.race([
+        openPromise,
+        new Promise<never>((_,reject)=>setTimeout(
+          ()=>reject(new Error("LUNA_GATEWAY_WEBSOCKET_OPEN_TIMEOUT")),
+          5000
+        ))
+      ]);
 
       while(true){
         const textData=await nextMessage();
