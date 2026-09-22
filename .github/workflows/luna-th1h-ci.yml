@@ -40,6 +40,8 @@ jobs:
           python -m py_compile ../scripts/research/normalize_set_tick_data.py
           python -m py_compile ../scripts/research/qa_verified_15m.py
           python -m py_compile ../scripts/research/apply_pit_universe.py
+          python -m py_compile ../scripts/research/monthly_walk_forward_adaptive_search.py
+          python -m py_compile ../scripts/research/luna_adaptive_tournament_v2.py
           cd ../scripts/research && python test_apply_pit_universe.py
 
   research_repaired_tournament_v3:
