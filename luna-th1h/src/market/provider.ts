@@ -91,6 +91,8 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
         last:Number.isFinite(Number(raw.last))?Number(raw.last):null,
         bidSize:Number.isFinite(Number(raw.bid_size))?Number(raw.bid_size):null,
         askSize:Number.isFinite(Number(raw.ask_size))?Number(raw.ask_size):null,
+        bidLevels:Array.isArray(raw.bid_levels)?raw.bid_levels.map((x:any)=>({price:Number(x.price),size:Number(x.size)})).filter((x:any)=>Number.isFinite(x.price)&&x.price>0&&Number.isFinite(x.size)&&x.size>0):undefined,
+        askLevels:Array.isArray(raw.ask_levels)?raw.ask_levels.map((x:any)=>({price:Number(x.price),size:Number(x.size)})).filter((x:any)=>Number.isFinite(x.price)&&x.price>0&&Number.isFinite(x.size)&&x.size>0):undefined,
         source:String(raw.source ?? "unknown-market-data"),
         dataQuality:raw.data_quality ? String(raw.data_quality) : undefined
       };
