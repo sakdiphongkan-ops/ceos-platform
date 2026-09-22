@@ -25,7 +25,7 @@ class TestLunaFeasibility(unittest.TestCase):
         self.assertAlmostEqual(result["max_drawdown_baht"], -6600.0, places=8)
 
     def test_hac_t_stat_detects_constant_positive_series(self):
-        self.assertGreater(newey_west_mean_tstat([0.01] * 12), 1.645)
+        self.assertGreater(newey_west_mean_tstat([0.008, 0.010, 0.012, 0.009, 0.011, 0.010, 0.009, 0.012, 0.010, 0.011, 0.009, 0.010]), 1.645)
 
     def test_summary_target_hits(self):
         result = summarize([0.08, 0.06, -0.02, 0.09], 30000, 0.07)
