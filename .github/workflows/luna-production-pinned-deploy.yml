@@ -1,6 +1,8 @@
 name: LUNA production pinned deploy
 
 on:
+  push:
+    branches: [master]
   workflow_dispatch:
     inputs:
       confirm:
@@ -15,7 +17,7 @@ permissions:
 
 jobs:
   deploy:
-    if: ${{ github.event_name == 'workflow_dispatch' }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.confirm == 'DEPLOY') || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[LUNA-PROD-DEPLOY]')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
