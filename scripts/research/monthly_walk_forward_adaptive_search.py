@@ -12,9 +12,11 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import os
 
 import numpy as np
 import pandas as pd
+from apply_pit_universe import filter_dataframe_by_date
 
 FACTORS = [
     "mom1", "mom3", "mom6", "mom12",
@@ -87,12 +89,19 @@ def main() -> None:
     ap.add_argument("--lookback-months", type=int, default=24)
     ap.add_argument("--min-history-months", type=int, default=12)
     ap.add_argument("--cost-bps", type=float, default=20.0)
+    ap.add_argument("--membership", default=os.getenv("LUNA_PIT_UNIVERSE_MEMBERSHIP"))
     ap.add_argument("--k-values", default="5,10,20")
     args = ap.parse_args()
 
+    if not args.membership:
+        raise SystemExit("PIT_UNIVERSE_MEMBERSHIP_REQUIRED")
     out = Path(args.output)
     out.mkdir(parents=True, exist_ok=True)
     raw = pd.read_csv(args.input)
+    raw["month_end"] = pd.to_datetime(raw["month_end"])
+    raw, pit_excluded_rows, pit_active_symbols = filter_dataframe_by_date(
+        raw, args.membership, "month_end"
+    )
 
     required = {"symbol", "month_end", "adj_close", *FACTORS}
     missing = sorted(required - set(raw.columns))
@@ -194,6 +203,9 @@ def main() -> None:
     summary = {
         "status": "COMPLETED",
         "engine": "luna-monthly-walk-forward-adaptive-v1",
+        "pit_membership": args.membership,
+        "pit_excluded_rows": int(pit_excluded_rows),
+        "pit_active_symbols": int(pit_active_symbols),
         "dataset_sha256": hashlib.sha256(
             Path(args.input).read_bytes()
         ).hexdigest(),
