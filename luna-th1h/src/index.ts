@@ -55,7 +55,8 @@ const telemetryQueue=new TelemetryQueue(
   items=>ingest("",{action:"telemetry_batch",items}),
   {
     maxBatchSize:config.telemetryBatchSize,
-    flushMs:config.telemetryFlushMs
+    flushMs:config.telemetryFlushMs,
+    tickBatchShare:config.telemetryTickBatchShare
   }
 );
 
@@ -1155,17 +1156,42 @@ async function endSession(status="CLOSED"){
   sessionEndPromise=(async()=>{
     if(heartbeatTimer) clearInterval(heartbeatTimer);
     heartbeatTimer=undefined;
+
     try{
       if(config.liveReconciliation && config.executionMode==="live"){
         await reconcileLiveOrderStates();
       }
+    }catch(err){
+      console.error(JSON.stringify({event:"SESSION_END_RECONCILIATION_ERROR",error:String(err)}));
+    }
+
+    try{
       await writeSnapshot();
+    }catch(err){
+      console.error(JSON.stringify({event:"SESSION_END_SNAPSHOT_ERROR",error:String(err)}));
+    }
+
+    try{
       await telemetryQueue.flushAll();
+    }catch(err){
+      console.error(JSON.stringify({
+        event:"SESSION_END_TELEMETRY_ERROR",
+        error:String(err),
+        telemetry:telemetryQueue.stats()
+      }));
+    }
+
+    try{
       await queueAudit("SESSION_ENDED",{status},activeStrategyVersion());
       await auditQueueTail;
+    }catch(err){
+      console.error(JSON.stringify({event:"SESSION_END_AUDIT_ERROR",error:String(err)}));
+    }
+
+    try{
       await ingest("",{action:"end_session",session_id:closingSessionId,status});
     }catch(err){
-      console.error(JSON.stringify({event:"SESSION_END_ERROR",error:String(err)}));
+      console.error(JSON.stringify({event:"SESSION_END_CLOSE_ERROR",error:String(err)}));
     }finally{
       if(sessionId===closingSessionId){
         sessionId=null;
