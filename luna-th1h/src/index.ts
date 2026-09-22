@@ -9,6 +9,7 @@ import {marketPhaseAt,sessionDateAt} from "./market-session.js";
 import {LatestExecutionScheduler} from "./execution-scheduler.js";
 import {compareLiveAccountState} from "./live-account-reconciliation.js";
 import {TelemetryQueue} from "./telemetry-queue.js";
+import {latencyMetrics,type LatencyLedger} from "./latency-ledger.js";
 
 const EXECUTION_TEST_VERSION="luna-th1h-execution-test-0.1.0";
 
@@ -65,6 +66,7 @@ const prewarmedSymbols=new Set<string>();
 const prewarmInFlight=new Map<string,Promise<void>>();
 const prewarmCache=new Map<string,{prices:number[];fetchedAtMs:number;fetchMs:number}>();
 const liveOrderStates=new Map<string,TrackedLiveOrder>();
+const latencyLedgers=new Map<string,LatencyLedger>();
 
 const SNAPSHOT_MS=1_000;
 const strategyV1=new StrategyV1({}, {priceOnlyFallback:config.priceOnlyFallback});
@@ -171,6 +173,15 @@ function releaseExecution(token:ExecutionReservationToken){
     const left=Math.max(0,(executionReservations.reservedSellQty[token.symbol]??0)-token.sellQty);
     if(left<=0) delete executionReservations.reservedSellQty[token.symbol];
     else executionReservations.reservedSellQty[token.symbol]=left;
+  }
+}
+
+function recordLatencyLedger(eventType:string,ledger:LatencyLedger,extra:Record<string,unknown>={}){
+  try{
+    const metrics=latencyMetrics(ledger);
+    queueAudit(eventType,{ledger,metrics,...extra});
+  }catch(error){
+    queueAudit("LATENCY_LEDGER_ERROR",{ledger,error:String(error),...extra});
   }
 }
 
@@ -467,7 +478,8 @@ async function executeSignal(
   q:Quote,
   signal:Signal,
   expectedSessionId:string|null=sessionId,
-  expectedSessionGeneration=sessionGeneration
+  expectedSessionGeneration=sessionGeneration,
+  latencyContext:{decisionTs:string}={decisionTs:new Date().toISOString()}
 ){
   if(sessionId!==expectedSessionId || sessionGeneration!==expectedSessionGeneration){
     throw new Error("EXECUTION_SESSION_GENERATION_MISMATCH");
@@ -494,11 +506,17 @@ async function executeSignal(
   const executionTs=new Date().toISOString();
   const reservation=reserveExecution(fill);
   const clientOrderId=`${sessionId}:${q.symbol}:${signal.ts}:${plan.side}:${executionTestStep}`;
+  const latencyLedger:LatencyLedger={
+    sourceTs:q.sourceTs??q.ts,
+    ingestTs:q.ts,
+    decisionTs:latencyContext.decisionTs
+  };
 
   if(config.executionMode==="live"){
     let brokerOrderReturned=false;
     let brokerOrderRecovered=false;
     try{
+      latencyLedger.submitTs=new Date().toISOString();
       const brokerOrder=await placeLiveOrder({
         clientOrderId,
         symbol:plan.symbol,
@@ -508,6 +526,8 @@ async function executeSignal(
         reason:signal.reason
       });
       brokerOrderReturned=true;
+      latencyLedger.ackTs=new Date(Number(brokerOrder.submitted_at_ms)).toISOString();
+      latencyLedgers.set(clientOrderId,latencyLedger);
       registerLiveOrder({
         clientOrderId,
         brokerOrderId:brokerOrder.broker_order_id,
@@ -553,6 +573,12 @@ async function executeSignal(
         qty:brokerOrder.qty,
         price:brokerOrder.price
       },signal.strategyVersion);
+      recordLatencyLedger("LATENCY_LEDGER_ORDER_ACKED",latencyLedger,{
+        client_order_id:clientOrderId,
+        broker_order_id:brokerOrder.broker_order_id,
+        symbol:brokerOrder.symbol,
+        side:brokerOrder.side
+      });
       console.log(JSON.stringify({event:"LIVE_ORDER_SUBMITTED",brokerOrderId:brokerOrder.broker_order_id}));
       return;
     }catch(err){
@@ -613,6 +639,7 @@ async function executeSignal(
   },signal.strategyVersion);
 
   try{
+    latencyLedger.submitTs=latencyLedger.submitTs??new Date().toISOString();
     const response=await ingest("",{
       action:"record_fill",
       session_id:sessionId,
@@ -653,6 +680,13 @@ async function executeSignal(
         applyFill(portfolio,fill);
       }
     }
+    latencyLedger.fillTs=executionTs;
+    recordLatencyLedger("LATENCY_LEDGER_ORDER_FILLED",latencyLedger,{
+      client_order_id:clientOrderId,
+      symbol:fill.symbol,
+      side:fill.side,
+      qty:fill.qty
+    });
     queueAudit("ORDER_FILLED",{
       client_order_id:clientOrderId,
       quote_ts:q.ts,
@@ -758,6 +792,17 @@ async function reconcileLiveOrderStates(){
           }
         });
         const result=(response as {result?:{idempotent?:boolean}})?.result;
+        const latencyLedger=latencyLedgers.get(current.clientOrderId);
+        if(latencyLedger && !result?.idempotent){
+          recordLatencyLedger("LATENCY_LEDGER_BROKER_FILL",latencyLedger,{
+            client_order_id:current.clientOrderId,
+            broker_order_id:next.brokerOrderId,
+            symbol:current.symbol,
+            side:current.side,
+            fill_qty:deltaQty,
+            cumulative_filled_qty:next.filledQty
+          });
+        }
         if(result && !result.idempotent){
           const sameSession=(
             sessionId===current.sessionId
@@ -800,6 +845,7 @@ async function reconcileLiveOrderStates(){
           pendingLiveReservations.delete(current.clientOrderId);
         }
         liveOrderStates.delete(current.clientOrderId);
+        if(next.status==="FILLED") latencyLedgers.delete(current.clientOrderId);
       }
       queueAudit("BROKER_ORDER_RECONCILED",{
         client_order_id:next.clientOrderId,
@@ -820,7 +866,7 @@ async function reconcileLiveOrderStates(){
 function aggregate15mCloses(quotes:any[]):number[]{
   const buckets=new Map<number,{ts:number;price:number}>();
   for(const x of quotes){
-    const ts=Date.parse(String(x?.ts??""));
+    const ts=Date.parse(String(x?.source_ts??x?.ts??""));
     const price=Number(x?.last);
     if(!Number.isFinite(ts)||!Number.isFinite(price)||price<=0) continue;
     const bucket=Math.floor(ts/(15*60_000))*(15*60_000);
@@ -1055,7 +1101,13 @@ async function handleQuote(q:Quote){
           },signal.strategyVersion);
           return;
         }
-        await executeSignal(q,signal,scheduledSessionId,scheduledSessionGeneration);
+        await executeSignal(
+          q,
+          signal,
+          scheduledSessionId,
+          scheduledSessionGeneration,
+          {decisionTs}
+        );
         const queueWaitMs=Date.now()-executionQueuedAt;
         const endToEndMs=Date.now()-startedAt;
         const executionMs=Math.max(0,endToEndMs-marketLagMs);
@@ -1064,6 +1116,10 @@ async function handleQuote(q:Quote){
           action:signal.action,
           quote_ts:q.ts,
           market_lag_ms:marketLagMs,
+          source_to_ingest_ms:sourceToIngestMs,
+          source_ts:sourceTs,
+          ingest_ts:q.ts,
+          decision_ts:decisionTs,
           prewarm_ms:prewarmMs,
           analysis_ms:Math.max(0,Date.now()-startedAt-queueWaitMs),
           queue_wait_ms:queueWaitMs,
@@ -1151,6 +1207,7 @@ async function handleQuote(q:Quote){
         queueAudit("HEARTBEAT",{
           provider:config.marketDataProvider,
           last_quote_ts:q.ts,
+          source_ts:q.sourceTs??q.ts,
           market_phase:phase,
           execution_test:config.executionTest
         }),
