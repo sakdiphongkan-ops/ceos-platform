@@ -565,7 +565,7 @@ async function executeSignal(
               clientOrderId,
               brokerOrderId:recovered.broker_order_id??null,
               symbol:signal.symbol,
-              side:signal.action,
+              side:plan.side,
               qty:plan.qty,
               sessionId:expectedSessionId!,
               sessionGeneration:expectedSessionGeneration,
@@ -821,7 +821,7 @@ function kickoffPrewarm(q:Quote){
   const generation=sessionGeneration;
   if(prewarmedSymbols.has(q.symbol) || prewarmInFlight.has(q.symbol) || prewarmCache.has(q.symbol)) return;
   const startedAt=Date.now();
-  let promise:Promise<void>;
+  let promise:Promise<void>|null=null;
   promise=(async()=>{
     try{
       const response=await ingest("",{
@@ -860,7 +860,7 @@ function kickoffPrewarm(q:Quote){
       }
     }
   })();
-  prewarmInFlight.set(q.symbol,promise);
+  if(promise) prewarmInFlight.set(q.symbol,promise);
   void promise;
 }
 
