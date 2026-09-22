@@ -168,7 +168,13 @@ export default function LunaPortfolioPage() {
 
   return <main className="luna-shell">
     <header className="topbar">
-      <div className="brand"><div className="brand-mark">L</div><div><div className="eyebrow">LUNA-TH1H</div><h1>Portfolio</h1></div></div>
+      <div className="brand"><div className="brand-mark">L</div><div><div className="eyebrow">LUNA-TH1H</div><h1>Control Room</h1></div></div>
+      <nav className="top-nav" aria-label="LUNA workspace">
+        <button className={tab==="holdings"?"active":""} onClick={()=>setTab("holdings")}>Overview</button>
+        <button className={tab==="trades"?"active":""} onClick={()=>setTab("trades")}>Trades</button>
+        <button className={tab==="closed"?"active":""} onClick={()=>setTab("closed")}>Closed</button>
+        <button className={tab==="research"?"active":""} onClick={()=>setTab("research")}>Research</button>
+      </nav>
       <div className="top-actions">
         <div className="market-status"><CircleDot size={11}/> SET / {executionMode}</div><div className="timeframe-chip"><BarChart3 size={13}/> {TIMEFRAME}</div>
         <button className="icon-button" title="Refresh" onClick={load}><RefreshCw size={17}/></button>
@@ -176,7 +182,7 @@ export default function LunaPortfolioPage() {
       </div>
     </header>
     <div className="page">
-      <section className="hero-row"><div><div className="eyebrow">INTRADAY CONTROL · LIVE PORTFOLIO</div><h2>What LUNA owns right now</h2><p>Database-backed holdings, executions, P&amp;L and risk exposure.</p></div><div className="hero-meta"><div className="data-chip"><span className="data-dot"/> {live ? "LIVE DATA" : "DATA OFFLINE"}</div><div className="safe-badge"><ShieldCheck size={15}/> {liveExecution ? "LIVE EXECUTION" : "PAPER EXECUTION"} / {killSwitch ? "KILL SWITCH ON" : "GATED"}</div></div></section>
+      <section className="hero-row"><div><div className="eyebrow">INTRADAY CONTROL · OPERATIONAL OVERVIEW</div><h2>LUNA command center</h2><p>See capital, risk, execution and research state at a glance.</p></div><div className="hero-meta"><div className="data-chip"><span className="data-dot"/> {live ? "LIVE DATA" : "DATA OFFLINE"}</div><div className="safe-badge"><ShieldCheck size={15}/> {liveExecution ? "LIVE EXECUTION" : "PAPER EXECUTION"} / {killSwitch ? "KILL SWITCH ON" : "GATED"}</div></div></section>
       <SystemControlRoom strategy={session?.strategy_version ?? LUNA_STRATEGY} asOf={session?.session_date ?? new Date().toISOString().slice(0,10)} />
       <section className="live-operating-strip">
         <div><span>MARKET DATA</span><strong>{live ? "LIVE FEED" : "OFFLINE"}</strong><small>2s UI refresh · gateway ≥100ms · SET</small></div>
