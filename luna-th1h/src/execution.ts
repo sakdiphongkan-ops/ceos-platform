@@ -219,7 +219,12 @@ export function planOrder(
       affordable,
       dailyTurnoverHeadroom/referencePrice
     ));
-    if(verifiedBook && q.askSize && q.askSize>0) qty=Math.min(qty,roundDown(q.askSize));
+    if(verifiedBook){
+      const availableAskDepth=q.askLevels?.length
+        ? q.askLevels.reduce((s,l)=>s+Math.max(0,l.size),0)
+        : Number(q.askSize??0);
+      if(availableAskDepth>0) qty=Math.min(qty,roundDown(availableAskDepth));
+    }
     if(qty<=0) return {accepted:false,reason:"INSUFFICIENT_CASH_OR_POSITION_HEADROOM"};
 
     const maxPositionNotional=state.initialCapital*config.maxPositionPct;
@@ -240,7 +245,7 @@ export function planOrder(
     recent.push(orderNowMs);
     return {
       accepted:true,symbol:q.symbol,side,qty,referencePrice,
-      visibleDepth:verifiedBook?Number(q.askSize??0):0,
+      visibleDepth:verifiedBook?(q.askLevels?.length?q.askLevels.reduce((s,l)=>s+Math.max(0,l.size),0):Number(q.askSize??0)):0,
       depthLevels:verifiedBook?q.askLevels:undefined,
       spreadBps:verifiedBook
         ? ((Number(q.ask)-Number(q.bid))/Number(q.last||q.ask))*10_000 : 0,
@@ -252,7 +257,12 @@ export function planOrder(
   const availablePositionQty=Math.max(0,pos.qty-reservedForSymbol);
   if(availablePositionQty<=0) return {accepted:false,reason:"NO_LONG_POSITION"};
   let qty=availablePositionQty;
-  if(verifiedBook && q.bidSize && q.bidSize>0) qty=Math.min(qty,roundDown(q.bidSize));
+  if(verifiedBook){
+    const availableBidDepth=q.bidLevels?.length
+      ? q.bidLevels.reduce((s,l)=>s+Math.max(0,l.size),0)
+      : Number(q.bidSize??0);
+    if(availableBidDepth>0) qty=Math.min(qty,roundDown(availableBidDepth));
+  }
   if(qty<=0) return {accepted:false,reason:"NO_SELLABLE_LIQUIDITY"};
 
   const notional=qty*referencePrice;
@@ -265,7 +275,7 @@ export function planOrder(
     if(!risk.ok) return {accepted:false,reason:risk.reason};
   return {
     accepted:true,symbol:q.symbol,side,qty,referencePrice,
-    visibleDepth:verifiedBook?Number(q.bidSize??0):0,
+    visibleDepth:verifiedBook?(q.bidLevels?.length?q.bidLevels.reduce((s,l)=>s+Math.max(0,l.size),0):Number(q.bidSize??0)):0,
     depthLevels:verifiedBook?q.bidLevels:undefined,
     spreadBps:verifiedBook
       ? ((Number(q.ask)-Number(q.bid))/Number(q.last||q.bid))*10_000 : 0,
