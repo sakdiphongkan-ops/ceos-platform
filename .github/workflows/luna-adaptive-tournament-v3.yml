@@ -1,16 +1,8 @@
 name: LUNA Adaptive Tournament v3 - Public SET
-# Factor-specific completeness repaired on 2026-09-20
+# Manual-only: research execution requires an explicitly verified PIT dataset/provenance.
 
 on:
   workflow_dispatch:
-  push:
-    branches: [master]
-    paths:
-      - "scripts/research/build_monthly_factor_dataset.py"
-      - "scripts/research/luna_adaptive_tournament_v3.py"
-      - "scripts/research/luna_holdout_audit_v2.py"
-      - ".github/workflows/luna-adaptive-tournament-v3.yml"
-
 concurrency:
   group: luna-adaptive-tournament-v3
   cancel-in-progress: true
