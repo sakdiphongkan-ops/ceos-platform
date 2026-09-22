@@ -179,7 +179,8 @@ export default function LunaPortfolioPage() {
 
       socket.onopen = () => {
         retryMs = 1000;
-        setRealtimeConnected(true);
+        // Connection alone is not proof of fresh market data.
+        setRealtimeConnected(false);
       };
 
       socket.onmessage = (event) => {
@@ -228,6 +229,14 @@ export default function LunaPortfolioPage() {
   },[]);
 
   useEffect(()=>{ const id=setInterval(()=>setClock(new Date()),1000); return()=>clearInterval(id); },[]);
+
+  // Require an actually fresh public-stream tick before calling the UI realtime.
+  useEffect(()=>{
+    const id=setInterval(()=>{
+      setRealtimeConnected(lastRealtimeTickAt!=null && Date.now()-lastRealtimeTickAt<=5000);
+    },1000);
+    return()=>clearInterval(id);
+  },[lastRealtimeTickAt]);
 
   const marketPhase=uiMarketPhase(clock);
   const todaySessionDate=bangkokDate(clock);
@@ -325,7 +334,8 @@ export default function LunaPortfolioPage() {
           : "NO MARKET TICKS";
   const marketFeedSource=marketFeed.latest_source ? String(marketFeed.latest_source) : "no source";
   const realtimeAgeMs=lastRealtimeTickAt==null ? null : Math.max(0,Date.now()-lastRealtimeTickAt);
-  const marketFeedAge=realtimeConnected && realtimeAgeMs!=null
+  const realtimeFresh=realtimeAgeMs!=null && realtimeAgeMs<=5000;
+  const marketFeedAge=realtimeFresh && realtimeAgeMs!=null
     ? Math.round(realtimeAgeMs) + " ms since UI tick"
     : Number.isFinite(Number(marketFeed.latest_age_ms))
       ? Math.max(0,Math.round(Number(marketFeed.latest_age_ms))) + " ms old"
@@ -344,7 +354,7 @@ export default function LunaPortfolioPage() {
       <div className="top-actions">
         <div className={`market-status phase-${marketPhase.toLowerCase()}`}><CircleDot size={11}/> SET · {marketPhaseLabel(marketPhase)}</div><div className="timeframe-chip"><BarChart3 size={13}/> {TIMEFRAME}</div>
         <button className={"icon-button "+(refreshing?"refreshing":"")} title="Refresh" onClick={load}><RefreshCw size={17}/></button>
-        <div className="session-chip"><Clock3 size={14}/> {todaySessionDate} · {bangkokClock(clock)} · {realtimeConnected ? "REALTIME TICK" : live ? "UPDATED "+updatedAt : "OFFLINE"}</div>
+        <div className="session-chip"><Clock3 size={14}/> {todaySessionDate} · {bangkokClock(clock)} · {realtimeFresh ? "REALTIME TICK" : live ? "STREAM STALE · UPDATED "+updatedAt : "OFFLINE"}</div>
       </div>
     </header>
     <div className="page">
@@ -355,7 +365,7 @@ export default function LunaPortfolioPage() {
         <div><span>EXECUTION MODE</span><strong>{executionMode}</strong><small>{liveExecution ? "live gate open" : "paper only"}</small></div>
         <div><span>KILL SWITCH</span><strong>{killSwitch ? "ON" : "OFF"}</strong><small>{armed ? "armed" : "disarmed"}</small></div>
         <div><span>LIVE ORDER GATE</span><strong>{liveExecution ? "READY" : "LOCKED"}</strong><small>broker bridge status</small></div>
-        <div><span>MARKET FEED</span><strong>{realtimeConnected ? "REALTIME STREAM" : marketFeedLabel}</strong><small>{realtimeConnected ? "public WS · " + marketFeedAge : marketFeedSource + " · " + marketFeedAge}</small></div><div className="live-operating-note"><ShieldCheck size={15}/><span>{marketPhase==="ACTIVE" ? "Market session active — backend re-checks phase immediately before every execution." : "Market execution is locked at this phase; stale signals are shown as HOLD until a fresh in-session signal arrives."}</span></div>
+        <div><span>MARKET FEED</span><strong>{realtimeFresh ? "REALTIME STREAM" : realtimeAgeMs!=null ? "STREAM STALE" : marketFeedLabel}</strong><small>{realtimeFresh ? "public WS · " + marketFeedAge : realtimeAgeMs!=null ? "last UI tick · " + marketFeedAge : marketFeedSource + " · " + marketFeedAge}</small></div><div className="live-operating-note"><ShieldCheck size={15}/><span>{marketPhase==="ACTIVE" ? "Market session active — backend re-checks phase immediately before every execution." : "Market execution is locked at this phase; stale signals are shown as HOLD until a fresh in-session signal arrives."}</span></div>
       </section>
       {error&&<div className="error-banner"><span>{error}</span><button onClick={load}>Retry</button></div>}
       <section className="summary-grid"><Metric label="Market ticks" value={String(sessionTicks.length)} sub="Latest session feed"/><Metric label="Signals" value={String(sessionSignals.length)} sub="15m strategy signals"/><Metric label="Orders" value={String(sessionOrders.length)} sub="Recorded this session"/>
