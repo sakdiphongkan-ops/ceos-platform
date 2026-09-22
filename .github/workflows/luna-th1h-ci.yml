@@ -68,8 +68,12 @@ jobs:
           python -m py_compile ../scripts/research/guard_holdout_once.py
           python -m py_compile ../scripts/research/build_monthly_luna_factors_from_daily.py
           python -m py_compile ../scripts/research/build_monthly_price_factors_from_daily_v1.py
+          python -m py_compile ../scripts/research/test_guard_holdout_once.py
+          python -m py_compile ../luna-execution-gateway/test_broker_timestamp.py
           cd ../scripts/research && python test_apply_pit_universe.py
+          python test_guard_holdout_once.py
           python test_set_data_contract.py
+          cd ../../luna-execution-gateway && python test_broker_timestamp.py
 
   research_repaired_tournament_v3:
     if: github.event_name == 'workflow_dispatch' && inputs.pit_membership_url != '' && inputs.pit_membership_sha256 != ''
