@@ -53,6 +53,31 @@ async function main(){
     !ticks.some(x=>x.action==="tick" && x.quote.symbol==="AAA" && x.quote.last===100),
     "stale AAA tick was not coalesced"
   );
+  assert(queue.stats().coalesced_ticks===1,"coalesced tick metric is incorrect");
+  assert(queue.stats().flushed_batches===1,"flushed batch metric is incorrect");
+  assert(queue.stats().flushed_items===4,"flushed item metric is incorrect");
+
+  const fairness:TelemetryItem[][]=[];
+  const fairnessQueue=new TelemetryQueue(async items=>{
+    fairness.push(items);
+  },{maxBatchSize:10,flushMs:5,tickBatchShare:0.25});
+  for(let i=0;i<30;i++){
+    fairnessQueue.enqueueSignal({
+      action:"signal",
+      session_id:"session-fair",
+      signal:{symbol:"S"+i,ts:"2026-09-22T10:00:00."+String(i).padStart(3,"0")+"Z",action:"BUY"}
+    });
+  }
+  fairnessQueue.enqueueTick({
+    action:"tick",
+    session_id:"session-fair",
+    quote:{symbol:"AAA",ts:"2026-09-22T10:00:00.999Z",last:999}
+  });
+  await fairnessQueue.flushAll();
+  assert(
+    fairness.some(batch=>batch.some(item=>item.action==="tick" && item.quote.symbol==="AAA")),
+    "tick starvation detected"
+  );
 
   let attempts=0;
   const retryQueue=new TelemetryQueue(async items=>{
@@ -77,6 +102,8 @@ async function main(){
 
   await retryQueue.flushAll();
   assert(attempts===2,"queued telemetry was not retained for retry");
+  assert(retryQueue.stats().failed_flushes===1,"failed flush metric is incorrect");
+
   console.log("PASS");
 }
 
