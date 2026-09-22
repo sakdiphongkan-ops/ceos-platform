@@ -17,6 +17,9 @@ export interface PortfolioState{
   positions:Record<string,PositionState>;
   marks:Record<string,Quote>;
   recentBuyTimestamps?:number[];
+  riskDayKey?:string;
+  dayStartEquity?:number;
+  dailyTurnover?:number;
 }
 
 export interface ExecutionReservations{
@@ -52,7 +55,7 @@ export interface SimulatedFill{
 }
 
 export function createPortfolio(initialCapital:number):PortfolioState{
-  return {cash:initialCapital,initialCapital,fees:0,slippageCost:0,positions:{},marks:{},recentBuyTimestamps:[]};
+  return {cash:initialCapital,initialCapital,fees:0,slippageCost:0,positions:{},marks:{},recentBuyTimestamps:[],riskDayKey:undefined,dayStartEquity:initialCapital,dailyTurnover:0};
 }
 
 function position(state:PortfolioState,symbol:string):PositionState{
@@ -74,6 +77,25 @@ function recentBuys(state:PortfolioState){
   return state.recentBuyTimestamps;
 }
 
+function marketDayKey(ts:string){
+  const d=new Date(ts);
+  if(!Number.isFinite(d.getTime())) return null;
+  return new Intl.DateTimeFormat("en-CA",{
+    timeZone:"Asia/Bangkok",year:"numeric",month:"2-digit",day:"2-digit"
+  }).format(d);
+}
+
+function ensureDailyRiskState(state:PortfolioState,ts:string){
+  const day=marketDayKey(ts);
+  if(!day) return;
+  if(state.riskDayKey!==day){
+    state.riskDayKey=day;
+    const s=snapshot(state);
+    state.dayStartEquity=s.cash+s.market_value;
+    state.dailyTurnover=0;
+  }
+}
+
 function pruneRecentBuys(state:PortfolioState,nowMs:number){
   const timestamps=recentBuys(state);
   const cutoff=nowMs-60_000;
@@ -83,6 +105,7 @@ function pruneRecentBuys(state:PortfolioState,nowMs:number){
 
 export function mark(state:PortfolioState,q:Quote){
   state.marks[q.symbol]=q;
+  ensureDailyRiskState(state,q.ts);
 }
 
 export function planOrder(
@@ -94,6 +117,7 @@ export function planOrder(
   if(signal.action==="HOLD") return {accepted:false,reason:"SIGNAL_HOLD"};
 
   const side:Side=signal.action;
+  ensureDailyRiskState(state,signal.ts);
   const hasBook=Number.isFinite(Number(q.bid))
     && Number(q.bid)>0
     && Number.isFinite(Number(q.ask))
@@ -128,8 +152,10 @@ export function planOrder(
       return {accepted:false,reason:"MAX_ORDERS_PER_MINUTE_LOCAL"};
     }
 
-    const accountPnl=snapshot(state).realized_pnl+snapshot(state).unrealized_pnl;
-    if(accountPnl<=-Math.abs(config.maxDailyLoss)){
+    const current=snapshot(state);
+    const dayStart=Number(state.dayStartEquity??state.initialCapital);
+    const dailyPnl=(current.cash+current.market_value)-dayStart;
+    if(dailyPnl<=-Math.abs(config.maxDailyLoss)){
       return {accepted:false,reason:"MAX_DAILY_LOSS_LOCAL"};
     }
 
@@ -143,7 +169,8 @@ export function planOrder(
     );
     const targetNotional=Math.max(0,state.initialCapital*targetFraction-currentNotional);
     const entryCapNotional=Math.max(0,state.initialCapital*config.entryNotionalPct);
-    const orderNotionalCap=Math.min(targetNotional,entryCapNotional);
+    const orderNotionalCap=Math.min(targetNotional,entryCapNotional,Math.max(0,config.maxOrderNotional));
+    const dailyTurnoverHeadroom=Math.max(0,config.maxDailyTurnover-Number(state.dailyTurnover??0));
     const grossHeadroom=Math.max(
       0,
       state.initialCapital*config.maxGrossExposurePct
@@ -158,7 +185,8 @@ export function planOrder(
     let qty=roundDown(Math.min(
       orderNotionalCap/referencePrice,
       grossHeadroom/referencePrice,
-      affordable
+      affordable,
+      dailyTurnoverHeadroom/referencePrice
     ));
     if(verifiedBook && q.askSize && q.askSize>0) qty=Math.min(qty,roundDown(q.askSize));
     if(qty<=0) return {accepted:false,reason:"INSUFFICIENT_CASH_OR_POSITION_HEADROOM"};
@@ -258,6 +286,7 @@ export function applyFill(state:PortfolioState,fill:SimulatedFill){
   }
   state.cash+=fill.totalCashDelta;
   state.fees+=fill.fee;
+  state.dailyTurnover=(Number(state.dailyTurnover??0)+fill.notional);
   state.slippageCost+=fill.slippage;
 }
 
