@@ -37,9 +37,12 @@ def main():
         raise SystemExit("PIT_UNIVERSE_MEMBERSHIP_REQUIRED")
     out=Path(args.output); out.mkdir(parents=True,exist_ok=True)
     df=pd.read_csv(args.input)
+    if "snapshot_date" not in df.columns:
+        raise SystemExit("PIT_SNAPSHOT_DATE_REQUIRED")
+    df["snapshot_date"]=pd.to_datetime(df["snapshot_date"])
     df["month_end"]=pd.to_datetime(df["month_end"])
     df, pit_excluded_rows, pit_active_symbols = filter_dataframe_by_date(
-        df, args.membership, "month_end"
+        df, args.membership, "snapshot_date"
     )
     req={"symbol","month_end","adj_close",*FACTORS}
     miss=sorted(req-set(df.columns))
