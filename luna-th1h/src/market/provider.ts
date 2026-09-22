@@ -26,6 +26,10 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
   let lastGatewayCount=-1;
   let emptyBackoffMs=Math.max(500,Math.min(5000,pollMs));
   const requireVerifiedBook=String(process.env.LUNA_REQUIRE_VERIFIED_BOOK ?? "true").toLowerCase()==="true";
+  const priceOnlyFallback=String(process.env.LUNA_PRICE_ONLY_FALLBACK ?? "false").toLowerCase()==="true";
+  const paperMode=String(process.env.LUNA_MODE ?? "paper").toLowerCase()==="paper";
+  const liveTradingArmed=String(process.env.LIVE_TRADING_ARMED ?? "false").toLowerCase()==="true";
+  const publicFallbackMaxQuoteAgeMs=Math.max(1000,Number(process.env.LUNA_PUBLIC_FALLBACK_MAX_QUOTE_AGE_MS ?? 6500));
 
   while(true){
     const cycleStarted=Date.now();
@@ -98,6 +102,14 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
         dataQuality:raw.data_quality ? String(raw.data_quality) : undefined
       };
       if(q.last===null && q.bid===null && q.ask===null) continue;
+      const sourceName=String(q.source??"").toLowerCase();
+      const allowPublicPriceOnly =
+        priceOnlyFallback
+        && paperMode
+        && !liveTradingArmed
+        && sourceName.includes("tradingview-public-screener")
+        && q.bid===null
+        && q.ask===null;
       if(requireVerifiedBook){
         const verifiedBook =
           Number.isFinite(Number(q.bid))
@@ -107,14 +119,17 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
           && Number(q.bidSize)>0
           && Number(q.askSize)>0
           && !String(q.dataQuality??"").toLowerCase().includes("unverified");
-        if(!verifiedBook) continue;
+        if(!verifiedBook && !allowPublicPriceOnly) continue;
       }
       const freshnessTs=q.sourceTs ?? q.ts;
       const parsedTs=Date.parse(freshnessTs);
       if(!Number.isFinite(parsedTs)) continue;
       const quoteAgeMs=Date.now()-parsedTs;
       if(quoteAgeMs<0) continue;
-      if(quoteAgeMs>Number(process.env.LUNA_MAX_QUOTE_AGE_MS ?? 3000)) continue;
+      const maxQuoteAgeMs=allowPublicPriceOnly
+        ? publicFallbackMaxQuoteAgeMs
+        : Number(process.env.LUNA_MAX_QUOTE_AGE_MS ?? 3000);
+      if(quoteAgeMs>maxQuoteAgeMs) continue;
       const sig=JSON.stringify([q.ts,q.bid,q.ask,q.last,q.bidSize,q.askSize]);
       if(previous.get(q.symbol)===sig) continue;
       previous.set(q.symbol,sig);
