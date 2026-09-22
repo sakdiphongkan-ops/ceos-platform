@@ -173,6 +173,7 @@ export function planOrder(
     }
 
     const current=snapshot(state);
+    const currentEquity=Math.max(0,current.cash+current.market_value);
     const dayStart=Number(state.dayStartEquity??state.initialCapital);
     const dailyPnl=(current.cash+current.market_value)-dayStart;
     if(dailyPnl<=-Math.abs(config.maxDailyLoss)){
@@ -188,8 +189,8 @@ export function planOrder(
       config.maxPositionPct,
       requestedTargetFraction
     );
-    const targetNotional=Math.max(0,state.initialCapital*targetFraction-currentNotional);
-    const entryCapNotional=Math.max(0,state.initialCapital*config.entryNotionalPct);
+    const targetNotional=Math.max(0,currentEquity*targetFraction-currentNotional);
+    const entryCapNotional=Math.max(0,currentEquity*config.entryNotionalPct);
     const slippageRate=costs.slippageBps/10_000;
     const conservativeImpactRate=costs.marketImpactBps/10_000;
     const conservativeExecutionRate=Math.max(0,slippageRate+conservativeImpactRate);
@@ -205,7 +206,7 @@ export function planOrder(
     const dailyTurnoverHeadroom=Math.max(0,config.maxDailyTurnover-Number(state.dailyTurnover??0));
     const grossHeadroom=Math.max(
       0,
-      state.initialCapital*config.maxGrossExposurePct
+      currentEquity*config.maxGrossExposurePct
         -currentGrossExposure(state)
         -Math.max(0,reservations.reservedGrossExposure)
     );
@@ -227,7 +228,7 @@ export function planOrder(
     }
     if(qty<=0) return {accepted:false,reason:"INSUFFICIENT_CASH_OR_POSITION_HEADROOM"};
 
-    const maxPositionNotional=state.initialCapital*config.maxPositionPct;
+    const maxPositionNotional=currentEquity*config.maxPositionPct;
     if(currentNotional+qty*referencePrice>maxPositionNotional+1e-8){
       const cappedQty=roundDown(Math.max(0,maxPositionNotional-currentNotional)/referencePrice);
       qty=Math.min(qty,cappedQty);
