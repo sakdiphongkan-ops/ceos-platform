@@ -1,4 +1,5 @@
 import {runBacktest} from "./backtest.js";
+import {simulateFill,type PlannedOrder} from "./execution.js";
 import type {Quote} from "./types.js";
 
 function quote(i:number,last:number):Quote{
@@ -20,5 +21,23 @@ if(!Number.isFinite(base.finalEquity) || !Number.isFinite(stress.finalEquity)){
 }
 if(stress.finalEquity>base.finalEquity+1e-8){
   throw new Error("higher execution cost unexpectedly improved final equity");
+}
+const order:PlannedOrder={
+  accepted:true,
+  symbol:"AAA",
+  side:"BUY",
+  qty:50,
+  referencePrice:100,
+  visibleDepth:100,
+  spreadBps:2,
+  reason:"COST_REPLAY_TEST"
+};
+const baselineFill=simulateFill(order,{marketImpactBps:8});
+const stressedImpactFill=simulateFill(order,{marketImpactBps:20});
+if(!(stressedImpactFill.fillPrice>baselineFill.fillPrice)){
+  throw new Error("market impact override did not increase stressed BUY fill price");
+}
+if(!(stressedImpactFill.slippage>baselineFill.slippage)){
+  throw new Error("market impact override did not increase stressed slippage");
 }
 console.log("execution cost replay tests: PASS");
