@@ -527,7 +527,8 @@ async function executeSignal(
         reason:signal.reason
       });
       brokerOrderReturned=true;
-      latencyLedger.ackTs=new Date(Number(brokerOrder.submitted_at_ms)).toISOString();
+      latencyLedger.ackTs=new Date().toISOString();
+      latencyLedger.ackKind="gateway_response";
       registerLiveOrder({
         clientOrderId,
         brokerOrderId:brokerOrder.broker_order_id,
