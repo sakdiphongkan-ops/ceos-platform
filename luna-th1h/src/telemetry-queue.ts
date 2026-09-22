@@ -110,12 +110,13 @@ export class TelemetryQueue{
     }
 
     let tickCount=0;
+    const effectiveTickBudget=this.pendingSignals.length>0?tickBudget:this.maxBatchSize;
     if(batch.length<this.maxBatchSize){
       for(const [key,item] of this.pendingTicks){
         batch.push(item);
         this.pendingTicks.delete(key);
         tickCount++;
-        if(batch.length>=this.maxBatchSize || tickCount>=tickBudget) break;
+        if(batch.length>=this.maxBatchSize || tickCount>=effectiveTickBudget) break;
       }
     }
 
