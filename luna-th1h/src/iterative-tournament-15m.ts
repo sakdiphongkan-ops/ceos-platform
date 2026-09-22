@@ -373,6 +373,7 @@ async function main(){
     const exposureLedger=process.env.LUNA_HOLDOUT_EXPOSURE_LEDGER_FILE;
     if(!lockFile||!exposureLedger) throw new Error("FROZEN_HOLDOUT_REQUIRES_LOCK_AND_EXPOSURE_LEDGER");
     const holdoutDigest=digestQuotes(split.holdout);
+    const holdoutStartIso=new Date(split.holdoutStart).toISOString();
     assertFrozenHoldoutAllowed({
       lockFile,exposureLedger,datasetSha256:sha,
       holdoutStart:split.holdoutStart,holdoutDigest
@@ -412,7 +413,7 @@ async function main(){
     }));
     writeHoldoutExposureLedger(exposureLedger,{
       protocolVersion:"LUNA-15M-HOLDOUT-V1",datasetSha256:sha,
-      holdoutStart:split.holdoutStart,holdoutDigest,exposedAt:new Date().toISOString(),
+      holdoutStart:holdoutStartIso,holdoutDigest,exposedAt:new Date().toISOString(),
       candidateCount:holdoutEvaluated.length,selectionBasis:"development+audit_only"
     });
     holdoutEvaluation={
