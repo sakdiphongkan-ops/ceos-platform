@@ -28,6 +28,24 @@ export interface ExecutionReservations{
   reservedSellQty:Record<string,number>;
 }
 
+export interface ExecutionCostOverrides{
+  feeBps?:number;
+  sellTaxBps?:number;
+  slippageBps?:number;
+  marketImpactBps?:number;
+  extraSlippageBps?:number;
+}
+
+function executionCosts(overrides:ExecutionCostOverrides = {}){
+  return {
+    feeBps:Number.isFinite(overrides.feeBps)?Number(overrides.feeBps):config.feeBps,
+    sellTaxBps:Number.isFinite(overrides.sellTaxBps)?Number(overrides.sellTaxBps):config.sellTaxBps,
+    slippageBps:(Number.isFinite(overrides.slippageBps)?Number(overrides.slippageBps):config.slippageBps)
+      +(Number.isFinite(overrides.extraSlippageBps)?Number(overrides.extraSlippageBps):0),
+    marketImpactBps:Number.isFinite(overrides.marketImpactBps)?Number(overrides.marketImpactBps):config.marketImpactBps
+  };
+}
+
 export type PlannedOrder = {
   accepted:true;
   symbol:string;
@@ -112,7 +130,8 @@ export function planOrder(
   signal:Signal,
   q:Quote,
   state:PortfolioState,
-  reservations:ExecutionReservations={reservedBuyCash:0,reservedGrossExposure:0,reservedSellQty:{}}
+  reservations:ExecutionReservations={reservedBuyCash:0,reservedGrossExposure:0,reservedSellQty:{}},
+  costOverrides:ExecutionCostOverrides={}
 ):PlannedOrder{
   if(signal.action==="HOLD") return {accepted:false,reason:"SIGNAL_HOLD"};
 
@@ -159,6 +178,7 @@ export function planOrder(
       return {accepted:false,reason:"MAX_DAILY_LOSS_LOCAL"};
     }
 
+    const costs=executionCosts(costOverrides);
     const requestedTargetFraction=Math.max(
       0,
       Number(signal.targetAllocationPct??(config.entryNotionalPct*100))/100
@@ -169,8 +189,8 @@ export function planOrder(
     );
     const targetNotional=Math.max(0,state.initialCapital*targetFraction-currentNotional);
     const entryCapNotional=Math.max(0,state.initialCapital*config.entryNotionalPct);
-    const slippageRate=config.slippageBps/10_000;
-    const conservativeImpactRate=config.marketImpactBps/10_000;
+    const slippageRate=costs.slippageBps/10_000;
+    const conservativeImpactRate=costs.marketImpactBps/10_000;
     const conservativeExecutionRate=Math.max(0,slippageRate+conservativeImpactRate);
     const hardOrderReferenceCap=Math.max(
       0,
@@ -188,7 +208,7 @@ export function planOrder(
         -currentGrossExposure(state)
         -Math.max(0,reservations.reservedGrossExposure)
     );
-    const feeRate=config.feeBps/10000;
+    const feeRate=costs.feeBps/10000;
     const estimatedAllInPerShare=referencePrice*(1+slippageRate)*(1+feeRate);
     const availableCash=Math.max(0,state.cash-Math.max(0,reservations.reservedBuyCash));
     const affordable=availableCash/estimatedAllInPerShare;
@@ -250,10 +270,14 @@ export function planOrder(
   };
 }
 
-export function simulateFill(order:Extract<PlannedOrder,{accepted:true}>):SimulatedFill{
-  const slippageRate=config.slippageBps/10000;
-  const feeRate=config.feeBps/10000;
-  const taxRate=order.side==="SELL"?config.sellTaxBps/10000:0;
+export function simulateFill(
+  order:Extract<PlannedOrder,{accepted:true}>,
+  costOverrides:ExecutionCostOverrides={}
+):SimulatedFill{
+  const costs=executionCosts(costOverrides);
+  const slippageRate=costs.slippageBps/10000;
+  const feeRate=costs.feeBps/10000;
+  const taxRate=order.side==="SELL"?costs.sellTaxBps/10000:0;
   const participation=order.visibleDepth>0
     ? Math.min(1,Math.max(0,order.qty/order.visibleDepth))
     : 0;
