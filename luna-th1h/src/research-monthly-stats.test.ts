@@ -1,4 +1,4 @@
-import {monthlyStats} from "./iterative-tournament-15m.js";
+import {monthlyStats} from "./research-metrics.js";
 const curve=[
   {ts:"2026-01-02T03:00:00.000Z",equity:90},
   {ts:"2026-01-30T03:00:00.000Z",equity:100},
