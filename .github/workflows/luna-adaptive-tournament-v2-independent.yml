@@ -1,15 +1,8 @@
 name: LUNA Adaptive Tournament v2 - Independent SET Data
+# Manual-only: research execution requires an explicitly verified PIT dataset/provenance.
 
 on:
-  push:
-    branches: [master]
-    paths:
-      - "scripts/research/luna_adaptive_tournament_v2.py"
-      - "scripts/research/build_monthly_price_factors_from_daily_v1.py"
-      - ".github/workflows/luna-adaptive-tournament-v2-independent.yml"
-      - "scripts/research/download_mendeley_set.py"
   workflow_dispatch:
-
 concurrency:
   group: luna-adaptive-tournament-v2-independent
   cancel-in-progress: true
