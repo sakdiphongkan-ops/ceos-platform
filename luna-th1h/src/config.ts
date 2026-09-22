@@ -12,9 +12,9 @@ export const config={
   initialCapital:num("LUNA_INITIAL_CAPITAL",1_000_000),
   maxPositionPct:num("LUNA_MAX_POSITION_PCT",0.075),
   maxGrossExposurePct:num("LUNA_MAX_GROSS_EXPOSURE_PCT",0.50),
-  entryNotionalPct:num("LUNA_ENTRY_NOTIONAL_PCT",0.05)
-  ,maxDailyLoss:num("LUNA_MAX_DAILY_LOSS",5_000)
-  ,maxOrdersPerMinute:num("LUNA_MAX_ORDERS_PER_MINUTE",2),
+  entryNotionalPct:num("LUNA_ENTRY_NOTIONAL_PCT",0.05),
+  maxDailyLoss:num("LUNA_MAX_DAILY_LOSS",5_000),
+  maxOrdersPerMinute:num("LUNA_MAX_ORDERS_PER_MINUTE",2),
   feeBps:num("LUNA_FEE_BPS",25),
   sellTaxBps:num("LUNA_SELL_TAX_BPS",10),
   slippageBps:num("LUNA_SLIPPAGE_BPS",5),
