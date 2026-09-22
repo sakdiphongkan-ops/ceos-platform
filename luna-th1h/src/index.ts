@@ -1252,6 +1252,8 @@ async function main(){
     throw new Error("LUNA_LIVE_ACCOUNT_DRIFT_TOLERANCE_MUST_BE_NON_NEGATIVE");
   }
   if(!["paper","live"].includes(config.mode)) throw new Error(`Unknown LUNA_MODE: ${config.mode}`);
+  if(!["paper","live"].includes(config.executionMode)) throw new Error(`Unknown LUNA_EXECUTION_MODE: ${config.executionMode}`);
+  if(config.executionTest && (config.mode==="live" || config.executionMode==="live")) throw new Error("EXECUTION_TEST_IS_PAPER_ONLY");
   if(config.priceOnlyFallback && (config.mode==="live" || config.executionMode==="live")){
     throw new Error("PRICE_ONLY_FALLBACK_IS_PAPER_ONLY");
   }
