@@ -381,3 +381,18 @@ tbody tr:hover,tbody tr.selected-row{background:rgba(121,214,160,.035)}
   border:1px solid var(--line);background:#0c120e;color:#b5c1ba;
 }
 .research-panel .research-pipeline b{color:#4d5b52}
+
+
+/* LUNA pre-open readiness / market-phase UI */
+.market-status,.market-phase-cell { transition: border-color .18s ease, background .18s ease, color .18s ease; }
+.market-status.phase-active,.market-phase-cell.phase-active { border-color: rgba(32,160,96,.36); background: rgba(32,160,96,.08); }
+.market-status.phase-pre_open,.market-phase-cell.phase-pre_open { border-color: rgba(86,124,255,.28); background: rgba(86,124,255,.07); }
+.market-status.phase-break,.market-phase-cell.phase-break { border-color: rgba(170,132,40,.28); background: rgba(170,132,40,.07); }
+.market-status.phase-reduce_only,.market-phase-cell.phase-reduce_only { border-color: rgba(209,126,32,.34); background: rgba(209,126,32,.08); }
+.market-status.phase-force_close,.market-phase-cell.phase-force_close { border-color: rgba(214,71,71,.34); background: rgba(214,71,71,.08); }
+.market-status.phase-closed,.market-phase-cell.phase-closed { border-color: rgba(120,120,120,.24); background: rgba(120,120,120,.06); }
+.market-phase-cell { min-width:0; }
+.market-phase-cell strong { display:block; }
+.market-phase-cell small { opacity:.66; }
+@media (max-width:980px) { .top-actions{flex-wrap:wrap;} .live-operating-strip{grid-template-columns:repeat(2,minmax(0,1fr));} .live-operating-note{grid-column:1/-1;} }
+@media (max-width:640px) { .topbar{gap:10px;} .top-nav{display:none;} .top-actions{width:100%;justify-content:flex-start;} .live-operating-strip{grid-template-columns:1fr;} .live-operating-note{grid-column:auto;} .session-chip{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;} }
