@@ -13,6 +13,7 @@ import os
 import numpy as np
 import pandas as pd
 from apply_pit_universe import filter_dataframe_by_date
+from luna_feasibility import cost_stress, summarize
 
 FACTORS=["mom1","mom3","mom6","mom12","high52_ratio","vol20","maxdd60","avg_amount20"]
 
@@ -196,6 +197,27 @@ def main():
       "initial_capital_baht":30000,
       "leakage_guard":"month t selection uses only strictly prior months; t return is never in selection history"
     }
+    feasibility = summarize(
+        r,
+        initial_capital=30000.0,
+        target=0.07,
+        nw_lag=3,
+    )
+    feasibility_stress = cost_stress(
+        ledger.rename(columns={"realized_return":"realized_return"}),
+        (20.0, 30.0, 50.0, 75.0, 100.0),
+        30000.0,
+        0.07,
+        3,
+    )
+    summary["feasibility"] = feasibility
+    summary["cost_stress"] = feasibility_stress
+    summary["feasibility_engine"] = "luna-feasibility-v1"
+    (out/"feasibility_summary.json").write_text(
+        json.dumps({"baseline": feasibility, "cost_stress": feasibility_stress}, indent=2, default=str),
+        encoding="utf-8",
+    )
+    pd.DataFrame(feasibility_stress).to_csv(out/"feasibility_cost_stress.csv", index=False)
     (out/"summary.json").write_text(json.dumps(summary,indent=2,default=str),encoding="utf-8")
     print(json.dumps(summary,indent=2,default=str))
 
