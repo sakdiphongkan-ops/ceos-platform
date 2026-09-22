@@ -176,7 +176,7 @@ export class StrategyV1{
 
     const st=stateFor(this.states,q.symbol);
     const positionBeforeBar=this.evaluatePosition(q,ctx,st);
-    if(ctx.positionQty>0 && positionBeforeBar.action==="SELL") return positionBeforeBar;
+    if(positionBeforeBar?.action==="SELL") return positionBeforeBar;
 
     const bucket=bucketStartMs(q.ts);
     let completedNewBar=false;
@@ -197,8 +197,14 @@ export class StrategyV1{
     }
 
     if(ctx.positionQty>0){
-      if(positionBeforeBar.action==="HOLD" && !completedNewBar) return positionBeforeBar;
-      return this.evaluatePosition(q,ctx,st);
+      if(positionBeforeBar?.action==="HOLD" && !completedNewBar) return positionBeforeBar;
+      return this.evaluatePosition(q,ctx,st) ?? {
+        symbol:q.symbol,
+        ts:q.ts,
+        action:"HOLD",
+        reason:"HOLD_POSITION_15M",
+        strategyVersion:this.version
+      };
     }
 
     if(!verifiedBook){
