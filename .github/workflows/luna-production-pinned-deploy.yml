@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   deploy:
-    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[LUNA-PROD-DEPLOY]') }}
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
@@ -84,6 +84,7 @@ jobs:
           ENV_ID: "a0a04144-e4d8-4352-a578-27ef8fb56e5c"
           PROJECT_ID: "26e44379-04ed-4132-b1d8-fbde42a45d9a"
         run: |
+          cd luna-execution-gateway
           railway up --project "$PROJECT_ID" --environment "$ENV_ID" --service "$SERVICE_ID" --ci --message "LUNA gateway pinned deploy $GITHUB_SHA"
       - name: Verify latest worker deployment
         env:
