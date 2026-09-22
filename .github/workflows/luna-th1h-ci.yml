@@ -30,8 +30,11 @@ jobs:
       - run: npm run test:telemetry-queue
       - run: npm run test:latency
       - run: npm run backtest:fixture
-      - name: Compile execution gateway
-        run: python -m py_compile ../luna-execution-gateway/app.py
+      - name: Compile execution gateway and SET data QA tools
+        run: |
+          python -m py_compile ../luna-execution-gateway/app.py
+          python -m py_compile ../scripts/research/normalize_set_tick_data.py
+          python -m py_compile ../scripts/research/qa_verified_15m.py
 
   research_repaired_tournament_v3:
     if: github.event_name == 'push'
