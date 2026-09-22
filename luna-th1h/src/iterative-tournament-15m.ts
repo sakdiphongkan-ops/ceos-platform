@@ -160,44 +160,33 @@ function bucket15m(ts:string){
 
 function splitChronologicalTicks(quotes:Quote[]){
   if(quotes.length<500) throw new Error("Need at least 500 raw ticks; got "+quotes.length);
-  const buckets=[...new Set(quotes.map(q=>bucket15m(q.ts)).filter((x):x is number=>x!==null))].sort((a,b)=>a-b);
+  const buckets=[...new Set(quotes.map(q=>bucket15m(q.sourceTs??q.ts)).filter((x):x is number=>x!==null))].sort((a,b)=>a-b);
   if(buckets.length<100) throw new Error("Need at least 100 observed 15m buckets; got "+buckets.length);
-  const holdoutStartIndex=Math.floor(buckets.length*0.80);
+  const selectionEndIndex=Math.floor(buckets.length*0.60);
+  const auditEndIndex=Math.floor(buckets.length*0.80);
+  const holdoutStartIndex=auditEndIndex;
+  const selectionEnd=buckets[selectionEndIndex-1];
+  const auditEnd=buckets[auditEndIndex-1];
   const holdoutStart=buckets[holdoutStartIndex];
-  if(!holdoutStart) throw new Error("Invalid holdout boundary.");
-
+  if(!selectionEnd || !auditEnd || !holdoutStart) throw new Error("Invalid nested research boundaries.");
   const folds:any[]=[];
   for(let i=0;i<WALK_FORWARD_FOLDS;i++){
-    const trainEndIndex=Math.floor(buckets.length*(0.50+i*(0.30/(WALK_FORWARD_FOLDS))));
-    const validationEndIndex=Math.floor(buckets.length*(0.50+(i+1)*(0.30/(WALK_FORWARD_FOLDS))));
-    if(trainEndIndex<=40 || validationEndIndex<=trainEndIndex || validationEndIndex>=holdoutStartIndex) continue;
+    const trainEndIndex=Math.floor(buckets.length*(0.30+i*(0.30/WALK_FORWARD_FOLDS)));
+    const validationEndIndex=Math.floor(buckets.length*(0.30+(i+1)*(0.30/WALK_FORWARD_FOLDS)));
+    if(trainEndIndex<=40 || validationEndIndex<=trainEndIndex || validationEndIndex>selectionEndIndex) continue;
     const trainEnd=buckets[trainEndIndex-1];
     const validationEnd=buckets[validationEndIndex-1];
-    const train=quotes.filter(q=>(bucket15m(q.ts)??Infinity)<=trainEnd);
-    const validation=quotes.filter(q=>{
-      const x=bucket15m(q.ts);
-      return x!==null && x>trainEnd && x<=validationEnd;
-    });
-    const warmupForValidation=quotes.filter(q=>{
-      const x=bucket15m(q.ts);
-      return x!==null && x<=trainEnd;
-    });
-    if(train.length && validation.length){
-      folds.push({index:i+1,train,validation,warmupForValidation,bucket_start_index:0,train_end_index:trainEndIndex,validation_end_index:validationEndIndex});
-    }
+    const train=quotes.filter(q=>(bucket15m(q.sourceTs??q.ts)??Infinity)<=trainEnd);
+    const validation=quotes.filter(q=>{const x=bucket15m(q.sourceTs??q.ts);return x!==null&&x>trainEnd&&x<=validationEnd;});
+    const warmupForValidation=quotes.filter(q=>{const x=bucket15m(q.sourceTs??q.ts);return x!==null&&x<=trainEnd;});
+    if(train.length&&validation.length) folds.push({index:i+1,train,validation,warmupForValidation,train_end_index:trainEndIndex,validation_end_index:validationEndIndex});
   }
-  if(folds.length<2) throw new Error("Need at least 2 valid walk-forward folds.");
-  const holdout=quotes.filter(q=>(bucket15m(q.ts)??-Infinity)>=holdoutStart);
-  const warmupForHoldout=quotes.filter(q=>{
-    const x=bucket15m(q.ts);
-    return x!==null && x<holdoutStart;
-  });
-  return {
-    folds,
-    holdout,
-    warmupForHoldout,
-    buckets:buckets.length
-  };
+  if(folds.length<2) throw new Error("Need at least 2 valid inner walk-forward folds.");
+  const audit=quotes.filter(q=>{const x=bucket15m(q.sourceTs??q.ts);return x!==null&&x>selectionEnd&&x<=auditEnd;});
+  const warmupForAudit=quotes.filter(q=>{const x=bucket15m(q.sourceTs??q.ts);return x!==null&&x<=selectionEnd;});
+  const holdout=quotes.filter(q=>(bucket15m(q.sourceTs??q.ts)??-Infinity)>=holdoutStart);
+  const warmupForHoldout=quotes.filter(q=>{const x=bucket15m(q.sourceTs??q.ts);return x!==null&&x<holdoutStart;});
+  return {folds,selectionEndIndex,auditEndIndex,holdoutStartIndex,selectionEnd,auditEnd,holdoutStart,audit,warmupForAudit,holdout,warmupForHoldout,buckets:buckets.length};
 }
 function monthlyStats(curve:any[],initial:number){
   const months=new Map<string,{first:number;last:number}>();
@@ -392,15 +381,15 @@ async function main(){
     methodology:{
       search:"deterministic evolutionary parameter tournament",
       generations,populationSize,elites,globalEvaluated,
-      split:"chronological 60% TRAIN / 20% VALIDATION / 20% HOLDOUT",
-      selection_rule:"TRAIN+VALIDATION only; HOLDOUT untouched until finalists",
+      split:"nested chronological 60% DEVELOPMENT / 20% AUDIT / 20% FINAL HOLDOUT",
+      selection_rule:"inner walk-forward folds inside first 60% select candidates; 20% AUDIT is unseen during evolution; FINAL HOLDOUT is frozen and evaluated only after audit",
       execution_timing:"raw ticks retained; completed 15m bar closes are warmed up from prior data, entry/exit executes only on subsequent observed ticks",
       leakage_guard:"HOLDOUT NEVER USED FOR CANDIDATE SELECTION",
       stress_model:"full event replay with extra slippage applied to execution price and affordability checks",
       target_monthly_geometric_return:TARGET_MONTHLY_GEO,
       walk_forward_folds:WALK_FORWARD_FOLDS,
-      walk_forward_rule:"sequential expanding train windows 50/60/70% with validation ending at 60/70/80%; final 20% frozen holdout",
-      credible_gate:"walk-forward average validation geo AND holdout geo meet target; minimum fold geo >= configured floor; >=50% positive months; validation/holdout DD <=20%; 10bps full replay remains profitable"
+      walk_forward_rule:"inner expanding train windows inside first 60%; 20% audit and final 20% holdout remain unseen during candidate evolution",
+      credible_gate:"inner walk-forward passes; audit geo and final holdout geo meet target; >=50% positive months; audit/holdout DD <=20%; 10bps final holdout replay remains profitable"
     },
     generationReports,
     finalists:holdoutEvaluated.map(e=>({
