@@ -21,6 +21,7 @@ function evaluateCandidate(c:Candidate,split:any):Eval{
   const minValidationMonthlyGeo=Math.min(...foldResults.map((x:any)=>x.validationMonthlyGeo));
   const avgPositiveRatio=foldResults.reduce((s:any,x:any)=>s+x.validationPositiveMonthRatio,0)/foldResults.length;
   const maxDrawdownPct=Math.max(...foldResults.map((x:any)=>x.validationDrawdownPct));
+  const minFoldTrades=Math.min(...foldResults.map((x:any)=>x.validationTrades));
   const avgTurnover=foldResults.reduce((s:any,x:any)=>s+x.validationTurnover,0)/foldResults.length;
   const representativeFold=foldResults.at(-1);
   const train=runBacktest(
@@ -51,6 +52,7 @@ function evaluateCandidate(c:Candidate,split:any):Eval{
     walkForwardFoldCount:foldResults.length,
     walkForwardMinValidationMonthlyGeo:minValidationMonthlyGeo,
     walkForwardMaxValidationDrawdownPct:maxDrawdownPct,
+    walkForwardMinValidationTrades:minFoldTrades,
     walkForwardAvgValidationMonthlyGeo:avgValidationMonthlyGeo,
     walkForwardAvgValidationPositiveMonthRatio:avgPositiveRatio,
     walkForwardAvgValidationTurnover:avgTurnover,
@@ -111,6 +113,8 @@ const outputPath=process.env.LUNA_RESEARCH_OUTPUT ?? "reports/luna-15m/iterative
 const TARGET_MONTHLY_GEO=Number(process.env.LUNA_RESEARCH_TARGET_MONTHLY_GEO ?? 0.07);
 const WALK_FORWARD_FOLDS=Math.max(2,Math.min(6,Number(process.env.LUNA_RESEARCH_WALK_FORWARD_FOLDS ?? 3)));
 const MIN_FOLD_MONTHLY_GEO=Number(process.env.LUNA_RESEARCH_MIN_FOLD_MONTHLY_GEO ?? 0);
+const MIN_FOLD_TRADES=Math.max(1,Number(process.env.LUNA_RESEARCH_MIN_FOLD_TRADES ?? 5));
+const AUDIT_STRESS_BPS=Math.max(0,Number(process.env.LUNA_RESEARCH_AUDIT_STRESS_BPS ?? 10));
 
 const choices={
   fastPeriod:[3,5,8,13],
@@ -212,7 +216,7 @@ function score(e:{
   walkForwardMinValidationMonthlyGeo:number;
   walkForwardAvgValidationMonthlyGeo:number;
 }){
-  if(e.validationTrades<5 || !Number.isFinite(e.walkForwardAvgValidationMonthlyGeo)) return -999;
+  if(e.validationTrades<MIN_FOLD_TRADES || !Number.isFinite(e.walkForwardAvgValidationMonthlyGeo)) return -999;
   const stability=Math.min(
     e.trainMonthlyGeo,
     e.validationMonthlyGeo,
@@ -344,11 +348,23 @@ async function main(){
       split.audit,initialCapital,e.candidate,{warmupQuotes:split.warmupForAudit}
     );
     const am=monthlyStats(audit.equityCurve,initialCapital);
-    return {...e,audit,
+    const auditStress=runBacktest(
+      split.audit,initialCapital,e.candidate,{
+        warmupQuotes:split.warmupForAudit,
+        costModel:{extraSlippageBps:AUDIT_STRESS_BPS}
+      }
+    );
+    const auditStressMonthly=monthlyStats(auditStress.equityCurve,initialCapital);
+    return {...e,audit,auditStress,
       auditMonthlyGeo:am.geo,
       auditPositiveMonthRatio:am.positiveRatio,
       auditDrawdownPct:Number(audit.maxDrawdown)/initialCapital,
-      auditTurnover:turnover(audit)};
+      auditTurnover:turnover(audit),
+      auditStressMonthlyGeo:auditStressMonthly.geo,
+      auditStressNetPnl:auditStress.netPnl,
+      auditStressReturnPct:auditStress.returnPct,
+      auditStressDrawdownPct:Number(auditStress.maxDrawdown)/initialCapital,
+      auditStressTrades:auditStress.tradeCount};
   });
 
   const credible=auditEvaluated
@@ -356,7 +372,10 @@ async function main(){
     .filter(e=>(e.walkForwardMinValidationMonthlyGeo??-Infinity)>=MIN_FOLD_MONTHLY_GEO)
     .filter(e=>(e.walkForwardAvgValidationPositiveMonthRatio??0)>=0.50)
     .filter(e=>(e.walkForwardMaxValidationDrawdownPct??1)<=0.20)
+    .filter(e=>(e.walkForwardMinValidationTrades??0)>=MIN_FOLD_TRADES)
     .filter(e=>(e.auditMonthlyGeo??-Infinity)>=TARGET_MONTHLY_GEO)
+    .filter(e=>(e.auditStressMonthlyGeo??-Infinity)>=0)
+    .filter(e=>(e.auditStressNetPnl??-Infinity)>0)
     .filter(e=>(e.auditPositiveMonthRatio??0)>=0.50)
     .filter(e=>(e.auditDrawdownPct??1)<=0.20)
     .sort((x,y)=>{
@@ -443,11 +462,13 @@ async function main(){
       leakage_guard:"HOLDOUT NEVER USED FOR CANDIDATE SELECTION",
       holdout_selection_forbidden:true,
       holdout_exposure_rule:"FINAL HOLDOUT MAY BE OPENED ONLY ONCE WITH AN IMMUTABLE LOCK AND EXPOSURE LEDGER",
+      audit_stress_bps:AUDIT_STRESS_BPS,
+      minimum_trades_per_walk_forward_fold:MIN_FOLD_TRADES,
       pit_provenance_rule:"PIT membership must carry a SHA-256-pinned provenance manifest from an allowed authoritative domain",
-      stress_model:"full event replay with extra slippage applied to execution price and affordability checks",
+      stress_model:"full event replay with extra slippage applied to execution price and affordability checks; audit selection also requires positive stressed PnL",
       acceptance_hurdle_monthly_geometric_return:TARGET_MONTHLY_GEO,
       walk_forward_folds:WALK_FORWARD_FOLDS,
-      walk_forward_rule:"inner expanding train windows inside first 60%; 20% audit and final 20% holdout remain unseen during candidate evolution",
+      walk_forward_rule:"inner expanding train windows inside first 60%; every fold must meet minimum trade count; 20% audit and final 20% holdout remain unseen during candidate evolution",
       credible_gate:"candidate selection uses development+audit only; frozen final holdout is confirmation-only and never used for ranking/selection; 7% monthly is an acceptance hurdle; >=50% positive months; audit DD <=20%; holdout is inaccessible during normal iteration and can be opened only once with an immutable lock + exposure ledger"
     },
     generationReports,
@@ -463,6 +484,11 @@ async function main(){
       walk_forward_avg_validation_monthly_geo:e.walkForwardAvgValidationMonthlyGeo,
       walk_forward_min_validation_monthly_geo:e.walkForwardMinValidationMonthlyGeo,
       walk_forward_max_validation_drawdown_pct:e.walkForwardMaxValidationDrawdownPct,
+      walk_forward_min_validation_trades:e.walkForwardMinValidationTrades,
+      audit_stress_monthly_geo:e.auditStressMonthlyGeo,
+      audit_stress_net_pnl:e.auditStressNetPnl,
+      audit_stress_drawdown_pct:e.auditStressDrawdownPct,
+      audit_stress_trades:e.auditStressTrades,
       fold_results:e.foldResults
     })),
     credibleCandidates:credible.slice(0,10).map(e=>({
@@ -470,7 +496,10 @@ async function main(){
       validationMonthlyGeo:e.validationMonthlyGeo,
       auditMonthlyGeo:e.auditMonthlyGeo,
       auditPositiveMonthRatio:e.auditPositiveMonthRatio,
-      auditDrawdownPct:e.auditDrawdownPct
+      auditDrawdownPct:e.auditDrawdownPct,
+      auditStressMonthlyGeo:e.auditStressMonthlyGeo,
+      auditStressNetPnl:e.auditStressNetPnl,
+      auditStressDrawdownPct:e.auditStressDrawdownPct
     })),
     holdoutEvaluation,
     holdoutConfirmation
