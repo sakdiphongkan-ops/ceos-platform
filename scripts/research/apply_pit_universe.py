@@ -8,6 +8,7 @@ A quote is eligible only when start_date <= quote date <= end_date.
 """
 import argparse, csv, hashlib, json
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from pathlib import Path
 
 def parse_date(s):
@@ -67,7 +68,10 @@ def main():
     for r in rows:
         symbol=r["symbol"].strip().upper().replace(".BK","")
         ts=r["ts"].replace("Z","+00:00")
-        day=datetime.fromisoformat(ts).date()
+        parsed=datetime.fromisoformat(ts)
+        if parsed.tzinfo is None:
+            raise ValueError("quotes timestamp must include timezone")
+        day=parsed.astimezone(ZoneInfo("Asia/Bangkok")).date()
         if eligible(member_index,symbol,day):
             r["symbol"]=symbol
             out.append(r)
@@ -86,7 +90,8 @@ def main():
       "excluded_rows":excluded,"membership_rows":len(members),
       "input_sha256":sha(args.quotes),"membership_sha256":sha(args.membership),
       "output_sha256":sha(args.output),
-      "point_in_time_rule":"start_date <= quote UTC date <= end_date; blank end_date means open-ended",
+      "point_in_time_rule":"start_date <= quote Asia/Bangkok market date <= end_date; blank end_date means open-ended",
+      "timezone":"Asia/Bangkok",
       "generated_at":datetime.now(timezone.utc).isoformat()
     }
     mp=args.manifest or args.output+".manifest.json"
