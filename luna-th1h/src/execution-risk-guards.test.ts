@@ -79,4 +79,16 @@ if(blockedByTurnover.accepted){
   throw new Error("daily turnover guard failed");
 }
 
+const drawdownSized=createPortfolio(config.initialCapital);
+drawdownSized.cash=config.initialCapital*0.8;
+drawdownSized.dayStartEquity=config.initialCapital*0.8;
+mark(drawdownSized,q(startTs,"DRAWDOWN"));
+const drawdownOrder=planOrder(buySignal(startTs,"DRAWDOWN"),q(startTs,"DRAWDOWN"),drawdownSized);
+if(!drawdownOrder.accepted) throw new Error("BUY should remain possible after a non-breaching drawdown");
+const currentEquity=drawdownSized.cash;
+const maxCurrentEquityOrder=currentEquity*config.entryNotionalPct;
+if(drawdownOrder.qty*drawdownOrder.referencePrice>maxCurrentEquityOrder+1e-8){
+  throw new Error("entry sizing must be based on current equity, not initial capital");
+}
+
 console.log("execution risk guard tests: PASS");
