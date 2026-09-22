@@ -5,6 +5,7 @@ export interface LatencyLedger {
   decisionTs?:string;
   submitTs?:string;
   ackTs?:string;
+  ackKind?: "broker_native"|"gateway_response";
   fillTs?:string;
 }
 export interface LatencyMetrics {stage:LatencyStage;ms:number;}
