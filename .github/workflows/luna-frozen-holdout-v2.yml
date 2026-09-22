@@ -9,7 +9,7 @@ concurrency:
 
 jobs:
   audit:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     permissions:
@@ -18,7 +18,15 @@ jobs:
       - uses: actions/checkout@v4
       - name: Block repeated holdout exposure
         run: |
-          python scripts/research/guard_holdout_once.py --marker research-results/luna-holdout-audit-v1-sealed.json --result research-results/luna-holdout-audit-v1-summary.json --protocol LUNA-HOLDOUT-AUDIT-V1
+          python scripts/research/guard_holdout_once.py --marker research-results/luna-frozen-holdout-v2-sealed.json --result research-results/luna-frozen-holdout-v2-summary.json --protocol LUNA-FROZEN-HOLDOUT-V2
+
+      - name: Verify committed PIT membership provenance
+        run: |
+          test -s research-results/pit-membership/pit_membership.csv
+          test -s research-results/pit-membership/pit_membership.manifest.json
+          python scripts/research/verify_pit_membership_manifest.py \
+            --membership research-results/pit-membership/pit_membership.csv \
+            --manifest research-results/pit-membership/pit_membership.manifest.json
 
       - uses: actions/setup-python@v5
         with:
@@ -42,7 +50,7 @@ jobs:
       - name: Build five-year monthly panel
         run: |
           python scripts/research/filter_last_5y.py --input data/set_2000_2025/factors.csv --output data/set_2000_2025/factors_5y.csv
-          python scripts/research/build_monthly_factor_dataset.py --input data/set_2000_2025/factors_5y.csv --output data/set_2000_2025/monthly_factors_5y.csv
+          python scripts/research/build_monthly_factor_dataset.py --input data/set_2000_2025/factors_5y.csv --output data/set_2000_2025/monthly_factors_5y.csv --membership research-results/pit-membership/pit_membership.csv
       - name: Run frozen holdout
         run: |
           rm -rf research/luna_frozen_holdout_v2
