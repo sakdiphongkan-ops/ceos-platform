@@ -517,6 +517,7 @@ async function executeSignal(
     let brokerOrderRecovered=false;
     try{
       latencyLedger.submitTs=new Date().toISOString();
+      latencyLedgers.set(clientOrderId,latencyLedger);
       const brokerOrder=await placeLiveOrder({
         clientOrderId,
         symbol:plan.symbol,
@@ -527,7 +528,6 @@ async function executeSignal(
       });
       brokerOrderReturned=true;
       latencyLedger.ackTs=new Date(Number(brokerOrder.submitted_at_ms)).toISOString();
-      latencyLedgers.set(clientOrderId,latencyLedger);
       registerLiveOrder({
         clientOrderId,
         brokerOrderId:brokerOrder.broker_order_id,
@@ -587,6 +587,10 @@ async function executeSignal(
           const recoveredOrders=await reconcileLiveOrders([clientOrderId]);
           const recovered=recoveredOrders.find(x=>x.client_order_id===clientOrderId);
           if(recovered){
+            const recoveryLedger=latencyLedgers.get(clientOrderId);
+            if(recoveryLedger && recovered.updated_at_ms){
+              recoveryLedger.ackTs=new Date(Number(recovered.updated_at_ms)).toISOString();
+            }
             registerLiveOrder({
               clientOrderId,
               brokerOrderId:recovered.broker_order_id??null,
