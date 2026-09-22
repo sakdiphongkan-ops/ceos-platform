@@ -817,6 +817,19 @@ async function reconcileLiveOrderStates(){
   }
 }
 
+function aggregate15mCloses(quotes:any[]):number[]{
+  const buckets=new Map<number,{ts:number;price:number}>();
+  for(const x of quotes){
+    const ts=Date.parse(String(x?.ts??""));
+    const price=Number(x?.last);
+    if(!Number.isFinite(ts)||!Number.isFinite(price)||price<=0) continue;
+    const bucket=Math.floor(ts/(15*60_000))*(15*60_000);
+    const existing=buckets.get(bucket);
+    if(!existing || ts>existing.ts) buckets.set(bucket,{ts,price});
+  }
+  return [...buckets.entries()].sort((a,b)=>a[0]-b[0]).map(([,x])=>x.price);
+}
+
 function kickoffPrewarm(q:Quote){
   const generation=sessionGeneration;
   if(prewarmedSymbols.has(q.symbol) || prewarmInFlight.has(q.symbol) || prewarmCache.has(q.symbol)) return;
@@ -828,12 +841,12 @@ function kickoffPrewarm(q:Quote){
         action:"recent_ticks",
         symbol:q.symbol,
         source:q.source,
-        limit:25
+        limit:2000
       });
       const quotes=Array.isArray((response as any)?.quotes)?(response as any).quotes:[];
-      const prices=quotes
-        .filter((x:any)=>x?.ts && x.ts!==q.ts && Number.isFinite(Number(x.last)) && Number(x.last)>0)
-        .map((x:any)=>Number(x.last));
+      const prices=aggregate15mCloses(
+        quotes.filter((x:any)=>x?.ts && x.ts!==q.ts)
+      );
       if(generation!==sessionGeneration) return;
       prewarmCache.set(q.symbol,{
         prices,
@@ -845,6 +858,7 @@ function kickoffPrewarm(q:Quote){
         source:q.source,
         data_quality:q.dataQuality??null,
         historical_points:prices.length,
+        timeframe:"15m",
         fetch_ms:Date.now()-startedAt
       },strategyV1.version);
     }catch(err){
@@ -852,6 +866,7 @@ function kickoffPrewarm(q:Quote){
         symbol:q.symbol,
         source:q.source,
         error:String(err),
+        timeframe:"15m",
         fetch_ms:Date.now()-startedAt
       },strategyV1.version);
     }finally{
