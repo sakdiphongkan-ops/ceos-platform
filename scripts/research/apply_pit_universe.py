@@ -26,8 +26,14 @@ def load_membership(path):
     if not rows: raise ValueError("No membership rows")
     return rows
 
+def build_index(rows):
+    idx={}
+    for symbol,start,end in rows:
+        idx.setdefault(symbol,[]).append((start,end))
+    return idx
+
 def eligible(index,symbol,day):
-    return any(s==symbol and start<=day and (end is None or day<=end) for s,start,end in index)
+    return any(start<=day and (end is None or day<=end) for start,end in index.get(symbol,()))
 
 def main():
     ap=argparse.ArgumentParser()
@@ -37,6 +43,7 @@ def main():
     ap.add_argument("--manifest",default=None)
     args=ap.parse_args()
     members=load_membership(args.membership)
+    member_index=build_index(members)
     with open(args.quotes,newline="",encoding="utf-8") as f:
         reader=csv.DictReader(f)
         fields=reader.fieldnames or []
@@ -48,7 +55,7 @@ def main():
         symbol=r["symbol"].strip().upper().replace(".BK","")
         ts=r["ts"].replace("Z","+00:00")
         day=datetime.fromisoformat(ts).date()
-        if eligible(members,symbol,day):
+        if eligible(member_index,symbol,day):
             r["symbol"]=symbol
             out.append(r)
         else: excluded+=1
