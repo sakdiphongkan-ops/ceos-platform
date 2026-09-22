@@ -449,11 +449,12 @@ async function main(){
       selection_rule:"inner walk-forward folds inside first 60% select candidates; 20% AUDIT is unseen during evolution; FINAL HOLDOUT is frozen and evaluated only after audit",
       execution_timing:"raw ticks retained; completed 15m bar closes are warmed up from prior data, entry/exit executes only on subsequent observed ticks",
       leakage_guard:"HOLDOUT NEVER USED FOR CANDIDATE SELECTION",
+      holdout_selection_forbidden:true,
       stress_model:"full event replay with extra slippage applied to execution price and affordability checks",
       acceptance_hurdle_monthly_geometric_return:TARGET_MONTHLY_GEO,
       walk_forward_folds:WALK_FORWARD_FOLDS,
       walk_forward_rule:"inner expanding train windows inside first 60%; 20% audit and final 20% holdout remain unseen during candidate evolution",
-      credible_gate:"7% monthly is acceptance-only, never the optimization score; inner walk-forward passes; audit and frozen final holdout meet the hurdle; >=50% positive months; audit/holdout DD <=20%; 10bps final holdout replay remains profitable"
+      credible_gate:"candidate selection uses development+audit only; frozen final holdout is confirmation-only and never used for ranking/selection; 7% monthly is an acceptance hurdle; >=50% positive months; audit DD <=20%; holdout is reported separately with 10bps stress confirmation"
     },
     generationReports,
     finalists:holdoutEvaluated.map(e=>({
@@ -485,7 +486,8 @@ async function main(){
       holdoutTrades:e.holdout.tradeCount,
       holdoutPositiveMonthRatio:e.holdoutPositiveMonthRatio,
       stress:e.stress
-    }))
+    })),
+    holdoutConfirmation
   };
   fs.mkdirSync(path.dirname(outputPath),{recursive:true});
   fs.writeFileSync(outputPath,JSON.stringify(report,null,2));
