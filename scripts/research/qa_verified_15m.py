@@ -39,7 +39,10 @@ def main() -> None:
     for r in rows:
         ts = parse_ts(r["ts"])
         symbol = r["symbol"].upper()
-        key = (symbol, r["ts"])
+        key = (
+            symbol, r["source_ts"], r["bid"], r["ask"], r["last"],
+            r["bid_size"], r["ask_size"]
+        )
         if key in seen:
             duplicates.add(key)
         seen.add(key)
@@ -83,6 +86,7 @@ def main() -> None:
         "start_ts": start.isoformat(),
         "end_ts": end.isoformat(),
         "duplicate_rows": len(duplicates),
+        "duplicate_definition": "same symbol+source_ts+L1+last+sizes",
         "bars_15m": sum(len(v) for v in bars_by_symbol.values()),
         "symbols_top": by_symbol.most_common(20),
         "source_counts": dict(Counter(r["source"] for r in rows)),
