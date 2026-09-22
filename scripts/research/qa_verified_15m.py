@@ -67,8 +67,8 @@ def main() -> None:
     start, end = min(timestamps), max(timestamps)
     bars_by_symbol = defaultdict(set)
     for r in rows:
-        ts = parse_ts(r["ts"])
-        bars_by_symbol[r["symbol"].upper()].add(int(ts.timestamp()) // 900)
+        source_ts = parse_ts(r["source_ts"])
+        bars_by_symbol[r["symbol"].upper()].add(int(source_ts.timestamp()) // 900)
 
     report = {
         "status": "PASS" if (
