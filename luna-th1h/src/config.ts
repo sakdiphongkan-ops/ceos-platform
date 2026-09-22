@@ -36,6 +36,7 @@ export const config={
   maxAnalysisConcurrency:num("LUNA_MAX_ANALYSIS_CONCURRENCY",16),
   telemetryBatchSize:num("LUNA_TELEMETRY_BATCH_SIZE",50),
   telemetryFlushMs:num("LUNA_TELEMETRY_FLUSH_MS",50),
+  telemetryTickBatchShare:num("LUNA_TELEMETRY_TICK_SHARE",0.25),
   heartbeatMs:num("LUNA_HEARTBEAT_MS",5000),
   decisionLogMode:process.env.LUNA_DECISION_LOG_MODE ?? "signals",
   reduceOnlyTime:process.env.LUNA_REDUCE_ONLY_TIME ?? "16:20",
