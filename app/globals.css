@@ -146,7 +146,7 @@ body {
   background:linear-gradient(180deg,rgba(16,22,18,.97),rgba(11,15,12,.97));
   box-shadow:0 12px 34px rgba(0,0,0,.18);
 }
-.main-card{overflow:hidden;border-radius:15px}
+.main-card{overflow:visible;border-radius:15px}
 .side-card{border-radius:15px;padding:18px;min-height:520px;position:sticky;top:92px}
 .card-head{display:flex;align-items:center;justify-content:space-between;gap:15px;padding:18px 18px 15px}
 .card-title{font-size:14px;font-weight:800;letter-spacing:-.015em}
@@ -357,3 +357,6 @@ tbody tr:hover,tbody tr.selected-row{background:rgba(121,214,160,.035)}
 .refreshing svg{animation:luna-spin .8s linear infinite}
 @keyframes luna-spin{to{transform:rotate(360deg)}}
 @media(max-width:700px){.filter-menu{left:0;right:auto;width:min(220px,calc(100vw - 28px))}}
+
+.main-card .table-wrap{border-radius:0 0 15px 15px}
+.filter-wrap{z-index:10}
