@@ -36,8 +36,8 @@ jobs:
           while true; do
             rows=$(gh api repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs --paginate --jq '.check_runs[] | [.name,.status,.conclusion] | @tsv' || true)
             echo "$rows"
-            luna=$(printf '%s\n' "$rows" | awk -F '\t' '$1=="LUNA-TH1H CI"{print $2" "$3; exit}')
-            ceos=$(printf '%s\n' "$rows" | awk -F '\t' '$1=="CEOS Platform Build"{print $2" "$3; exit}')
+            luna=$(printf '%s\n' "$rows" | awk -F '\t' '$1=="typecheck"{print $2" "$3; exit}')
+            ceos=$(printf '%s\n' "$rows" | awk -F '\t' '$1=="build"{print $2" "$3; exit}')
             if printf '%s' "$luna" | grep -q '^completed success$' && printf '%s' "$ceos" | grep -q '^completed success$'; then
               echo "Primary CI passed for $GITHUB_SHA"
               break
