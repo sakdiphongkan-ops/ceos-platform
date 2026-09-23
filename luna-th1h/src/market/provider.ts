@@ -100,20 +100,32 @@ async function* gatewayWebSocketMessages(streamUrl:string,key:string):AsyncGener
         reject(streamError);
         return;
       }
-      waiter=resolve;
-      waiterReject=reject;
-      const timeout=setTimeout(()=>{
-        if(waiter===resolve){
-          waiter=null;
-          waiterReject=null;
-          reject(new Error("LUNA_GATEWAY_WEBSOCKET_MESSAGE_TIMEOUT"));
-        }
+      let settled=false;
+      const timer=setTimeout(()=>{
+        if(settled) return;
+        settled=true;
+        waiter=null;
+        waiterReject=null;
+        reject(new Error("LUNA_GATEWAY_WEBSOCKET_MESSAGE_TIMEOUT"));
       },timeoutMs);
       const wrappedResolve=(value:string)=>{
-        clearTimeout(timeout);
+        if(settled) return;
+        settled=true;
+        clearTimeout(timer);
+        waiter=null;
+        waiterReject=null;
         resolve(value);
       };
+      const wrappedReject=(reason?:unknown)=>{
+        if(settled) return;
+        settled=true;
+        clearTimeout(timer);
+        waiter=null;
+        waiterReject=null;
+        reject(reason);
+      };
       waiter=wrappedResolve;
+      waiterReject=wrappedReject;
     });
 
     ws.onopen=()=>{
