@@ -10,6 +10,7 @@ import {LatestExecutionScheduler} from "./execution-scheduler.js";
 import {compareLiveAccountState} from "./live-account-reconciliation.js";
 import {TelemetryQueue} from "./telemetry-queue.js";
 import {latencyMetrics,type LatencyLedger} from "./latency-ledger.js";
+import {M1_ORTHOGONAL_L2_VERSION,applyM1OverlayToSignal} from "./m1-overlay.js";
 
 const EXECUTION_TEST_VERSION="luna-th1h-execution-test-0.1.0";
 
@@ -67,6 +68,9 @@ const prewarmInFlight=new Map<string,Promise<void>>();
 const prewarmCache=new Map<string,{prices:number[];fetchedAtMs:number;fetchMs:number}>();
 const liveOrderStates=new Map<string,TrackedLiveOrder>();
 const latencyLedgers=new Map<string,LatencyLedger>();
+const m1OverlayWeights=new Map<string,number>();
+let m1OverlaySourceMonthEnd:string|null=null;
+let m1OverlayRefreshedAtMs=0;
 
 const SNAPSHOT_MS=1_000;
 const strategyV1=new StrategyV1({}, {priceOnlyFallback:config.priceOnlyFallback});
@@ -234,6 +238,98 @@ async function writeSnapshot(){
   });
 }
 
+
+async function refreshM1Overlay(force=false){
+  if(config.m1OverlayMode==="off") return false;
+  const now=Date.now();
+  if(!force && m1OverlayWeights.size>0 && now-m1OverlayRefreshedAtMs<config.m1OverlayRefreshMs) return true;
+  try{
+    const response=await ingest("",{
+      action:"m1_l2_overlay",
+      as_of_date:todayInTimezone(config.timezone)
+    });
+    const payload=response as {
+      ok?:boolean;
+      strategy_version?:string;
+      source_month_end?:string|null;
+      rows?:Array<{symbol:string;weight:number}>;
+    };
+    if(payload.ok!==true || payload.strategy_version!==M1_ORTHOGONAL_L2_VERSION || !Array.isArray(payload.rows) || payload.rows.length!==20){
+      throw new Error("M1_L2_OVERLAY_PAYLOAD_INVALID");
+    }
+    const next=new Map<string,number>();
+    for(const row of payload.rows){
+      const weight=Number(row.weight);
+      if(!row.symbol || !Number.isFinite(weight) || weight<0 || weight>0.100000000001){
+        throw new Error("M1_L2_OVERLAY_ROW_INVALID");
+      }
+      next.set(String(row.symbol).toUpperCase(),weight);
+    }
+    const sum=[...next.values()].reduce((s,v)=>s+v,0);
+    if(Math.abs(sum-1)>1e-9) throw new Error("M1_L2_OVERLAY_WEIGHT_SUM_INVALID");
+    m1OverlayWeights.clear();
+    for(const [symbol,weight] of next) m1OverlayWeights.set(symbol,weight);
+    m1OverlaySourceMonthEnd=payload.source_month_end??null;
+    m1OverlayRefreshedAtMs=Date.now();
+    queueAudit("M1_L2_OVERLAY_REFRESH",{
+      overlay_strategy_version:M1_ORTHOGONAL_L2_VERSION,
+      source_month_end:m1OverlaySourceMonthEnd,
+      symbols:m1OverlayWeights.size,
+      weight_sum:sum,
+      mode:config.m1OverlayMode
+    },activeStrategyVersion());
+    return true;
+  }catch(err){
+    queueAudit("M1_L2_OVERLAY_REFRESH_ERROR",{
+      overlay_strategy_version:M1_ORTHOGONAL_L2_VERSION,
+      mode:config.m1OverlayMode,
+      error:String(err)
+    },activeStrategyVersion());
+    return false;
+  }
+}
+
+function applyM1Overlay(signal:Signal):Signal{
+  if(signal.action!=="BUY" || config.m1OverlayMode==="off") return signal;
+  const weight=m1OverlayWeights.get(String(signal.symbol).toUpperCase());
+  const decision=applyM1OverlayToSignal({
+    action:signal.action,
+    symbol:signal.symbol,
+    targetAllocationPct:signal.targetAllocationPct,
+    overlayAction:config.m1OverlayMode,
+    overlayWeight:weight
+  });
+  if(config.m1OverlayMode==="shadow"){
+    queueAudit("M1_L2_SHADOW_DECISION",{
+      symbol:signal.symbol,
+      base_target_allocation_pct:signal.targetAllocationPct??null,
+      overlay_weight_pct:Number.isFinite(weight??NaN)?Number(weight)*100:null,
+      overlay_source_month_end:m1OverlaySourceMonthEnd,
+      accepted:decision.accepted,
+      reason:decision.reason
+    },signal.strategyVersion);
+    return {
+      ...signal,
+      sizingReason:[signal.sizingReason??"",decision.reason??"M1_L2_SHADOW_NO_CHANGE"].filter(Boolean).join(" | ")
+    };
+  }
+  if(!decision.accepted){
+    return {
+      ...signal,
+      action:"HOLD",
+      targetAllocationPct:0,
+      reason:signal.reason+" | "+(decision.reason??"M1_L2_OVERLAY_BLOCK"),
+      sizingReason:"M1_L2_ENFORCE_BLOCK"
+    };
+  }
+  return {
+    ...signal,
+    targetAllocationPct:decision.targetAllocationPct??signal.targetAllocationPct,
+    reason:signal.reason+" | "+(decision.reason??"M1_L2_ENFORCE"),
+    sizingReason:[signal.sizingReason??"",decision.reason??""].filter(Boolean).join(" | ")
+  };
+}
+
 async function getExecutionControl(){
   const response=await ingest("",{action:"get_execution_control"});
   const control=(response as {control?:{
@@ -398,6 +494,7 @@ async function startSession(){
   sessionId=data.session.id;
   sessionDate=todayInTimezone(config.timezone);
   lastLiveAccountStateSyncAt=Date.now();
+  if(config.m1OverlayMode!=="off") await refreshM1Overlay(true);
   queueAudit("SESSION_STARTED",{
     provider:config.marketDataProvider,
     capital:portfolio.initialCapital,
@@ -467,11 +564,11 @@ function getSignal(q:Quote):Signal{
     if(decision.action==="SELL") return decision;
     return {symbol:q.symbol,ts:q.ts,action:"HOLD",reason:"REDUCE_ONLY_ENTRY_BLOCK",strategyVersion:strategyV1.version};
   }
-  return strategyV1.evaluate(q,{
+  return applyM1Overlay(strategyV1.evaluate(q,{
     positionQty:pos?.qty??0,
     avgPrice:pos?.avgPrice??0,
     nowMs:Date.now()
-  });
+  }));
 }
 
 async function executeSignal(
@@ -1000,6 +1097,9 @@ async function handleQuote(q:Quote){
     return;
   }
 
+  if(config.m1OverlayMode!=="off" && (Date.now()-m1OverlayRefreshedAtMs>=config.m1OverlayRefreshMs || m1OverlayWeights.size===0)){
+    void refreshM1Overlay(false);
+  }
   const signal=getSignal(q);
   const decisionTs=new Date().toISOString();
   const sourceTs=q.sourceTs??q.ts;
@@ -1331,6 +1431,12 @@ async function main(){
   }
   if(!["all","signals","off"].includes(config.decisionLogMode)){
     throw new Error("LUNA_DECISION_LOG_MODE_MUST_BE_ALL_SIGNALS_OR_OFF");
+  }
+  if(!["off","shadow","enforce"].includes(config.m1OverlayMode)){
+    throw new Error("LUNA_M1_OVERLAY_MODE_MUST_BE_OFF_SHADOW_OR_ENFORCE");
+  }
+  if(!Number.isFinite(config.m1OverlayRefreshMs) || config.m1OverlayRefreshMs<10_000){
+    throw new Error("LUNA_M1_OVERLAY_REFRESH_MS_MUST_BE_AT_LEAST_10000");
   }
   if(!Number.isFinite(config.supabaseRequestTimeoutMs) || config.supabaseRequestTimeoutMs<250){
     throw new Error("LUNA_SUPABASE_REQUEST_TIMEOUT_MS_MUST_BE_AT_LEAST_250");
