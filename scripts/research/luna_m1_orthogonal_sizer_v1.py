@@ -111,6 +111,10 @@ def prepare(
         how="left",
         validate="one_to_one",
     )
+    counts = x.groupby("month_end")["symbol"].nunique()
+    if (counts != TOP_K).any():
+        bad = counts[counts != TOP_K].to_dict()
+        raise SystemExit(f"M1_BASKET_SIZE_MUST_BE_20:{bad}")
     if x[["r_mom3", "r_high52_ratio", "r_vol20"]].isna().any().any():
         raise SystemExit("AUX_FACTOR_COVERAGE_FAILURE")
 
