@@ -151,15 +151,28 @@ def load_inputs(m1_path: str, factors_path: str) -> pd.DataFrame:
         if x[col].isna().any():
             raise SystemExit(f"FACTOR_COVERAGE_FAILURE:{col}")
 
-    x["r_mom3"] = x.groupby("month_end")["mom3"].rank(pct=True, method="average")
-    x["r_high52"] = x.groupby("month_end")["high52_ratio"].rank(
-        pct=True, method="average"
+    def postgres_percent_rank(series: pd.Series, null_neutral: float | None = None) -> pd.Series:
+        n = len(series)
+        if n <= 1:
+            out = pd.Series(0.5, index=series.index, dtype=float)
+        else:
+            ranks = series.rank(method="min", ascending=True, na_option="keep")
+            out = (ranks - 1.0) / (n - 1.0)
+        if null_neutral is not None:
+            out = out.fillna(null_neutral)
+        return out.astype(float)
+
+    x["r_mom3"] = x.groupby("month_end")["mom3"].transform(
+        lambda s: postgres_percent_rank(s, null_neutral=0.5)
     )
-    x["r_vol20"] = x.groupby("month_end")["vol20"].rank(
-        pct=True, method="average"
+    x["r_high52"] = x.groupby("month_end")["high52_ratio"].transform(
+        postgres_percent_rank
     )
-    x["r_amount"] = x.groupby("month_end")["avg_amount20"].rank(
-        pct=True, method="average"
+    x["r_vol20"] = x.groupby("month_end")["vol20"].transform(
+        postgres_percent_rank
+    )
+    x["r_amount"] = x.groupby("month_end")["avg_amount20"].transform(
+        postgres_percent_rank
     )
 
     x["aux_score"] = (
@@ -294,7 +307,7 @@ def main() -> None:
         "cost_convention": "two-sided; turnover=0.5*L1(weight change); cost=2*turnover*bps_per_side",
         "periods": period_summary(path),
         "cost_stress": stress_table(x),
-        "factor_missing_policy": "MOM3 missing -> neutral 50th percentile inside exact M1 basket; no name is dropped",
+        "factor_missing_policy": "MOM3 missing -> rank neutral 0.5 inside exact M1 basket, matching PostgreSQL percent_rank treatment; no name is dropped",
         "data_contract": "Auxiliary factors are canonical monthly factors, ranked only within exact M1 20-stock basket. No global 924/925 universe rank is used.",
         "promotion_gate": {
             "research": True,
