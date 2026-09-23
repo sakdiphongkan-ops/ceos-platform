@@ -27,6 +27,7 @@ let lastLiveAccountStateSyncAt=0;
 let lastLiveAccountStateAttemptAt=0;
 let sessionStartPromise:Promise<void>|null=null;
 let sessionEndPromise:Promise<void>|null=null;
+let marketWatchdogTimer:NodeJS.Timeout|undefined;
 let auditQueueTail:Promise<void>=Promise.resolve();
 type ExecutionReservationToken={
   buyCash:number;
@@ -1053,6 +1054,27 @@ async function ensureSession(){
   await sessionStartPromise;
 }
 
+function startMarketWatchdog(){
+  if(marketWatchdogTimer) return;
+  marketWatchdogTimer=setInterval(()=>{
+    const phase=currentMarketPhase();
+    if(phase==="ACTIVE" && !sessionId){
+      void ensureSession().catch(err=>console.error(JSON.stringify({
+        event:"SESSION_AUTO_START_ERROR",
+        error:String(err),
+        market_phase:phase
+      })));
+      return;
+    }
+    if(phase==="CLOSED" && sessionId){
+      void endSession("MARKET_CLOSED").catch(err=>console.error(JSON.stringify({
+        event:"SESSION_AUTO_CLOSE_ERROR",
+        error:String(err)
+      })));
+    }
+  },1000);
+}
+
 async function handleQuote(q:Quote){
   await ensureSession();
   if(!sessionId) return;
@@ -1494,6 +1516,8 @@ async function main(){
     throw new Error("Supabase ingest security configuration is incomplete.");
   }
 
+  startMarketWatchdog();
+
   for await(const q of marketQuotes(config.marketDataProvider)){
     void analysisScheduler.enqueue(q.symbol,async()=>{
       try{
@@ -1523,8 +1547,8 @@ async function main(){
   }
 }
 
-process.on("SIGINT",async()=>{await endSession("CLOSED");process.exit(0)});
-process.on("SIGTERM",async()=>{await endSession("CLOSED");process.exit(0)});
+process.on("SIGINT",async()=>{if(marketWatchdogTimer) clearInterval(marketWatchdogTimer);await endSession("CLOSED");process.exit(0)});
+process.on("SIGTERM",async()=>{if(marketWatchdogTimer) clearInterval(marketWatchdogTimer);await endSession("CLOSED");process.exit(0)});
 
 main().catch(async err=>{
   console.error(JSON.stringify({event:"LUNA_FATAL",error:String(err)}));
