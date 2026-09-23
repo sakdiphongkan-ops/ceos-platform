@@ -41,6 +41,7 @@ jobs:
       - run: npm run typecheck
       - run: npm run test:market-session
       - run: npm run test:strategy-state
+      - run: npm run test:m1-overlay
       - run: npm run test:execution-reservations
       - run: npm run test:risk-guards
       - run: npm run test:cost-replay
