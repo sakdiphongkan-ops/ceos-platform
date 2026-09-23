@@ -1,0 +1,107 @@
+{
+  "status": "RESEARCH_ONLY",
+  "strategy_version": "luna-m1-orthogonal-sizer-l1-v1",
+  "candidate": {
+    "base": "luna-m1s0k20rev-v1 exact monthly 20-stock basket",
+    "auxiliary": "0.50*rank(MOM3)+0.30*rank(52W_HIGH_RATIO)-0.20*rank(VOL20)",
+    "residualization": "cross-sectional OLS residual of auxiliary score versus exact M1 selection_score, separately each month",
+    "lambda_grid_tested": [
+      0,
+      0.25,
+      0.5,
+      0.75,
+      1
+    ],
+    "frozen_lambda": 1,
+    "weight_rule": "(1 + lambda*((rank-10.5)/9.5))/20",
+    "weight_range": "0% to 10%, long-only, weights sum to 100%"
+  },
+  "protocol": {
+    "baseline_cost_bps": 20,
+    "stress_bps": [
+      20,
+      40,
+      60,
+      100
+    ],
+    "validation_period": "2024-09-30..2025-08-31",
+    "holdout_period": "2025-09-30..2026-08-31",
+    "independent_stability_block": "2023-09-30..2024-08-31",
+    "rolling_windows": "45 rolling 12-month windows ending 2022-12..2026-08",
+    "holdout_used_to_select_lambda": false
+  },
+  "blocks": {
+    "BLOCK_1": {
+      "months": 12,
+      "geo20": 0.0279597691895326,
+      "geo40": 0.0264505390575065,
+      "geo60": 0.0249411274143183,
+      "geo100": 0.0219217561835798,
+      "win20": 0.6666666666666667,
+      "avg_turnover": 0.7596491228070175,
+      "mdd20": -0.264713433107573
+    },
+    "VALIDATION": {
+      "months": 12,
+      "geo20": 0.0286730887333881,
+      "geo40": 0.0271215325874836,
+      "geo60": 0.0255696984272722,
+      "geo100": 0.0224651910899214,
+      "win20": 0.5,
+      "avg_turnover": 0.7618421052631579,
+      "mdd20": -0.273260471923283
+    },
+    "HOLDOUT": {
+      "months": 12,
+      "geo20": 0.0679297362491003,
+      "geo40": 0.0664165123942244,
+      "geo60": 0.064903077962341,
+      "geo100": 0.0618755737515329,
+      "win20": 0.8333333333333334,
+      "avg_turnover": 0.7521929824561404,
+      "mdd20": -0.0394330753848339
+    }
+  },
+  "common_2022_01_to_2026_08": {
+    "months": 56,
+    "overlay_geo20": 0.0214942642664235,
+    "m1_geo20": 0.007413242454266681,
+    "overlay_mean_minus_m1_mean": 0.014792173441125,
+    "overlay_beats_m1_months": 36,
+    "m1_beats_overlay_months": 20,
+    "paired_t": 3.71885865916403,
+    "overlay_hac_t_lag3": 1.77486493490989,
+    "m1_hac_t_lag3": 0.9108863127736778,
+    "overlay_mdd_pct": -0.355573474173423,
+    "m1_mdd_pct": -0.463844901875153,
+    "overlay_mdd_baht": -10667.2042252027,
+    "m1_mdd_baht": -13915.3470562546
+  },
+  "rolling_12m": {
+    "windows": 45,
+    "overlay_better_pct20": 1,
+    "average_geo_advantage20": 0.01380835402206,
+    "worst_geo_advantage20": 0.00281727470227649,
+    "best_geo_advantage20": 0.029275458374756,
+    "overlay_better_pct40": 1,
+    "average_geo_advantage40": 0.0141249060368439,
+    "worst_geo_advantage40": 0.00318229079828316
+  },
+  "interpretation": {
+    "7pct_hurdle_status": "NOT_PASSED",
+    "holdout_geo20_gap_to_7pct": -0.0020702637508997,
+    "holdout_geo40_gap_to_7pct": -0.0035834876057756,
+    "important": "The 6.79% holdout result is close to, but below, the 7% monthly hurdle. It is not evidence of a guaranteed 7% monthly return."
+  },
+  "promotion_gate": {
+    "research": true,
+    "paper": false,
+    "customer": false,
+    "live": false,
+    "blockers": [
+      "Reproduce the auxiliary factors from the exact M1 source/data contract rather than ranked_v2 proxy.",
+      "Run the frozen candidate through paper realtime simulation.",
+      "Verify live broker reconciliation and licensed realtime market data before any live enablement."
+    ]
+  }
+}
