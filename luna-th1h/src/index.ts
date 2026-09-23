@@ -1518,32 +1518,44 @@ async function main(){
 
   startMarketWatchdog();
 
-  for await(const q of marketQuotes(config.marketDataProvider)){
-    void analysisScheduler.enqueue(q.symbol,async()=>{
-      try{
-        await handleQuote(q);
-      }catch(err){
-        console.error(JSON.stringify({
-          event:"LUNA_QUOTE_CYCLE_ERROR",
-          symbol:q.symbol,
-          ts:q.ts,
-          error:String(err)
-        }));
+  while(true){
+    try{
+      for await(const q of marketQuotes(config.marketDataProvider)){
+        void analysisScheduler.enqueue(q.symbol,async()=>{
+          try{
+            await handleQuote(q);
+          }catch(err){
+            console.error(JSON.stringify({
+              event:"LUNA_QUOTE_CYCLE_ERROR",
+              symbol:q.symbol,
+              ts:q.ts,
+              error:String(err)
+            }));
+          }
+        }).then(result=>{
+          if(result.superseded){
+            // The quote remained in the feed but was replaced before analysis started.
+            // This deliberately bounds latency under overload: analyze the newest state,
+            // not stale market data queued behind it.
+          }
+        }).catch(err=>{
+          console.error(JSON.stringify({
+            event:"LUNA_ANALYSIS_QUEUE_ERROR",
+            symbol:q.symbol,
+            ts:q.ts,
+            error:String(err)
+          }));
+        });
       }
-    }).then(result=>{
-      if(result.superseded){
-        // The quote remained in the feed but was replaced before analysis started.
-        // This deliberately bounds latency under overload: analyze the newest state,
-        // not stale market data queued behind it.
-      }
-    }).catch(err=>{
+    }catch(error){
       console.error(JSON.stringify({
-        event:"LUNA_ANALYSIS_QUEUE_ERROR",
-        symbol:q.symbol,
-        ts:q.ts,
-        error:String(err)
+        event:"LUNA_MARKETDATA_LOOP_ERROR",
+        provider:config.marketDataProvider,
+        error:String(error),
+        retry_ms:1000
       }));
-    });
+      await new Promise(resolve=>setTimeout(resolve,1000));
+    }
   }
 }
 
