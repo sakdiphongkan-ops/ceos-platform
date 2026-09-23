@@ -1,0 +1,75 @@
+{
+  "status": "RESEARCH_ONLY",
+  "strategy_version": "luna-m1-orthogonal-sizer-l2-v1",
+  "base_strategy": "luna-m1s0k20rev-v1 exact K20 monthly basket",
+  "auxiliary_formula": {
+    "mom3_rank": 0.4,
+    "high52_rank": 0.25,
+    "low_vol20_rank": 0.2,
+    "avg_amount20_rank": 0.15
+  },
+  "method": "residualize auxiliary score against exact M1 selection_score cross-sectionally each month, then assign frozen lambda=1.0 weights from 0% to 10%",
+  "validation_lambda_grid": {
+    "0": 0.017902594193856,
+    "1": 0.0326533067264418,
+    "0.25": 0.0216663372879462,
+    "0.5": 0.0253794916780155,
+    "0.75": 0.0290418847291083
+  },
+  "selected_lambda": 1,
+  "validation": {
+    "geo_monthly_20bps_side": 0.0326533067264418,
+    "geo_monthly_40bps_side": 0.031123431046211,
+    "win_rate_20bps": 0.6666666666666666,
+    "mdd_20bps": -0.248332331539744
+  },
+  "holdout": {
+    "period": "2025-09-30..2026-08-31",
+    "geo_monthly_20bps_side": 0.0653913016241912,
+    "geo_monthly_40bps_side": 0.0623827708417373,
+    "geo_monthly_60bps_side": 0.0593733778941512,
+    "geo_monthly_100bps_side": 0.0533519757444632,
+    "win_rate": 0.75,
+    "worst_month_at_20bps_side": -0.0525366832196125,
+    "avg_turnover": 0.7456140350877193
+  },
+  "paired_common_2022_01_to_2026_08": {
+    "months": 56,
+    "mean_monthly_advantage_vs_m1": 0.0156625375714365,
+    "m1_months_beaten_pct": 0.7142857142857143,
+    "hac_t_stat_difference": 3.76718940971358,
+    "overlay_mdd_pct": -0.377477326782715,
+    "overlay_mdd_baht": -11324.3198034814,
+    "m1_mdd_pct": -0.463844901875153,
+    "m1_mdd_baht": -13915.3470562546
+  },
+  "rolling_12m": {
+    "windows": 45,
+    "pct_windows_beating_m1": 0.8666666666666667,
+    "average_geo_advantage": 0.0129350370193691,
+    "worst_geo_advantage": -0.00569409451683221
+  },
+  "data_contract": {
+    "factor_source": "luna_research_monthly_price_factors derived from canonical daily price factors",
+    "ranking_scope": "inside exact M1 K20 basket only",
+    "global_universe_rank_used": false,
+    "factor_missing_policy": "MOM3 missing -> neutral within-basket 50th percentile; holdings are not dropped"
+  },
+  "hurdles": {
+    "target_monthly_geometric_return": 0.07,
+    "holdout_20bps_side_pass": false,
+    "holdout_100bps_side_pass": false,
+    "note": "7% monthly remains a hurdle, not a training objective or guarantee."
+  },
+  "promotion_gate": {
+    "research": true,
+    "paper": false,
+    "customer": false,
+    "live": false,
+    "blockers": [
+      "run the frozen candidate through blind paper shadow replay",
+      "verify official realtime data freshness and weight reconciliation",
+      "verify live broker reconciliation before any arming"
+    ]
+  }
+}
