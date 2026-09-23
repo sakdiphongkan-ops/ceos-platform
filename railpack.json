@@ -1,0 +1,13 @@
+{
+  "$schema": "https://schema.railpack.com",
+  "deploy": {
+    "inputs": [
+      "...",
+      {
+        "step": "install",
+        "include": ["luna-th1h/**"]
+      }
+    ],
+    "startCommand": "npm start --prefix luna-th1h"
+  }
+}
