@@ -6,21 +6,25 @@ from luna_m1_orthogonal_sizer_v1 import prepare
 
 class TestOrthogonalSizer(unittest.TestCase):
     def _frames(self):
-        holdings = pd.DataFrame([
-            {"month_end":"2026-01-31","symbol":"A","selection_score":1.0,"next_month_return":0.02},
-            {"month_end":"2026-01-31","symbol":"B","selection_score":2.0,"next_month_return":0.01},
-            {"month_end":"2026-02-28","symbol":"A","selection_score":1.0,"next_month_return":0.03},
-            {"month_end":"2026-02-28","symbol":"B","selection_score":2.0,"next_month_return":0.02},
-        ])
-        # Minimal two-name fixture; override TOP_K semantics by calling
-        # prepare only to ensure residualization/rank mechanics remain deterministic.
-        ranked = pd.DataFrame([
-            {"month_end":"2026-01-31","symbol":"A","r_mom3":1.0,"r_high52_ratio":0.1,"r_vol20":0.2},
-            {"month_end":"2026-01-31","symbol":"B","r_mom3":0.0,"r_high52_ratio":0.2,"r_vol20":0.1},
-            {"month_end":"2026-02-28","symbol":"A","r_mom3":1.0,"r_high52_ratio":0.1,"r_vol20":0.2},
-            {"month_end":"2026-02-28","symbol":"B","r_mom3":0.0,"r_high52_ratio":0.2,"r_vol20":0.1},
-        ])
-        return holdings, ranked
+        holdings = []
+        ranked = []
+        for month in ["2026-01-31", "2026-02-28"]:
+            for i in range(20):
+                symbol = f"S{i:02d}"
+                holdings.append({
+                    "month_end": month,
+                    "symbol": symbol,
+                    "selection_score": float(i),
+                    "next_month_return": 0.01 + i / 10000.0,
+                })
+                ranked.append({
+                    "month_end": month,
+                    "symbol": symbol,
+                    "r_mom3": 1.0 - i / 20.0,
+                    "r_high52_ratio": i / 20.0,
+                    "r_vol20": i / 30.0,
+                })
+        return pd.DataFrame(holdings), pd.DataFrame(ranked)
 
     def test_weight_sum_and_non_negative(self):
         h, r = self._frames()
@@ -34,6 +38,13 @@ class TestOrthogonalSizer(unittest.TestCase):
         h, r = self._frames()
         with self.assertRaises(SystemExit):
             prepare(h, r, 1.25)
+
+    def test_rejects_incomplete_m1_basket(self):
+        h, r = self._frames()
+        h = h[h["symbol"] != "S19"].copy()
+        r = r[r["symbol"] != "S19"].copy()
+        with self.assertRaises(SystemExit):
+            prepare(h, r, 1.0)
 
 
 if __name__ == "__main__":
