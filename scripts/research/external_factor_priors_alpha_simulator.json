@@ -1,0 +1,38 @@
+{
+  "artifact": "Alpha Simulator — Thai SET Factor Model (4)",
+  "artifact_sha256": "b5d1e664933174eb03a39348ba3912508a6d2b832fa975ce1dbefa934a6b6b38",
+  "role": "external_factor_prior_only",
+  "policy": "Do not use these alpha values as LUNA realized returns, training labels, or production signal weights unless independently re-estimated with point-in-time data and passed through LUNA OOS/HOLDOUT.",
+  "factors": {
+    "size": {
+      "gross_monthly_alpha_pct": -0.64,
+      "vol_multiplier": 1.28,
+      "annual_turnover": 1.15,
+      "source_claim": "SET100 research Feb 2003-Feb 2012; SMB average -0.64%/month"
+    },
+    "value": {
+      "gross_monthly_alpha_pct": -2.79,
+      "vol_multiplier": 1.10,
+      "annual_turnover": 0.70,
+      "source_claim": "SET100 research Feb 2003-Feb 2012; HML average -2.79%/month"
+    },
+    "momentum": {
+      "gross_monthly_alpha_pct": 0.62,
+      "vol_multiplier": 1.42,
+      "annual_turnover": 1.60,
+      "source_claim": "SET100 research Feb 2003-Feb 2012; WML average +0.62%/month"
+    },
+    "lowvol": {
+      "gross_monthly_alpha_pct": 0.78,
+      "vol_multiplier": 0.78,
+      "annual_turnover": 0.45,
+      "source_claim": "Low-volatility anomaly claim in the supplied simulator"
+    }
+  },
+  "important_limitations": [
+    "The simulator is an educational/static scenario tool, not a LUNA backtest.",
+    "The factor study period is historical and does not establish current 2026 SET alpha.",
+    "Commission assumptions are not exchange-wide broker quotes.",
+    "The values must not bypass LUNA PIT, walk-forward, OOS, HOLDOUT, liquidity, and execution checks."
+  ]
+}
