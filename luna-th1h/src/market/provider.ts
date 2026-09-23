@@ -58,7 +58,7 @@ function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVerifiedBoo
   const parsedTs=Date.parse(freshnessTs);
   if(!Number.isFinite(parsedTs)) return null;
   const quoteAgeMs=Date.now()-parsedTs;
-  if(quoteAgeMs<0 || quoteAgeMs>(allowPublicPriceOnly ? Math.max(1000,maxQuoteAgeMs) : maxQuoteAgeMs)) return null;
+  if(quoteAgeMs<0 || quoteAgeMs>(allowPublicPriceOnly ? publicFallbackMaxAgeMs : maxQuoteAgeMs)) return null;
   return q;
 }
 
@@ -214,7 +214,11 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
     process.env.LUNA_PRICE_ONLY_FALLBACK
       ?? (paperMode && !liveTradingArmed ? "true" : "false")
   ).toLowerCase()==="true";
-  const maxQuoteAgeMs=Number(process.env.LUNA_MAX_QUOTE_AGE_MS ?? 3000);
+  const maxQuoteAgeMs=Number(process.env.LUNA_MAX_QUOTE_AGE_MS ?? 2000);
+  const publicFallbackMaxAgeMs=Math.max(5_000,Number(process.env.LUNA_PUBLIC_FALLBACK_MAX_QUOTE_AGE_MS ?? 8_000));
+  let acceptedCount=0;
+  let rejectedCount=0;
+  let lastDiagnosticsAt=0;
   let nextStreamRetryAt=0;
 
   while(true){
@@ -308,7 +312,24 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
         paperMode,
         liveTradingArmed
       );
-      if(!q) continue;
+      if(!q){
+        rejectedCount++;
+        continue;
+      }
+      acceptedCount++;
+      if(Date.now()-lastDiagnosticsAt>=10_000){
+        lastDiagnosticsAt=Date.now();
+        console.log(JSON.stringify({
+          event:"LUNA_GATEWAY_NORMALIZATION_DIAGNOSTIC",
+          accepted_count:acceptedCount,
+          rejected_count:rejectedCount,
+          source:q.source,
+          last_quote_ts:q.ts,
+          public_fallback_allowed:priceOnlyFallback && paperMode && !liveTradingArmed,
+          public_fallback_max_age_ms:publicFallbackMaxAgeMs,
+          max_quote_age_ms:maxQuoteAgeMs
+        }));
+      }
       const sig=JSON.stringify([q.ts,q.bid,q.ask,q.last,q.bidSize,q.askSize]);
       if(previous.get(q.symbol)===sig) continue;
       previous.set(q.symbol,sig);
