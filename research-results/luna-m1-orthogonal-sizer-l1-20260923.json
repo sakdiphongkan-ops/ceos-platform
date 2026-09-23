@@ -75,7 +75,8 @@
     "overlay_mdd_pct": -0.355573474173423,
     "m1_mdd_pct": -0.463844901875153,
     "overlay_mdd_baht": -10667.2042252027,
-    "m1_mdd_baht": -13915.3470562546
+    "m1_mdd_baht": -13915.3470562546,
+    "hac_t_difference_overlay_minus_m1": 4.37831212572583
   },
   "rolling_12m": {
     "windows": 45,
@@ -91,7 +92,8 @@
     "7pct_hurdle_status": "NOT_PASSED",
     "holdout_geo20_gap_to_7pct": -0.0020702637508997,
     "holdout_geo40_gap_to_7pct": -0.0035834876057756,
-    "important": "The 6.79% holdout result is close to, but below, the 7% monthly hurdle. It is not evidence of a guaranteed 7% monthly return."
+    "important": "The 6.79% holdout result is close to, but below, the 7% monthly hurdle. It is not evidence of a guaranteed 7% monthly return.",
+    "note": "The HAC t-stat is a diagnostic, not proof against model-selection or regime risk; the rolling windows are overlapping."
   },
   "promotion_gate": {
     "research": true,
