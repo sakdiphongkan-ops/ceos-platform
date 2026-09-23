@@ -94,10 +94,14 @@ body {
 }
 .market-status svg{color:var(--accent)}
 .icon-button,.close-button{
-  width:34px;height:34px;display:grid;place-items:center;cursor:pointer;
-  border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:10px;
+  min-width:34px;height:34px;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;
+  border:1px solid var(--line-strong);background:rgba(121,214,160,.08);color:var(--accent);border-radius:10px;
+  box-shadow:inset 0 0 0 1px rgba(121,214,160,.04);
 }
-.icon-button:hover,.close-button:hover{border-color:var(--line-strong);background:#151d18}
+.icon-button:hover,.close-button:hover{border-color:var(--accent);background:rgba(121,214,160,.14)}
+.icon-button:disabled{opacity:.65;cursor:wait}
+.refresh-label{font-size:9px;font-weight:850;letter-spacing:.04em}
+
 .page{width:min(1540px,100%);margin:0 auto;padding:28px 28px 40px}
 .hero-row{
   display:flex;align-items:flex-end;justify-content:space-between;gap:20px;
