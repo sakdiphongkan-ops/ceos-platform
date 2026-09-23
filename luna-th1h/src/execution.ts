@@ -46,6 +46,18 @@ function executionCosts(overrides:ExecutionCostOverrides = {}){
   };
 }
 
+function allowPaperPriceOnlyExecution(q:Quote){
+  const mode=String(config.mode??"").toLowerCase();
+  const executionMode=String(config.executionMode??"").toLowerCase();
+  const liveTradingArmed=String(process.env.LIVE_TRADING_ARMED??"false").toLowerCase()==="true";
+  const source=String(q.source??"").toLowerCase();
+  return config.priceOnlyFallback
+    && mode==="paper"
+    && executionMode!=="live"
+    && !liveTradingArmed
+    && source.includes("tradingview-public-screener");
+}
+
 export type PlannedOrder = {
   accepted:true;
   symbol:string;
@@ -122,7 +134,6 @@ function pruneRecentBuys(state:PortfolioState,nowMs:number){
   while(timestamps.length && timestamps[0]<cutoff) timestamps.shift();
 }
 
-
 export function mark(state:PortfolioState,q:Quote){
   state.marks[q.symbol]=q;
   ensureDailyRiskState(state,q.ts);
@@ -148,11 +159,15 @@ export function planOrder(
   const verifiedBook=hasBook
     && hasDepth
     && !String(q.dataQuality??"").toLowerCase().includes("unverified");
+  const allowPriceOnlyPaper=allowPaperPriceOnlyExecution(q);
 
-  // Entries require a verified executable book. Risk-reducing SELLs may fall
-  // back to last price during a degraded feed so positions can still be closed.
+  // BUYs require a verified executable book in live/verified paths.
+  // In the explicitly non-live paper fallback, TradingView last-price execution
+  // is allowed because the strategy has already opted into the same fallback.
   const referencePrice=side==="BUY"
-    ? (verifiedBook?Number(q.ask):0)
+    ? (verifiedBook
+      ? Number(q.ask)
+      : (allowPriceOnlyPaper?usablePrice(q.last,q.ask,q.bid):0))
     : (verifiedBook?Number(q.bid):usablePrice(q.last,q.bid,q.ask));
   if(side==="BUY" && !referencePrice){
     return {accepted:false,reason:"BUY_BLOCKED_NO_VERIFIED_BOOK"};
@@ -252,7 +267,7 @@ export function planOrder(
       depthComplete:verifiedBook && q.depthComplete===true,
       spreadBps:verifiedBook
         ? ((Number(q.ask)-Number(q.bid))/Number(q.last||q.ask))*10_000 : 0,
-      reason:signal.reason
+      reason:allowPriceOnlyPaper && !verifiedBook ? "PRICE_ONLY_PAPER_LAST:"+signal.reason : signal.reason
     };
   }
 
@@ -275,7 +290,7 @@ export function planOrder(
     currentPositionNotional:currentNotional,
     cash:Math.max(0,state.cash-Math.max(0,reservations.reservedBuyCash))
   });
-    if(!risk.ok) return {accepted:false,reason:risk.reason};
+  if(!risk.ok) return {accepted:false,reason:risk.reason};
   return {
     accepted:true,symbol:q.symbol,side,qty,referencePrice,
     visibleDepth:verifiedBook?(q.bidLevels?.length?q.bidLevels.reduce((s,l)=>s+Math.max(0,l.size),0):Number(q.bidSize??0)):0,
