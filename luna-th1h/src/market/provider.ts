@@ -7,6 +7,15 @@ const PUBLIC_FALLBACK_MAX_QUOTE_AGE_MS=Math.max(
   Number(process.env.LUNA_PUBLIC_FALLBACK_MAX_QUOTE_AGE_MS ?? 8_000)
 );
 
+const NORMALIZATION_REJECTIONS:Record<string,number>={
+  missing_fields:0,
+  no_price:0,
+  unverified_book:0,
+  invalid_timestamp:0,
+  future_timestamp:0,
+  stale:0,
+};
+
 export function marketQuotes(provider:string):AsyncGenerator<Quote>{
   switch(provider){
     case "mock":
@@ -21,7 +30,10 @@ export function marketQuotes(provider:string):AsyncGenerator<Quote>{
 }
 
 function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVerifiedBook:boolean, priceOnlyFallback:boolean, paperMode:boolean, liveTradingArmed:boolean):Quote|null{
-  if(!raw?.symbol || !raw?.ts) return null;
+  if(!raw?.symbol || !raw?.ts){
+    NORMALIZATION_REJECTIONS.missing_fields++;
+    return null;
+  }
   const q:Quote = {
     symbol:String(raw.symbol),
     ts:String(raw.ts),
@@ -36,7 +48,10 @@ function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVerifiedBoo
     source:String(raw.source ?? "unknown-market-data"),
     dataQuality:raw.data_quality ? String(raw.data_quality) : undefined
   };
-  if(q.last===null && q.bid===null && q.ask===null) return null;
+  if(q.last===null && q.bid===null && q.ask===null){
+    NORMALIZATION_REJECTIONS.no_price++;
+    return null;
+  }
 
   const sourceName=String(q.source??"").toLowerCase();
   const allowPublicPriceOnly =
@@ -56,14 +71,27 @@ function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVerifiedBoo
       && Number(q.bidSize)>0
       && Number(q.askSize)>0
       && !String(q.dataQuality??"").toLowerCase().includes("unverified");
-    if(!verifiedBook && !allowPublicPriceOnly) return null;
+    if(!verifiedBook && !allowPublicPriceOnly){
+      NORMALIZATION_REJECTIONS.unverified_book++;
+      return null;
+    }
   }
 
   const freshnessTs=q.sourceTs ?? q.ts;
   const parsedTs=Date.parse(freshnessTs);
-  if(!Number.isFinite(parsedTs)) return null;
+  if(!Number.isFinite(parsedTs)){
+    NORMALIZATION_REJECTIONS.invalid_timestamp++;
+    return null;
+  }
   const quoteAgeMs=Date.now()-parsedTs;
-  if(quoteAgeMs<0 || quoteAgeMs>(allowPublicPriceOnly ? PUBLIC_FALLBACK_MAX_QUOTE_AGE_MS : maxQuoteAgeMs)) return null;
+  if(quoteAgeMs<0){
+    NORMALIZATION_REJECTIONS.future_timestamp++;
+    return null;
+  }
+  if(quoteAgeMs>(allowPublicPriceOnly ? PUBLIC_FALLBACK_MAX_QUOTE_AGE_MS : maxQuoteAgeMs)){
+    NORMALIZATION_REJECTIONS.stale++;
+    return null;
+  }
   return q;
 }
 
@@ -348,7 +376,8 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
         sample_source:quotes.find((x:any)=>x?.source)?.source ?? null,
         public_fallback_allowed:priceOnlyFallback && paperMode && !liveTradingArmed,
         public_fallback_max_age_ms:PUBLIC_FALLBACK_MAX_QUOTE_AGE_MS,
-        max_quote_age_ms:maxQuoteAgeMs
+        max_quote_age_ms:maxQuoteAgeMs,
+        rejection_reasons:{...NORMALIZATION_REJECTIONS}
       }));
     }
 
