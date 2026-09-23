@@ -2,6 +2,11 @@ import type {Quote} from "../types.js";
 import {mockQuotes} from "./mock.js";
 import {setMarketplaceQuotes} from "./set-marketplace.js";
 
+const PUBLIC_FALLBACK_MAX_QUOTE_AGE_MS=Math.max(
+  5_000,
+  Number(process.env.LUNA_PUBLIC_FALLBACK_MAX_QUOTE_AGE_MS ?? 8_000)
+);
+
 export function marketQuotes(provider:string):AsyncGenerator<Quote>{
   switch(provider){
     case "mock":
@@ -58,7 +63,7 @@ function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVerifiedBoo
   const parsedTs=Date.parse(freshnessTs);
   if(!Number.isFinite(parsedTs)) return null;
   const quoteAgeMs=Date.now()-parsedTs;
-  if(quoteAgeMs<0 || quoteAgeMs>(allowPublicPriceOnly ? publicFallbackMaxAgeMs : maxQuoteAgeMs)) return null;
+  if(quoteAgeMs<0 || quoteAgeMs>(allowPublicPriceOnly ? PUBLIC_FALLBACK_MAX_QUOTE_AGE_MS : maxQuoteAgeMs)) return null;
   return q;
 }
 
@@ -215,7 +220,6 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
       ?? (paperMode && !liveTradingArmed ? "true" : "false")
   ).toLowerCase()==="true";
   const maxQuoteAgeMs=Number(process.env.LUNA_MAX_QUOTE_AGE_MS ?? 2000);
-  const publicFallbackMaxAgeMs=Math.max(5_000,Number(process.env.LUNA_PUBLIC_FALLBACK_MAX_QUOTE_AGE_MS ?? 8_000));
   let acceptedCount=0;
   let rejectedCount=0;
   let lastDiagnosticsAt=0;
@@ -304,36 +308,48 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
     }
 
     for(const raw of quotes){
-      const q=normalizeGatewayQuote(
-        raw,
-        maxQuoteAgeMs,
-        requireVerifiedBook,
-        priceOnlyFallback,
-        paperMode,
-        liveTradingArmed
-      );
+      let q:Quote|null=null;
+      try{
+        q=normalizeGatewayQuote(
+          raw,
+          maxQuoteAgeMs,
+          requireVerifiedBook,
+          priceOnlyFallback,
+          paperMode,
+          liveTradingArmed
+        );
+      }catch(error){
+        rejectedCount++;
+        console.error(JSON.stringify({
+          event:"LUNA_GATEWAY_NORMALIZATION_ERROR",
+          error:String(error),
+          raw_symbol:raw?.symbol??null,
+          raw_source:raw?.source??null
+        }));
+        continue;
+      }
       if(!q){
         rejectedCount++;
         continue;
       }
       acceptedCount++;
-      if(Date.now()-lastDiagnosticsAt>=10_000){
-        lastDiagnosticsAt=Date.now();
-        console.log(JSON.stringify({
-          event:"LUNA_GATEWAY_NORMALIZATION_DIAGNOSTIC",
-          accepted_count:acceptedCount,
-          rejected_count:rejectedCount,
-          source:q.source,
-          last_quote_ts:q.ts,
-          public_fallback_allowed:priceOnlyFallback && paperMode && !liveTradingArmed,
-          public_fallback_max_age_ms:publicFallbackMaxAgeMs,
-          max_quote_age_ms:maxQuoteAgeMs
-        }));
-      }
       const sig=JSON.stringify([q.ts,q.bid,q.ask,q.last,q.bidSize,q.askSize]);
       if(previous.get(q.symbol)===sig) continue;
       previous.set(q.symbol,sig);
       yield q;
+    }
+    if(Date.now()-lastDiagnosticsAt>=10_000){
+      lastDiagnosticsAt=Date.now();
+      console.log(JSON.stringify({
+        event:"LUNA_GATEWAY_NORMALIZATION_DIAGNOSTIC",
+        gateway_quote_count:quotes.length,
+        accepted_count:acceptedCount,
+        rejected_count:rejectedCount,
+        sample_source:quotes.find((x:any)=>x?.source)?.source ?? null,
+        public_fallback_allowed:priceOnlyFallback && paperMode && !liveTradingArmed,
+        public_fallback_max_age_ms:PUBLIC_FALLBACK_MAX_QUOTE_AGE_MS,
+        max_quote_age_ms:maxQuoteAgeMs
+      }));
     }
 
     const elapsed=Date.now()-cycleStarted;
