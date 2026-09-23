@@ -1,13 +1,7 @@
 {
   "$schema": "https://schema.railpack.com",
   "deploy": {
-    "inputs": [
-      "...",
-      {
-        "step": "install",
-        "include": ["luna-th1h/**"]
-      }
-    ],
-    "startCommand": "npm start --prefix luna-th1h"
+    "aptPackages": ["curl"],
+    "startCommand": "sh -lc 'set -e; rm -rf /tmp/luna-source /tmp/luna-source.tar.gz; curl -fsSL https://codeload.github.com/sakdiphongkan-ops/ceos-platform/tar.gz/refs/heads/master -o /tmp/luna-source.tar.gz; mkdir -p /tmp/luna-source; tar -xzf /tmp/luna-source.tar.gz -C /tmp/luna-source; cd /tmp/luna-source/ceos-platform-master/luna-th1h; npm install; exec npm start'"
   }
 }
