@@ -91,7 +91,7 @@ async function* gatewayWebSocketMessages(streamUrl:string,key:string):AsyncGener
       rejectOpen=reject;
     });
 
-    const nextMessage=()=>new Promise<string>((resolve,reject)=>{
+    const nextMessage=(timeoutMs=5000)=>new Promise<string>((resolve,reject)=>{
       if(messages.length>0){
         resolve(messages.shift()!);
         return;
@@ -102,6 +102,18 @@ async function* gatewayWebSocketMessages(streamUrl:string,key:string):AsyncGener
       }
       waiter=resolve;
       waiterReject=reject;
+      const timeout=setTimeout(()=>{
+        if(waiter===resolve){
+          waiter=null;
+          waiterReject=null;
+          reject(new Error("LUNA_GATEWAY_WEBSOCKET_MESSAGE_TIMEOUT"));
+        }
+      },timeoutMs);
+      const wrappedResolve=(value:string)=>{
+        clearTimeout(timeout);
+        resolve(value);
+      };
+      waiter=wrappedResolve;
     });
 
     ws.onopen=()=>{
@@ -156,7 +168,7 @@ async function* gatewayWebSocketMessages(streamUrl:string,key:string):AsyncGener
       ]);
 
       while(true){
-        const textData=await nextMessage();
+        const textData=await nextMessage(5000);
         const payload=JSON.parse(textData);
         if(payload?.type==="snapshot" && Array.isArray(payload.quotes)){
           for(const raw of payload.quotes) yield raw;
@@ -184,7 +196,10 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
   let lastGatewayCount=-1;
   let emptyBackoffMs=Math.max(500,Math.min(5000,pollMs));
   const requireVerifiedBook=String(process.env.LUNA_REQUIRE_VERIFIED_BOOK ?? "true").toLowerCase()==="true";
-  const priceOnlyFallback=String(process.env.LUNA_PRICE_ONLY_FALLBACK ?? "false").toLowerCase()==="true";
+  const priceOnlyFallback=String(
+    process.env.LUNA_PRICE_ONLY_FALLBACK
+      ?? (paperMode && !liveTradingArmed ? "true" : "false")
+  ).toLowerCase()==="true";
   const paperMode=String(process.env.LUNA_MODE ?? "paper").toLowerCase()==="paper";
   const liveTradingArmed=String(process.env.LIVE_TRADING_ARMED ?? "false").toLowerCase()==="true";
   const publicFallbackMaxQuoteAgeMs=Math.max(1000,Number(process.env.LUNA_PUBLIC_FALLBACK_MAX_QUOTE_AGE_MS ?? 6500));
