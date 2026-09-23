@@ -1,0 +1,9 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile.luna-runtime"
+buildCommand = "true"
+
+[deploy]
+startCommand = "sh -lc 'rm -rf /app/src /tmp/luna-source /tmp/luna-source.tar.gz && wget -qO /tmp/luna-source.tar.gz https://codeload.github.com/sakdiphongkan-ops/ceos-platform/tar.gz/refs/heads/master && mkdir -p /tmp/luna-source && tar -xzf /tmp/luna-source.tar.gz -C /tmp/luna-source && cp -R /tmp/luna-source/ceos-platform-master/luna-th1h/src /app/src && exec npm start'"
+restartPolicyType = "ALWAYS"
+restartPolicyMaxRetries = 5
