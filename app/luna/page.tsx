@@ -353,7 +353,7 @@ export default function LunaPortfolioPage() {
       </nav>
       <div className="top-actions">
         <div className={`market-status phase-${marketPhase.toLowerCase()}`}><CircleDot size={11}/> SET · {marketPhaseLabel(marketPhase)}</div><div className="timeframe-chip"><BarChart3 size={13}/> {TIMEFRAME}</div>
-        <button className={"icon-button "+(refreshing?"refreshing":"")} title="Refresh" onClick={load}><RefreshCw size={17}/></button>
+        <button className={"icon-button "+(refreshing?"refreshing":"")} title={refreshing?"Refreshing LUNA feed…":"Refresh LUNA feed"} aria-label={refreshing?"Refreshing LUNA feed":"Refresh LUNA feed"} onClick={load} disabled={refreshing}><RefreshCw size={17}/><span className="refresh-label">{refreshing?"Refreshing":"Refresh"}</span></button>
         <div className="session-chip"><Clock3 size={14}/> {todaySessionDate} · {bangkokClock(clock)} · {realtimeFresh ? "REALTIME TICK" : live ? "STREAM STALE · UPDATED "+updatedAt : "OFFLINE"}</div>
       </div>
     </header>
