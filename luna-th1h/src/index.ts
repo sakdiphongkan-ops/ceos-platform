@@ -292,12 +292,8 @@ async function refreshM1Overlay(force=false){
 function applyM1Overlay(signal:Signal):Signal{
   if(signal.action!=="BUY" || config.m1OverlayMode==="off") return signal;
   const weight=m1OverlayWeights.get(String(signal.symbol).toUpperCase());
-  const overlayAction: "OFF" | "SHADOW" | "ENFORCE" =
-    config.m1OverlayMode === "off"
-      ? "OFF"
-      : config.m1OverlayMode === "shadow"
-        ? "SHADOW"
-        : "ENFORCE";
+  const overlayAction: "SHADOW" | "ENFORCE" =
+    config.m1OverlayMode === "shadow" ? "SHADOW" : "ENFORCE";
   const decision=applyM1OverlayToSignal({
     action:signal.action,
     symbol:signal.symbol,
