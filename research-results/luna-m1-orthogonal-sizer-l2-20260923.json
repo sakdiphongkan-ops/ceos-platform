@@ -71,5 +71,15 @@
       "verify official realtime data freshness and weight reconciliation",
       "verify live broker reconciliation before any arming"
     ]
-  }
+  },
+  "runtime_contract": {
+    "canonical_db_rpc": "public.luna_get_m1_l2_overlay(date)",
+    "rpc_execution_grant": "service_role only",
+    "edge_function_version": 47,
+    "edge_function_action": "m1_l2_overlay",
+    "worker_overlay_mode_default": "SHADOW",
+    "worker_source_commit": "04ee0ffd184a7fc7233ed8100d4f0cf7c5c52490",
+    "paper_live_deploy_status": "NOT_DEPLOYED"
+  },
+  "factor_missing_policy": "MOM3 missing -> PostgreSQL percent_rank neutral 0.5; no name is dropped."
 }
