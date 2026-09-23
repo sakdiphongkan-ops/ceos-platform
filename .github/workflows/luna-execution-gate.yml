@@ -1,0 +1,27 @@
+name: LUNA execution gate regression
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "luna-th1h/src/execution.ts"
+      - "luna-th1h/src/execution-price-only-paper.test.ts"
+      - "luna-th1h/src/config.ts"
+      - "luna-th1h/package.json"
+      - ".github/workflows/luna-execution-gate.yml"
+
+jobs:
+  execution-gate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: luna-th1h
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm run test:price-only-paper-execution
+      - run: npm run test:risk-guards
