@@ -58,9 +58,16 @@ function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVerifiedBoo
     priceOnlyFallback
     && paperMode
     && !liveTradingArmed
-    && sourceName.includes("tradingview-public-screener")
-    && q.bid===null
-    && q.ask===null;
+    && sourceName.includes("tradingview-public-screener");
+
+  if(allowPublicPriceOnly){
+    q.bid=null;
+    q.ask=null;
+    q.bidSize=null;
+    q.askSize=null;
+    q.bidLevels=undefined;
+    q.askLevels=undefined;
+  }
 
   if(requireVerifiedBook){
     const verifiedBook =
