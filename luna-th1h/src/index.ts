@@ -304,7 +304,7 @@ function applyM1Overlay(signal:Signal):Signal{
     overlayAction,
     overlayWeight:weight
   });
-  if(config.m1OverlayMode==="shadow"){
+  // Production deploy marker: M1 overlay action is normalized to the uppercase enum before this branch.\n  if(config.m1OverlayMode==="shadow"){
     queueAudit("M1_L2_SHADOW_DECISION",{
       symbol:signal.symbol,
       base_target_allocation_pct:signal.targetAllocationPct??null,
