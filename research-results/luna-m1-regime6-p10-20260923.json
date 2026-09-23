@@ -1,0 +1,64 @@
+{
+  "status": "RESEARCH_ONLY",
+  "strategy_version": "luna-m1-regime6-p10-v1",
+  "candidate_pool": {
+    "base": "M1_EXACT",
+    "secondary": "P10_MOM60_TREND_K5",
+    "secondary_formula": "0.60*r_mom1 + 0.30*r_high52_ratio - 0.10*r_vol20",
+    "secondary_top_k": 5
+  },
+  "selection_protocol": {
+    "lookback_candidates": [3, 6, 9, 12],
+    "selected_lookback": 6,
+    "selection_metric": "trailing geometric net return using each candidate's own turnover cost",
+    "validation_period": "2024-09-30..2025-08-31",
+    "holdout_period": "2025-09-30..2026-08-31",
+    "holdout_used_for_tuning": false,
+    "cost_bps_baseline": 20
+  },
+  "validation": {
+    "m1_geo_monthly": 0.017507293898439617,
+    "meta6_geo_monthly": 0.04769759449913632,
+    "m1_mdd": -0.4653372230402339,
+    "meta6_mdd": -0.05124834462217677
+  },
+  "holdout": {
+    "m1_geo_monthly": 0.04131950653341564,
+    "meta6_geo_monthly": 0.0420535864638660,
+    "m1_total_return": 0.6255788747006041,
+    "meta6_total_return": 0.6393837724064652,
+    "m1_win_rate": 0.75,
+    "meta6_win_rate": 0.9166666666666666,
+    "m1_mdd": -0.07853855413825308,
+    "meta6_mdd": -0.028903557371724536,
+    "holdout_cost_stress_geo_monthly": {
+      "m1_20bps": 0.04131950653341564,
+      "meta6_20bps": 0.0420535864638660,
+      "m1_40bps": 0.03941782320241812,
+      "meta6_40bps": 0.04008629079256604,
+      "m1_60bps": 0.03751611264584998,
+      "meta6_60bps": 0.038118980347568616,
+      "m1_100bps": 0.03371260927266618,
+      "meta6_100bps": 0.03418431481750244
+    }
+  },
+  "common_period_2022_01_to_2026_08": {
+    "m1_geo_monthly": 0.007413242454266777,
+    "meta6_geo_monthly": 0.020857046896042286,
+    "m1_cumulative_return": 0.5122677836812155,
+    "meta6_cumulative_return": 2.1771384288897515,
+    "m1_max_drawdown": -0.4638449018751528,
+    "meta6_max_drawdown": -0.38196358736375835,
+    "m1_positive_month_pct": 0.5535714285714286,
+    "meta6_positive_month_pct": 0.6071428571428571,
+    "m1_hac_t_stat": 0.9337501314547949,
+    "meta6_hac_t_stat": 2.330660920219065
+  },
+  "data_contract_warning": "M1_EXACT is from the locked 925-universe benchmark, while P10 is built from the PIT ranked_v2 924-symbol factor dataset. The hybrid therefore has not yet passed the same-universe/same-data-contract gate.",
+  "promotion_gate": {
+    "enabled_for_research": true,
+    "enabled_for_paper": false,
+    "enabled_for_customer": false,
+    "live_eligible": false
+  }
+}
