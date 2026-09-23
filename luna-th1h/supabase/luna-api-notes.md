@@ -23,7 +23,7 @@ A rollback database test verified duplicate submission leaves exactly one tick a
 
 ## M1 L2 orthogonal shadow endpoint — 2026-09-23
 
-luna-api version 46 exposes the authenticated m1_l2_overlay action for the research-only luna-m1-orthogonal-sizer-l2-v1 candidate. It takes the latest exact 20-stock basket from luna-m1s0k20rev-v1, reads canonical monthly factors only for those 20 symbols, residualizes the auxiliary score against the locked M1 selection score, and returns 0%..10% weights summing to 100%.
+luna-api version 47 exposes the authenticated m1_l2_overlay action for the research-only luna-m1-orthogonal-sizer-l2-v1 candidate. It takes the latest exact 20-stock basket from luna-m1s0k20rev-v1, reads canonical monthly factors only for those 20 symbols, residualizes the auxiliary score against the locked M1 selection score, and returns 0%..10% weights summing to 100%.
 
 The auxiliary definition is:
 - 0.40 * rank(MOM3)
@@ -35,4 +35,8 @@ MOM3 missing values are assigned rank 0.5 while retaining the full 20-stock bask
 
 The worker has a fail-closed OFF | SHADOW | ENFORCE overlay mode. The current default is SHADOW, so existing Strategy V1 order behavior is not changed; shadow decisions are audit-only. ENFORCE is not approved for paper/live until blind paper replay, official realtime freshness, and broker reconciliation gates pass.
 
-Edge Function version 46 is active with verify_jwt=false as before; write actions remain protected by the existing x-luna-agent authentication.
+Edge Function version 47 is active with verify_jwt=false as before; write actions remain protected by the existing x-luna-agent authentication.
+
+## Canonical DB overlay RPC — 2026-09-23
+
+The M1 L2 calculation is now centralized in public.luna_get_m1_l2_overlay(date), with execution restricted to service_role. The Edge Function m1_l2_overlay action calls this RPC instead of duplicating factor ranking/residualization logic. This keeps research and runtime on one PostgreSQL calculation contract.
