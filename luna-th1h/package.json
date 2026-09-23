@@ -33,7 +33,8 @@
     "test:pit-universe": "tsx src/pit-universe.test.ts",
     "test:research-governance": "tsx src/research-governance.test.ts",
     "test:research-monthly-stats": "tsx src/research-monthly-stats.test.ts",
-    "freeze:holdout": "tsx src/freeze-holdout.ts"
+    "freeze:holdout": "tsx src/freeze-holdout.ts",
+    "test:m1-overlay": "tsx src/m1-overlay.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.0"
