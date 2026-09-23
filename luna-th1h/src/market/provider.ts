@@ -208,13 +208,12 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
   let lastGatewayCount=-1;
   let emptyBackoffMs=Math.max(500,Math.min(5000,pollMs));
   const requireVerifiedBook=String(process.env.LUNA_REQUIRE_VERIFIED_BOOK ?? "true").toLowerCase()==="true";
+  const paperMode=String(process.env.LUNA_MODE ?? "paper").toLowerCase()==="paper";
+  const liveTradingArmed=String(process.env.LIVE_TRADING_ARMED ?? "false").toLowerCase()==="true";
   const priceOnlyFallback=String(
     process.env.LUNA_PRICE_ONLY_FALLBACK
       ?? (paperMode && !liveTradingArmed ? "true" : "false")
   ).toLowerCase()==="true";
-  const paperMode=String(process.env.LUNA_MODE ?? "paper").toLowerCase()==="paper";
-  const liveTradingArmed=String(process.env.LIVE_TRADING_ARMED ?? "false").toLowerCase()==="true";
-  const publicFallbackMaxQuoteAgeMs=Math.max(1000,Number(process.env.LUNA_PUBLIC_FALLBACK_MAX_QUOTE_AGE_MS ?? 6500));
   const maxQuoteAgeMs=Number(process.env.LUNA_MAX_QUOTE_AGE_MS ?? 3000);
   let nextStreamRetryAt=0;
 
