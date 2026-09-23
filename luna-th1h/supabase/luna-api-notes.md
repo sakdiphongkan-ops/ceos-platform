@@ -20,3 +20,19 @@ The `telemetry_batch` Edge Function action inserts ticks/signals in batches. Tic
 The production migration added unique indexes for both telemetry streams and restricted the new SECURITY DEFINER batch RPC to `service_role`.
 
 A rollback database test verified duplicate submission leaves exactly one tick and one signal while fast live state updates to the latest price. No test rows remained after rollback.
+
+## M1 L2 orthogonal shadow endpoint — 2026-09-23
+
+luna-api version 46 exposes the authenticated m1_l2_overlay action for the research-only luna-m1-orthogonal-sizer-l2-v1 candidate. It takes the latest exact 20-stock basket from luna-m1s0k20rev-v1, reads canonical monthly factors only for those 20 symbols, residualizes the auxiliary score against the locked M1 selection score, and returns 0%..10% weights summing to 100%.
+
+The auxiliary definition is:
+- 0.40 * rank(MOM3)
+- 0.25 * rank(52W_HIGH_RATIO)
+- 0.20 * inverse rank(VOL20)
+- 0.15 * rank(AVG_AMOUNT20)
+
+MOM3 missing values are assigned rank 0.5 while retaining the full 20-stock basket; this matches the PostgreSQL percent_rank treatment used by the research SQL. No global 924/925 universe ranking is performed by this endpoint.
+
+The worker has a fail-closed OFF | SHADOW | ENFORCE overlay mode. The current default is SHADOW, so existing Strategy V1 order behavior is not changed; shadow decisions are audit-only. ENFORCE is not approved for paper/live until blind paper replay, official realtime freshness, and broker reconciliation gates pass.
+
+Edge Function version 46 is active with verify_jwt=false as before; write actions remain protected by the existing x-luna-agent authentication.
