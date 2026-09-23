@@ -7,6 +7,8 @@ on:
       - "scripts/research/luna_feasibility.py"
       - "scripts/research/test_luna_feasibility.py"
       - "scripts/research/luna_adaptive_tournament_v2.py"
+      - "scripts/research/luna_cost_convention_audit.py"
+      - "scripts/research/test_luna_cost_convention_audit.py"
       - ".github/workflows/luna-feasibility-ci.yml"
   workflow_dispatch:
 
@@ -24,8 +26,8 @@ jobs:
           python-version: "3.11"
       - name: Install research runtime
         run: python -m pip install --upgrade pip numpy pandas
-      - name: Compile feasibility scripts
-        run: python -m py_compile scripts/research/luna_feasibility.py scripts/research/luna_adaptive_tournament_v2.py
-      - name: Run feasibility regression tests
+      - name: Compile research scripts
+        run: python -m py_compile scripts/research/luna_feasibility.py scripts/research/luna_adaptive_tournament_v2.py scripts/research/luna_cost_convention_audit.py
+      - name: Run research regression tests
         working-directory: scripts/research
-        run: python -m unittest -v test_luna_feasibility.py
+        run: python -m unittest -v test_luna_feasibility.py test_luna_cost_convention_audit.py
