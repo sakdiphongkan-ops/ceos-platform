@@ -25,19 +25,27 @@ function pctRank(values:number[]){
   });
 }
 
+function pctRankWithNeutral(values:Array<number|null>,neutral=0.5){
+  const nonNull=values.filter((v):v is number=>Number.isFinite(v??NaN));
+  if(!nonNull.length) return values.map(()=>neutral);
+  const sorted=[...nonNull].sort((a,b)=>a-b);
+  const denominator=Math.max(1,values.length-1);
+  return values.map(v=>{
+    if(!Number.isFinite(v??NaN)) return neutral;
+    const idx=sorted.findIndex(x=>x===v);
+    return idx<0?neutral:idx/denominator;
+  });
+}
+
 export function computeM1OverlayWeights(rows:M1OverlayRow[]):M1OverlayWeight[]{
   if(rows.length!==20) throw new Error("M1_OVERLAY_REQUIRES_20_ROWS");
   if(new Set(rows.map(x=>x.symbol)).size!==20) throw new Error("M1_OVERLAY_DUPLICATE_SYMBOL");
 
-  const available=rows.map(x=>x.mom3).filter((x):x is number=>Number.isFinite(x));
-  const sortedAvailable=[...available].sort((a,b)=>a-b);
-  const neutral=available.length ? sortedAvailable[Math.floor((available.length-1)*0.5)] : 0;
-  const mom3=rows.map(x=>Number.isFinite(x.mom3??NaN)?Number(x.mom3):neutral);
   const high52=rows.map(x=>x.high52Ratio);
   const vol20=rows.map(x=>x.vol20);
   const amount=rows.map(x=>x.avgAmount20);
 
-  const rm3=pctRank(mom3);
+  const rm3=pctRankWithNeutral(rows.map(x=>x.mom3),0.5);
   const rh52=pctRank(high52);
   const rv=pctRank(vol20);
   const ra=pctRank(amount);
