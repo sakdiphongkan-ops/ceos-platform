@@ -11,6 +11,7 @@ import {compareLiveAccountState} from "./live-account-reconciliation.js";
 import {TelemetryQueue} from "./telemetry-queue.js";
 import {latencyMetrics,type LatencyLedger} from "./latency-ledger.js";
 import {M1_ORTHOGONAL_L2_VERSION,applyM1OverlayToSignal} from "./m1-overlay.js";
+import {assessQuoteQuality} from "./data-quality.js";
 
 const EXECUTION_TEST_VERSION="luna-th1h-execution-test-0.1.0";
 
@@ -580,7 +581,7 @@ async function executeSignal(
   signal:Signal,
   expectedSessionId:string|null=sessionId,
   expectedSessionGeneration=sessionGeneration,
-  latencyContext:{decisionTs:string}={decisionTs:new Date().toISOString()}
+  latencyContext:{decisionTs:string;traceId?:string}={decisionTs:new Date().toISOString()}
 ){
   if(sessionId!==expectedSessionId || sessionGeneration!==expectedSessionGeneration){
     throw new Error("EXECUTION_SESSION_GENERATION_MISMATCH");
@@ -597,6 +598,7 @@ async function executeSignal(
   if(!plan.accepted){
     if(signal.action!=="HOLD"){
       queueAudit("ORDER_BLOCKED",{
+        trace_id:latencyContext.traceId??null,
         symbol:q.symbol,action:signal.action,reason:plan.reason,quote:q
       },signal.strategyVersion);
     }
@@ -1103,6 +1105,22 @@ async function handleQuote(q:Quote){
 
   if(sessionId!==activeSessionId || sessionGeneration!==activeSessionGeneration) return;
 
+  const traceId=`${activeSessionId}:${q.symbol}:${q.ts}`;
+  const quality=assessQuoteQuality(q,Date.now(),config.maxQuoteAgeMs);
+  if(!quality.ok){
+    await queueAudit("DATA_QUALITY_REJECTED",{
+      trace_id:traceId,
+      symbol:q.symbol,
+      quote_ts:q.ts,
+      source_ts:q.sourceTs??null,
+      source:q.source,
+      reason:quality.reason,
+      age_ms:quality.ageMs,
+      source_to_ingest_ms:quality.sourceToIngestMs
+    },activeStrategyVersion(),activeSessionId);
+    return;
+  }
+
   const phase=currentMarketPhase();
   if(phase==="CLOSED"){
     await endSession("MARKET_CLOSED");
@@ -1149,13 +1167,13 @@ async function handleQuote(q:Quote){
       telemetryQueue.enqueueTick({
         action:"tick",
         session_id:activeSessionId,
-        quote:{...q}
+        quote:{...q,trace_id:traceId}
       });
       if(signal.action!=="HOLD" || config.executionTest){
         const telemetrySignal={
           action:"signal" as const,
           session_id:activeSessionId,
-          signal:{...signal}
+          signal:{...signal,trace_id:traceId}
         };
         try{
           telemetryQueue.enqueueSignal(telemetrySignal);
@@ -1189,6 +1207,7 @@ async function handleQuote(q:Quote){
   ){
     console.log(JSON.stringify({
       event:signal.action==="HOLD"?"DECISION":"SIGNAL",
+      trace_id:traceId,
       quote:q,
       signal,
       market_lag_ms:marketLagMs,
@@ -1207,6 +1226,7 @@ async function handleQuote(q:Quote){
       try{
         if(sessionId!==scheduledSessionId || sessionGeneration!==scheduledSessionGeneration){
           await queueAudit("ORDER_SUPPRESSED_SESSION_GENERATION",{
+            trace_id:traceId,
             symbol:q.symbol,
             action:signal.action,
             quote_ts:q.ts,
@@ -1230,6 +1250,7 @@ async function handleQuote(q:Quote){
           || quoteAgeMs>config.maxQuoteAgeMs;
         if(blockedByPhase){
           await queueAudit("ORDER_SUPPRESSED_MARKET_PHASE",{
+            trace_id:traceId,
             symbol:q.symbol,
             action:signal.action,
             market_phase:executionPhase,
@@ -1245,12 +1266,13 @@ async function handleQuote(q:Quote){
           signal,
           scheduledSessionId,
           scheduledSessionGeneration,
-          {decisionTs}
+          {decisionTs,traceId}
         );
         const queueWaitMs=Date.now()-executionQueuedAt;
         const endToEndMs=Date.now()-startedAt;
         const executionMs=Math.max(0,endToEndMs-marketLagMs);
         queueAudit("LATENCY_METRIC",{
+          trace_id:traceId,
           symbol:q.symbol,
           action:signal.action,
           quote_ts:q.ts,
@@ -1272,6 +1294,7 @@ async function handleQuote(q:Quote){
         },signal.strategyVersion);
         console.log(JSON.stringify({
           event:"EXECUTION_COMPLETE",
+          trace_id:traceId,
           symbol:q.symbol,
           action:signal.action,
           queue_wait_ms:queueWaitMs,
@@ -1293,6 +1316,7 @@ async function handleQuote(q:Quote){
     }).then((result)=>{
       if(result.superseded){
         queueAudit("SIGNAL_SUPERSEDED",{
+          trace_id:traceId,
           symbol:q.symbol,
           action:signal.action,
           quote_ts:q.ts,
