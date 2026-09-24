@@ -586,6 +586,18 @@ async function executeSignal(
   if(sessionId!==expectedSessionId || sessionGeneration!==expectedSessionGeneration){
     throw new Error("EXECUTION_SESSION_GENERATION_MISMATCH");
   }
+  try{
+    await ingest("",{action:"validate_session",session_id:expectedSessionId});
+  }catch(error){
+    console.error(JSON.stringify({
+      event:"EXECUTION_SESSION_GUARD_BLOCKED",
+      session_id:expectedSessionId,
+      symbol:q.symbol,
+      action:signal.action,
+      error:String(error)
+    }));
+    return;
+  }
   if(config.executionMode==="live"){
     await refreshLiveAccountState(
       expectedSessionId!,
