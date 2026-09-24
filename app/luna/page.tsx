@@ -46,7 +46,7 @@ const LUNA_API = "https://wigzicwgcsrhdummrbjx.supabase.co/functions/v1/luna-api
 const LUNA_PUBLIC_MARKET_STREAM =
   process.env.NEXT_PUBLIC_LUNA_PUBLIC_MARKET_STREAM_URL ??
   "wss://luna-execution-gateway-production.up.railway.app/quotes/public-stream";
-const LUNA_STRATEGY = "luna-th1h-v1.0.0";
+const LUNA_STRATEGY = "luna-th1h-v1.4.0-15m-riskgated";
 const TIMEFRAME = "15m";
 
 type RealtimeQuote = {
@@ -145,7 +145,8 @@ export default function LunaPortfolioPage() {
   const load=useCallback(async()=>{
     setRefreshing(true); setError("");
     try{
-      const res=await fetch(`${LUNA_API}?limit=100`,{cache:"no-store"});
+      const asOf=bangkokDate(new Date());
+      const res=await fetch(`${LUNA_API}?limit=100&strategy=${encodeURIComponent(LUNA_STRATEGY)}&as_of=${encodeURIComponent(asOf)}`,{cache:"no-store"});
       if(!res.ok) throw new Error(`API ${res.status}`);
       const data=await res.json() as LunaFeed;
       setFeed(data);
