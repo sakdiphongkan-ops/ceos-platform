@@ -95,6 +95,7 @@ export class LiveSafetyKernel{
   }
 
   evaluate(input:LiveSafetyInput):LiveSafetyDecision{
+    const evaluationNowMs=input.nowMs??Date.now();
     if(this.tripped) return {ok:false,reason:this.tripReason??"LIVE_SAFETY_KERNEL_TRIPPED"};
     if(!input.hardOrderGateEnabled) return {ok:false,reason:"LIVE_HARD_ORDER_GATE_DISABLED"};
     if(input.control.execution_mode!=="live") return {ok:false,reason:"LIVE_CONTROL_EXECUTION_MODE_MISMATCH"};
@@ -119,7 +120,7 @@ export class LiveSafetyKernel{
     if(!Number.isFinite(input.referencePrice) || input.referencePrice<=0){
       return {ok:false,reason:"LIVE_INVALID_REFERENCE_PRICE"};
     }
-    const ageMs=Date.now()-Date.parse(input.quote.ts);
+    const ageMs=evaluationNowMs-Date.parse(input.quote.ts);
     if(!Number.isFinite(ageMs) || ageMs<0 || ageMs>input.quoteMaxAgeMs){
       return {ok:false,reason:"LIVE_QUOTE_STALE_OR_INVALID"};
     }
