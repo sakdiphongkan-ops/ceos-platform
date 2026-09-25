@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from typing import Any, Dict, Optional
-from urllib.parse import urlencode, quote
+from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 
@@ -25,7 +25,7 @@ try:
 except Exception:  # pragma: no cover
     Investor = None
 
-APP_VERSION = "0.7.1"
+APP_VERSION = "0.7.2"
 RELEASE_SOURCE_REVISION = (
     os.getenv("LUNA_DEPLOY_SOURCE_SHA")
     or os.getenv("GITHUB_SHA")
@@ -625,8 +625,8 @@ def _toptrader_ws_message(message: str):
 async def _toptrader_ws_consume(chunk: list[str], index: int):
     if websockets is None:
         raise ProviderUnavailable("toptrader_websockets_dependency_unavailable")
-    encoded = quote(",".join(chunk), safe=",")
-    uri = TOPTRADER_WS_BASE + "?symbols=" + encoded
+    query = urlencode({"symbols": ",".join(chunk)})
+    uri = TOPTRADER_WS_BASE + "?" + query
     print("LUNA_MARKETDATA toptrader_ws_connect chunk=" + str(index) + " symbols=" + str(len(chunk)), flush=True)
     async with websockets.connect(uri, ping_interval=20, ping_timeout=20, close_timeout=5, max_size=2_000_000) as ws:
         async for message in ws:
