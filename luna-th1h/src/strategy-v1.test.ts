@@ -1,4 +1,4 @@
-import {StrategyV1} from "./strategy-v1.js";
+import {StrategyV1,VERSION} from "./strategy-v1.js";
 
 function quote(ts:string,last:number,book=true){
   return {
@@ -71,7 +71,7 @@ const priceOnlyEntry=priceOnlyStrategy.evaluate(
   {positionQty:0,avgPrice:0,nowMs:entryTs}
 );
 if(priceOnlyEntry.action!=="BUY") throw new Error("paper price-only fallback should allow BUY after warmup");
-if(priceOnlyEntry.strategyVersion!=="luna-th1h-v1.0.0-price-only-paper-warm5") throw new Error("price-only strategy version mismatch");
+if(priceOnlyEntry.strategyVersion!==VERSION) throw new Error("price-only fallback strategy version mismatch");
 if(Number(priceOnlyEntry.targetAllocationPct??0)>=7.5) throw new Error("price-only fallback must remain inside reduced sizing envelope");
 
 const exitStrategy=new StrategyV1();
