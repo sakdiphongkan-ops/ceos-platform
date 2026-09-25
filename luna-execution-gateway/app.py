@@ -20,7 +20,7 @@ try:
 except Exception:  # pragma: no cover
     Investor = None
 
-APP_VERSION = "0.5.6"
+APP_VERSION = "0.6.0"
 RELEASE_SOURCE_REVISION = (
     os.getenv("LUNA_DEPLOY_SOURCE_SHA")
     or os.getenv("GITHUB_SHA")
@@ -50,8 +50,8 @@ MARKETDATA_INGEST_KEY = os.getenv("LUNA_MARKETDATA_INGEST_KEY") or GATEWAY_KEY
 #   1) official SET Market Data API (api-key)
 #   2) Settrade Open API (broker/app credentials)
 PRIMARY_PROVIDER = os.getenv("LUNA_PRIMARY_MARKETDATA_PROVIDER", "SETTRADE").upper()
-BACKUP_VENDOR = os.getenv("LUNA_BACKUP_VENDOR", "THAIQUEST_ASPEN").upper()
-BACKUP_VENDOR_MODE = os.getenv("LUNA_BACKUP_VENDOR_MODE", "MANUAL_TERMINAL").upper()
+BACKUP_VENDOR = os.getenv("LUNA_BACKUP_VENDOR", "TOPTRADER_PUBLIC").upper()
+BACKUP_VENDOR_MODE = os.getenv("LUNA_BACKUP_VENDOR_MODE", "PUBLIC_REST").upper()
 
 PROVIDER_MODE = os.getenv("LUNA_MARKETDATA_PROVIDER", PRIMARY_PROVIDER).upper()
 SET_API_KEY = (
@@ -66,6 +66,10 @@ SET_API_BASE = os.getenv(
 )
 SET_API_POLL_SEC = max(1.0, float(os.getenv("SET_MARKETDATA_POLL_SEC", "2")))
 SET_API_TIMEOUT_SEC = max(2.0, float(os.getenv("SET_MARKETDATA_TIMEOUT_SEC", "8")))
+TOPTRADER_ENABLED = os.getenv("LUNA_TOPTRADER_BACKUP_ENABLED", "true").lower() == "true"
+TOPTRADER_API_BASE = os.getenv("LUNA_TOPTRADER_API_BASE", "https://api.toptrader.co.th/v1/market/tick")
+TOPTRADER_POLL_SEC = max(1.0, float(os.getenv("LUNA_TOPTRADER_POLL_SEC", "2")))
+TOPTRADER_TIMEOUT_SEC = max(2.0, float(os.getenv("LUNA_TOPTRADER_TIMEOUT_SEC", "8")))
 
 # Paper-only public fallback. TradingView's public Thailand screener is not
 # treated as exchange-certified real-time data; it is used only to keep the
@@ -137,7 +141,7 @@ _collector_error: Optional[str] = None
 _supervisor_started = False
 _selected_provider: Optional[str] = None
 _provider_restarts = 0
-_provider_failures: Dict[str, int] = {"SET_API": 0, "SETTRADE": 0}
+_provider_failures: Dict[str, int] = {"SET_API": 0, "SETTRADE": 0, "TOPTRADER_PUBLIC": 0}
 
 _channel_status: Dict[str, Dict[str, Any]] = {
     "price": {"running": False, "restarts": 0, "last_start": None, "last_error": None},
