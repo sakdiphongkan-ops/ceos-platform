@@ -1,5 +1,6 @@
 import {config} from "./config.js";
 import type {Side} from "./types.js";
+import type {LiveSafetyApproval} from "./live-safety-kernel.js";
 
 export interface LiveBrokerOrder{
   client_order_id:string;
@@ -136,6 +137,14 @@ export async function liveGatewayDiagnostics(){
   return body;
 }
 
+function validateApproval(approval:LiveSafetyApproval){
+  if(!approval) throw new Error("LIVE_SAFETY_APPROVAL_REQUIRED");
+  const issuedAtMs=Number(approval.issuedAtMs);
+  if(!Number.isFinite(issuedAtMs) || Math.abs(Date.now()-issuedAtMs)>1500){
+    throw new Error("LIVE_SAFETY_APPROVAL_EXPIRED");
+  }
+}
+
 export async function placeLiveOrder(order:{
   clientOrderId:string;
   symbol:string;
@@ -143,8 +152,10 @@ export async function placeLiveOrder(order:{
   qty:number;
   price:number;
   reason:string;
+  safetyApproval:LiveSafetyApproval;
 }):Promise<LiveBrokerOrder>{
   ensureConfigured();
+  validateApproval(order.safetyApproval);
   const res=await fetch(`${config.liveGatewayUrl}/place`,{
     method:"POST",
     headers:headers(),
