@@ -12,6 +12,7 @@ import {TelemetryQueue} from "./telemetry-queue.js";
 import {latencyMetrics,type LatencyLedger} from "./latency-ledger.js";
 import {M1_ORTHOGONAL_L2_VERSION,applyM1OverlayToSignal} from "./m1-overlay.js";
 import {assessQuoteQuality} from "./data-quality.js";
+import {LiveSafetyKernel,type LiveSafetyApproval} from "./live-safety-kernel.js";
 
 const EXECUTION_TEST_VERSION="luna-th1h-execution-test-0.1.0";
 
@@ -82,6 +83,11 @@ let m1OverlayRefreshedAtMs=0;
 
 const SNAPSHOT_MS=1_000;
 const strategyV1=new StrategyV1({}, {priceOnlyFallback:config.priceOnlyFallback});
+const liveSafetyKernel=new LiveSafetyKernel({
+  gatewayFailureTripCount:Math.max(1,Math.floor(config.liveSafetyGatewayFailureTripCount))
+});
+let lastLiveGatewayHealthAt=0;
+let liveGatewayHealthCache:{ok:boolean;live_armed:boolean}={ok:false,live_armed:false};
 
 function activeStrategyVersion(){
   return config.executionTest?EXECUTION_TEST_VERSION:strategyV1.version;
@@ -359,16 +365,31 @@ function applyM1Overlay(signal:Signal):Signal{
 async function getExecutionControl(){
   const response=await ingest("",{action:"get_execution_control"});
   const control=(response as {control?:{
-    execution_mode:string;armed:boolean;kill_switch:boolean;max_daily_loss:number;
-    max_order_notional:number;max_orders_per_minute:number
+    execution_mode:string;armed:boolean;kill_switch:boolean;observe_only?:boolean;max_daily_loss:number;
+    max_order_notional:number;max_orders_per_minute:number;max_daily_turnover?:number
   }}).control;
   if(!control) throw new Error("Supabase did not return execution control.");
   return control;
 }
 
+async function cachedLiveGatewayHealth(force=false){
+  const now=Date.now();
+  if(!force && now-lastLiveGatewayHealthAt<1000) return liveGatewayHealthCache;
+  try{
+    const health=await liveGatewayHealth();
+    liveGatewayHealthCache={ok:health.ok===true,live_armed:health.live_armed===true};
+    lastLiveGatewayHealthAt=now;
+    return liveGatewayHealthCache;
+  }catch(error){
+    liveSafetyKernel.recordGatewayFailure("HEALTH:"+String(error));
+    throw error;
+  }
+}
+
 async function preflightLive(){
   if(config.executionMode!=="live") throw new Error("LIVE_EXECUTION_MODE_REQUIRED");
   if(config.mode!=="live") throw new Error("LUNA_MODE_MUST_BE_LIVE_FOR_LIVE_EXECUTION");
+  if(!config.liveOrderGateEnabled) throw new Error("LIVE_HARD_ORDER_GATE_DISABLED");
   if(!config.liveReconciliation) throw new Error("LIVE_RECONCILIATION_MUST_BE_ENABLED");
   if(String(process.env.LIVE_RECONCILIATION_READY ?? "false").toLowerCase()!=="true"){
     throw new Error("LIVE_RECONCILIATION_NOT_READY");
@@ -377,7 +398,7 @@ async function preflightLive(){
   if(control.execution_mode!=="live" || !control.armed || control.kill_switch){
     throw new Error(`LIVE_CONTROL_BLOCKED execution_mode=${control.execution_mode} armed=${control.armed} kill_switch=${control.kill_switch}`);
   }
-  const health=await liveGatewayHealth();
+  const health=await cachedLiveGatewayHealth(true);
   if(!health.ok || !health.live_armed) throw new Error("LIVE_GATEWAY_NOT_ARMED");
   const diagnostics=await liveGatewayDiagnostics();
   if(!diagnostics?.credentials_present || !diagnostics?.python_sdk_loaded){
@@ -633,11 +654,24 @@ async function executeSignal(
     return;
   }
   if(config.executionMode==="live"){
-    await refreshLiveAccountState(
-      expectedSessionId!,
-      expectedSessionGeneration,
-      false
-    );
+    try{
+      await refreshLiveAccountState(
+        expectedSessionId!,
+        expectedSessionGeneration,
+        false
+      );
+    }catch(error){
+      if(!String(error).includes("LIVE_ACCOUNT_STATE_SYNC_BACKOFF")){
+        liveSafetyKernel.recordReconciliationFailure(String(error));
+      }
+      queueAudit("LIVE_SAFETY_RECONCILIATION_BLOCK",{
+        trace_id:latencyContext.traceId??null,
+        symbol:q.symbol,
+        error:String(error),
+        safety:liveSafetyKernel.status()
+      },signal.strategyVersion,expectedSessionId);
+      return;
+    }
   }
   mark(portfolio,q);
   const plan=planOrder(signal,q,portfolio,executionReservations);
@@ -649,6 +683,79 @@ async function executeSignal(
       },signal.strategyVersion);
     }
     return;
+  }
+
+  let safetyApproval:LiveSafetyApproval|undefined;
+  if(config.executionMode==="live"){
+    try{
+      const control=await getExecutionControl();
+      const gatewayHealth=await cachedLiveGatewayHealth(false);
+      const snap=snapshot(portfolio);
+      const equity=snap.cash+snap.market_value;
+      const dayStart=Number(portfolio.dayStartEquity??portfolio.initialCapital);
+      const dailyPnl=equity-dayStart;
+      const maxOrderNotional=Math.min(
+        config.maxOrderNotional,
+        Number.isFinite(Number(control.max_order_notional)) && Number(control.max_order_notional)>0
+          ? Number(control.max_order_notional)
+          : config.maxOrderNotional
+      );
+      const maxDailyLoss=Math.min(
+        config.maxDailyLoss,
+        Number.isFinite(Number(control.max_daily_loss)) && Number(control.max_daily_loss)>0
+          ? Number(control.max_daily_loss)
+          : config.maxDailyLoss
+      );
+      const maxDailyTurnover=Math.min(
+        config.maxDailyTurnover,
+        Number.isFinite(Number(control.max_daily_turnover)) && Number(control.max_daily_turnover)>0
+          ? Number(control.max_daily_turnover)
+          : config.maxDailyTurnover
+      );
+      const decision=liveSafetyKernel.issueApproval({
+        control,
+        marketPhase:currentMarketPhase(),
+        quote:q,
+        side:plan.side,
+        qty:plan.qty,
+        referencePrice:plan.referencePrice,
+        maxOrderNotional,
+        maxDailyLoss,
+        dailyPnl,
+        maxDailyTurnover,
+        dailyTurnover:Number(portfolio.dailyTurnover??0),
+        quoteMaxAgeMs:config.maxQuoteAgeMs,
+        maxQuoteDeviationBps:config.liveSafetyMaxQuoteDeviationBps,
+        maxClockSkewMs:config.liveSafetyMaxClockSkewMs,
+        clockSkewMs:Math.max(0,Date.now()-Date.parse(q.ts)),
+        reconciliationOk:true,
+        gatewayHealthy:gatewayHealth.ok,
+        gatewayLiveArmed:gatewayHealth.live_armed,
+        hardOrderGateEnabled:config.liveOrderGateEnabled,
+      });
+      if("ok" in decision){
+        if(!decision.ok){
+          queueAudit("LIVE_SAFETY_PREORDER_BLOCK",{
+            trace_id:latencyContext.traceId??null,
+            symbol:q.symbol,side:plan.side,qty:plan.qty,
+            reason:decision.reason,
+            safety:liveSafetyKernel.status()
+          },signal.strategyVersion,expectedSessionId);
+          return;
+        }
+      }else{
+        safetyApproval=decision;
+      }
+    }catch(error){
+      liveSafetyKernel.trip("PREORDER_SAFETY_ERROR:"+String(error));
+      queueAudit("LIVE_SAFETY_PREORDER_ERROR",{
+        trace_id:latencyContext.traceId??null,
+        symbol:q.symbol,
+        error:String(error),
+        safety:liveSafetyKernel.status()
+      },signal.strategyVersion,expectedSessionId);
+      return;
+    }
   }
 
   const fill=simulateFill(plan);
@@ -667,15 +774,18 @@ async function executeSignal(
     try{
       latencyLedger.submitTs=new Date().toISOString();
       latencyLedgers.set(clientOrderId,latencyLedger);
+      if(!safetyApproval) throw new Error("LIVE_SAFETY_APPROVAL_MISSING");
       const brokerOrder=await placeLiveOrder({
         clientOrderId,
         symbol:plan.symbol,
         side:plan.side,
         qty:plan.qty,
         price:plan.referencePrice,
-        reason:signal.reason
+        reason:signal.reason,
+        safetyApproval
       });
       brokerOrderReturned=true;
+      liveSafetyKernel.recordSuccess();
       latencyLedger.ackTs=brokerOrder.broker_native_submitted_at_ms!=null
         ? new Date(brokerOrder.broker_native_submitted_at_ms).toISOString()
         : new Date().toISOString();
@@ -734,6 +844,7 @@ async function executeSignal(
       console.log(JSON.stringify({event:"LIVE_ORDER_SUBMITTED",brokerOrderId:brokerOrder.broker_order_id}));
       return;
     }catch(err){
+      liveSafetyKernel.recordGatewayFailure(String(err));
       if(!brokerOrderReturned){
         try{
           const recoveredOrders=await reconcileLiveOrders([clientOrderId]);
@@ -1616,6 +1727,15 @@ async function main(){
   }
   if(config.liveAccountCashDriftTolerance<0 || config.liveAccountQtyDriftTolerance<0){
     throw new Error("LUNA_LIVE_ACCOUNT_DRIFT_TOLERANCE_MUST_BE_NON_NEGATIVE");
+  }
+  if(config.liveSafetyGatewayFailureTripCount<1){
+    throw new Error("LUNA_LIVE_SAFETY_GATEWAY_FAILURE_TRIP_COUNT_MUST_BE_AT_LEAST_1");
+  }
+  if(config.liveSafetyMaxQuoteDeviationBps<=0){
+    throw new Error("LUNA_LIVE_SAFETY_MAX_QUOTE_DEVIATION_BPS_MUST_BE_POSITIVE");
+  }
+  if(config.liveSafetyMaxClockSkewMs<0){
+    throw new Error("LUNA_LIVE_SAFETY_MAX_CLOCK_SKEW_MS_MUST_BE_NON_NEGATIVE");
   }
   if(!["paper","live"].includes(config.mode)) throw new Error(`Unknown LUNA_MODE: ${config.mode}`);
   if(!["paper","live"].includes(config.executionMode)) throw new Error(`Unknown LUNA_EXECUTION_MODE: ${config.executionMode}`);

@@ -47,6 +47,7 @@ jobs:
       - run: npm run test:cost-replay
       - run: npm run test:execution-scheduler
       - run: npm run test:live-reconciliation
+      - run: npm run test:live-safety-kernel
       - run: npm run test:telemetry-queue
       - run: npm run test:latency
       - run: npm run test:latency-ledger
@@ -76,6 +77,7 @@ jobs:
           python test_guard_holdout_once.py
           python test_set_data_contract.py
           cd ../../luna-execution-gateway && python test_broker_timestamp.py
+          python test_safety.py
 
   research_repaired_tournament_v3:
     if: github.event_name == 'workflow_dispatch' && inputs.pit_membership_url != '' && inputs.pit_membership_sha256 != ''
