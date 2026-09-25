@@ -540,7 +540,7 @@ def _extract_rows(payload: Any):
     if isinstance(payload, list):
         return payload
     if isinstance(payload, dict):
-        for key in ("data", "result", "results", "items"):
+        for key in ("data", "result", "results", "items", "answer"):
             value = payload.get(key)
             if isinstance(value, list):
                 return value
