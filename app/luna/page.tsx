@@ -566,6 +566,22 @@ function SystemControlRoom({strategy,asOf}:{strategy:string;asOf:string}) {
   const [error,setError]=useState("");
 
   const refresh=useCallback(async()=>{
+    const marketPhaseNow=uiMarketPhase(new Date());
+    if(marketPhaseNow==="CLOSED"){
+      setError("");
+      setState({
+        ok:true,
+        generated_at:new Date().toISOString(),
+        as_of_date:asOf,
+        system_test:{overall_status:"DEFERRED",checks:[{name:"MARKET_CLOSED",pass:true}],summary:{integrity:true}},
+        readiness:{month_closed:false,execution_mode:"paper",paper_execution_permitted:false,live_execution_permitted:false,kill_switch:false,armed:false,ceos_feed_rows:0,ceos_allowed_rows:0},
+        fast:{forecast_rank:[]},
+        final:{summary:{rows:0,paper_sim_ready:0,live_allowed:0,top20:[]},rows:[]},
+        paper_audit:{preview_rows:0,incomplete_month_blocked_rows:0,orders_total:0,live_orders_created:false,month_closed:false}
+      });
+      setLoading(false);
+      return;
+    }
     setLoading(true); setError("");
     try{
       const res=await fetch(`${LUNA_API}?view=latest_control&strategy=${encodeURIComponent(strategy)}`,{cache:"no-store"});
