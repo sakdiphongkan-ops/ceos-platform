@@ -626,6 +626,7 @@ def _run_toptrader_public():
             _provider_failures["TOPTRADER_PUBLIC"] += 1
             raise ProviderUnavailable("toptrader_no_matching_symbols")
         _collector_error = None
+        print("LUNA_MARKETDATA toptrader_snapshot found=" + str(found) + " quote_count=" + str(len(_quotes)) + " latest_age=" + str(_latest_quote_age_sec()), flush=True)
         time.sleep(TOPTRADER_POLL_SEC)
 
 def _fetch_set_api():
