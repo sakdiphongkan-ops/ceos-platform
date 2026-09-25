@@ -20,7 +20,7 @@ try:
 except Exception:  # pragma: no cover
     Investor = None
 
-APP_VERSION = "0.5.3"
+APP_VERSION = "0.5.4"
 RELEASE_SOURCE_REVISION = (
     os.getenv("LUNA_DEPLOY_SOURCE_SHA")
     or os.getenv("GITHUB_SHA")
@@ -48,7 +48,11 @@ GATEWAY_KEY = os.getenv("LUNA_GATEWAY_KEY", "")
 # Priority in AUTO mode:
 #   1) official SET Market Data API (api-key)
 #   2) Settrade Open API (broker/app credentials)
-PROVIDER_MODE = os.getenv("LUNA_MARKETDATA_PROVIDER", "AUTO").upper()
+PRIMARY_PROVIDER = os.getenv("LUNA_PRIMARY_MARKETDATA_PROVIDER", "SETTRADE").upper()
+BACKUP_VENDOR = os.getenv("LUNA_BACKUP_VENDOR", "THAIQUEST_ASPEN").upper()
+BACKUP_VENDOR_MODE = os.getenv("LUNA_BACKUP_VENDOR_MODE", "MANUAL_TERMINAL").upper()
+
+PROVIDER_MODE = os.getenv("LUNA_MARKETDATA_PROVIDER", PRIMARY_PROVIDER).upper()
 SET_API_KEY = (
     os.getenv("SET_MARKETDATA_API_KEY")
     or os.getenv("SET_MARKETPLACE_API_KEY")
@@ -880,12 +884,12 @@ def _run_settrade_session():
 
 
 def _provider_order():
-    if PROVIDER_MODE == "SET_API":
-        return ["SET_API"]
     if PROVIDER_MODE == "SETTRADE":
-        return ["SETTRADE"]
-    # AUTO: licensed sources first; public scanner is paper-only last resort.
-    order = ["SET_API", "SETTRADE"]
+        order = ["SETTRADE", "SET_API"]
+    elif PROVIDER_MODE == "SET_API":
+        order = ["SET_API", "SETTRADE"]
+    else:
+        order = ["SETTRADE", "SET_API"]
     if PUBLIC_FALLBACK_ENABLED:
         order.append("TRADINGVIEW_PUBLIC")
     return order
