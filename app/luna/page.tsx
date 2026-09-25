@@ -69,6 +69,28 @@ type RuntimeStatus = {
   error?: { message?: string };
 };
 
+type ShadowStatus = {
+  ok?: boolean;
+  generated_at?: string;
+  shadow?: {
+    state?: string;
+    strategy_version?: string;
+    latest_bar_end?: string | null;
+    eligible_symbols?: number;
+    buy_candidates?: number;
+    sell_candidates?: number;
+    orders_allowed?: boolean;
+    blockers?: string[];
+    latest_source?: string | null;
+    verified_latest_bar_symbols?: number;
+    decisions?: Array<{
+      symbol:string; bar_end:string; close:number; ema5:number; ema20:number; momentum_1:number;
+      bar_count:number; candidate_action:string; verified_book:boolean; feed_verified:boolean;
+      execution_blocked:boolean; reason:string;
+    }>;
+  };
+  error?: { message?: string };
+};
 type RealtimeQuote = {
   symbol: string;
   ts?: string;
@@ -162,6 +184,7 @@ export default function LunaPortfolioPage() {
   const [lastRealtimeTickAt,setLastRealtimeTickAt]=useState<number|null>(null);
   const [clock,setClock]=useState(()=>new Date());
   const [runtimeStatus,setRuntimeStatus]=useState<RuntimeStatus|null>(null);
+  const [shadowStatus,setShadowStatus]=useState<ShadowStatus|null>(null);
 
   const load=useCallback(async()=>{
     setRefreshing(true); setError("");
@@ -187,7 +210,27 @@ export default function LunaPortfolioPage() {
     }
   },[]);
 
-  useEffect(()=>{ load(); const id=setInterval(load,5000); return()=>clearInterval(id); },[load]);
+  const loadShadowStatus=useCallback(async()=>{
+    try{
+      const asOf=bangkokDate(new Date());
+      const res=await fetch(LUNA_API+`?view=shadow_status&strategy=${encodeURIComponent(LUNA_STRATEGY)}&as_of=${encodeURIComponent(asOf)}`,{cache:"no-store"});
+      if(!res.ok) return;
+      const data=await res.json() as ShadowStatus;
+      setShadowStatus(data);
+    }catch{}
+  },[]);
+
+  useEffect(()=>{
+    load();
+    const id=setInterval(load,5000);
+    return()=>clearInterval(id);
+  },[load]);
+
+  useEffect(()=>{
+    loadShadowStatus();
+    const id=setInterval(loadShadowStatus,15000);
+    return()=>clearInterval(id);
+  },[loadShadowStatus]);
 
   useEffect(()=>{
     let socket: WebSocket | null = null;
@@ -387,16 +430,20 @@ export default function LunaPortfolioPage() {
           : "DEGRADED";
 
   const runtimeLabel = ({
-    ACTIVE:"SYSTEM ACTIVE · PAPER RUNTIME",
+    ACTIVE:"SYSTEM ACTIVE · PAPER OBSERVE",
     STANDBY:"SYSTEM ONLINE · STANDBY",
     DEGRADED:"SYSTEM DEGRADED",
     OFFLINE:"SYSTEM OFFLINE"
   } as const)[runtimeState];
 
+  const shadow=shadowStatus?.shadow;
+  const shadowBlocked=shadow && (shadow.orders_allowed!==true || (shadow.blockers?.length??0)>0);
   const runtimeDetail = runtimeState==="ACTIVE"
     ? strategyMismatch
       ? `Server runtime is active and ingesting market data, but the active runtime strategy is ${backendStrategy}; the control panel is scoped to ${LUNA_STRATEGY}. This is a strategy-alignment warning, not an API outage.`
-      : `Server runtime is active · fresh backend ticks are arriving every cycle · latest source ${backendRuntime?.latest_source??"unknown"}.`
+      : shadow
+        ? `Server runtime is active · v1.4 observe engine is calculating candidates (${shadow.buy_candidates??0} BUY / ${shadow.sell_candidates??0} SELL). ${shadowBlocked ? "Order gate remains blocked by readiness." : "Order gate is available."}`
+        : `Server runtime is active · fresh backend ticks are arriving every cycle · latest source ${backendRuntime?.latest_source??"unknown"}.`
     : runtimeState==="DEGRADED"
       ? backendRuntime?.state==="LIVE" && runtimeAgeMs!=null
         ? `Server runtime exists, but the latest backend tick is ${Math.round(runtimeAgeMs)} ms old. Treat the feed as degraded until freshness recovers.`
@@ -443,10 +490,10 @@ export default function LunaPortfolioPage() {
         <div><span>KILL SWITCH</span><strong>{killSwitch ? "ON" : "OFF"}</strong><small>{armed ? "armed" : "disarmed"}</small></div>
         <div><span>RUNTIME</span><strong>{runtimeShort}</strong><small>{sessionIsToday ? "today's session detected" : "no open session today"}</small></div>
         <div><span>LIVE ORDER GATE</span><strong>{liveExecution ? "READY" : "LOCKED"}</strong><small>broker bridge status</small></div>
-        <div><span>MARKET FEED</span><strong>{realtimeFresh ? "REALTIME STREAM" : realtimeAgeMs!=null ? "STREAM STALE" : marketFeedLabel}</strong><small>{realtimeFresh ? "public WS · " + marketFeedAge : realtimeAgeMs!=null ? "last UI tick · " + marketFeedAge : marketFeedSource + " · " + marketFeedAge}</small></div><div className="live-operating-note"><ShieldCheck size={15}/><span>{marketPhase==="ACTIVE" ? "Market session active — backend re-checks phase immediately before every execution." : "Market execution is locked at this phase; stale signals are shown as HOLD until a fresh in-session signal arrives."}</span></div>
+        <div><span>MARKET FEED</span><strong>{realtimeFresh ? "REALTIME STREAM" : realtimeAgeMs!=null ? "STREAM STALE" : marketFeedLabel}</strong><small>{realtimeFresh ? "public WS · " + marketFeedAge : realtimeAgeMs!=null ? "last UI tick · " + marketFeedAge : marketFeedSource + " · " + marketFeedAge}</small></div><div><span>SHADOW ENGINE</span><strong>{shadow ? `${shadow.buy_candidates??0} BUY · ${shadow.sell_candidates??0} SELL` : "SYNCING"}</strong><small>{shadow?.blockers?.length ? shadow.blockers.join(" · ") : "v1.4 observe · no order"}</small></div><div className="live-operating-note"><ShieldCheck size={15}/><span>{marketPhase==="ACTIVE" ? "Market session active — backend re-checks phase immediately before every execution." : "Market execution is locked at this phase; stale signals are shown as HOLD until a fresh in-session signal arrives."}</span></div>
       </section>
       {error&&<div className="error-banner"><span>{error}</span><button onClick={load}>Retry</button></div>}
-      <section className="summary-grid"><Metric label="Market ticks" value={String(sessionTicks.length)} sub="Latest session feed"/><Metric label="Signals" value={String(sessionSignals.length)} sub="15m strategy signals"/><Metric label="Orders" value={String(sessionOrders.length)} sub="Recorded this session"/>
+      <section className="summary-grid"><Metric label="Market ticks" value={String(sessionTicks.length)} sub="Latest session feed"/><Metric label="Shadow BUY" value={String(shadow?.buy_candidates??0)} sub="v1.4 candidates"/><Metric label="Shadow SELL" value={String(shadow?.sell_candidates??0)} sub="v1.4 candidates"/><Metric label="Signals" value={String(sessionSignals.length)} sub="Execution signals"/><Metric label="Orders" value={String(sessionOrders.length)} sub="Recorded this session"/>
         <Metric label="Total Equity" value={`฿${money(equity)}`} sub={`Initial ฿${money(initial)}`} positive={equity>=initial}/>
         <Metric label="Market Value" value={`฿${money(marketValue)}`} sub={`${exposure.toFixed(1)}% exposure`}/>
         <Metric label="Cash" value={`฿${money(cash)}`} sub="Available cash"/>
