@@ -80,6 +80,7 @@ TOPTRADER_WS_CHUNK_SIZE = max(1, min(512, int(os.getenv("LUNA_TOPTRADER_WS_CHUNK
 TOPTRADER_WS_RECONNECT_SEC = max(1.0, float(os.getenv("LUNA_TOPTRADER_WS_RECONNECT_SEC", "3")))
 TOPTRADER_POLL_SEC = max(1.0, float(os.getenv("LUNA_TOPTRADER_POLL_SEC", "2")))
 TOPTRADER_TIMEOUT_SEC = max(2.0, float(os.getenv("LUNA_TOPTRADER_TIMEOUT_SEC", "8")))
+TOPTRADER_REST_PUMP_ENABLED = os.getenv("LUNA_TOPTRADER_REST_PUMP_ENABLED", "true").lower() == "true"
 
 # Paper-only public fallback. TradingView's public Thailand screener is not
 # treated as exchange-certified real-time data; it is used only to keep the
@@ -707,6 +708,10 @@ def _run_toptrader_ws():
     print("LUNA_MARKETDATA provider_start provider=TOPTRADER_WS target=" + str(len(SYMBOLS)) + " catalog_overlap=" + str(catalog_overlap) + " connections=" + str(len(chunks)) + " bid_offer=" + str(REALTIME_BOOK), flush=True)
     for index, chunk in enumerate(chunks, start=1):
         threading.Thread(target=_toptrader_ws_worker, args=(chunk, index), daemon=True).start()
+    rest_stop = threading.Event()
+    if TOPTRADER_REST_PUMP_ENABLED:
+        threading.Thread(target=_toptrader_rest_pump, args=(rest_stop,), daemon=True).start()
+        print("LUNA_MARKETDATA toptrader_rest_pump started", flush=True)
     started = time.monotonic()
     while True:
         time.sleep(2)
@@ -715,10 +720,13 @@ def _run_toptrader_ws():
         age = _latest_quote_age_sec()
         target_count = len(SYMBOLS)
         coverage = (seen / target_count) if target_count else 0.0
-        print("LUNA_MARKETDATA toptrader_ws_snapshot seen=" + str(seen) + " quote_count=" + str(len(_quotes)) + " target=" + str(target_count) + " coverage=" + f"{coverage:.3f}" + " latest_age=" + str(age), flush=True)
+        quote_count = len(_quotes)
+        quote_coverage = (quote_count / target_count) if target_count else 0.0
+        print("LUNA_MARKETDATA toptrader_ws_snapshot ws_seen=" + str(seen) + " quote_count=" + str(quote_count) + " target=" + str(target_count) + " ws_coverage=" + f"{coverage:.3f}" + " quote_coverage=" + f"{quote_coverage:.3f}" + " latest_age=" + str(age), flush=True)
         if seen > 0 and age is not None and age <= STALE_AFTER_SEC:
             _collector_error = None
         elif time.monotonic() - started >= 30:
+            rest_stop.set()
             raise ProviderUnavailable("toptrader_ws_no_fresh_quotes")
 
 
@@ -745,6 +753,31 @@ def _fetch_toptrader_public():
         raise ProviderUnavailable("toptrader_invalid_json") from exc
 
 
+def _apply_toptrader_rest_payload(payload: Any) -> int:
+    rows = _extract_rows(payload)
+    found = 0
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        symbol = str(row.get("symbol") or "").upper()
+        if symbol not in SYMBOLS:
+            continue
+        _quote_payload(symbol=symbol, last=row.get("last"), bid=row.get("bid") if REALTIME_BOOK else None, ask=row.get("ask") if REALTIME_BOOK else None, source="toptrader-public-rest", source_ts=_epoch_to_iso(row.get("datetime")), total_volume=row.get("volume"), raw=row)
+        found += 1
+    return found
+
+
+def _toptrader_rest_pump(stop_event: threading.Event):
+    while not stop_event.is_set():
+        try:
+            found = _apply_toptrader_rest_payload(_fetch_toptrader_public())
+            if found == 0:
+                print("LUNA_MARKETDATA toptrader_rest_pump no_matching_symbols", flush=True)
+        except Exception as exc:
+            print("LUNA_MARKETDATA toptrader_rest_pump_error error=" + str(exc), flush=True)
+        stop_event.wait(TOPTRADER_POLL_SEC)
+
+
 def _run_toptrader_public():
     global _collector_error, _selected_provider, _provider_restarts
     if not TOPTRADER_ENABLED:
@@ -756,16 +789,7 @@ def _run_toptrader_public():
     print("LUNA_MARKETDATA provider_start provider=TOPTRADER_PUBLIC symbols=" + str(len(SYMBOLS)) + " bid_offer=" + str(REALTIME_BOOK), flush=True)
     while True:
         payload = _fetch_toptrader_public()
-        rows = _extract_rows(payload)
-        found = 0
-        for row in rows:
-            if not isinstance(row, dict):
-                continue
-            symbol = str(row.get("symbol") or "").upper()
-            if symbol not in SYMBOLS:
-                continue
-            _quote_payload(symbol=symbol, last=row.get("last"), bid=row.get("bid") if REALTIME_BOOK else None, ask=row.get("ask") if REALTIME_BOOK else None, source="toptrader-public-realtime", source_ts=_epoch_to_iso(row.get("datetime")), total_volume=row.get("volume"), raw=row)
-            found += 1
+        found = _apply_toptrader_rest_payload(payload)
         if found == 0:
             _provider_failures["TOPTRADER_PUBLIC"] += 1
             raise ProviderUnavailable("toptrader_no_matching_symbols")
