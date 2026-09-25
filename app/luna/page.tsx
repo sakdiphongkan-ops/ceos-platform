@@ -426,9 +426,11 @@ export default function LunaPortfolioPage() {
       ? "DEGRADED"
       : backendRuntimeLive
         ? "ACTIVE"
-        : backendRuntime?.state==="NO_OPEN_SESSION" || !backendRuntime?.session
+        : marketPhase==="BREAK" || marketPhase==="CLOSED"
           ? "STANDBY"
-          : "DEGRADED";
+          : backendRuntime?.state==="NO_OPEN_SESSION" || !backendRuntime?.session
+            ? "STANDBY"
+            : "DEGRADED";
 
   const runtimeLabel = ({
     ACTIVE:"SYSTEM ACTIVE · PAPER OBSERVE",
@@ -448,6 +450,8 @@ export default function LunaPortfolioPage() {
     : runtimeState==="DEGRADED"
       ? backendRuntime?.state==="LIVE" && runtimeAgeMs!=null
         ? `Server runtime exists, but the latest backend tick is ${Math.round(runtimeAgeMs)} ms old. Treat the feed as degraded until freshness recovers.`
+        : marketPhase==="BREAK"
+        ? "Market is in the midday break. LUNA remains online and the order gate stays closed until the afternoon session resumes."
         : "API is reachable, but the runtime health check is not yet healthy. Review the control room before assuming execution readiness."
       : runtimeState==="STANDBY"
         ? (marketPhase==="ACTIVE" || marketPhase==="REDUCE_ONLY" || marketPhase==="FORCE_CLOSE")
