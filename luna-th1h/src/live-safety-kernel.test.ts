@@ -28,6 +28,10 @@ function input(overrides:Record<string,unknown>={}){
     qty:100,
     referencePrice:100.1,
     maxOrderNotional:50_000,
+    maxDailyLoss:5_000,
+    dailyPnl:0,
+    maxDailyTurnover:2_000_000,
+    dailyTurnover:0,
     quoteMaxAgeMs:2_000,
     maxQuoteDeviationBps:75,
     maxClockSkewMs:1_500,
@@ -65,6 +69,12 @@ check("price deviation must block",kernel.evaluate(input({referencePrice:102})).
 
 kernel=new LiveSafetyKernel();
 check("max notional must block",kernel.evaluate(input({qty:600})).reason==="LIVE_MAX_ORDER_NOTIONAL");
+
+kernel=new LiveSafetyKernel();
+check("daily loss must block",kernel.evaluate(input({dailyPnl:-5_001})).reason==="LIVE_MAX_DAILY_LOSS");
+
+kernel=new LiveSafetyKernel();
+check("daily turnover must block",kernel.evaluate(input({dailyTurnover:2_000_000})).reason==="LIVE_MAX_DAILY_TURNOVER");
 
 kernel=new LiveSafetyKernel();
 check("reconciliation must block",kernel.evaluate(input({reconciliationOk:false})).reason==="LIVE_RECONCILIATION_REQUIRED");
