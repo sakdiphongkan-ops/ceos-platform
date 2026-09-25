@@ -100,7 +100,10 @@ export class StrategyV1{
 
   constructor(params:Partial<StrategyParams>={},opts:{priceOnlyFallback?:boolean}={}){
     this.priceOnlyFallback=Boolean(opts.priceOnlyFallback);
-    this.version=this.priceOnlyFallback?PRICE_ONLY_VERSION:VERSION;
+    // Strategy identity stays on the production 15m engine. Data-access mode
+    // (verified book vs paper price-only fallback) is an execution/data-state,
+    // not a different strategy version.
+    this.version=VERSION;
     this.params={...DEFAULT_PARAMS,...params};
     if(this.params.fastPeriod>=this.params.slowPeriod){
       throw new Error("fastPeriod must be smaller than slowPeriod");
