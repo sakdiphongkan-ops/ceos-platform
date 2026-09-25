@@ -71,6 +71,9 @@ const lastPersistBySymbol=new Map<string,number>();
 const prewarmedSymbols=new Set<string>();
 const prewarmInFlight=new Map<string,Promise<void>>();
 const prewarmCache=new Map<string,{prices:number[];fetchedAtMs:number;fetchMs:number}>();
+const prewarmQueuedSymbols=new Set<string>();
+let prewarmBatchTimer:NodeJS.Timeout|undefined;
+let prewarmBatchInFlight=false;
 const liveOrderStates=new Map<string,TrackedLiveOrder>();
 const latencyLedgers=new Map<string,LatencyLedger>();
 const m1OverlayWeights=new Map<string,number>();
@@ -1029,53 +1032,87 @@ function aggregate15mCloses(quotes:any[]):number[]{
   return [...buckets.entries()].sort((a,b)=>a[0]-b[0]).map(([,x])=>x.price);
 }
 
-function kickoffPrewarm(q:Quote){
-  if(!config.prewarmEnabled) return;
+function schedulePrewarmBatch(){
+  if(prewarmBatchTimer || prewarmBatchInFlight || prewarmQueuedSymbols.size===0) return;
+  prewarmBatchTimer=setTimeout(()=>{
+    prewarmBatchTimer=undefined;
+    void flushPrewarmBatch();
+  },150);
+}
+
+async function flushPrewarmBatch(){
+  if(prewarmBatchInFlight || prewarmQueuedSymbols.size===0 || !config.prewarmEnabled) return;
   const generation=sessionGeneration;
-  if(prewarmedSymbols.has(q.symbol) || prewarmInFlight.has(q.symbol) || prewarmCache.has(q.symbol)) return;
+  const symbols=[...prewarmQueuedSymbols].filter(symbol=>!prewarmedSymbols.has(symbol)).slice(0,50);
+  for(const symbol of symbols) prewarmQueuedSymbols.delete(symbol);
+  if(symbols.length===0){
+    schedulePrewarmBatch();
+    return;
+  }
+
+  prewarmBatchInFlight=true;
   const startedAt=Date.now();
-  let promise:Promise<void>|null=null;
-  promise=(async()=>{
-    try{
-      const response=await ingest("",{
-        action:"recent_15m_bars",
-        symbol:q.symbol,
-        limit:80
-      });
-      const bars=Array.isArray((response as any)?.bars)?(response as any).bars:[];
-      const prices=bars
+  try{
+    const response=await ingest("",{
+      action:"recent_15m_bars_batch",
+      symbols,
+      limit:80
+    });
+    if(generation!==sessionGeneration) return;
+    const grouped=(response as any)?.bars_by_symbol??{};
+    let ready=0;
+    let totalPoints=0;
+
+    for(const symbol of symbols){
+      const rows=Array.isArray(grouped[symbol])?grouped[symbol]:[];
+      const prices=rows
         .map((x:any)=>Number(x?.close))
         .filter((x:number)=>Number.isFinite(x)&&x>0);
-      if(generation!==sessionGeneration) return;
-      prewarmCache.set(q.symbol,{
+      if(prices.length===0) continue;
+      prewarmCache.set(symbol,{
         prices,
         fetchedAtMs:Date.now(),
         fetchMs:Date.now()-startedAt
       });
-      queueAudit("STRATEGY_PREWARM_READY",{
-        symbol:q.symbol,
-        source:q.source,
-        data_quality:q.dataQuality??null,
-        historical_points:prices.length,
-        timeframe:"15m",
-        fetch_ms:Date.now()-startedAt
-      },strategyV1.version);
-    }catch(err){
-      queueAudit("STRATEGY_PREWARM_ERROR",{
-        symbol:q.symbol,
-        source:q.source,
-        error:String(err),
-        timeframe:"15m",
-        fetch_ms:Date.now()-startedAt
-      },strategyV1.version);
-    }finally{
-      if(prewarmInFlight.get(q.symbol)===promise){
-        prewarmInFlight.delete(q.symbol);
-      }
+      ready++;
+      totalPoints+=prices.length;
     }
-  })();
-  if(promise) prewarmInFlight.set(q.symbol,promise);
-  void promise;
+
+    queueAudit("STRATEGY_PREWARM_BATCH_READY",{
+      symbols_requested:symbols.length,
+      symbols_ready:ready,
+      historical_points:totalPoints,
+      batch_size:symbols.length,
+      timeframe:"15m",
+      fetch_ms:Date.now()-startedAt
+    },strategyV1.version);
+  }catch(err){
+    for(const symbol of symbols) prewarmQueuedSymbols.add(symbol);
+    queueAudit("STRATEGY_PREWARM_BATCH_ERROR",{
+      symbols_requested:symbols.length,
+      error:String(err),
+      timeframe:"15m",
+      fetch_ms:Date.now()-startedAt
+    },strategyV1.version);
+  }finally{
+    prewarmBatchInFlight=false;
+    if(prewarmQueuedSymbols.size>0) schedulePrewarmBatch();
+  }
+}
+
+function kickoffPrewarm(q:Quote){
+  if(!config.prewarmEnabled) return;
+  if(prewarmedSymbols.has(q.symbol) || prewarmCache.has(q.symbol)) return;
+  prewarmQueuedSymbols.add(q.symbol);
+  if(prewarmQueuedSymbols.size>=50){
+    if(prewarmBatchTimer){
+      clearTimeout(prewarmBatchTimer);
+      prewarmBatchTimer=undefined;
+    }
+    void flushPrewarmBatch();
+    return;
+  }
+  schedulePrewarmBatch();
 }
 
 function consumePrewarm(q:Quote){
@@ -1166,6 +1203,8 @@ async function handleQuote(q:Quote){
     prewarmedSymbols.clear();
     prewarmCache.clear();
     prewarmInFlight.clear();
+    prewarmQueuedSymbols.clear();
+    if(prewarmBatchTimer){clearTimeout(prewarmBatchTimer); prewarmBatchTimer=undefined;}
     lastPersistBySymbol.clear();
     lastSnapshotAt=0;
     await ensureSession();
