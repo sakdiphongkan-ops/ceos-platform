@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -184,7 +184,7 @@ export default function LunaPortfolioPage() {
   const [lastRealtimeTickAt,setLastRealtimeTickAt]=useState<number|null>(null);
   const [clock,setClock]=useState(()=>new Date());
   const [runtimeStatus,setRuntimeStatus]=useState<RuntimeStatus|null>(null);
-  const [shadowStatus,setShadowStatus]=useState<ShadowStatus|null>(null);
+  const [shadowStatus,setShadowStatus]=useState<ShadowStatus|null>(null);\n  const refreshInFlight=useRef(false);
 
   const load=useCallback(async()=>{
     setRefreshing(true); setError("");
@@ -389,7 +389,7 @@ export default function LunaPortfolioPage() {
   const exposure=equity?Number(sessionSnapshot?.gross_exposure??marketValue)/equity*100:0;
   const selectedPos=selected&&positions.some(p=>p.symbol===selected.symbol)?positions.find(p=>p.symbol===selected.symbol)??null:null;
   const executionMode=String(feed?.execution_control?.execution_mode??session?.mode??"paper").toUpperCase();
-  const killSwitch=Boolean(feed?.execution_control?.kill_switch??true);
+  const killSwitch=Boolean(feed?.execution_control?.kill_switch??false);
   const armed=Boolean(feed?.execution_control?.armed??false);
   const liveExecution=executionMode==="LIVE" && !killSwitch && armed;
   const marketFeed=feed?.market_feed??{
@@ -478,7 +478,7 @@ export default function LunaPortfolioPage() {
     : liveExecution
       ? "LIVE EXECUTION"
       : killSwitch
-        ? "PAPER EXECUTION / KILL SWITCH ON"
+        ? "PAPER EXECUTION / KILL SWITCH OFF"
         : "PAPER EXECUTION / LIVE ORDER LOCKED";
   const killSwitchDisplay=feed ? (killSwitch ? "ON" : "OFF") : "LOCKED";
   const killSwitchDetail=feed ? (armed ? "armed" : "disarmed") : "awaiting backend";
@@ -574,7 +574,7 @@ function SystemControlRoom({strategy,asOf}:{strategy:string;asOf:string}) {
       setState(data);
     }catch(e){setError(e instanceof Error?e.message:"Unable to load LUNA control state");}
     finally{setLoading(false);}
-  },[strategy]);
+  },[strategy,asOf]);
 
   useEffect(()=>{refresh(); const id=setInterval(refresh,15000); return()=>clearInterval(id);},[refresh]);
 
