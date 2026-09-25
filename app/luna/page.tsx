@@ -2,170 +2,34 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowDownRight,
-  ArrowUpRight,
-  BarChart3,
-  ChevronDown,
-  CircleDot,
-  Clock3,
-  Filter,
-  History,
-  Layers3,
-  RefreshCw,
-  Search,
-  ShieldCheck,
-  WalletCards,
-  X,
+  ArrowDownRight, ArrowUpRight, BarChart3, ChevronDown, CircleDot, Clock3, Filter, History,
+  Layers3, RefreshCw, Search, ShieldCheck, WalletCards, X,
 } from "lucide-react";
 
+import {
+  bangkokClock, bangkokDate, isRealtimeFresh, LUNA_PUBLIC_MARKET_STREAM, LUNA_STRATEGY,
+  marketPhaseHint, marketPhaseLabel, TIMEFRAME, uiMarketPhase, type RuntimeState,
+} from "../../lib/luna-runtime";
+import {
+  connectRealtimeMarketStream, fetchControlRoom, fetchPortfolioState, fetchShadowStatus,
+  fetchTournament100, type ControlRoomState, type LunaFeed, type RealtimeQuote,
+  type RuntimeStatus, type ShadowStatus, type Tournament100Result,
+} from "../../lib/luna-client";
+
 type Position = {
-  symbol: string;
-  name: string;
-  qty: number;
-  avgCost: number;
-  last: number;
-  dayChange: number;
-  realized: number;
-  signal: "BUY" | "SELL" | "HOLD";
-  signalReason: string;
+  symbol: string; name: string; qty: number; avgCost: number; last: number; dayChange: number;
+  realized: number; signal: "BUY" | "SELL" | "HOLD"; signalReason: string;
 };
 
 type Trade = {
-  time: string;
-  symbol: string;
-  side: "BUY" | "SELL";
-  qty: number;
-  price: number;
-  value: number;
-  status: "FILLED" | "PARTIAL" | "REJECTED";
-  strategy: string;
-  reason: string;
-};
-
-const LUNA_API = "https://wigzicwgcsrhdummrbjx.supabase.co/functions/v1/luna-api";
-const LUNA_PUBLIC_MARKET_STREAM =
-  process.env.NEXT_PUBLIC_LUNA_PUBLIC_MARKET_STREAM_URL ??
-  "wss://luna-execution-gateway-production.up.railway.app/quotes/public-stream";
-const LUNA_STRATEGY = "luna-th1h-v1.4.0-15m-riskgated";
-const TIMEFRAME = "15m";
-
-type RuntimeStatus = {
-  ok?: boolean;
-  generated_at?: string;
-  runtime?: {
-    state?: string;
-    system_state?: string;
-    session?: { id?: string; session_date?: string; mode?: string; strategy_version?: string; status?: string };
-    strategy_version?: string;
-    latest_source?: string | null;
-    latest_age_ms?: number | null;
-    latest_tick_ts?: string | null;
-    ticks_10s?: number;
-    ticks_30s?: number;
-    ticks_2m?: number;
-    symbols_30s?: number;
-    bid_ask_ticks_30s?: number;
-  };
-  error?: { message?: string };
-};
-
-type ShadowStatus = {
-  ok?: boolean;
-  generated_at?: string;
-  shadow?: {
-    state?: string;
-    strategy_version?: string;
-    latest_bar_end?: string | null;
-    eligible_symbols?: number;
-    buy_candidates?: number;
-    sell_candidates?: number;
-    orders_allowed?: boolean;
-    blockers?: string[];
-    latest_source?: string | null;
-    verified_latest_bar_symbols?: number;
-    decisions?: Array<{
-      symbol:string; bar_end:string; close:number; ema5:number; ema20:number; momentum_1:number;
-      bar_count:number; candidate_action:string; verified_book:boolean; feed_verified:boolean;
-      execution_blocked:boolean; reason:string;
-    }>;
-  };
-  error?: { message?: string };
-};
-type RealtimeQuote = {
-  symbol: string;
-  ts?: string;
-  source_ts?: string | null;
-  bid?: number | null;
-  ask?: number | null;
-  last?: number | null;
-  bid_size?: number | null;
-  ask_size?: number | null;
-  source?: string | null;
-};
-
-type LunaFeed = {
-  generated_at:string;
-  sessions:any[];
-  ticks:any[];
-  signals:any[];
-  snapshots:any[];
-  orders:any[];
-  fills:any[];
-  positions:any[];
-  execution_control:any;
-  counts:any;
-  errors:any[];
-  market_feed?: {
-    status:string;
-    verified_realtime:boolean;
-    public_fallback:boolean;
-    latest_source?:string|null;
-    latest_ts?:string|null;
-    latest_age_ms?:number|null;
-    sources?:string[];
-  };
-  latency?: {
-    summary?: {
-      sample_count:number;
-      market_lag_ms?:{p50:number;p95:number;p99:number;max:number};
-      analysis_ms?:{p50:number;p95:number;p99:number;max:number};
-      queue_wait_ms?:{p50:number;p95:number;p99:number;max:number};
-      execution_ms?:{p50:number;p95:number;p99:number;max:number};
-      end_to_end_ms?:{p50:number;p95:number;p99:number;max:number};
-    };
-  };
+  time: string; symbol: string; side: "BUY" | "SELL"; qty: number; price: number; value: number;
+  status: "FILLED" | "PARTIAL" | "REJECTED"; strategy: string; reason: string;
 };
 
 const money = (n: number) =>
   new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n) || 0);
 
-type UiMarketPhase = "PRE_OPEN" | "ACTIVE" | "BREAK" | "REDUCE_ONLY" | "FORCE_CLOSE" | "CLOSED";
-
 const signed = (n: number) => `${n >= 0 ? "+" : "-"}฿${money(Math.abs(n))}`;
-
-function bangkokParts(date: Date) {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Asia/Bangkok", weekday: "short", year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
-  }).formatToParts(date);
-  const value = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
-  return { weekday:value("weekday"), year:Number(value("year")), month:Number(value("month")), day:Number(value("day")), hour:Number(value("hour")), minute:Number(value("minute")), second:Number(value("second")) };
-}
-function bangkokDate(date: Date) { const p=bangkokParts(date); return `${p.year}-${String(p.month).padStart(2,"0")}-${String(p.day).padStart(2,"0")}`; }
-function bangkokClock(date: Date) { const p=bangkokParts(date); return `${String(p.hour).padStart(2,"0")}:${String(p.minute).padStart(2,"0")}:${String(p.second).padStart(2,"0")}`; }
-function uiMarketPhase(date: Date): UiMarketPhase {
-  const p=bangkokParts(date); if(p.weekday==="Sat"||p.weekday==="Sun") return "CLOSED";
-  const mins=p.hour*60+p.minute;
-  if(mins<600) return "PRE_OPEN";
-  if(mins<750) return "ACTIVE";
-  if(mins<840) return "BREAK";
-  if(mins<980) return "ACTIVE";
-  if(mins<985) return "REDUCE_ONLY";
-  if(mins<990) return "FORCE_CLOSE";
-  return "CLOSED";
-}
-function marketPhaseLabel(phase:UiMarketPhase) { return ({PRE_OPEN:"PRE-OPEN",ACTIVE:"MARKET OPEN",BREAK:"MIDDAY BREAK",REDUCE_ONLY:"REDUCE ONLY",FORCE_CLOSE:"FORCE CLOSE",CLOSED:"MARKET CLOSED"})[phase]; }
-function marketPhaseHint(phase:UiMarketPhase) { return ({PRE_OPEN:"Entry locked until 10:00",ACTIVE:"New entries enabled",BREAK:"Entry locked · afternoon pre-open",REDUCE_ONLY:"BUY locked · SELL allowed",FORCE_CLOSE:"Closing positions only",CLOSED:"No new execution"})[phase]; }
 
 export default function LunaPortfolioPage() {
   const [tab,setTab]=useState<"holdings"|"trades"|"closed"|"research">("holdings");
