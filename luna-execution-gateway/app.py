@@ -953,11 +953,13 @@ def _run_settrade_session():
 
 def _provider_order():
     if PROVIDER_MODE == "SETTRADE":
-        order = ["SETTRADE", "SET_API"]
+        order = ["SETTRADE", "TOPTRADER_PUBLIC", "SET_API"]
     elif PROVIDER_MODE == "SET_API":
-        order = ["SET_API", "SETTRADE"]
+        order = ["SET_API", "SETTRADE", "TOPTRADER_PUBLIC"]
+    elif PROVIDER_MODE == "TOPTRADER_PUBLIC":
+        order = ["TOPTRADER_PUBLIC", "SETTRADE", "SET_API"]
     else:
-        order = ["SETTRADE", "SET_API"]
+        order = ["SETTRADE", "TOPTRADER_PUBLIC", "SET_API"]
     if PUBLIC_FALLBACK_ENABLED:
         order.append("TRADINGVIEW_PUBLIC")
     return order
@@ -968,6 +970,8 @@ def _provider_available(name: str):
         return set_api_configured()
     if name == "SETTRADE":
         return settrade_configured()
+    if name == "TOPTRADER_PUBLIC":
+        return TOPTRADER_ENABLED
     if name == "TRADINGVIEW_PUBLIC":
         return PUBLIC_FALLBACK_ENABLED
     return False
@@ -1004,6 +1008,8 @@ def _run_supervisor():
                     _run_set_api()
                 elif provider == "SETTRADE":
                     _run_settrade_session()
+                elif provider == "TOPTRADER_PUBLIC":
+                    _run_toptrader_public()
                 elif provider == "TRADINGVIEW_PUBLIC":
                     _run_tradingview_session()
                 else:
@@ -1118,6 +1124,7 @@ def health():
         "provider_candidates": _provider_order(),
         "set_api_configured": set_api_configured(),
         "settrade_configured": settrade_configured(),
+        "toptrader_backup_enabled": TOPTRADER_ENABLED,
         "public_fallback_enabled": PUBLIC_FALLBACK_ENABLED,
         "realtime_marketdata_enabled": REALTIME_ENABLED,
         "realtime_bid_offer_enabled": REALTIME_BOOK,
