@@ -1023,6 +1023,7 @@ function aggregate15mCloses(quotes:any[]):number[]{
 }
 
 function kickoffPrewarm(q:Quote){
+  if(!config.prewarmEnabled) return;
   const generation=sessionGeneration;
   if(prewarmedSymbols.has(q.symbol) || prewarmInFlight.has(q.symbol) || prewarmCache.has(q.symbol)) return;
   const startedAt=Date.now();
