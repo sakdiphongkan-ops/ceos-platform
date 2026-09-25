@@ -698,15 +698,13 @@ def _run_toptrader_ws():
         raise ProviderUnavailable("SETTRADE_REALTIME_SYMBOLS is empty")
     _selected_provider = "TOPTRADER_WS"
     _provider_restarts += 1
-    supported = _fetch_toptrader_symbol_catalog()
-    ws_symbols = [s for s in SYMBOLS if s in supported]
-    unsupported = [s for s in SYMBOLS if s not in supported]
-    if not ws_symbols:
-        raise ProviderUnavailable("toptrader_ws_no_supported_luna_symbols")
+    catalog = _fetch_toptrader_symbol_catalog()
+    catalog_overlap = len([s for s in SYMBOLS if s in catalog])
+    ws_symbols = list(SYMBOLS)
     chunks = [ws_symbols[i:i + TOPTRADER_WS_CHUNK_SIZE] for i in range(0, len(ws_symbols), TOPTRADER_WS_CHUNK_SIZE)]
     with _toptrader_ws_lock:
         _toptrader_ws_seen.clear()
-    print("LUNA_MARKETDATA provider_start provider=TOPTRADER_WS target=" + str(len(SYMBOLS)) + " supported=" + str(len(ws_symbols)) + " unsupported=" + str(len(unsupported)) + " connections=" + str(len(chunks)) + " bid_offer=" + str(REALTIME_BOOK), flush=True)
+    print("LUNA_MARKETDATA provider_start provider=TOPTRADER_WS target=" + str(len(SYMBOLS)) + " catalog_overlap=" + str(catalog_overlap) + " connections=" + str(len(chunks)) + " bid_offer=" + str(REALTIME_BOOK), flush=True)
     for index, chunk in enumerate(chunks, start=1):
         threading.Thread(target=_toptrader_ws_worker, args=(chunk, index), daemon=True).start()
     started = time.monotonic()
