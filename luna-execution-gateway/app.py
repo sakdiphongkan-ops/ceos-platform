@@ -20,7 +20,7 @@ try:
 except Exception:  # pragma: no cover
     Investor = None
 
-APP_VERSION = "0.5.2"
+APP_VERSION = "0.5.3"
 RELEASE_SOURCE_REVISION = (
     os.getenv("LUNA_DEPLOY_SOURCE_SHA")
     or os.getenv("GITHUB_SHA")
@@ -49,7 +49,12 @@ GATEWAY_KEY = os.getenv("LUNA_GATEWAY_KEY", "")
 #   1) official SET Market Data API (api-key)
 #   2) Settrade Open API (broker/app credentials)
 PROVIDER_MODE = os.getenv("LUNA_MARKETDATA_PROVIDER", "AUTO").upper()
-SET_API_KEY = os.getenv("SET_MARKETDATA_API_KEY", "")
+SET_API_KEY = (
+    os.getenv("SET_MARKETDATA_API_KEY")
+    or os.getenv("SET_MARKETPLACE_API_KEY")
+    or os.getenv("SET_API_KEY")
+    or ""
+)
 SET_API_BASE = os.getenv(
     "SET_MARKETDATA_API_BASE",
     "https://marketplace.set.or.th/api/public/realtime-data/stock",
@@ -154,6 +159,21 @@ def investor_client():
                 is_auto_queue=False,
             )
         return _investor
+
+
+def realtime_marketdata_client(inv):
+    """Return the realtime market-data connection supported by the installed Settrade SDK."""
+    if hasattr(inv, "RealtimeDataConnection"):
+        try:
+            return inv.RealtimeDataConnection()
+        except Exception as exc:
+            print(
+                f"LUNA_MARKETDATA realtime_connection_fallback error={exc}",
+                flush=True,
+            )
+    if hasattr(inv, "MQTTWebsocket"):
+        return inv.MQTTWebsocket()
+    raise ProviderUnavailable("settrade_realtime_connection_unavailable")
 
 
 def live_gate():
@@ -447,8 +467,7 @@ def _quote_payload(
     last: Any = None,
     bid: Any = None,
     ask: Any = None,
-    bid_size: Any = None,
-    ask_size: Any = None,
+    bid_size: Any = None,    ask_size: Any = None,
     source: str = "",
     source_ts: Any = None,
     raw: Any = None,
@@ -782,7 +801,7 @@ def _run_settrade_session():
     _selected_provider = "SETTRADE"
     _provider_restarts += 1
     inv = investor_client()
-    mqtt = inv.MQTTWebsocket()
+    mqtt = realtime_marketdata_client(inv)
     subscriptions = []
     threads = []
 
@@ -897,8 +916,7 @@ def _run_supervisor():
         if not SYMBOLS:
             _selected_provider = None
             _collector_error = "SETTRADE_REALTIME_SYMBOLS is empty"
-            time.sleep(CREDENTIAL_RETRY_SEC)
-            continue
+            time.sleep(CREDENTIAL_RETRY_SEC)            continue
 
         attempted = []
         ran = False
