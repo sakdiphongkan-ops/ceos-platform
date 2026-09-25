@@ -1030,15 +1030,14 @@ function kickoffPrewarm(q:Quote){
   promise=(async()=>{
     try{
       const response=await ingest("",{
-        action:"recent_ticks",
+        action:"recent_15m_bars",
         symbol:q.symbol,
-        source:q.source,
-        limit:2000
+        limit:80
       });
-      const quotes=Array.isArray((response as any)?.quotes)?(response as any).quotes:[];
-      const prices=aggregate15mCloses(
-        quotes.filter((x:any)=>x?.ts && x.ts!==q.ts)
-      );
+      const bars=Array.isArray((response as any)?.bars)?(response as any).bars:[];
+      const prices=bars
+        .map((x:any)=>Number(x?.close))
+        .filter((x:number)=>Number.isFinite(x)&&x>0);
       if(generation!==sessionGeneration) return;
       prewarmCache.set(q.symbol,{
         prices,
