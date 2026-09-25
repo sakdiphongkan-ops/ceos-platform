@@ -226,15 +226,16 @@ function buildMarketSnapshots(
       const close = bars[i].close;
       const previous2 = bars[i - 2]?.close;
       const previous8 = bars[i - 8]?.close;
-      const atr5 = series.atr.get(5)?.[i];
-      const atr20 = series.atr.get(20)?.[i];
+      const atr5 = series.atr.get(5)?.[i] ?? NaN;
+      const atr20 = series.atr.get(20)?.[i] ?? NaN;
 
       if (
         !Number.isFinite(previous2)
         || !Number.isFinite(previous8)
         || !Number.isFinite(atr5)
         || !Number.isFinite(atr20)
-        || !close
+        || !Number.isFinite(close)
+        || close <= 0
       ) {
         continue;
       }
