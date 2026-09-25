@@ -19,6 +19,11 @@ function check(name:string,condition:boolean){
   if(!condition) throw new Error(name);
 }
 
+function blockedReason(decision:ReturnType<LiveSafetyKernel["evaluate"]>){
+  if(decision.ok) throw new Error("expected blocked decision");
+  return decision.reason;
+}
+
 function input(overrides:Record<string,unknown>={}){
   return {
     control,
@@ -49,35 +54,35 @@ let kernel=new LiveSafetyKernel();
 check("baseline should pass",kernel.evaluate(input()).ok===true);
 
 kernel=new LiveSafetyKernel();
-check("kill switch must block",kernel.evaluate(input({control:{...control,kill_switch:true}})).reason==="LIVE_CONTROL_KILL_SWITCH");
+check("kill switch must block",blockedReason(kernel.evaluate(input({control:{...control,kill_switch:true}})))==="LIVE_CONTROL_KILL_SWITCH");
 
 kernel=new LiveSafetyKernel();
-check("gate disabled must block",kernel.evaluate(input({hardOrderGateEnabled:false})).reason==="LIVE_HARD_ORDER_GATE_DISABLED");
+check("gate disabled must block",blockedReason(kernel.evaluate(input({hardOrderGateEnabled:false})))==="LIVE_HARD_ORDER_GATE_DISABLED");
 
 kernel=new LiveSafetyKernel();
-check("stale quote must block",kernel.evaluate(input({
+check("stale quote must block",blockedReason(kernel.evaluate(input({
   quote:{...baseQuote,ts:new Date(now.getTime()-5_000).toISOString()}
-})).reason==="LIVE_QUOTE_STALE_OR_INVALID");
+})))==="LIVE_QUOTE_STALE_OR_INVALID");
 
 kernel=new LiveSafetyKernel();
-check("bad book must block",kernel.evaluate(input({
+check("bad book must block",blockedReason(kernel.evaluate(input({
   quote:{...baseQuote,bidSize:0}
-})).reason==="LIVE_VERIFIED_BOOK_REQUIRED");
+})))==="LIVE_VERIFIED_BOOK_REQUIRED");
 
 kernel=new LiveSafetyKernel();
-check("price deviation must block",kernel.evaluate(input({referencePrice:102})).reason==="LIVE_PRICE_DEVIATION_GUARD");
+check("price deviation must block",blockedReason(kernel.evaluate(input({referencePrice:102})))==="LIVE_PRICE_DEVIATION_GUARD");
 
 kernel=new LiveSafetyKernel();
-check("max notional must block",kernel.evaluate(input({qty:600})).reason==="LIVE_MAX_ORDER_NOTIONAL");
+check("max notional must block",blockedReason(kernel.evaluate(input({qty:600})))==="LIVE_MAX_ORDER_NOTIONAL");
 
 kernel=new LiveSafetyKernel();
-check("daily loss must block",kernel.evaluate(input({dailyPnl:-5_001})).reason==="LIVE_MAX_DAILY_LOSS");
+check("daily loss must block",blockedReason(kernel.evaluate(input({dailyPnl:-5_001})))==="LIVE_MAX_DAILY_LOSS");
 
 kernel=new LiveSafetyKernel();
-check("daily turnover must block",kernel.evaluate(input({dailyTurnover:2_000_000})).reason==="LIVE_MAX_DAILY_TURNOVER");
+check("daily turnover must block",blockedReason(kernel.evaluate(input({dailyTurnover:2_000_000})))==="LIVE_MAX_DAILY_TURNOVER");
 
 kernel=new LiveSafetyKernel();
-check("reconciliation must block",kernel.evaluate(input({reconciliationOk:false})).reason==="LIVE_RECONCILIATION_REQUIRED");
+check("reconciliation must block",blockedReason(kernel.evaluate(input({reconciliationOk:false})))==="LIVE_RECONCILIATION_REQUIRED");
 
 kernel=new LiveSafetyKernel({gatewayFailureTripCount:3});
 kernel.recordGatewayFailure("timeout");
