@@ -418,12 +418,13 @@ export default function LunaPortfolioPage() {
   const backendStrategy=String(backendRuntime?.strategy_version??backendRuntime?.session?.strategy_version??"");
   const strategyMismatch=Boolean(backendStrategy && backendStrategy!==LUNA_STRATEGY);
   const runtimeAgeMs=Number.isFinite(Number(backendRuntime?.latest_age_ms)) ? Math.max(0,Number(backendRuntime?.latest_age_ms)) : null;
-  const backendRuntimeFresh=backendRuntime?.state==="LIVE" && runtimeAgeMs!=null && runtimeAgeMs<=5000 && Number(backendRuntime?.ticks_30s??0)>0;
+  const backendRuntimeLive=backendRuntime?.state==="LIVE" && Number(backendRuntime?.ticks_30s??0)>0;
+  const backendRuntimeFresh=backendRuntimeLive && runtimeAgeMs!=null && runtimeAgeMs<=10000;
   const runtimeState:RuntimeState = !live
     ? "OFFLINE"
     : error
       ? "DEGRADED"
-      : backendRuntimeFresh
+      : backendRuntimeLive
         ? "ACTIVE"
         : backendRuntime?.state==="NO_OPEN_SESSION" || !backendRuntime?.session
           ? "STANDBY"
