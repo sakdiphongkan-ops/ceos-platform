@@ -53,7 +53,7 @@ function cachedHhmmMinutes(value:string){
   return minutes;
 }
 
-export type MarketPhase = "CLOSED"|"ACTIVE"|"REDUCE_ONLY"|"FORCE_CLOSE";
+export type MarketPhase = "CLOSED"|"ACTIVE"|"BREAK"|"REDUCE_ONLY"|"FORCE_CLOSE";
 
 export function marketPhaseAt(
   ts:string,
@@ -75,7 +75,7 @@ export function marketPhaseAt(
 
   if(forceClose<=reduceOnly) throw new Error("forceCloseTime must be after reduceOnlyTime");
   if(minutes<morningStart) return "CLOSED";
-  if(minutes>=morningEnd && minutes<afternoonStart) return "CLOSED";
+  if(minutes>=morningEnd && minutes<afternoonStart) return "BREAK";
   if(minutes>=tradingEnd) return "CLOSED";
   if(minutes>=forceClose) return "FORCE_CLOSE";
   if(minutes>=reduceOnly) return "REDUCE_ONLY";
