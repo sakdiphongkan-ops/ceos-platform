@@ -20,7 +20,7 @@ try:
 except Exception:  # pragma: no cover
     Investor = None
 
-APP_VERSION = "0.5.5"
+APP_VERSION = "0.5.6"
 RELEASE_SOURCE_REVISION = (
     os.getenv("LUNA_DEPLOY_SOURCE_SHA")
     or os.getenv("GITHUB_SHA")
@@ -85,6 +85,8 @@ APP_CODE = os.getenv("LUNA_SETTRADE_APP_CODE") or os.getenv("SETTRADE_APP_CODE",
 REALTIME_ENABLED = os.getenv("REALTIME_MARKETDATA_ENABLED", "false").lower() == "true"
 REALTIME_BOOK = os.getenv("REALTIME_BID_OFFER_ENABLED", "true").lower() == "true"
 INGEST_ENABLED = bool(MARKETDATA_INGEST_KEY)
+EXTERNAL_BRIDGE_MAX_AGE_SEC = max(5.0, float(os.getenv("LUNA_EXTERNAL_BRIDGE_MAX_AGE_SEC", "10")))
+_external_bridge_last_ts = 0.0
 PUBLIC_STREAM_ENABLED = os.getenv("LUNA_PUBLIC_STREAM_ENABLED", "true").lower() == "true"
 PUBLIC_STREAM_MAX_CLIENTS = max(1, int(os.getenv("LUNA_PUBLIC_STREAM_MAX_CLIENTS", "50")))
 SYMBOLS = [s.strip().upper() for s in os.getenv("SETTRADE_REALTIME_SYMBOLS", "").split(",") if s.strip()]
@@ -1039,6 +1041,8 @@ class MarketQuoteBatch(BaseModel):
 def health():
     with _quote_lock:
         quote_count = len(_quotes)
+    bridge_age = (time.time() - _external_bridge_last_ts) if _external_bridge_last_ts else None
+    effective_provider = "SETTRADE_LOCAL_BRIDGE" if bridge_age is not None and bridge_age <= EXTERNAL_BRIDGE_MAX_AGE_SEC else _selected_provider
     return {
         "ok": True,
         "version": APP_VERSION,
@@ -1046,7 +1050,7 @@ def health():
         "public_stream_release": PUBLIC_STREAM_RELEASE,
         "live_armed": LIVE_ARMED,
         "provider_mode": PROVIDER_MODE,
-        "selected_provider": _selected_provider,
+        "selected_provider": effective_provider,
         "provider_candidates": _provider_order(),
         "set_api_configured": set_api_configured(),
         "settrade_configured": settrade_configured(),
@@ -1061,10 +1065,16 @@ def health():
         "collector_error": _collector_error,
         "provider_failures": dict(_provider_failures),
         "channel_status": _channel_snapshot(),
+        "external_bridge_active": bridge_age is not None and bridge_age <= EXTERNAL_BRIDGE_MAX_AGE_SEC,
+        "external_bridge_age_sec": bridge_age,
+        "external_bridge_max_age_sec": EXTERNAL_BRIDGE_MAX_AGE_SEC,
         "public_stream_enabled": PUBLIC_STREAM_ENABLED,
         "public_stream_clients": len(_public_stream_clients),
         "public_stream_max_clients": PUBLIC_STREAM_MAX_CLIENTS,
         "marketdata_ingest_enabled": INGEST_ENABLED,
+        "external_bridge_active": bridge_age is not None and bridge_age <= EXTERNAL_BRIDGE_MAX_AGE_SEC,
+        "external_bridge_age_sec": bridge_age,
+        "external_bridge_max_age_sec": EXTERNAL_BRIDGE_MAX_AGE_SEC,
         "market_phase": market_phase_now(),
         "timestamp": int(time.time()),
     }
@@ -1261,9 +1271,11 @@ def marketdata_ingest(payload: MarketQuoteBatch, x_luna_gateway: Optional[str] =
             raw=quote.raw,
         )
         accepted += 1
-    global _collector_error
+    global _collector_error, _external_bridge_last_ts, _selected_provider
     if accepted:
         _collector_error = None
+        _external_bridge_last_ts = time.time()
+        _selected_provider = "SETTRADE_LOCAL_BRIDGE"
     return {"ok": True, "accepted": accepted, "received": len(payload.quotes), "source": "luna-local-bridge"}
 
 
@@ -1331,12 +1343,14 @@ def diagnostics(x_luna_gateway: Optional[str] = Header(default=None)):
     auth(x_luna_gateway)
     with _quote_lock:
         quote_count = len(_quotes)
+    bridge_age = (time.time() - _external_bridge_last_ts) if _external_bridge_last_ts else None
+    effective_provider = "SETTRADE_LOCAL_BRIDGE" if bridge_age is not None and bridge_age <= EXTERNAL_BRIDGE_MAX_AGE_SEC else _selected_provider
     return {
         "ok": True,
         "version": APP_VERSION,
         "live_armed": LIVE_ARMED,
         "provider_mode": PROVIDER_MODE,
-        "selected_provider": _selected_provider,
+        "selected_provider": effective_provider,
         "provider_candidates": _provider_order(),
         "set_api_configured": set_api_configured(),
         "settrade_configured": settrade_configured(),
