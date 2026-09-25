@@ -767,3 +767,10 @@ tbody tr:hover,tbody tr.selected-row{background:rgba(111,128,110,.055)}
   .hero-row p{font-size:12px}
   .metric-value{font-size:22px}
 }
+
+
+/* Runtime observability: distinguish healthy standby from actual outage. */
+.runtime-banner{display:flex;align-items:center;gap:14px;padding:13px 16px;margin:10px 0 14px;border:1px solid var(--border);border-radius:16px;background:rgba(251,250,247,.86);box-shadow:0 8px 22px rgba(45,55,48,.04)}
+.runtime-banner-icon{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;flex:0 0 32px;background:rgba(111,128,110,.12);color:var(--accent-strong)}
+.runtime-banner-copy{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}.runtime-banner-copy strong{font-size:15px;letter-spacing:.02em;color:var(--text-strong)}.runtime-banner-copy span{font-size:13px;color:var(--text);opacity:.78;line-height:1.45}.runtime-banner-meta{display:flex;flex-direction:column;align-items:flex-end;gap:3px;font-size:10px;letter-spacing:.09em;color:var(--muted);white-space:nowrap}.runtime-chip{font-weight:700;letter-spacing:.04em}.runtime-active .runtime-banner-icon{background:rgba(92,125,91,.14);color:#55785a}.runtime-standby .runtime-banner-icon{background:rgba(172,150,109,.14);color:#8f774f}.runtime-degraded .runtime-banner-icon{background:rgba(173,110,105,.14);color:#a15f5b}.runtime-offline .runtime-banner-icon{background:rgba(117,117,117,.14);color:#757575}.runtime-degraded{border-color:rgba(173,110,105,.28)}.session-runtime-active{border-color:rgba(92,125,91,.24)}.session-runtime-standby{border-color:rgba(172,150,109,.30)}.session-runtime-degraded{border-color:rgba(173,110,105,.28)}
+@media (max-width:900px){.runtime-banner{align-items:flex-start}.runtime-banner-meta{align-items:flex-start}.session-chip{max-width:100%}}
