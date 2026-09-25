@@ -1,0 +1,35 @@
+name: LUNA code quality
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - "app/**"
+      - "lib/**"
+      - "package.json"
+      - ".github/workflows/luna-code-quality.yml"
+  push:
+    branches: [master]
+    paths:
+      - "app/**"
+      - "lib/**"
+      - "package.json"
+
+concurrency:
+  group: luna-code-quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Typecheck and build
+        run: npm run check
