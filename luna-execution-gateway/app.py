@@ -920,7 +920,8 @@ def _run_supervisor():
         if not SYMBOLS:
             _selected_provider = None
             _collector_error = "SETTRADE_REALTIME_SYMBOLS is empty"
-            time.sleep(CREDENTIAL_RETRY_SEC)            continue
+            time.sleep(CREDENTIAL_RETRY_SEC)
+            continue
 
         attempted = []
         ran = False
