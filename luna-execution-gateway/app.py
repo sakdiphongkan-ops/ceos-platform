@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from typing import Any, Dict, Optional
-from urllib.parse import urlencode
+from urllib.parse import urlencode, quote
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 
@@ -20,7 +20,7 @@ try:
 except Exception:  # pragma: no cover
     Investor = None
 
-APP_VERSION = "0.6.0"
+APP_VERSION = "0.7.0"
 RELEASE_SOURCE_REVISION = (
     os.getenv("LUNA_DEPLOY_SOURCE_SHA")
     or os.getenv("GITHUB_SHA")
@@ -68,6 +68,10 @@ SET_API_POLL_SEC = max(1.0, float(os.getenv("SET_MARKETDATA_POLL_SEC", "2")))
 SET_API_TIMEOUT_SEC = max(2.0, float(os.getenv("SET_MARKETDATA_TIMEOUT_SEC", "8")))
 TOPTRADER_ENABLED = os.getenv("LUNA_TOPTRADER_BACKUP_ENABLED", "true").lower() == "true"
 TOPTRADER_API_BASE = os.getenv("LUNA_TOPTRADER_API_BASE", "https://api.toptrader.co.th/v1/market/tick")
+TOPTRADER_WS_ENABLED = os.getenv("LUNA_TOPTRADER_WS_ENABLED", "true").lower() == "true"
+TOPTRADER_WS_BASE = os.getenv("LUNA_TOPTRADER_WS_BASE", "wss://ws.toptrader.co.th/market")
+TOPTRADER_WS_CHUNK_SIZE = max(1, min(512, int(os.getenv("LUNA_TOPTRADER_WS_CHUNK_SIZE", "500"))))
+TOPTRADER_WS_RECONNECT_SEC = max(1.0, float(os.getenv("LUNA_TOPTRADER_WS_RECONNECT_SEC", "3")))
 TOPTRADER_POLL_SEC = max(1.0, float(os.getenv("LUNA_TOPTRADER_POLL_SEC", "2")))
 TOPTRADER_TIMEOUT_SEC = max(2.0, float(os.getenv("LUNA_TOPTRADER_TIMEOUT_SEC", "8")))
 
@@ -141,7 +145,9 @@ _collector_error: Optional[str] = None
 _supervisor_started = False
 _selected_provider: Optional[str] = None
 _provider_restarts = 0
-_provider_failures: Dict[str, int] = {"SET_API": 0, "SETTRADE": 0, "TOPTRADER_PUBLIC": 0}
+_provider_failures: Dict[str, int] = {"SET_API": 0, "SETTRADE": 0, "TOPTRADER_WS": 0, "TOPTRADER_PUBLIC": 0}
+_toptrader_ws_lock = threading.Lock()
+_toptrader_ws_seen: set[str] = set()
 
 _channel_status: Dict[str, Dict[str, Any]] = {
     "price": {"running": False, "restarts": 0, "last_start": None, "last_error": None},
@@ -578,6 +584,94 @@ def _epoch_to_iso(value: Any) -> Optional[str]:
         return None
 
 
+def _toptrader_ws_message(message: str):
+    try:
+        msg = json.loads(message)
+    except Exception:
+        return
+    if not isinstance(msg, dict):
+        return
+    data = msg.get("data") if isinstance(msg.get("data"), dict) else msg
+    stream = str(msg.get("stream") or "")
+    event_type = str(msg.get("type") or "").lower()
+    symbol = str(msg.get("symbol") or data.get("symbol") or "").upper()
+    if not symbol and "@" in stream:
+        symbol = stream.split("@", 1)[0].upper()
+    if symbol not in SYMBOLS:
+        return
+    if event_type == "tick" or stream.endswith("@tick"):
+        _quote_payload(symbol=symbol, last=data.get("last"), bid=data.get("bid"), ask=data.get("ask"), source="toptrader-public-ws", source_ts=_epoch_to_iso(data.get("datetime")), total_volume=data.get("volume"), raw=data)
+    elif event_type == "book" or stream.endswith("@book"):
+        book = data.get("book") if isinstance(data.get("book"), list) else []
+        bid = ask = bid_size = ask_size = None
+        for level in book:
+            if not isinstance(level, dict):
+                continue
+            side = str(level.get("type") or "").lower()
+            if side == "buy" and bid is None:
+                bid, bid_size = level.get("price"), level.get("volume")
+            elif side == "sell" and ask is None:
+                ask, ask_size = level.get("price"), level.get("volume")
+        _quote_payload(symbol=symbol, bid=bid, ask=ask, bid_size=bid_size, ask_size=ask_size, source="toptrader-public-ws", source_ts=_epoch_to_iso(data.get("datetime")), raw=data)
+    with _toptrader_ws_lock:
+        _toptrader_ws_seen.add(symbol)
+
+
+async def _toptrader_ws_consume(chunk: list[str], index: int):
+    if websockets is None:
+        raise ProviderUnavailable("toptrader_websockets_dependency_unavailable")
+    encoded = quote(",".join(chunk), safe=",")
+    uri = TOPTRADER_WS_BASE + "?symbols=" + encoded
+    print("LUNA_MARKETDATA toptrader_ws_connect chunk=" + str(index) + " symbols=" + str(len(chunk)), flush=True)
+    async with websockets.connect(uri, ping_interval=20, ping_timeout=20, close_timeout=5, max_size=2_000_000) as ws:
+        async for message in ws:
+            _toptrader_ws_message(message)
+
+
+def _toptrader_ws_worker(chunk: list[str], index: int):
+    retry = TOPTRADER_WS_RECONNECT_SEC
+    while True:
+        try:
+            asyncio.run(_toptrader_ws_consume(chunk, index))
+        except Exception as exc:
+            _provider_failures["TOPTRADER_WS"] += 1
+            print("LUNA_MARKETDATA toptrader_ws_error chunk=" + str(index) + " error=" + str(exc), flush=True)
+            time.sleep(retry)
+            retry = min(RECONNECT_MAX_SEC, retry * 2)
+        else:
+            retry = TOPTRADER_WS_RECONNECT_SEC
+
+
+def _run_toptrader_ws():
+    global _collector_error, _selected_provider, _provider_restarts
+    if not TOPTRADER_ENABLED or not TOPTRADER_WS_ENABLED:
+        raise ProviderUnavailable("toptrader_ws_backup_disabled")
+    if websockets is None:
+        raise ProviderUnavailable("toptrader_websockets_dependency_unavailable")
+    if not SYMBOLS:
+        raise ProviderUnavailable("SETTRADE_REALTIME_SYMBOLS is empty")
+    _selected_provider = "TOPTRADER_WS"
+    _provider_restarts += 1
+    chunks = [SYMBOLS[i:i + TOPTRADER_WS_CHUNK_SIZE] for i in range(0, len(SYMBOLS), TOPTRADER_WS_CHUNK_SIZE)]
+    with _toptrader_ws_lock:
+        _toptrader_ws_seen.clear()
+    print("LUNA_MARKETDATA provider_start provider=TOPTRADER_WS symbols=" + str(len(SYMBOLS)) + " connections=" + str(len(chunks)) + " bid_offer=" + str(REALTIME_BOOK), flush=True)
+    for index, chunk in enumerate(chunks, start=1):
+        threading.Thread(target=_toptrader_ws_worker, args=(chunk, index), daemon=True).start()
+    started = time.monotonic()
+    while True:
+        time.sleep(2)
+        with _toptrader_ws_lock:
+            seen = len(_toptrader_ws_seen)
+        age = _latest_quote_age_sec()
+        coverage = (seen / len(SYMBOLS)) if SYMBOLS else 0.0
+        print("LUNA_MARKETDATA toptrader_ws_snapshot seen=" + str(seen) + " target=" + str(len(SYMBOLS)) + " coverage=" + f"{coverage:.3f}" + " latest_age=" + str(age), flush=True)
+        if seen > 0 and age is not None and age <= STALE_AFTER_SEC:
+            _collector_error = None
+        elif time.monotonic() - started >= 30:
+            raise ProviderUnavailable("toptrader_ws_no_fresh_quotes")
+
+
 def _fetch_toptrader_public():
     if not TOPTRADER_ENABLED:
         raise ProviderUnavailable("toptrader_backup_disabled")
@@ -954,13 +1048,15 @@ def _run_settrade_session():
 
 def _provider_order():
     if PROVIDER_MODE == "SETTRADE":
-        order = ["SETTRADE", "TOPTRADER_PUBLIC", "SET_API"]
+        order = ["SETTRADE", "TOPTRADER_WS", "TOPTRADER_PUBLIC", "SET_API"]
     elif PROVIDER_MODE == "SET_API":
-        order = ["SET_API", "SETTRADE", "TOPTRADER_PUBLIC"]
+        order = ["SET_API", "SETTRADE", "TOPTRADER_WS", "TOPTRADER_PUBLIC"]
+    elif PROVIDER_MODE == "TOPTRADER_WS":
+        order = ["TOPTRADER_WS", "TOPTRADER_PUBLIC", "SETTRADE", "SET_API"]
     elif PROVIDER_MODE == "TOPTRADER_PUBLIC":
-        order = ["TOPTRADER_PUBLIC", "SETTRADE", "SET_API"]
+        order = ["TOPTRADER_PUBLIC", "TOPTRADER_WS", "SETTRADE", "SET_API"]
     else:
-        order = ["SETTRADE", "TOPTRADER_PUBLIC", "SET_API"]
+        order = ["SETTRADE", "TOPTRADER_WS", "TOPTRADER_PUBLIC", "SET_API"]
     if PUBLIC_FALLBACK_ENABLED:
         order.append("TRADINGVIEW_PUBLIC")
     return order
@@ -971,6 +1067,8 @@ def _provider_available(name: str):
         return set_api_configured()
     if name == "SETTRADE":
         return settrade_configured()
+    if name == "TOPTRADER_WS":
+        return TOPTRADER_ENABLED and TOPTRADER_WS_ENABLED and websockets is not None
     if name == "TOPTRADER_PUBLIC":
         return TOPTRADER_ENABLED
     if name == "TRADINGVIEW_PUBLIC":
@@ -1009,6 +1107,8 @@ def _run_supervisor():
                     _run_set_api()
                 elif provider == "SETTRADE":
                     _run_settrade_session()
+                elif provider == "TOPTRADER_WS":
+                    _run_toptrader_ws()
                 elif provider == "TOPTRADER_PUBLIC":
                     _run_toptrader_public()
                 elif provider == "TRADINGVIEW_PUBLIC":
@@ -1126,6 +1226,8 @@ def health():
         "set_api_configured": set_api_configured(),
         "settrade_configured": settrade_configured(),
         "toptrader_backup_enabled": TOPTRADER_ENABLED,
+        "toptrader_ws_enabled": TOPTRADER_WS_ENABLED,
+        "toptrader_ws_dependency_available": websockets is not None,
         "public_fallback_enabled": PUBLIC_FALLBACK_ENABLED,
         "realtime_marketdata_enabled": REALTIME_ENABLED,
         "realtime_bid_offer_enabled": REALTIME_BOOK,
