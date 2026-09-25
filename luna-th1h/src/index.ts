@@ -15,6 +15,7 @@ import {assessQuoteQuality} from "./data-quality.js";
 
 const EXECUTION_TEST_VERSION="luna-th1h-execution-test-0.1.0";
 
+const runtimeOwner=crypto.randomUUID();
 let sessionId:string|null=null;
 let sessionDate:string|null=null;
 let auditChain="GENESIS";
@@ -105,12 +106,15 @@ async function ingest(path:string,body:Record<string,unknown>,agentRequired=true
     "Authorization":`Bearer ${config.supabaseAnonKey}`
   };
   if(agentRequired) headers["x-luna-agent"]=config.lunaAgentKey;
+  const requestBody=agentRequired
+    ? {...body,runtime_owner:runtimeOwner}
+    : body;
 
   let lastError:unknown;
   for(let attempt=1;attempt<=3;attempt++){
     try{
       const res=await fetch(`${config.supabaseFunctionUrl}/${path}`,{
-        method:"POST",headers,body:JSON.stringify(body),
+        method:"POST",headers,body:JSON.stringify(requestBody),
         signal:AbortSignal.timeout(config.supabaseRequestTimeoutMs)
       });
       const text=await res.text();
