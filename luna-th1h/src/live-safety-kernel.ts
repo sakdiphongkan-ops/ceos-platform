@@ -28,6 +28,8 @@ export type LiveSafetyInput={
   nowMs?:number;
 };
 
+const LIVE_SAFETY_APPROVAL=Symbol("LUNA_LIVE_SAFETY_APPROVAL");
+export type LiveSafetyApproval={readonly [LIVE_SAFETY_APPROVAL]:true;issuedAtMs:number};
 export type LiveSafetyDecision={ok:true}|{ok:false;reason:string};
 
 export type LiveSafetyStatus={
@@ -80,6 +82,12 @@ export class LiveSafetyKernel{
 
   recordFeedFailure(reason:string,nowMs=Date.now()){
     this.trip(`FEED_FAIL_CLOSED:${reason}`,nowMs);
+  }
+
+  issueApproval(input:LiveSafetyInput):LiveSafetyApproval|LiveSafetyDecision{
+    const decision=this.evaluate(input);
+    if(!decision.ok) return decision;
+    return {[LIVE_SAFETY_APPROVAL]:true,issuedAtMs:Date.now()} as LiveSafetyApproval;
   }
 
   evaluate(input:LiveSafetyInput):LiveSafetyDecision{
