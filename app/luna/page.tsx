@@ -342,6 +342,40 @@ export default function LunaPortfolioPage() {
       ? Math.max(0,Math.round(Number(marketFeed.latest_age_ms))) + " ms old"
       : "age unavailable";
 
+  type RuntimeState = "ACTIVE" | "STANDBY" | "DEGRADED" | "OFFLINE";
+  const runtimeState:RuntimeState = !live
+    ? "OFFLINE"
+    : error
+      ? "DEGRADED"
+      : sessionIsToday && realtimeFresh
+        ? "ACTIVE"
+        : "STANDBY";
+
+  const runtimeLabel = ({
+    ACTIVE:"SYSTEM ACTIVE",
+    STANDBY:"SYSTEM ONLINE · STANDBY",
+    DEGRADED:"SYSTEM DEGRADED",
+    OFFLINE:"SYSTEM OFFLINE"
+  } as const)[runtimeState];
+
+  const runtimeDetail = runtimeState==="ACTIVE"
+    ? "API connected · today's trading session is open · fresh market ticks are arriving."
+    : runtimeState==="DEGRADED"
+      ? realtimeAgeMs!=null
+        ? "API connected · market stream is not fresh right now. No new execution should be assumed."
+        : "API connected · a runtime check needs attention. Review the control room below."
+      : runtimeState==="STANDBY"
+        ? marketPhase==="ACTIVE" || marketPhase==="REDUCE_ONLY" || marketPhase==="FORCE_CLOSE"
+          ? "API is healthy, but today's runtime session is not OPEN yet. This is standby, not an API error."
+          : "API is healthy and ready. No trading session is running because the market is not in an active execution phase."
+        : "The LUNA API could not be reached. This is the only state shown as OFFLINE.";
+
+  const runtimeShort = ({
+    ACTIVE:"ACTIVE",
+    STANDBY:"STANDBY",
+    DEGRADED:"CHECK",
+    OFFLINE:"OFFLINE"
+  } as const)[runtimeState];
 
   return <main className="luna-shell">
     <header className="topbar">
@@ -355,16 +389,22 @@ export default function LunaPortfolioPage() {
       <div className="top-actions">
         <div className={`market-status phase-${marketPhase.toLowerCase()}`}><CircleDot size={11}/> SET · {marketPhaseLabel(marketPhase)}</div><div className="timeframe-chip"><BarChart3 size={13}/> {TIMEFRAME}</div>
         <button className={"icon-button "+(refreshing?"refreshing":"")} title={refreshing?"Refreshing LUNA feed…":"Refresh LUNA feed"} aria-label={refreshing?"Refreshing LUNA feed":"Refresh LUNA feed"} onClick={load} disabled={refreshing}><RefreshCw size={17}/><span className="refresh-label">{refreshing?"Refreshing":"Refresh"}</span></button>
-        <div className="session-chip"><Clock3 size={14}/> {todaySessionDate} · {bangkokClock(clock)} · {realtimeFresh ? "REALTIME TICK" : live ? "STREAM STALE · UPDATED "+updatedAt : "OFFLINE"}</div>
+        <div className={`session-chip session-runtime-${runtimeState.toLowerCase()}`}><Clock3 size={14}/> {todaySessionDate} · {bangkokClock(clock)} · {runtimeState==="ACTIVE" ? "SYSTEM ACTIVE · REALTIME" : runtimeState==="STANDBY" ? "ONLINE · STANDBY" : runtimeState==="DEGRADED" ? "ONLINE · CHECK" : "OFFLINE"}</div>
       </div>
     </header>
     <div className="page">
-      <section className="hero-row"><div><div className="eyebrow">INTRADAY CONTROL · OPERATIONAL OVERVIEW</div><h2>LUNA command center</h2><p>See capital, risk, execution and research state at a glance.</p></div><div className="hero-meta"><div className="data-chip"><span className="data-dot"/> {live ? "API CONNECTED" : "API OFFLINE"}</div><div className="safe-badge"><ShieldCheck size={15}/> {liveExecution ? "LIVE EXECUTION" : "PAPER EXECUTION"} / {killSwitch ? "KILL SWITCH ON" : liveExecution && marketPhase==="ACTIVE" ? "GATE OPEN" : "MARKET LOCKED"}</div></div></section>
+      <section className="hero-row"><div><div className="eyebrow">INTRADAY CONTROL · OPERATIONAL OVERVIEW</div><h2>LUNA command center</h2><p>See capital, risk, execution and research state at a glance.</p></div><div className="hero-meta"><div className={`data-chip runtime-chip runtime-${runtimeState.toLowerCase()}`}><span className="data-dot"/>{runtimeLabel}</div><div className="safe-badge"><ShieldCheck size={15}/> {liveExecution ? "LIVE EXECUTION" : "PAPER EXECUTION"} / {killSwitch ? "KILL SWITCH ON" : liveExecution && marketPhase==="ACTIVE" ? "GATE OPEN" : "MARKET LOCKED"}</div></div></section>
+      <section className={`runtime-banner runtime-${runtimeState.toLowerCase()}`} aria-live="polite">
+        <div className="runtime-banner-icon"><CircleDot size={15}/></div>
+        <div className="runtime-banner-copy"><strong>{runtimeLabel}</strong><span>{runtimeDetail}</span></div>
+        <div className="runtime-banner-meta"><span>API {live ? "CONNECTED" : "UNREACHABLE"}</span><span>LAST SYNC {updatedAt}</span></div>
+      </section>
       <SystemControlRoom strategy={session?.strategy_version ?? LUNA_STRATEGY} asOf={todaySessionDate} />
       <section className="live-operating-strip">
         <div className={`market-phase-cell phase-${marketPhase.toLowerCase()}`}><span>MARKET / SET</span><strong>{marketPhaseLabel(marketPhase)}</strong><small>{bangkokClock(clock)} · {marketPhaseHint(marketPhase)}</small></div>
         <div><span>EXECUTION MODE</span><strong>{executionMode}</strong><small>{liveExecution ? "live gate open" : "paper only"}</small></div>
         <div><span>KILL SWITCH</span><strong>{killSwitch ? "ON" : "OFF"}</strong><small>{armed ? "armed" : "disarmed"}</small></div>
+        <div><span>RUNTIME</span><strong>{runtimeShort}</strong><small>{sessionIsToday ? "today's session detected" : "no open session today"}</small></div>
         <div><span>LIVE ORDER GATE</span><strong>{liveExecution ? "READY" : "LOCKED"}</strong><small>broker bridge status</small></div>
         <div><span>MARKET FEED</span><strong>{realtimeFresh ? "REALTIME STREAM" : realtimeAgeMs!=null ? "STREAM STALE" : marketFeedLabel}</strong><small>{realtimeFresh ? "public WS · " + marketFeedAge : realtimeAgeMs!=null ? "last UI tick · " + marketFeedAge : marketFeedSource + " · " + marketFeedAge}</small></div><div className="live-operating-note"><ShieldCheck size={15}/><span>{marketPhase==="ACTIVE" ? "Market session active — backend re-checks phase immediately before every execution." : "Market execution is locked at this phase; stale signals are shown as HOLD until a fresh in-session signal arrives."}</span></div>
       </section>
