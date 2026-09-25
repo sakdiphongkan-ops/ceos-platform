@@ -336,7 +336,6 @@ export default function LunaPortfolioPage() {
       ? Math.max(0,Math.round(Number(marketFeed.latest_age_ms))) + " ms old"
       : "age unavailable";
 
-  type RuntimeState = "ACTIVE" | "STANDBY" | "DEGRADED" | "OFFLINE";
   const backendRuntime=runtimeStatus?.runtime;
   const backendStrategy=String(backendRuntime?.strategy_version??backendRuntime?.session?.strategy_version??"");
   const strategyMismatch=Boolean(backendStrategy && backendStrategy!==LUNA_STRATEGY);
@@ -506,9 +505,7 @@ function SystemControlRoom({strategy,asOf}:{strategy:string;asOf:string}) {
     }
     setLoading(true); setError("");
     try{
-      const res=await fetch(`${LUNA_API}?view=latest_control&strategy=${encodeURIComponent(strategy)}`,{cache:"no-store"});
-      if(!res.ok) throw new Error(`Control API ${res.status}`);
-      const data=await res.json();
+      const data=await fetchControlRoom(strategy);
       if(!data.ok) throw new Error("LUNA control API returned partial data");
       setState(data);
     }catch(e){setError(e instanceof Error?e.message:"Unable to load LUNA control state");}
