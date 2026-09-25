@@ -17,6 +17,10 @@ export type LiveSafetyInput={
   qty:number;
   referencePrice:number;
   maxOrderNotional:number;
+  maxDailyLoss:number;
+  dailyPnl:number;
+  maxDailyTurnover:number;
+  dailyTurnover:number;
   quoteMaxAgeMs:number;
   maxQuoteDeviationBps:number;
   maxClockSkewMs:number;
@@ -109,6 +113,8 @@ export class LiveSafetyKernel{
     if(input.side==="BUY" && input.marketPhase!=="ACTIVE"){
       return {ok:false,reason:`BUY_PHASE_BLOCK:${input.marketPhase}`};
     }
+    if(input.dailyPnl<=-Math.abs(input.maxDailyLoss)) return {ok:false,reason:"LIVE_MAX_DAILY_LOSS"};
+    if(input.dailyTurnover>=input.maxDailyTurnover) return {ok:false,reason:"LIVE_MAX_DAILY_TURNOVER"};
     if(!Number.isFinite(input.qty) || input.qty<=0) return {ok:false,reason:"LIVE_INVALID_QTY"};
     if(!Number.isFinite(input.referencePrice) || input.referencePrice<=0){
       return {ok:false,reason:"LIVE_INVALID_REFERENCE_PRICE"};
