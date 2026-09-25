@@ -426,7 +426,7 @@ export default function LunaPortfolioPage() {
       ? "DEGRADED"
       : marketPhase==="BREAK"
         ? "STANDBY"
-        : backendRuntimeLive
+        : backendRuntimeFresh
           ? "ACTIVE"
           : marketPhase==="CLOSED"
             ? "STANDBY"
@@ -480,6 +480,8 @@ export default function LunaPortfolioPage() {
       : killSwitch
         ? "PAPER EXECUTION / KILL SWITCH ON"
         : "PAPER EXECUTION / LIVE ORDER LOCKED";
+  const killSwitchDisplay=feed ? (killSwitch ? "ON" : "OFF") : "LOCKED";
+  const killSwitchDetail=feed ? (armed ? "armed" : "disarmed") : "awaiting backend";
 
   return <main className="luna-shell">
     <header className="topbar">
@@ -507,7 +509,7 @@ export default function LunaPortfolioPage() {
       <section className="live-operating-strip">
         <div className={`market-phase-cell phase-${marketPhase.toLowerCase()}`}><span>MARKET / SET</span><strong>{marketPhaseLabel(marketPhase)}</strong><small>{bangkokClock(clock)} · {marketPhaseHint(marketPhase)}</small></div>
         <div><span>EXECUTION MODE</span><strong>{executionMode}</strong><small>{liveExecution ? "live gate open" : "paper only"}</small></div>
-        <div><span>KILL SWITCH</span><strong>{killSwitch ? "ON" : "OFF"}</strong><small>{armed ? "armed" : "disarmed"}</small></div>
+        <div><span>KILL SWITCH</span><strong>{killSwitchDisplay}</strong><small>{killSwitchDetail}</small></div>
         <div><span>RUNTIME</span><strong>{runtimeShort}</strong><small>{sessionIsToday ? "today's session detected" : "no open session today"}</small></div>
         <div><span>LIVE ORDER GATE</span><strong>{liveExecution ? "READY" : "LOCKED"}</strong><small>broker bridge status</small></div>
         <div><span>MARKET FEED</span><strong>{realtimeFresh ? "REALTIME STREAM" : realtimeAgeMs!=null ? "STREAM STALE" : marketFeedLabel}</strong><small>{realtimeFresh ? "public WS · " + marketFeedAge : realtimeAgeMs!=null ? "last UI tick · " + marketFeedAge : marketFeedSource + " · " + marketFeedAge}</small></div><div><span>SHADOW ENGINE</span><strong>{shadow ? `${shadow.buy_candidates??0} BUY · ${shadow.sell_candidates??0} SELL` : "SYNCING"}</strong><small>{shadow?.blockers?.length ? shadow.blockers.join(" · ") : "v1.4 observe · no order"}</small></div><div className="live-operating-note"><ShieldCheck size={15}/><span>{marketPhase==="ACTIVE" ? "Market session active — backend re-checks phase immediately before every execution." : "Market execution is locked at this phase; stale signals are shown as HOLD until a fresh in-session signal arrives."}</span></div>
