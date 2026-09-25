@@ -49,6 +49,26 @@ const LUNA_PUBLIC_MARKET_STREAM =
 const LUNA_STRATEGY = "luna-th1h-v1.4.0-15m-riskgated";
 const TIMEFRAME = "15m";
 
+type RuntimeStatus = {
+  ok?: boolean;
+  generated_at?: string;
+  runtime?: {
+    state?: string;
+    system_state?: string;
+    session?: { id?: string; session_date?: string; mode?: string; strategy_version?: string; status?: string };
+    strategy_version?: string;
+    latest_source?: string | null;
+    latest_age_ms?: number | null;
+    latest_tick_ts?: string | null;
+    ticks_10s?: number;
+    ticks_30s?: number;
+    ticks_2m?: number;
+    symbols_30s?: number;
+    bid_ask_ticks_30s?: number;
+  };
+  error?: { message?: string };
+};
+
 type RealtimeQuote = {
   symbol: string;
   ts?: string;
@@ -141,18 +161,26 @@ export default function LunaPortfolioPage() {
   const [realtimeConnected,setRealtimeConnected]=useState(false);
   const [lastRealtimeTickAt,setLastRealtimeTickAt]=useState<number|null>(null);
   const [clock,setClock]=useState(()=>new Date());
+  const [runtimeStatus,setRuntimeStatus]=useState<RuntimeStatus|null>(null);
 
   const load=useCallback(async()=>{
     setRefreshing(true); setError("");
     try{
       const asOf=bangkokDate(new Date());
-      const res=await fetch(`${LUNA_API}?limit=100&strategy=${encodeURIComponent(LUNA_STRATEGY)}&as_of=${encodeURIComponent(asOf)}`,{cache:"no-store"});
-      if(!res.ok) throw new Error(`API ${res.status}`);
-      const data=await res.json() as LunaFeed;
+      const [feedRes,runtimeRes]=await Promise.all([
+        fetch(`${LUNA_API}?limit=100&strategy=${encodeURIComponent(LUNA_STRATEGY)}&as_of=${encodeURIComponent(asOf)}`,{cache:"no-store"}),
+        fetch(`${LUNA_API}?view=runtime_status&as_of=${encodeURIComponent(asOf)}`,{cache:"no-store"})
+      ]);
+      if(!feedRes.ok) throw new Error(`API ${feedRes.status}`);
+      const data=await feedRes.json() as LunaFeed;
+      const runtime=runtimeRes.ok ? await runtimeRes.json() as RuntimeStatus : {ok:false,error:{message:`Runtime API ${runtimeRes.status}`}};
       setFeed(data);
+      setRuntimeStatus(runtime);
+      const runtimeError=!runtimeRes.ok || runtime?.ok===false;
       if(data.errors?.length) setError("Feed returned partial data");
+      else if(runtimeError) setError(runtime?.error?.message??"Runtime health check unavailable");
       setLive(true);
-    }catch(e){ setLive(false); setError(e instanceof Error?e.message:"Unable to load LUNA feed"); }
+    }catch(e){ setLive(false); setRuntimeStatus(null); setError(e instanceof Error?e.message:"Unable to load LUNA feed"); }
     finally{
       setLoading(false);
       setRefreshing(false);
@@ -343,31 +371,40 @@ export default function LunaPortfolioPage() {
       : "age unavailable";
 
   type RuntimeState = "ACTIVE" | "STANDBY" | "DEGRADED" | "OFFLINE";
+  const backendRuntime=runtimeStatus?.runtime;
+  const backendStrategy=String(backendRuntime?.strategy_version??backendRuntime?.session?.strategy_version??"");
+  const strategyMismatch=Boolean(backendStrategy && backendStrategy!==LUNA_STRATEGY);
+  const runtimeAgeMs=Number.isFinite(Number(backendRuntime?.latest_age_ms)) ? Math.max(0,Number(backendRuntime?.latest_age_ms)) : null;
+  const backendRuntimeFresh=backendRuntime?.state==="LIVE" && runtimeAgeMs!=null && runtimeAgeMs<=5000 && Number(backendRuntime?.ticks_30s??0)>0;
   const runtimeState:RuntimeState = !live
     ? "OFFLINE"
     : error
       ? "DEGRADED"
-      : sessionIsToday && realtimeFresh
+      : backendRuntimeFresh
         ? "ACTIVE"
-        : "STANDBY";
+        : backendRuntime?.state==="NO_OPEN_SESSION" || !backendRuntime?.session
+          ? "STANDBY"
+          : "DEGRADED";
 
   const runtimeLabel = ({
-    ACTIVE:"SYSTEM ACTIVE",
+    ACTIVE:"SYSTEM ACTIVE · PAPER RUNTIME",
     STANDBY:"SYSTEM ONLINE · STANDBY",
     DEGRADED:"SYSTEM DEGRADED",
     OFFLINE:"SYSTEM OFFLINE"
   } as const)[runtimeState];
 
   const runtimeDetail = runtimeState==="ACTIVE"
-    ? "API connected · today's trading session is open · fresh market ticks are arriving."
+    ? strategyMismatch
+      ? `Server runtime is active and ingesting market data, but the active runtime strategy is ${backendStrategy}; the control panel is scoped to ${LUNA_STRATEGY}. This is a strategy-alignment warning, not an API outage.`
+      : `Server runtime is active · fresh backend ticks are arriving every cycle · latest source ${backendRuntime?.latest_source??"unknown"}.`
     : runtimeState==="DEGRADED"
-      ? realtimeAgeMs!=null
-        ? "API connected · market stream is not fresh right now. No new execution should be assumed."
-        : "API connected · a runtime check needs attention. Review the control room below."
+      ? backendRuntime?.state==="LIVE" && runtimeAgeMs!=null
+        ? `Server runtime exists, but the latest backend tick is ${Math.round(runtimeAgeMs)} ms old. Treat the feed as degraded until freshness recovers.`
+        : "API is reachable, but the runtime health check is not yet healthy. Review the control room before assuming execution readiness."
       : runtimeState==="STANDBY"
-        ? marketPhase==="ACTIVE" || marketPhase==="REDUCE_ONLY" || marketPhase==="FORCE_CLOSE"
-          ? "API is healthy, but today's runtime session is not OPEN yet. This is standby, not an API error."
-          : "API is healthy and ready. No trading session is running because the market is not in an active execution phase."
+        ? (marketPhase==="ACTIVE" || marketPhase==="REDUCE_ONLY" || marketPhase==="FORCE_CLOSE")
+          ? "API is healthy, but there is no active server session. This is standby, not an API outage."
+          : "API is healthy and ready. No trading session is running because the market is outside the execution window."
         : "The LUNA API could not be reached. This is the only state shown as OFFLINE.";
 
   const runtimeShort = ({
@@ -389,7 +426,7 @@ export default function LunaPortfolioPage() {
       <div className="top-actions">
         <div className={`market-status phase-${marketPhase.toLowerCase()}`}><CircleDot size={11}/> SET · {marketPhaseLabel(marketPhase)}</div><div className="timeframe-chip"><BarChart3 size={13}/> {TIMEFRAME}</div>
         <button className={"icon-button "+(refreshing?"refreshing":"")} title={refreshing?"Refreshing LUNA feed…":"Refresh LUNA feed"} aria-label={refreshing?"Refreshing LUNA feed":"Refresh LUNA feed"} onClick={load} disabled={refreshing}><RefreshCw size={17}/><span className="refresh-label">{refreshing?"Refreshing":"Refresh"}</span></button>
-        <div className={`session-chip session-runtime-${runtimeState.toLowerCase()}`}><Clock3 size={14}/> {todaySessionDate} · {bangkokClock(clock)} · {runtimeState==="ACTIVE" ? "SYSTEM ACTIVE · REALTIME" : runtimeState==="STANDBY" ? "ONLINE · STANDBY" : runtimeState==="DEGRADED" ? "ONLINE · CHECK" : "OFFLINE"}</div>
+        <div className={`session-chip session-runtime-${runtimeState.toLowerCase()}`}><Clock3 size={14}/> {todaySessionDate} · {bangkokClock(clock)} · {runtimeState==="ACTIVE" ? (realtimeFresh ? "SYSTEM ACTIVE · UI REALTIME" : "SYSTEM ACTIVE · SERVER") : runtimeState==="STANDBY" ? "ONLINE · STANDBY" : runtimeState==="DEGRADED" ? "ONLINE · CHECK" : "OFFLINE"}</div>
       </div>
     </header>
     <div className="page">
@@ -397,7 +434,7 @@ export default function LunaPortfolioPage() {
       <section className={`runtime-banner runtime-${runtimeState.toLowerCase()}`} aria-live="polite">
         <div className="runtime-banner-icon"><CircleDot size={15}/></div>
         <div className="runtime-banner-copy"><strong>{runtimeLabel}</strong><span>{runtimeDetail}</span></div>
-        <div className="runtime-banner-meta"><span>API {live ? "CONNECTED" : "UNREACHABLE"}</span><span>LAST SYNC {updatedAt}</span></div>
+        <div className="runtime-banner-meta"><span>API {live ? "CONNECTED" : "UNREACHABLE"}</span><span>BACKEND {backendRuntime?.state??"UNKNOWN"}</span><span>LAST TICK {runtimeAgeMs!=null ? Math.round(runtimeAgeMs)+" ms" : "—"}</span></div>
       </section>
       <SystemControlRoom strategy={session?.strategy_version ?? LUNA_STRATEGY} asOf={todaySessionDate} />
       <section className="live-operating-strip">
