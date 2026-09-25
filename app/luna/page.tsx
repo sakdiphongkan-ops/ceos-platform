@@ -367,7 +367,7 @@ export default function LunaPortfolioPage() {
 
 
 function SystemControlRoom({strategy,asOf}:{strategy:string;asOf:string}) {
-  const [state,setState]=useState<any|null>(null);
+  const [state,setState]=useState<ControlRoomState|null>(null);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
 
@@ -491,7 +491,7 @@ function SignalBadge({signal,large=false}:{signal:"BUY"|"SELL"|"HOLD";large?:boo
 function SideBadge({side}:{side:"BUY"|"SELL"}) { return <span className={`side-badge ${side.toLowerCase()}`}>{side}</span>; }
 function StatusBadge({status}:{status:string}) { return <span className={`status-badge ${status.toLowerCase()}`}>{status}</span>; }
 function ResearchPanel() {
-  const [data, setData] = useState<any|null>(null);
+  const [data, setData] = useState<Tournament100Result|null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showAll, setShowAll] = useState(false);
@@ -500,9 +500,7 @@ function ResearchPanel() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/backtest/tournament100?mode=signal&universe=full", { cache: "no-store" });
-      if (!res.ok) throw new Error(`Backtest API ${res.status}`);
-      const json = await res.json();
+      const json = await fetchTournament100("signal", "full");
       setData(json);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unable to load research results");
