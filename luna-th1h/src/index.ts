@@ -12,7 +12,7 @@ import {TelemetryQueue} from "./telemetry-queue.js";
 import {latencyMetrics,type LatencyLedger} from "./latency-ledger.js";
 import {M1_ORTHOGONAL_L2_VERSION,applyM1OverlayToSignal} from "./m1-overlay.js";
 import {assessQuoteQuality} from "./data-quality.js";
-import {LiveSafetyKernel} from "./live-safety-kernel.js";
+import {LiveSafetyKernel,type LiveSafetyApproval} from "./live-safety-kernel.js";
 
 const EXECUTION_TEST_VERSION="luna-th1h-execution-test-0.1.0";
 
@@ -685,7 +685,7 @@ async function executeSignal(
     return;
   }
 
-  let safetyApproval;
+  let safetyApproval:LiveSafetyApproval|undefined;
   if(config.executionMode==="live"){
     try{
       const control=await getExecutionControl();
@@ -733,16 +733,19 @@ async function executeSignal(
         gatewayLiveArmed:gatewayHealth.live_armed,
         hardOrderGateEnabled:config.liveOrderGateEnabled,
       });
-      if("ok" in decision ? !decision.ok : false){
-        queueAudit("LIVE_SAFETY_PREORDER_BLOCK",{
-          trace_id:latencyContext.traceId??null,
-          symbol:q.symbol,side:plan.side,qty:plan.qty,
-          reason:decision.reason,
-          safety:liveSafetyKernel.status()
-        },signal.strategyVersion,expectedSessionId);
-        return;
+      if("ok" in decision){
+        if(!decision.ok){
+          queueAudit("LIVE_SAFETY_PREORDER_BLOCK",{
+            trace_id:latencyContext.traceId??null,
+            symbol:q.symbol,side:plan.side,qty:plan.qty,
+            reason:decision.reason,
+            safety:liveSafetyKernel.status()
+          },signal.strategyVersion,expectedSessionId);
+          return;
+        }
+      }else{
+        safetyApproval=decision;
       }
-      safetyApproval=decision;
     }catch(error){
       liveSafetyKernel.trip("PREORDER_SAFETY_ERROR:"+String(error));
       queueAudit("LIVE_SAFETY_PREORDER_ERROR",{
@@ -771,6 +774,7 @@ async function executeSignal(
     try{
       latencyLedger.submitTs=new Date().toISOString();
       latencyLedgers.set(clientOrderId,latencyLedger);
+      if(!safetyApproval) throw new Error("LIVE_SAFETY_APPROVAL_MISSING");
       const brokerOrder=await placeLiveOrder({
         clientOrderId,
         symbol:plan.symbol,
