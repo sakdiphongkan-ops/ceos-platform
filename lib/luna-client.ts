@@ -175,6 +175,7 @@ export class LunaApiError extends Error {
 }
 
 const DEFAULT_TIMEOUT_MS = 4_500;
+const RESEARCH_TIMEOUT_MS = 25_000;
 
 export async function fetchJson<T>(
   input: RequestInfo | URL,
@@ -270,6 +271,8 @@ export async function fetchTournament100(
 ): Promise<Tournament100Result> {
   const response = await fetchJson<Tournament100Result>(
     `/api/backtest/tournament100?mode=${encodeURIComponent(mode)}&universe=${encodeURIComponent(universe)}`,
+    {},
+    RESEARCH_TIMEOUT_MS,
   );
 
   return response;
