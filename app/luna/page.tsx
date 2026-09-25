@@ -50,127 +50,69 @@ export default function LunaPortfolioPage() {
   const [runtimeStatus,setRuntimeStatus]=useState<RuntimeStatus|null>(null);
   const [shadowStatus,setShadowStatus]=useState<ShadowStatus|null>(null);
   const refreshInFlight=useRef(false);
+  const shadowInFlight=useRef(false);
 
   const load=useCallback(async()=>{
-    setRefreshing(true); setError("");
+    if(refreshInFlight.current) return;
+    refreshInFlight.current=true;
+    setRefreshing(true);
+    setError("");
+
     try{
       const asOf=bangkokDate(new Date());
-      const [feedRes,runtimeRes]=await Promise.all([
-        fetch(`${LUNA_API}?view=feed&limit=100&strategy=${encodeURIComponent(LUNA_STRATEGY)}&as_of=${encodeURIComponent(asOf)}`,{cache:"no-store"}),
-        fetch(`${LUNA_API}?view=runtime_status&strategy=${encodeURIComponent(LUNA_STRATEGY)}&as_of=${encodeURIComponent(asOf)}`,{cache:"no-store"})
-      ]);
-      if(!feedRes.ok) throw new Error(`API ${feedRes.status}`);
-      const data=await feedRes.json() as LunaFeed;
-      const runtime=runtimeRes.ok ? await runtimeRes.json() as RuntimeStatus : {ok:false,error:{message:`Runtime API ${runtimeRes.status}`}};
+      const {feed:data,runtime}=await fetchPortfolioState(asOf);
       setFeed(data);
       setRuntimeStatus(runtime);
-      const runtimeError=!runtimeRes.ok || runtime?.ok===false;
-      if(data.errors?.length) setError("Feed returned partial data");
-      else if(runtimeError) setError(runtime?.error?.message??"Runtime health check unavailable");
+
+      const runtimeError=runtime?.ok===false;
+      if(data.errors?.length) {
+        setError("Feed returned partial data");
+      } else if(runtimeError) {
+        setError(runtime?.error?.message??"Runtime health check unavailable");
+      }
       setLive(true);
-    }catch(e){ setLive(false); setRuntimeStatus(null); setError(e instanceof Error?e.message:"Unable to load LUNA feed"); }
-    finally{
+    }catch(e){
+      setLive(false);
+      setRuntimeStatus(null);
+      setError(e instanceof Error ? e.message : "Unable to load LUNA feed");
+    }finally{
+      refreshInFlight.current=false;
       setLoading(false);
       setRefreshing(false);
     }
   },[]);
 
   const loadShadowStatus=useCallback(async()=>{
+    if(shadowInFlight.current) return;
+    shadowInFlight.current=true;
+
     try{
-      const asOf=bangkokDate(new Date());
-      const res=await fetch(LUNA_API+`?view=shadow_status&strategy=${encodeURIComponent(LUNA_STRATEGY)}&as_of=${encodeURIComponent(asOf)}`,{cache:"no-store"});
-      if(!res.ok) return;
-      const data=await res.json() as ShadowStatus;
+      const data=await fetchShadowStatus(bangkokDate(new Date()));
       setShadowStatus(data);
-    }catch{}
+    }catch{
+      // Shadow status is observability-only; do not mark the portfolio offline.
+    }finally{
+      shadowInFlight.current=false;
+    }
   },[]);
 
   useEffect(()=>{
-    load();
-    const id=setInterval(load,5000);
-    return()=>clearInterval(id);
-  },[load]);
-
-  useEffect(()=>{
-    loadShadowStatus();
-    const id=setInterval(loadShadowStatus,15000);
-    return()=>clearInterval(id);
-  },[loadShadowStatus]);
-
-  useEffect(()=>{
-    let socket: WebSocket | null = null;
-    let retryTimer: ReturnType<typeof setTimeout> | null = null;
-    let retryMs = 1000;
-    let stopped = false;
-
-    const connect = () => {
-      if (stopped) return;
-      try {
-        socket = new WebSocket(LUNA_PUBLIC_MARKET_STREAM);
-      } catch {
-        setRealtimeConnected(false);
-        retryTimer = setTimeout(connect, retryMs);
-        retryMs = Math.min(15000, retryMs * 2);
-        return;
-      }
-
-      socket.onopen = () => {
-        retryMs = 1000;
-        // Connection alone is not proof of fresh market data.
-        setRealtimeConnected(false);
-      };
-
-      socket.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data) as {
-            type?: string;
-            quotes?: RealtimeQuote[];
-            quote?: RealtimeQuote;
-          };
-          if (message.type === "snapshot" && Array.isArray(message.quotes)) {
-            const next: Record<string,RealtimeQuote> = {};
-            for (const quote of message.quotes) {
-              if (quote?.symbol) next[quote.symbol] = quote;
-            }
-            setRealtimeQuotes(next);
-            if (message.quotes.length) setLastRealtimeTickAt(Date.now());
-          } else if (message.type === "quote" && message.quote?.symbol) {
-            const quote = message.quote;
-            setRealtimeQuotes((prev) => ({...prev, [quote.symbol]: quote}));
-            setLastRealtimeTickAt(Date.now());
-          }
-        } catch {
-          // Ignore malformed public-stream frames; HTTP remains the source of record.
-        }
-      };
-
-      socket.onclose = () => {
-        if (stopped) return;
-        setRealtimeConnected(false);
-        retryTimer = setTimeout(connect, retryMs);
-        retryMs = Math.min(15000, retryMs * 2);
-      };
-
-      socket.onerror = () => {
-        setRealtimeConnected(false);
-      };
-    };
-
-    connect();
-
-    return () => {
-      stopped = true;
-      if (retryTimer) clearTimeout(retryTimer);
-      socket?.close();
-    };
+    return connectRealtimeMarketStream({
+      url:LUNA_PUBLIC_MARKET_STREAM,
+      onQuotes:(quotes)=>{
+        setRealtimeQuotes((prev)=>({ ...prev, ...quotes }));
+      },
+      onTick:()=>setLastRealtimeTickAt(Date.now()),
+      onConnectionChange:setRealtimeConnected,
+    });
   },[]);
 
   useEffect(()=>{ const id=setInterval(()=>setClock(new Date()),1000); return()=>clearInterval(id); },[]);
 
-  // Require an actually fresh public-stream tick before calling the UI realtime.
+  // A socket connection is not considered realtime until a fresh tick arrives.
   useEffect(()=>{
     const id=setInterval(()=>{
-      setRealtimeConnected(lastRealtimeTickAt!=null && Date.now()-lastRealtimeTickAt<=5000);
+      setRealtimeConnected(isRealtimeFresh(lastRealtimeTickAt));
     },1000);
     return()=>clearInterval(id);
   },[lastRealtimeTickAt]);
