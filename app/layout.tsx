@@ -1,8 +1,8 @@
 import './globals.css';
 
 export const metadata = {
-  title: 'CEOS AI Investment System',
-  description: 'AI driven portfolio intelligence platform',
+  title: 'LUNA-TH1H · Control Room',
+  description: 'LUNA intraday systematic trading control room',
 };
 
 export default function RootLayout({
