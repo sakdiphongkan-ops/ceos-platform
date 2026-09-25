@@ -20,7 +20,7 @@ try:
 except Exception:  # pragma: no cover
     Investor = None
 
-APP_VERSION = "0.5.4"
+APP_VERSION = "0.5.5"
 RELEASE_SOURCE_REVISION = (
     os.getenv("LUNA_DEPLOY_SOURCE_SHA")
     or os.getenv("GITHUB_SHA")
@@ -43,6 +43,7 @@ print(
 
 LIVE_ARMED = os.getenv("LIVE_TRADING_ARMED", "false").lower() == "true"
 GATEWAY_KEY = os.getenv("LUNA_GATEWAY_KEY", "")
+MARKETDATA_INGEST_KEY = os.getenv("LUNA_MARKETDATA_INGEST_KEY") or GATEWAY_KEY
 
 # Market-data providers are selected automatically unless explicitly forced.
 # Priority in AUTO mode:
@@ -83,6 +84,7 @@ APP_CODE = os.getenv("LUNA_SETTRADE_APP_CODE") or os.getenv("SETTRADE_APP_CODE",
 
 REALTIME_ENABLED = os.getenv("REALTIME_MARKETDATA_ENABLED", "false").lower() == "true"
 REALTIME_BOOK = os.getenv("REALTIME_BID_OFFER_ENABLED", "true").lower() == "true"
+INGEST_ENABLED = bool(MARKETDATA_INGEST_KEY)
 PUBLIC_STREAM_ENABLED = os.getenv("LUNA_PUBLIC_STREAM_ENABLED", "true").lower() == "true"
 PUBLIC_STREAM_MAX_CLIENTS = max(1, int(os.getenv("LUNA_PUBLIC_STREAM_MAX_CLIENTS", "50")))
 SYMBOLS = [s.strip().upper() for s in os.getenv("SETTRADE_REALTIME_SYMBOLS", "").split(",") if s.strip()]
@@ -1015,6 +1017,23 @@ class CancelOrder(BaseModel):
     client_order_id: str = Field(min_length=8, max_length=200)
     broker_order_id: str = Field(min_length=1, max_length=200)
 
+class MarketQuote(BaseModel):
+    symbol: str = Field(min_length=1, max_length=32)
+    last: Optional[float] = None
+    bid: Optional[float] = None
+    ask: Optional[float] = None
+    bid_size: Optional[float] = None
+    ask_size: Optional[float] = None
+    source_ts: Optional[Any] = None
+    total_volume: Optional[float] = None
+    source: str = Field(default="settrade-local-bridge", max_length=128)
+    raw: Optional[Dict[str, Any]] = None
+
+
+class MarketQuoteBatch(BaseModel):
+    quotes: list[MarketQuote] = Field(min_length=1, max_length=500)
+
+
 
 @app.get("/health")
 def health():
@@ -1045,6 +1064,7 @@ def health():
         "public_stream_enabled": PUBLIC_STREAM_ENABLED,
         "public_stream_clients": len(_public_stream_clients),
         "public_stream_max_clients": PUBLIC_STREAM_MAX_CLIENTS,
+        "marketdata_ingest_enabled": INGEST_ENABLED,
         "market_phase": market_phase_now(),
         "timestamp": int(time.time()),
     }
@@ -1215,6 +1235,36 @@ def portfolio(x_luna_gateway: Optional[str] = Header(default=None)):
     auth(x_luna_gateway)
     eq = client()
     return {"ok": True, "data": eq.get_portfolio()}
+
+
+@app.post("/marketdata/ingest")
+def marketdata_ingest(payload: MarketQuoteBatch, x_luna_gateway: Optional[str] = Header(default=None)):
+    if not MARKETDATA_INGEST_KEY or x_luna_gateway != MARKETDATA_INGEST_KEY:
+        raise HTTPException(status_code=401, detail="unauthorized")
+    accepted = 0
+    for quote in payload.quotes:
+        symbol = quote.symbol.strip().upper()
+        if not symbol or symbol not in SYMBOLS:
+            continue
+        if all(v is None for v in (quote.last, quote.bid, quote.ask)):
+            continue
+        _quote_payload(
+            symbol=symbol,
+            last=quote.last,
+            bid=quote.bid,
+            ask=quote.ask,
+            bid_size=quote.bid_size,
+            ask_size=quote.ask_size,
+            source=quote.source,
+            source_ts=quote.source_ts,
+            total_volume=quote.total_volume,
+            raw=quote.raw,
+        )
+        accepted += 1
+    global _collector_error
+    if accepted:
+        _collector_error = None
+    return {"ok": True, "accepted": accepted, "received": len(payload.quotes), "source": "luna-local-bridge"}
 
 
 @app.post("/place")
