@@ -50,6 +50,23 @@ LIVE_ARMED = os.getenv("LIVE_TRADING_ARMED", "false").lower() == "true"
 GATEWAY_KEY = os.getenv("LUNA_GATEWAY_KEY", "")
 MARKETDATA_INGEST_KEY = os.getenv("LUNA_MARKETDATA_INGEST_KEY") or GATEWAY_KEY
 
+
+GATEWAY_ORDER_GATE_ENABLED = os.getenv("LUNA_GATEWAY_ORDER_GATE_ENABLED", "false").lower() == "true"
+GATEWAY_KILL_SWITCH = os.getenv("LUNA_GATEWAY_KILL_SWITCH", "true").lower() == "true"
+GATEWAY_MAX_ORDER_NOTIONAL = max(1.0, float(os.getenv("LUNA_GATEWAY_MAX_ORDER_NOTIONAL", "50000")))
+GATEWAY_MAX_ORDERS_PER_MINUTE = max(1, int(os.getenv("LUNA_GATEWAY_MAX_ORDERS_PER_MINUTE", "2")))
+GATEWAY_MAX_QUOTE_AGE_SEC = max(0.1, float(os.getenv("LUNA_GATEWAY_MAX_QUOTE_AGE_SEC", "2")))
+GATEWAY_MAX_PRICE_DEVIATION_BPS = max(1.0, float(os.getenv("LUNA_GATEWAY_MAX_PRICE_DEVIATION_BPS", "75")))
+GATEWAY_BROKER_FAILURE_TRIP_COUNT = max(1, int(os.getenv("LUNA_GATEWAY_BROKER_FAILURE_TRIP_COUNT", "3")))
+GATEWAY_CIRCUIT_RESET_KEY = os.getenv("LUNA_GATEWAY_CIRCUIT_RESET_KEY", "")
+
+_safety_lock = threading.Lock()
+_broker_failure_streak = 0
+_broker_circuit_tripped = False
+_broker_last_failure: Optional[str] = None
+_seen_client_orders: set[str] = set()
+_order_attempt_timestamps: list[float] = []
+
 # Market-data providers are selected automatically unless explicitly forced.
 # Priority in AUTO mode:
 #   1) official SET Market Data API (api-key)
@@ -220,6 +237,127 @@ def live_gate():
         raise HTTPException(status_code=503, detail={"missing_credentials": missing})
     if Investor is None:
         raise HTTPException(status_code=503, detail="settrade_sdk_unavailable")
+
+
+
+
+def _record_broker_failure(reason: str):
+    global _broker_failure_streak, _broker_circuit_tripped, _broker_last_failure
+    with _safety_lock:
+        _broker_failure_streak += 1
+        _broker_last_failure = str(reason)
+        if _broker_failure_streak >= GATEWAY_BROKER_FAILURE_TRIP_COUNT:
+            _broker_circuit_tripped = True
+
+
+def _record_broker_success():
+    global _broker_failure_streak, _broker_last_failure
+    with _safety_lock:
+        _broker_failure_streak = 0
+        _broker_last_failure = None
+
+
+def _safety_snapshot():
+    with _safety_lock:
+        return {
+            "order_gate_enabled": GATEWAY_ORDER_GATE_ENABLED,
+            "kill_switch": GATEWAY_KILL_SWITCH,
+            "broker_failure_streak": _broker_failure_streak,
+            "broker_circuit_tripped": _broker_circuit_tripped,
+            "broker_last_failure": _broker_last_failure,
+            "seen_client_orders": len(_seen_client_orders),
+            "order_attempts_last_minute": len(_order_attempt_timestamps),
+        }
+
+
+def _prune_order_attempts(now: float):
+    cutoff = now - 60.0
+    while _order_attempt_timestamps and _order_attempt_timestamps[0] < cutoff:
+        _order_attempt_timestamps.pop(0)
+
+
+def _hard_order_gate(payload: Any):
+    if not GATEWAY_ORDER_GATE_ENABLED:
+        raise HTTPException(status_code=423, detail={"code": "hard_order_gate_disabled"})
+    if GATEWAY_KILL_SWITCH:
+        raise HTTPException(status_code=423, detail={"code": "gateway_kill_switch_active"})
+    if not LIVE_ARMED:
+        raise HTTPException(status_code=423, detail={"code": "live_trading_not_armed"})
+
+    with _safety_lock:
+        if _broker_circuit_tripped:
+            raise HTTPException(status_code=503, detail={"code": "broker_circuit_breaker_tripped"})
+        if str(payload.client_order_id) in _seen_client_orders:
+            raise HTTPException(status_code=409, detail={"code": "duplicate_client_order_id"})
+        now = time.time()
+        _prune_order_attempts(now)
+        if len(_order_attempt_timestamps) >= GATEWAY_MAX_ORDERS_PER_MINUTE:
+            raise HTTPException(status_code=429, detail={"code": "gateway_order_rate_limit"})
+        _order_attempt_timestamps.append(now)
+
+    side = str(payload.side).upper()
+    if side not in {"BUY", "SELL"}:
+        raise HTTPException(status_code=400, detail="invalid_side")
+
+    phase = market_phase_now()
+    if phase == "CLOSED" or phase == "BREAK":
+        raise HTTPException(status_code=423, detail={"code": "market_phase_blocked", "market_phase": phase})
+    if side == "BUY" and phase != "ACTIVE":
+        raise HTTPException(status_code=423, detail={"code": "buy_locked_by_market_phase", "market_phase": phase})
+
+    notional = float(payload.price) * int(payload.volume)
+    if notional <= 0 or notional > GATEWAY_MAX_ORDER_NOTIONAL + 1e-9:
+        raise HTTPException(status_code=422, detail={"code": "max_order_notional", "notional": notional})
+
+    with _quote_lock:
+        quote = dict(_quotes.get(str(payload.symbol).strip().upper(), {}))
+    if not quote:
+        raise HTTPException(status_code=503, detail={"code": "verified_quote_unavailable"})
+    age = time.time() - float(quote.get("_ingested_ts") or 0.0)
+    if age < 0 or age > GATEWAY_MAX_QUOTE_AGE_SEC:
+        raise HTTPException(status_code=503, detail={"code": "quote_stale", "age_sec": age})
+    bid = _num(quote.get("bid"))
+    ask = _num(quote.get("ask"))
+    bid_size = _num(quote.get("bid_size"))
+    ask_size = _num(quote.get("ask_size"))
+    if (
+        bid is None or bid <= 0
+        or ask is None or ask <= 0
+        or ask < bid
+        or bid_size is None or bid_size <= 0
+        or ask_size is None or ask_size <= 0
+    ):
+        raise HTTPException(status_code=503, detail={"code": "verified_book_unavailable"})
+    executable = ask if side == "BUY" else bid
+    deviation_bps = abs(float(payload.price) - executable) / executable * 10000.0
+    if deviation_bps > GATEWAY_MAX_PRICE_DEVIATION_BPS:
+        raise HTTPException(status_code=423, detail={
+            "code": "price_deviation_guard",
+            "deviation_bps": deviation_bps,
+            "limit_bps": GATEWAY_MAX_PRICE_DEVIATION_BPS,
+        })
+
+
+@app.get("/safety")
+def safety(x_luna_gateway: Optional[str] = Header(default=None)):
+    auth(x_luna_gateway)
+    return {"ok": True, "safety": _safety_snapshot(), "live_armed": LIVE_ARMED}
+
+
+@app.post("/safety/reset")
+def safety_reset(
+    x_luna_gateway: Optional[str] = Header(default=None),
+    x_luna_reset_key: Optional[str] = Header(default=None),
+):
+    auth(x_luna_gateway)
+    if not GATEWAY_CIRCUIT_RESET_KEY or x_luna_reset_key != GATEWAY_CIRCUIT_RESET_KEY:
+        raise HTTPException(status_code=403, detail="circuit_reset_not_authorized")
+    global _broker_failure_streak, _broker_circuit_tripped, _broker_last_failure
+    with _safety_lock:
+        _broker_failure_streak = 0
+        _broker_circuit_tripped = False
+        _broker_last_failure = None
+    return {"ok": True, "safety": _safety_snapshot()}
 
 
 def market_phase_now() -> str:
@@ -1294,6 +1432,9 @@ def health():
         "source_revision": RELEASE_SOURCE_REVISION,
         "public_stream_release": PUBLIC_STREAM_RELEASE,
         "live_armed": LIVE_ARMED,
+        "hard_order_gate_enabled": GATEWAY_ORDER_GATE_ENABLED,
+        "gateway_kill_switch": GATEWAY_KILL_SWITCH,
+        "safety": _safety_snapshot(),
         "provider_mode": PROVIDER_MODE,
         "selected_provider": effective_provider,
         "provider_candidates": _provider_order(),
@@ -1530,30 +1671,40 @@ def marketdata_ingest(payload: MarketQuoteBatch, x_luna_gateway: Optional[str] =
 @app.post("/place")
 def place(payload: PlaceOrder, x_luna_gateway: Optional[str] = Header(default=None)):
     auth(x_luna_gateway)
+    _hard_order_gate(payload)
     eq = client()
-    if payload.side not in {"BUY", "SELL"}:
-        raise HTTPException(status_code=400, detail="invalid_side")
 
-    phase = market_phase_now()
-    if phase == "CLOSED":
-        raise HTTPException(status_code=423, detail={"code": "market_closed", "market_phase": phase})
-    if payload.side == "BUY" and phase != "ACTIVE":
-        raise HTTPException(status_code=423, detail={"code": "buy_locked_by_market_phase", "market_phase": phase})
+    try:
+        broker_result = eq.place_order(
+            symbol=payload.symbol,
+            price=payload.price,
+            volume=payload.volume,
+            side=payload.side,
+            pin=os.getenv("SETTRADE_PIN", ""),
+        )
+    except Exception as exc:
+        _record_broker_failure(str(exc))
+        raise HTTPException(status_code=503, detail={"code": "broker_place_failed"}) from exc
 
-    broker_result = eq.place_order(
-        symbol=payload.symbol,
-        price=payload.price,
-        volume=payload.volume,
-        side=payload.side,
-        pin=os.getenv("SETTRADE_PIN", ""),
-    )
-
+    broker_data = (broker_result or {}).get("data", {}) if isinstance(broker_result, dict) else {}
+    if isinstance(broker_result, dict) and broker_result.get("success") is False:
+        _record_broker_failure("BROKER_REJECTED")
+        raise HTTPException(status_code=502, detail={"code": "broker_rejected"})
     broker_id = str(
-        (broker_result or {}).get("data", {}).get("order_id")
+        broker_data.get("order_id")
         or (broker_result or {}).get("orderId")
         or (broker_result or {}).get("order_no")
-        or uuid.uuid4()
-    )
+        or ""
+    ).strip()
+    if not broker_id:
+        _record_broker_failure("BROKER_ACK_MISSING_ORDER_ID")
+        raise HTTPException(status_code=502, detail={"code": "broker_ack_missing_order_id"})
+    _record_broker_success()
+    with _safety_lock:
+        _seen_client_orders.add(str(payload.client_order_id))
+        if len(_seen_client_orders) > 5000:
+            _seen_client_orders.pop()
+
     gateway_received_ms=int(time.time() * 1000)
     broker_native_submitted_at_ms=extract_broker_native_submitted_at_ms(broker_result)
 
