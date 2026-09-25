@@ -27,6 +27,8 @@ let lastReconciliationAt=0;
 let lastLiveAccountStateSyncAt=0;
 let lastLiveAccountStateAttemptAt=0;
 let sessionStartPromise:Promise<void>|null=null;
+let sessionStartRetryAt=0;
+let sessionStartFailureCount=0;
 let sessionEndPromise:Promise<void>|null=null;
 let marketWatchdogTimer:NodeJS.Timeout|undefined;
 let auditQueueTail:Promise<void>=Promise.resolve();
@@ -1062,9 +1064,37 @@ async function ensureSession(){
   const phase=currentMarketPhase();
   if(sessionId) return;
   if(phase==="CLOSED") return;
+
+  const now=Date.now();
+  if(now<sessionStartRetryAt) return;
+
   if(!sessionStartPromise){
-    sessionStartPromise=startSession().finally(()=>{sessionStartPromise=null});
+    sessionStartPromise=(async()=>{
+      try{
+        await startSession();
+        sessionStartFailureCount=0;
+        sessionStartRetryAt=0;
+      }catch(err){
+        sessionStartFailureCount++;
+        const message=String(err);
+        const isRateLimited=message.includes("HTTP 429") || message.includes("SECURITY_RATE_LIMITED");
+        const isPolicyConflict=message.includes("HTTP 409");
+        const baseMs=isRateLimited ? 15_000 : isPolicyConflict ? 5_000 : 3_000;
+        const backoffMs=Math.min(60_000,baseMs*Math.min(4,sessionStartFailureCount));
+        sessionStartRetryAt=Date.now()+backoffMs;
+        console.error(JSON.stringify({
+          event:"SESSION_AUTO_START_ERROR",
+          error:message,
+          market_phase:phase,
+          retry_ms:backoffMs,
+          failure_count:sessionStartFailureCount
+        }));
+      }finally{
+        sessionStartPromise=null;
+      }
+    })();
   }
+
   await sessionStartPromise;
 }
 
