@@ -184,7 +184,8 @@ export default function LunaPortfolioPage() {
   const [lastRealtimeTickAt,setLastRealtimeTickAt]=useState<number|null>(null);
   const [clock,setClock]=useState(()=>new Date());
   const [runtimeStatus,setRuntimeStatus]=useState<RuntimeStatus|null>(null);
-  const [shadowStatus,setShadowStatus]=useState<ShadowStatus|null>(null);\n  const refreshInFlight=useRef(false);
+  const [shadowStatus,setShadowStatus]=useState<ShadowStatus|null>(null);
+  const refreshInFlight=useRef(false);
 
   const load=useCallback(async()=>{
     setRefreshing(true); setError("");
