@@ -461,12 +461,25 @@ export default function LunaPortfolioPage() {
           : "API is healthy and ready. No trading session is running because the market is outside the execution window."
         : "The LUNA API could not be reached. This is the only state shown as OFFLINE.";
 
-  const runtimeShort = ({
+  const isConnecting=loading && !feed;
+  const runtimeTone=isConnecting ? "STANDBY" : runtimeState;
+  const runtimeShort = isConnecting ? "CONNECTING" : ({
     ACTIVE:"ACTIVE",
     STANDBY:"STANDBY",
     DEGRADED:"CHECK",
     OFFLINE:"OFFLINE"
   } as const)[runtimeState];
+  const runtimeDisplayLabel=isConnecting ? "CONNECTING TO LUNA" : runtimeLabel;
+  const runtimeDisplayDetail=isConnecting
+    ? "Connecting to the backend control room. No trading action is enabled during startup."
+    : runtimeDetail;
+  const safetyBadge=!feed
+    ? "SAFETY LOCKED"
+    : liveExecution
+      ? "LIVE EXECUTION"
+      : killSwitch
+        ? "PAPER EXECUTION / KILL SWITCH ON"
+        : "PAPER EXECUTION / LIVE ORDER LOCKED";
 
   return <main className="luna-shell">
     <header className="topbar">
@@ -480,14 +493,14 @@ export default function LunaPortfolioPage() {
       <div className="top-actions">
         <div className={`market-status phase-${marketPhase.toLowerCase()}`}><CircleDot size={11}/> SET · {marketPhaseLabel(marketPhase)}</div><div className="timeframe-chip"><BarChart3 size={13}/> {TIMEFRAME}</div>
         <button className={"icon-button "+(refreshing?"refreshing":"")} title={refreshing?"Refreshing LUNA feed…":"Refresh LUNA feed"} aria-label={refreshing?"Refreshing LUNA feed":"Refresh LUNA feed"} onClick={load} disabled={refreshing}><RefreshCw size={17}/><span className="refresh-label">{refreshing?"Refreshing":"Refresh"}</span></button>
-        <div className={`session-chip session-runtime-${runtimeState.toLowerCase()}`}><Clock3 size={14}/> {todaySessionDate} · {bangkokClock(clock)} · {runtimeState==="ACTIVE" ? (realtimeFresh ? "SYSTEM ACTIVE · UI REALTIME" : "SYSTEM ACTIVE · SERVER") : runtimeState==="STANDBY" ? "ONLINE · STANDBY" : runtimeState==="DEGRADED" ? "ONLINE · CHECK" : "OFFLINE"}</div>
+        <div className={`session-chip session-runtime-${runtimeTone.toLowerCase()}`}><Clock3 size={14}/> {todaySessionDate} · {bangkokClock(clock)} · {isConnecting ? "CONNECTING" : runtimeState==="ACTIVE" ? (realtimeFresh ? "SYSTEM ACTIVE · UI REALTIME" : "SYSTEM ACTIVE · SERVER") : runtimeState==="STANDBY" ? "ONLINE · STANDBY" : runtimeState==="DEGRADED" ? "ONLINE · CHECK" : "OFFLINE"}</div>
       </div>
     </header>
     <div className="page">
-      <section className="hero-row"><div><div className="eyebrow">INTRADAY CONTROL · OPERATIONAL OVERVIEW</div><h2>LUNA command center</h2><p>See capital, risk, execution and research state at a glance.</p></div><div className="hero-meta"><div className={`data-chip runtime-chip runtime-${runtimeState.toLowerCase()}`}><span className="data-dot"/>{runtimeLabel}</div><div className="safe-badge"><ShieldCheck size={15}/> {liveExecution ? "LIVE EXECUTION" : "PAPER EXECUTION"} / {killSwitch ? "KILL SWITCH ON" : liveExecution && marketPhase==="ACTIVE" ? "GATE OPEN" : "MARKET LOCKED"}</div></div></section>
-      <section className={`runtime-banner runtime-${runtimeState.toLowerCase()}`} aria-live="polite">
+      <section className="hero-row"><div><div className="eyebrow">INTRADAY CONTROL · OPERATIONAL OVERVIEW</div><h2>LUNA command center</h2><p>See capital, risk, execution and research state at a glance.</p></div><div className="hero-meta"><div className={`data-chip runtime-chip runtime-${runtimeTone.toLowerCase()}`}><span className="data-dot"/>{runtimeDisplayLabel}</div><div className="safe-badge"><ShieldCheck size={15}/> {safetyBadge}</div></div></section>
+      <section className={`runtime-banner runtime-${runtimeTone.toLowerCase()}`} aria-live="polite">
         <div className="runtime-banner-icon"><CircleDot size={15}/></div>
-        <div className="runtime-banner-copy"><strong>{runtimeLabel}</strong><span>{runtimeDetail}</span></div>
+        <div className="runtime-banner-copy"><strong>{runtimeDisplayLabel}</strong><span>{runtimeDisplayDetail}</span></div>
         <div className="runtime-banner-meta"><span>API {live ? "CONNECTED" : "UNREACHABLE"}</span><span>BACKEND {backendRuntime?.state??"UNKNOWN"}</span><span>LAST TICK {runtimeAgeMs!=null ? Math.round(runtimeAgeMs)+" ms" : "—"}</span></div>
       </section>
       <SystemControlRoom strategy={session?.strategy_version ?? LUNA_STRATEGY} asOf={todaySessionDate} />
