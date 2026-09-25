@@ -713,9 +713,9 @@ def _run_toptrader_ws():
         with _toptrader_ws_lock:
             seen = len(_toptrader_ws_seen)
         age = _latest_quote_age_sec()
-        supported_count = len([s for s in SYMBOLS if s in _toptrader_supported_symbols])
-        coverage = (seen / supported_count) if supported_count else 0.0
-        print("LUNA_MARKETDATA toptrader_ws_snapshot seen=" + str(seen) + " supported=" + str(supported_count) + " target=" + str(len(SYMBOLS)) + " coverage=" + f"{coverage:.3f}" + " latest_age=" + str(age), flush=True)
+        target_count = len(SYMBOLS)
+        coverage = (seen / target_count) if target_count else 0.0
+        print("LUNA_MARKETDATA toptrader_ws_snapshot seen=" + str(seen) + " quote_count=" + str(len(_quotes)) + " target=" + str(target_count) + " coverage=" + f"{coverage:.3f}" + " latest_age=" + str(age), flush=True)
         if seen > 0 and age is not None and age <= STALE_AFTER_SEC:
             _collector_error = None
         elif time.monotonic() - started >= 30:
