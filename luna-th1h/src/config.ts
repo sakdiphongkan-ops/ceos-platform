@@ -27,6 +27,7 @@ export const config={
   liveAccountCashDriftTolerance:num("LUNA_LIVE_ACCOUNT_CASH_DRIFT_TOLERANCE",25),
   liveAccountQtyDriftTolerance:num("LUNA_LIVE_ACCOUNT_QTY_DRIFT_TOLERANCE",0.5),
   executionTest:bool("LUNA_EXECUTION_TEST",false),
+  observeOnly:bool("LUNA_OBSERVE_ONLY",true),
   priceOnlyFallback:bool("LUNA_PRICE_ONLY_FALLBACK",false),
   m1OverlayMode:(process.env.LUNA_M1_OVERLAY_MODE ?? "shadow") as "off"|"shadow"|"enforce",
   m1OverlayStrategyVersion:process.env.LUNA_M1_OVERLAY_STRATEGY_VERSION ?? "luna-m1-orthogonal-sizer-l2-v1",
