@@ -568,6 +568,66 @@ def _extract_book_level(value):
     return best.get("price"), best.get("volume")
 
 
+def _epoch_to_iso(value: Any) -> Optional[str]:
+    try:
+        ts = float(value)
+        if ts > 1_000_000_000_000:
+            ts /= 1000.0
+        return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
+    except Exception:
+        return None
+
+
+def _fetch_toptrader_public():
+    if not TOPTRADER_ENABLED:
+        raise ProviderUnavailable("toptrader_backup_disabled")
+    query = urlencode({"symbol": "SET\\*,!BBL"})
+    req = Request(TOPTRADER_API_BASE + "?" + query, headers={"Accept": "application/json", "User-Agent": "LUNA-TH1H/0.6.0"}, method="GET")
+    try:
+        with urlopen(req, timeout=TOPTRADER_TIMEOUT_SEC) as response:
+            body = response.read().decode("utf-8")
+            status = getattr(response, "status", 200)
+    except HTTPError as exc:
+        raise ProviderUnavailable("toptrader_http_" + str(exc.code)) from exc
+    except URLError as exc:
+        raise ProviderUnavailable("toptrader_network:" + str(exc.reason)) from exc
+    except Exception as exc:
+        raise ProviderUnavailable("toptrader_request:" + str(exc)) from exc
+    if status >= 400:
+        raise ProviderUnavailable("toptrader_http_" + str(status))
+    try:
+        return json.loads(body)
+    except json.JSONDecodeError as exc:
+        raise ProviderUnavailable("toptrader_invalid_json") from exc
+
+
+def _run_toptrader_public():
+    global _collector_error, _selected_provider, _provider_restarts
+    if not TOPTRADER_ENABLED:
+        raise ProviderUnavailable("toptrader_backup_disabled")
+    if not SYMBOLS:
+        raise ProviderUnavailable("SETTRADE_REALTIME_SYMBOLS is empty")
+    _selected_provider = "TOPTRADER_PUBLIC"
+    _provider_restarts += 1
+    print("LUNA_MARKETDATA provider_start provider=TOPTRADER_PUBLIC symbols=" + str(len(SYMBOLS)) + " bid_offer=" + str(REALTIME_BOOK), flush=True)
+    while True:
+        payload = _fetch_toptrader_public()
+        rows = _extract_rows(payload)
+        found = 0
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            symbol = str(row.get("symbol") or "").upper()
+            if symbol not in SYMBOLS:
+                continue
+            _quote_payload(symbol=symbol, last=row.get("last"), bid=row.get("bid") if REALTIME_BOOK else None, ask=row.get("ask") if REALTIME_BOOK else None, source="toptrader-public-realtime", source_ts=_epoch_to_iso(row.get("datetime")), total_volume=row.get("volume"), raw=row)
+            found += 1
+        if found == 0:
+            _provider_failures["TOPTRADER_PUBLIC"] += 1
+            raise ProviderUnavailable("toptrader_no_matching_symbols")
+        _collector_error = None
+        time.sleep(TOPTRADER_POLL_SEC)
+
 def _fetch_set_api():
     if not SET_API_KEY:
         raise ProviderUnavailable("set_api_key_missing")
