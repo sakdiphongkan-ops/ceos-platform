@@ -119,69 +119,185 @@ export default function LunaPortfolioPage() {
 
   const marketPhase=uiMarketPhase(clock);
   const todaySessionDate=bangkokDate(clock);
-  const sessions=[...(feed?.sessions??[])].sort((a,b)=>{
-    const ad=new Date(a.created_at??a.started_at??a.session_date??0).getTime();
-    const bd=new Date(b.created_at??b.started_at??b.session_date??0).getTime();
-    return bd-ad;
-  });
-  const openSession=sessions.find(s=>s.status==="OPEN" && s.session_date===todaySessionDate);
-  const session=openSession??sessions.find(s=>s.session_date===todaySessionDate)??sessions[0];
-  const sessionIsToday=session?.session_date===todaySessionDate;
-  const sessionId=sessionIsToday?session?.id:undefined;
-  const sessionPositions=sessionId ? (feed?.positions??[]).filter(p=>p.session_id===sessionId) : [];
-  const sessionOrders=sessionId ? (feed?.orders??[]).filter(o=>o.session_id===sessionId) : [];
-  const sessionSignals=[...(feed?.signals??[])].filter(s=>sessionId && s.session_id===sessionId).sort((a,b)=>{
-    return new Date(b.ts??b.created_at??0).getTime()-new Date(a.ts??a.created_at??0).getTime();
-  });
-  const sessionSnapshot=sessionId ? [...(feed?.snapshots??[])].filter(s=>s.session_id===sessionId).sort((a,b)=>{
-    return new Date(b.ts??b.created_at??0).getTime()-new Date(a.ts??a.created_at??0).getTime();
-  })[0] : undefined;
-  const sessionTicks=sessionId ? (feed?.ticks??[]).filter(t=>t.session_id===sessionId) : [];
 
-  const positions:Position[]=sessionPositions.filter(p=>Number(p.qty)>0).map(p=>{
-    const realtimeTick=realtimeQuotes[p.symbol];
-    const tick=realtimeTick ?? sessionTicks.find(t=>t.symbol===p.symbol);
-    const signal=sessionSignals.find(s=>s.symbol===p.symbol);
-    const signalTs=signal?.ts??signal?.created_at;
-    const signalAgeMs=signalTs ? Math.max(0,Date.now()-Date.parse(signalTs)) : Number.POSITIVE_INFINITY;
-    const signalIsCurrent=sessionIsToday && ["ACTIVE","REDUCE_ONLY","FORCE_CLOSE"].includes(marketPhase) && Number.isFinite(signalAgeMs) && signalAgeMs<=15_000;
-    const last=Number(tick?.last??tick?.bid??tick?.ask??p.avg_price);
-    const action=(signalIsCurrent && (signal?.action==="BUY"||signal?.action==="SELL"||signal?.action==="HOLD")) ? signal.action : "HOLD";
+  const sessionData=useMemo(()=>{
+    const sessions=[...(feed?.sessions??[])].sort((a,b)=>{
+      const ad=new Date(a.created_at??a.started_at??a.session_date??0).getTime();
+      const bd=new Date(b.created_at??b.started_at??b.session_date??0).getTime();
+      return bd-ad;
+    });
+
+    const openSession=sessions.find((item)=>item.status==="OPEN" && item.session_date===todaySessionDate);
+    const selectedSession=openSession
+      ?? sessions.find((item)=>item.session_date===todaySessionDate)
+      ?? sessions[0];
+    const sessionIsToday=selectedSession?.session_date===todaySessionDate;
+    const sessionId=sessionIsToday ? selectedSession?.id : undefined;
+
+    const filterSession=(rows:Array<Record<string,any>>)=>sessionId
+      ? rows.filter((row)=>row.session_id===sessionId)
+      : [];
+
+    const sessionSignals=filterSession(feed?.signals??[]).sort((a,b)=>
+      new Date(b.ts??b.created_at??0).getTime()-new Date(a.ts??a.created_at??0).getTime()
+    );
+
+    const sessionSnapshot=filterSession(feed?.snapshots??[])
+      .sort((a,b)=>
+        new Date(b.ts??b.created_at??0).getTime()-new Date(a.ts??a.created_at??0).getTime()
+      )[0];
+
     return {
-      symbol:p.symbol,name:p.symbol,qty:Number(p.qty),avgCost:Number(p.avg_price),last,
-      dayChange:0,realized:Number(p.realized_pnl??0),signal:action,
-      signalReason:signalIsCurrent ? (signal?.reason??"No current signal recorded") : marketPhaseHint(marketPhase)
+      session:selectedSession,
+      sessionIsToday,
+      sessionId,
+      sessionPositions:filterSession(feed?.positions??[]),
+      sessionOrders:filterSession(feed?.orders??[]),
+      sessionSignals,
+      sessionSnapshot,
+      sessionTicks:filterSession(feed?.ticks??[]),
     };
-  });
+  },[
+    feed?.sessions,
+    feed?.positions,
+    feed?.orders,
+    feed?.signals,
+    feed?.snapshots,
+    feed?.ticks,
+    todaySessionDate,
+  ]);
 
-  const trades:Trade[]=sessionOrders.map(o=>{
-    const fill=(feed?.fills??[]).find(f=>f.order_id===o.id);
-    const status=o.status==="PARTIAL"?"PARTIAL":o.status==="REJECTED"?"REJECTED":"FILLED";
-    const price=Number(o.avg_fill_price??fill?.price??o.limit_price??0);
-    return {time:new Date(o.created_at).toLocaleTimeString("en-GB",{hour12:false}),symbol:o.symbol,
-      side:o.side==="SELL"?"SELL":"BUY",qty:Number(o.filled_qty||o.qty),price,value:price*Number(o.filled_qty||o.qty),
-      status,strategy:session?.strategy_version??"—",reason:o.reason??"—"};
-  });
+  const {
+    session,
+    sessionIsToday,
+    sessionId,
+    sessionPositions,
+    sessionOrders,
+    sessionSignals,
+    sessionSnapshot,
+    sessionTicks,
+  }=sessionData;
+
+  const positions=useMemo<Position[]>(()=>{
+    const tickBySymbol=new Map(sessionTicks.map((tick)=>[String(tick.symbol),tick]));
+    const signalBySymbol=new Map(sessionSignals.map((signal)=>[String(signal.symbol),signal]));
+
+    return sessionPositions
+      .filter((position)=>Number(position.qty)>0)
+      .map((position)=>{
+        const symbol=String(position.symbol);
+        const realtimeTick=realtimeQuotes[symbol];
+        const tick=realtimeTick ?? tickBySymbol.get(symbol);
+        const signal=signalBySymbol.get(symbol);
+        const signalTs=signal?.ts??signal?.created_at;
+        const signalAgeMs=signalTs
+          ? Math.max(0,Date.now()-Date.parse(signalTs))
+          : Number.POSITIVE_INFINITY;
+        const signalIsCurrent=
+          sessionIsToday
+          && ["ACTIVE","REDUCE_ONLY","FORCE_CLOSE"].includes(marketPhase)
+          && Number.isFinite(signalAgeMs)
+          && signalAgeMs<=15_000;
+
+        const last=Number(tick?.last??tick?.bid??tick?.ask??position.avg_price);
+        const action=
+          signalIsCurrent
+          && (signal?.action==="BUY"||signal?.action==="SELL"||signal?.action==="HOLD")
+            ? signal.action
+            : "HOLD";
+
+        return {
+          symbol,
+          name:symbol,
+          qty:Number(position.qty),
+          avgCost:Number(position.avg_price),
+          last,
+          dayChange:0,
+          realized:Number(position.realized_pnl??0),
+          signal:action,
+          signalReason:signalIsCurrent
+            ? (signal?.reason??"No current signal recorded")
+            : marketPhaseHint(marketPhase),
+        };
+      });
+  },[
+    marketPhase,
+    realtimeQuotes,
+    sessionIsToday,
+    sessionPositions,
+    sessionSignals,
+    sessionTicks,
+  ]);
+
+  const trades=useMemo<Trade[]>(()=>{
+    const fillByOrderId=new Map((feed?.fills??[]).map((fill)=>[String(fill.order_id),fill]));
+
+    return sessionOrders.map((order)=>{
+      const fill=fillByOrderId.get(String(order.id));
+      const status=order.status==="PARTIAL"
+        ? "PARTIAL"
+        : order.status==="REJECTED"
+          ? "REJECTED"
+          : "FILLED";
+      const price=Number(order.avg_fill_price??fill?.price??order.limit_price??0);
+      const qty=Number(order.filled_qty||order.qty);
+
+      return {
+        time:new Date(order.created_at).toLocaleTimeString("en-GB",{hour12:false}),
+        symbol:order.symbol,
+        side:order.side==="SELL" ? "SELL" : "BUY",
+        qty,
+        price,
+        value:price*qty,
+        status,
+        strategy:session?.strategy_version??"—",
+        reason:order.reason??"—",
+      };
+    });
+  },[feed?.fills,session?.strategy_version,sessionOrders]);
 
   const closedPositions=useMemo(()=>{
+    const fillByOrderId=new Map((feed?.fills??[]).map((fill)=>[String(fill.order_id),fill]));
     const bySymbol=new Map<string,{symbol:string;entry:number;exit:number;qty:number;pnl:number;duration:string}>();
-    const orders=[...sessionOrders].sort((a,b)=>new Date(a.created_at).getTime()-new Date(b.created_at).getTime());
-    for(const o of orders){
-      const fill=(feed?.fills??[]).find(f=>f.order_id===o.id); const qty=Number(o.filled_qty||fill?.qty||0); if(!qty) continue;
-      const price=Number(o.avg_fill_price??fill?.price??o.limit_price??0);
-      const cur=bySymbol.get(o.symbol);
-      if(o.side==="BUY") bySymbol.set(o.symbol,{symbol:o.symbol,entry:price,exit:0,qty,pnl:0,duration:"—"});
-      else if(cur){cur.exit=price;cur.pnl=(price-cur.entry)*Math.min(cur.qty,qty);bySymbol.set(o.symbol,cur);}
-    }
-    return Array.from(bySymbol.values()).filter(x=>x.exit>0);
-  },[sessionOrders,feed?.fills]);
+    const orders=[...sessionOrders].sort(
+      (a,b)=>new Date(a.created_at).getTime()-new Date(b.created_at).getTime()
+    );
 
-  const filteredPositions=positions.filter(p=>{
-    const matchesQuery=(p.symbol+" "+p.name).toLowerCase().includes(query.toLowerCase());
-    const matchesSignal=signalFilter==="ALL" || p.signal===signalFilter;
-    const matchesProfit=!profitOnly || (p.last-p.avgCost)>=0;
+    for(const order of orders){
+      const fill=fillByOrderId.get(String(order.id));
+      const qty=Number(order.filled_qty||fill?.qty||0);
+      if(!qty) continue;
+
+      const price=Number(order.avg_fill_price??fill?.price??order.limit_price??0);
+      const current=bySymbol.get(order.symbol);
+
+      if(order.side==="BUY"){
+        bySymbol.set(order.symbol,{
+          symbol:order.symbol,
+          entry:price,
+          exit:0,
+          qty,
+          pnl:0,
+          duration:"—",
+        });
+      }else if(current){
+        current.exit=price;
+        current.pnl=(price-current.entry)*Math.min(current.qty,qty);
+        bySymbol.set(order.symbol,current);
+      }
+    }
+
+    return Array.from(bySymbol.values()).filter((item)=>item.exit>0);
+  },[feed?.fills,sessionOrders]);
+
+  const filteredPositions=useMemo(()=>positions.filter((position)=>{
+    const normalizedQuery=query.toLowerCase();
+    const matchesQuery=(position.symbol+" "+position.name).toLowerCase().includes(normalizedQuery);
+    const matchesSignal=signalFilter==="ALL" || position.signal===signalFilter;
+    const matchesProfit=!profitOnly || position.last>=position.avgCost;
     return matchesQuery && matchesSignal && matchesProfit;
-  });
+  }),[positions,profitOnly,query,signalFilter]);
+
   const filterCount=(signalFilter!=="ALL"?1:0)+(profitOnly?1:0);
   const updatedAt=feed?.generated_at ? new Date(feed.generated_at).toLocaleTimeString("en-GB",{hour12:false}) : "—";
   const initial=Number(session?.initial_capital??1000000);
