@@ -232,6 +232,18 @@ function currentSessionDate(){
   return sessionDateAt(new Date().toISOString(),config.timezone);
 }
 
+function effectiveQuoteAgeMs(){
+  const paperFallback = config.mode==="paper"
+    && config.executionMode==="paper"
+    && config.priceOnlyFallback
+    && String(process.env.LIVE_TRADING_ARMED??"false").toLowerCase()!=="true";
+  if(!paperFallback) return config.maxQuoteAgeMs;
+  return Math.max(
+    config.maxQuoteAgeMs,
+    Number(process.env.LUNA_PUBLIC_FALLBACK_MAX_QUOTE_AGE_MS??8000)
+  );
+}
+
 async function writeSnapshot(){
   if(!sessionId || !portfolio) return;
   await ingest("",{
@@ -540,7 +552,7 @@ function getSignal(q:Quote):Signal{
     return {symbol:q.symbol,ts:q.ts,action:"HOLD",reason:"INVALID_QUOTE_TIMESTAMP",strategyVersion:strategyV1.version};
   }
   const quoteAgeMs=Math.max(0,Date.now()-quoteTsMs);
-  if(quoteAgeMs>config.maxQuoteAgeMs){
+  if(quoteAgeMs>effectiveQuoteAgeMs()){
     return {symbol:q.symbol,ts:q.ts,action:"HOLD",reason:"STALE_QUOTE",strategyVersion:strategyV1.version};
   }
 
@@ -598,6 +610,16 @@ async function executeSignal(
       action:signal.action,
       error:String(error)
     }));
+    return;
+  }
+  if(config.observeOnly){
+    queueAudit("ORDER_SUPPRESSED_OBSERVE_ONLY",{
+      trace_id:latencyContext.traceId??null,
+      session_id:expectedSessionId,
+      symbol:q.symbol,
+      action:signal.action,
+      reason:"STRATEGY_BINDING_OBSERVE_ONLY"
+    },signal.strategyVersion,expectedSessionId);
     return;
   }
   if(config.executionMode==="live"){
@@ -1148,7 +1170,9 @@ async function handleQuote(q:Quote){
   if(sessionId!==activeSessionId || sessionGeneration!==activeSessionGeneration) return;
 
   const traceId=`${activeSessionId}:${q.symbol}:${q.ts}`;
-  const quality=assessQuoteQuality(q,Date.now(),config.maxQuoteAgeMs);
+  // Historical warm-up is safe even when the current quote is stale.
+  kickoffPrewarm(q);
+  const quality=assessQuoteQuality(q,Date.now(),effectiveQuoteAgeMs());
   if(!quality.ok){
     await queueAudit("DATA_QUALITY_REJECTED",{
       trace_id:traceId,
@@ -1170,7 +1194,6 @@ async function handleQuote(q:Quote){
   }
 
   const startedAt=Date.now();
-  kickoffPrewarm(q);
   const prewarm=consumePrewarm(q);
   const prewarmMs=0;
 
