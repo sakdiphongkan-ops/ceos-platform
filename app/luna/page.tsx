@@ -424,13 +424,15 @@ export default function LunaPortfolioPage() {
     ? "OFFLINE"
     : error
       ? "DEGRADED"
-      : backendRuntimeLive
-        ? "ACTIVE"
-        : marketPhase==="BREAK" || marketPhase==="CLOSED"
-          ? "STANDBY"
-          : backendRuntime?.state==="NO_OPEN_SESSION" || !backendRuntime?.session
+      : marketPhase==="BREAK"
+        ? "STANDBY"
+        : backendRuntimeLive
+          ? "ACTIVE"
+          : marketPhase==="CLOSED"
             ? "STANDBY"
-            : "DEGRADED";
+            : backendRuntime?.state==="NO_OPEN_SESSION" || !backendRuntime?.session
+              ? "STANDBY"
+              : "DEGRADED";
 
   const runtimeLabel = ({
     ACTIVE:"SYSTEM ACTIVE · PAPER OBSERVE",
