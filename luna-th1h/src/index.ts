@@ -578,6 +578,9 @@ function getSignal(q:Quote):Signal{
   if(phase==="CLOSED"){
     return {symbol:q.symbol,ts:q.ts,action:"HOLD",reason:"MARKET_CLOSED",strategyVersion:strategyV1.version};
   }
+  if(phase==="BREAK"){
+    return {symbol:q.symbol,ts:q.ts,action:"HOLD",reason:"MIDDAY_BREAK",strategyVersion:strategyV1.version};
+  }
   if(phase==="REDUCE_ONLY"){
     const decision=strategyV1.evaluate(q,{
       positionQty:pos?.qty??0,
@@ -1315,8 +1318,9 @@ async function handleQuote(q:Quote){
           : Number.POSITIVE_INFINITY;
         const blockedByPhase =
           executionPhase==="CLOSED"
+          || executionPhase==="BREAK"
           || (signal.action==="BUY" && executionPhase!=="ACTIVE")
-          || quoteAgeMs>config.maxQuoteAgeMs;
+          || quoteAgeMs>effectiveQuoteAgeMs();
         if(blockedByPhase){
           await queueAudit("ORDER_SUPPRESSED_MARKET_PHASE",{
             trace_id:traceId,
