@@ -191,7 +191,7 @@ export default function LunaPortfolioPage() {
     try{
       const asOf=bangkokDate(new Date());
       const [feedRes,runtimeRes]=await Promise.all([
-        fetch(`${LUNA_API}?limit=100&strategy=${encodeURIComponent(LUNA_STRATEGY)}&as_of=${encodeURIComponent(asOf)}`,{cache:"no-store"}),
+        fetch(`${LUNA_API}?view=feed&limit=100&strategy=${encodeURIComponent(LUNA_STRATEGY)}&as_of=${encodeURIComponent(asOf)}`,{cache:"no-store"}),
         fetch(`${LUNA_API}?view=runtime_status&strategy=${encodeURIComponent(LUNA_STRATEGY)}&as_of=${encodeURIComponent(asOf)}`,{cache:"no-store"})
       ]);
       if(!feedRes.ok) throw new Error(`API ${feedRes.status}`);
