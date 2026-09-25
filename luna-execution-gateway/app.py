@@ -73,9 +73,10 @@ SET_API_POLL_SEC = max(1.0, float(os.getenv("SET_MARKETDATA_POLL_SEC", "2")))
 SET_API_TIMEOUT_SEC = max(2.0, float(os.getenv("SET_MARKETDATA_TIMEOUT_SEC", "8")))
 TOPTRADER_ENABLED = os.getenv("LUNA_TOPTRADER_BACKUP_ENABLED", "true").lower() == "true"
 TOPTRADER_API_BASE = os.getenv("LUNA_TOPTRADER_API_BASE", "https://api.toptrader.co.th/v1/market/tick")
+TOPTRADER_SYMBOLS_BASE = os.getenv("LUNA_TOPTRADER_SYMBOLS_BASE", "https://api.toptrader.co.th/v1/market/symbols")
 TOPTRADER_WS_ENABLED = os.getenv("LUNA_TOPTRADER_WS_ENABLED", "true").lower() == "true"
 TOPTRADER_WS_BASE = os.getenv("LUNA_TOPTRADER_WS_BASE", "wss://ws.toptrader.co.th/market")
-TOPTRADER_WS_CHUNK_SIZE = max(1, min(512, int(os.getenv("LUNA_TOPTRADER_WS_CHUNK_SIZE", "500"))))
+TOPTRADER_WS_CHUNK_SIZE = max(1, min(512, int(os.getenv("LUNA_TOPTRADER_WS_CHUNK_SIZE", "128"))))
 TOPTRADER_WS_RECONNECT_SEC = max(1.0, float(os.getenv("LUNA_TOPTRADER_WS_RECONNECT_SEC", "3")))
 TOPTRADER_POLL_SEC = max(1.0, float(os.getenv("LUNA_TOPTRADER_POLL_SEC", "2")))
 TOPTRADER_TIMEOUT_SEC = max(2.0, float(os.getenv("LUNA_TOPTRADER_TIMEOUT_SEC", "8")))
@@ -153,6 +154,8 @@ _provider_restarts = 0
 _provider_failures: Dict[str, int] = {"SET_API": 0, "SETTRADE": 0, "TOPTRADER_WS": 0, "TOPTRADER_PUBLIC": 0}
 _toptrader_ws_lock = threading.Lock()
 _toptrader_ws_seen: set[str] = set()
+_toptrader_supported_symbols: set[str] = set()
+_toptrader_symbols_loaded_at = 0.0
 
 _channel_status: Dict[str, Dict[str, Any]] = {
     "price": {"running": False, "restarts": 0, "last_start": None, "last_error": None},
@@ -622,6 +625,44 @@ def _toptrader_ws_message(message: str):
         _toptrader_ws_seen.add(symbol)
 
 
+def _fetch_toptrader_symbol_catalog() -> set[str]:
+    global _toptrader_supported_symbols, _toptrader_symbols_loaded_at
+    now = time.time()
+    if _toptrader_supported_symbols and now - _toptrader_symbols_loaded_at < 300:
+        return set(_toptrader_supported_symbols)
+    req = Request(TOPTRADER_SYMBOLS_BASE, headers={"Accept": "application/json", "User-Agent": "LUNA-TH1H/0.7.2"}, method="GET")
+    try:
+        with urlopen(req, timeout=TOPTRADER_TIMEOUT_SEC) as response:
+            body = response.read().decode("utf-8")
+            status = getattr(response, "status", 200)
+    except HTTPError as exc:
+        raise ProviderUnavailable("toptrader_symbols_http_" + str(exc.code)) from exc
+    except URLError as exc:
+        raise ProviderUnavailable("toptrader_symbols_network:" + str(exc.reason)) from exc
+    except Exception as exc:
+        raise ProviderUnavailable("toptrader_symbols_request:" + str(exc)) from exc
+    if status >= 400:
+        raise ProviderUnavailable("toptrader_symbols_http_" + str(status))
+    try:
+        payload = json.loads(body)
+    except json.JSONDecodeError as exc:
+        raise ProviderUnavailable("toptrader_symbols_invalid_json") from exc
+    rows = _extract_rows(payload)
+    supported = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        symbol = str(row.get("symbol") or "").strip().upper()
+        category = str(row.get("category") or "").strip().upper()
+        if symbol and (not category or category == "SET"):
+            supported.add(symbol)
+    if not supported:
+        raise ProviderUnavailable("toptrader_symbols_catalog_empty")
+    _toptrader_supported_symbols = supported
+    _toptrader_symbols_loaded_at = now
+    print("LUNA_MARKETDATA toptrader_catalog symbols=" + str(len(supported)), flush=True)
+    return set(supported)
+
 async def _toptrader_ws_consume(chunk: list[str], index: int):
     if websockets is None:
         raise ProviderUnavailable("toptrader_websockets_dependency_unavailable")
@@ -657,10 +698,15 @@ def _run_toptrader_ws():
         raise ProviderUnavailable("SETTRADE_REALTIME_SYMBOLS is empty")
     _selected_provider = "TOPTRADER_WS"
     _provider_restarts += 1
-    chunks = [SYMBOLS[i:i + TOPTRADER_WS_CHUNK_SIZE] for i in range(0, len(SYMBOLS), TOPTRADER_WS_CHUNK_SIZE)]
+    supported = _fetch_toptrader_symbol_catalog()
+    ws_symbols = [s for s in SYMBOLS if s in supported]
+    unsupported = [s for s in SYMBOLS if s not in supported]
+    if not ws_symbols:
+        raise ProviderUnavailable("toptrader_ws_no_supported_luna_symbols")
+    chunks = [ws_symbols[i:i + TOPTRADER_WS_CHUNK_SIZE] for i in range(0, len(ws_symbols), TOPTRADER_WS_CHUNK_SIZE)]
     with _toptrader_ws_lock:
         _toptrader_ws_seen.clear()
-    print("LUNA_MARKETDATA provider_start provider=TOPTRADER_WS symbols=" + str(len(SYMBOLS)) + " connections=" + str(len(chunks)) + " bid_offer=" + str(REALTIME_BOOK), flush=True)
+    print("LUNA_MARKETDATA provider_start provider=TOPTRADER_WS target=" + str(len(SYMBOLS)) + " supported=" + str(len(ws_symbols)) + " unsupported=" + str(len(unsupported)) + " connections=" + str(len(chunks)) + " bid_offer=" + str(REALTIME_BOOK), flush=True)
     for index, chunk in enumerate(chunks, start=1):
         threading.Thread(target=_toptrader_ws_worker, args=(chunk, index), daemon=True).start()
     started = time.monotonic()
@@ -669,8 +715,9 @@ def _run_toptrader_ws():
         with _toptrader_ws_lock:
             seen = len(_toptrader_ws_seen)
         age = _latest_quote_age_sec()
-        coverage = (seen / len(SYMBOLS)) if SYMBOLS else 0.0
-        print("LUNA_MARKETDATA toptrader_ws_snapshot seen=" + str(seen) + " target=" + str(len(SYMBOLS)) + " coverage=" + f"{coverage:.3f}" + " latest_age=" + str(age), flush=True)
+        supported_count = len([s for s in SYMBOLS if s in _toptrader_supported_symbols])
+        coverage = (seen / supported_count) if supported_count else 0.0
+        print("LUNA_MARKETDATA toptrader_ws_snapshot seen=" + str(seen) + " supported=" + str(supported_count) + " target=" + str(len(SYMBOLS)) + " coverage=" + f"{coverage:.3f}" + " latest_age=" + str(age), flush=True)
         if seen > 0 and age is not None and age <= STALE_AFTER_SEC:
             _collector_error = None
         elif time.monotonic() - started >= 30:
