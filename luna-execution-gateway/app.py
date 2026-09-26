@@ -1846,6 +1846,8 @@ def diagnostics(x_luna_gateway: Optional[str] = Header(default=None)):
         "public_fallback_enabled": PUBLIC_FALLBACK_ENABLED,
         "settrade_missing_credentials": missing_settrade_credentials(),
         "python_sdk_loaded": Investor is not None,
+        "settrade_sdk": "settrade-v2",
+        "settrade_environment": SETTRADE_ENV,
         "realtime_marketdata_enabled": REALTIME_ENABLED,
         "realtime_bid_offer_enabled": REALTIME_BOOK,
         "realtime_symbol_target": len(SYMBOLS),
