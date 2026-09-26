@@ -39,6 +39,30 @@ jobs:
           print("LUNA_GATEWAY_IMPORT_OK", app.SETTRADE_SDK_VERSION)
           PY
 
+      - name: Smoke-test provider proof policy
+        env:
+          LUNA_DEPLOY_SOURCE_SHA: ci
+          LUNA_EXPECTED_SOURCE_SHA: ci
+          LUNA_PRIMARY_MARKETDATA_PROVIDER: SETTRADE
+          LUNA_MARKETDATA_PROVIDER: SETTRADE
+          REALTIME_MARKETDATA_ENABLED: "true"
+          SETTRADE_REALTIME_SYMBOLS: "AOT"
+          SETTRADE_BROKER_ID: "broker"
+          SETTRADE_APP_ID: "app"
+          SETTRADE_APP_SECRET: "secret"
+          SETTRADE_APP_CODE: "code"
+          LUNA_LIVE_MIN_REALTIME_COVERAGE: "0.0"
+        run: |
+          python - <<'PY'
+          import app
+          app._selected_provider = "SETTRADE"
+          proof = app._connectivity_proof()
+          assert proof["checks"]["selected_provider_credentials_configured"] is True
+          assert proof["checks"]["set_api_backup_configured"] is False
+          assert proof["live_execution_ready"] is True
+          print("LUNA_PROVIDER_POLICY_SMOKE_OK")
+          PY
+
       - name: Verify Settrade Open API v2 surface
         run: |
           python - <<'PY'
