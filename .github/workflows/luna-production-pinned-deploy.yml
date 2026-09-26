@@ -39,7 +39,7 @@ jobs:
         run: |
           echo "Deploying commit: $GITHUB_SHA"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-      - name: Wait for primary CI on this exact commit
+      - name: Wait for actual LUNA CI on this exact commit
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -47,18 +47,27 @@ jobs:
           while true; do
             rows=$(gh api repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs --paginate --jq '.check_runs[] | [.name,.status,.conclusion] | @tsv' || true)
             echo "$rows"
-            luna=$(printf '%s\n' "$rows" | awk -F '\t' '$1=="typecheck"{print $2" "$3; exit}')
-            ceos=$(printf '%s\n' "$rows" | awk -F '\t' '$1=="build"{print $2" "$3; exit}')
-            if printf '%s' "$luna" | grep -q '^completed success$' && printf '%s' "$ceos" | grep -q '^completed success$'; then
-              echo "Primary CI passed for $GITHUB_SHA"
-              break
+            gateway=$(printf '%s\n' "$rows" | awk -F '\t' '$1=="gateway-ci"{print $2" "$3; exit}')
+            execution=$(printf '%s\n' "$rows" | awk -F '\t' '$1=="execution-gate"{print $2" "$3; exit}')
+
+            if printf '%s' "$gateway" | grep -q '^completed success$'; then
+              if [ -z "$execution" ] || printf '%s' "$execution" | grep -q '^completed success$'; then
+                echo "Required LUNA CI passed for $GITHUB_SHA"
+                break
+              fi
             fi
-            if printf '%s' "$luna" | grep -q 'completed failure\|completed cancelled\|completed timed_out' || printf '%s' "$ceos" | grep -q 'completed failure\|completed cancelled\|completed timed_out'; then
-              echo "Primary CI failed on $GITHUB_SHA"
+
+            if printf '%s' "$gateway" | grep -q 'completed failure\|completed cancelled\|completed timed_out'; then
+              echo "Gateway CI failed on $GITHUB_SHA"
               exit 1
             fi
+            if printf '%s' "$execution" | grep -q 'completed failure\|completed cancelled\|completed timed_out'; then
+              echo "Execution gate failed on $GITHUB_SHA"
+              exit 1
+            fi
+
             if [ $(date +%s) -ge $deadline ]; then
-              echo "Timed out waiting for primary CI"
+              echo "Timed out waiting for actual LUNA CI"
               exit 1
             fi
             sleep 15
