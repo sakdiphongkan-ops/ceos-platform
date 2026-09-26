@@ -63,6 +63,42 @@ jobs:
           print("LUNA_PROVIDER_POLICY_SMOKE_OK")
           PY
 
+      - name: Smoke-test provider source binding
+        env:
+          LUNA_DEPLOY_SOURCE_SHA: ci
+          LUNA_EXPECTED_SOURCE_SHA: ci
+          LUNA_PRIMARY_MARKETDATA_PROVIDER: SETTRADE
+          LUNA_MARKETDATA_PROVIDER: SETTRADE
+          REALTIME_MARKETDATA_ENABLED: "true"
+          SETTRADE_REALTIME_SYMBOLS: "AOT"
+          SETTRADE_BROKER_ID: "broker"
+          SETTRADE_APP_ID: "app"
+          SETTRADE_APP_SECRET: "secret"
+          SETTRADE_APP_CODE: "code"
+          LUNA_LIVE_MIN_REALTIME_COVERAGE: "1.0"
+        run: |
+          python - <<'PY'
+          import time
+          import app
+          app._selected_provider = "SETTRADE"
+          app._quotes["AOT"] = {
+              "symbol": "AOT",
+              "source": "toptrader-public-rest",
+              "_ingested_ts": time.time(),
+              "bid": 10,
+              "ask": 10.1,
+              "bid_size": 100,
+              "ask_size": 100,
+          }
+          proof = app._connectivity_proof()
+          assert proof["coverage"]["fresh_quote_count"] == 0
+          assert proof["live_execution_ready"] is False
+          app._quotes["AOT"]["source"] = "settrade-price-info"
+          proof = app._connectivity_proof()
+          assert proof["coverage"]["fresh_quote_count"] == 1
+          print("LUNA_PROVIDER_SOURCE_BINDING_OK")
+          PY
+
       - name: Verify Settrade Open API v2 surface
         run: |
           python - <<'PY'

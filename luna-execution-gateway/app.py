@@ -303,6 +303,15 @@ def _prune_order_attempts(now: float):
         _order_attempt_timestamps.pop(0)
 
 
+def _quote_matches_selected_provider(quote: Dict[str, Any]) -> bool:
+    source = str(quote.get("source") or "").lower()
+    if _selected_provider == "SETTRADE":
+        return source.startswith("settrade")
+    if _selected_provider == "SET_API":
+        return source.startswith("set-market-data-api")
+    return False
+
+
 def _quote_coverage_snapshot() -> Dict[str, Any]:
     """Return fresh-quote coverage evidence for the configured realtime universe."""
     now = time.time()
@@ -313,6 +322,8 @@ def _quote_coverage_snapshot() -> Dict[str, Any]:
     verified_book_symbols = set()
     for symbol, quote in target_quotes.items():
         if not quote:
+            continue
+        if not _quote_matches_selected_provider(quote):
             continue
         ts = quote.get("_ingested_ts")
         if ts is None:
@@ -427,6 +438,11 @@ def _hard_order_gate(payload: Any):
         quote = dict(_quotes.get(str(payload.symbol).strip().upper(), {}))
     if not quote:
         raise HTTPException(status_code=503, detail={"code": "verified_quote_unavailable"})
+    if not _quote_matches_selected_provider(quote):
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "quote_provider_mismatch", "selected_provider": _selected_provider},
+        )
     age = time.time() - float(quote.get("_ingested_ts") or 0.0)
     if age < 0 or age > GATEWAY_MAX_QUOTE_AGE_SEC:
         raise HTTPException(status_code=503, detail={"code": "quote_stale", "age_sec": age})
