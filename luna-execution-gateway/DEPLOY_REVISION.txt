@@ -1,0 +1,1 @@
+LUNA production deploy trigger: hardened Settrade v2 gateway, 99% realtime coverage policy, authorized SET API backup. Live trading remains disabled until runtime proof passes.
