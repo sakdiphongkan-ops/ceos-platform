@@ -14,8 +14,10 @@ import numpy as np
 import pandas as pd
 from apply_pit_universe import filter_dataframe_by_date
 from luna_feasibility import cost_stress, summarize
+from pit_financials import PointInTimeFinancials, add_common_financial_factors
 
-FACTORS=["mom1","mom3","mom6","mom12","high52_ratio","vol20","maxdd60","avg_amount20"]
+BASE_FACTORS=["mom1","mom3","mom6","mom12","high52_ratio","vol20","maxdd60","avg_amount20"]
+FINANCIAL_FACTORS=["profit_margin","roe","asset_turnover","cash_conversion"]
 
 def geo(x):
     x=np.asarray(x,dtype=float)
@@ -33,7 +35,14 @@ def main():
     ap.add_argument("--formula-count",type=int,default=1000)
     ap.add_argument("--k",type=int,default=20)
     ap.add_argument("--seed",type=int,default=20260920)
+    ap.add_argument("--financial-statements",default=os.getenv("LUNA_PIT_FINANCIAL_STATEMENTS"))
+    ap.add_argument("--enable-pit-fundamentals",action="store_true",default=str(os.getenv("LUNA_ENABLE_PIT_FUNDAMENTALS","false")).lower()=="true")
     args=ap.parse_args()
+    pit_financials_enabled=bool(args.enable_pit_fundamentals or args.financial_statements)
+    factor_columns=list(BASE_FACTORS)
+    pit_financial_factor_coverage={}
+    pit_financial_revision_count=0
+    pit_financial_sha256=None
     if not args.membership:
         raise SystemExit("PIT_UNIVERSE_MEMBERSHIP_REQUIRED")
     out=Path(args.output); out.mkdir(parents=True,exist_ok=True)
@@ -45,16 +54,42 @@ def main():
     df, pit_excluded_rows, pit_active_symbols = filter_dataframe_by_date(
         df, args.membership, "snapshot_date"
     )
-    req={"symbol","month_end","adj_close",*FACTORS}
+
+    if pit_financials_enabled:
+        if not args.financial_statements:
+            raise SystemExit("PIT_FINANCIAL_STATEMENTS_REQUIRED")
+        statement_path=Path(args.financial_statements)
+        if not statement_path.exists():
+            raise SystemExit(f"PIT_FINANCIAL_STATEMENTS_NOT_FOUND: {statement_path}")
+        pit_engine=PointInTimeFinancials()
+        statements=pit_engine.load(statement_path)
+        statements=pit_engine.detect_revisions(statements)
+        pit_financial_revision_count=int(statements["is_restated"].sum())
+        pit_financial_sha256=hashlib.sha256(statement_path.read_bytes()).hexdigest()
+        obs=df[["snapshot_date","symbol"]].rename(columns={"snapshot_date":"date","symbol":"ticker"})
+        attached=pit_engine.merge_prices(statements,obs)
+        attached=add_common_financial_factors(attached)
+        available_financial=[f for f in FINANCIAL_FACTORS if f in attached.columns]
+        if not available_financial:
+            raise SystemExit("NO_PIT_FINANCIAL_FACTORS_AVAILABLE")
+        attached=attached[["date","ticker",*available_financial]].drop_duplicates(["date","ticker"])
+        df=df.merge(attached,left_on=["snapshot_date","symbol"],right_on=["date","ticker"],how="left",validate="many_to_one")
+        df.drop(columns=["date","ticker"],inplace=True)
+        for f in available_financial:
+            df[f]=pd.to_numeric(df[f],errors="coerce")
+        factor_columns.extend(available_financial)
+        pit_financial_factor_coverage={f:float(df[f].notna().mean()) for f in available_financial}
+
+    req={"symbol","month_end","adj_close",*factor_columns}
     miss=sorted(req-set(df.columns))
     if miss: raise SystemExit(f"missing columns: {miss}")
     df["month_end"]=pd.to_datetime(df.month_end).dt.to_period("M").dt.to_timestamp("M")
     df=df.sort_values(["month_end","symbol"]).drop_duplicates(["month_end","symbol"])
     df["adj_close"]=pd.to_numeric(df.adj_close,errors="coerce")
-    for f in FACTORS: df[f]=pd.to_numeric(df[f],errors="coerce")
-    factor_coverage={f:float(df[f].notna().mean()) for f in FACTORS}
+    for f in factor_columns: df[f]=pd.to_numeric(df[f],errors="coerce")
+    factor_coverage={f:float(df[f].notna().mean()) for f in factor_columns}
     active_factors=[f for f in FACTORS if factor_coverage[f] >= 0.20]
-    excluded_factors=[f for f in FACTORS if f not in active_factors]
+    excluded_factors=[f for f in factor_columns if f not in active_factors]
     if "mom1" not in active_factors or len(active_factors) < 2:
         raise SystemExit(f"insufficient usable factors: {factor_coverage}")
     # Strict calendar-contiguous forward return: a missing month is NOT a 1M return.
@@ -175,6 +210,10 @@ def main():
       "dataset_sha256":hashlib.sha256(Path(args.input).read_bytes()).hexdigest(),
       "formula_count":len(formulas),"months_traded":len(r),
       "factor_coverage":factor_coverage,"active_factors":active_factors,
+      "pit_financials_enabled":pit_financials_enabled,
+      "pit_financial_statements_sha256":pit_financial_sha256,
+      "pit_financial_revision_count":pit_financial_revision_count,
+      "pit_financial_factor_coverage":pit_financial_factor_coverage,
       "excluded_sparse_factors":[f for f in FACTORS if f not in active_factors],
       "geometric_monthly_return":adaptive_stats["geometric_monthly_return"],
       "cumulative_return":adaptive_stats["cumulative_return"],
