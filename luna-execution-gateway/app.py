@@ -1978,6 +1978,7 @@ def place(
     x_luna_gateway: Optional[str] = Header(default=None),
     x_luna_order: Optional[str] = Header(default=None),
 ):
+    global _broker_circuit_tripped, _broker_last_failure
     order_auth(x_luna_gateway, x_luna_order)
     _hard_order_gate(payload)
     if not execution_ledger_configured():
