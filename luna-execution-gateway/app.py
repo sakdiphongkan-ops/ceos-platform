@@ -51,7 +51,7 @@ print(
 
 LIVE_ARMED = os.getenv("LIVE_TRADING_ARMED", "false").lower() == "true"
 GATEWAY_KEY = os.getenv("LUNA_GATEWAY_KEY", "")
-MARKETDATA_INGEST_KEY = os.getenv("LUNA_MARKETDATA_INGEST_KEY") or GATEWAY_KEY
+MARKETDATA_INGEST_KEY = os.getenv("LUNA_MARKETDATA_INGEST_KEY", "")
 
 
 GATEWAY_ORDER_GATE_ENABLED = os.getenv("LUNA_GATEWAY_ORDER_GATE_ENABLED", "false").lower() == "true"
@@ -141,6 +141,7 @@ INGEST_ENABLED = bool(MARKETDATA_INGEST_KEY)
 EXTERNAL_BRIDGE_MAX_AGE_SEC = max(5.0, float(os.getenv("LUNA_EXTERNAL_BRIDGE_MAX_AGE_SEC", "10")))
 _external_bridge_last_ts = 0.0
 PUBLIC_STREAM_ENABLED = os.getenv("LUNA_PUBLIC_STREAM_ENABLED", "true").lower() == "true"
+PUBLIC_AUTHORIZED_FEED_ENABLED = os.getenv("LUNA_PUBLIC_AUTHORIZED_FEED_ENABLED", "false").lower() == "true"
 PUBLIC_STREAM_MAX_CLIENTS = max(1, int(os.getenv("LUNA_PUBLIC_STREAM_MAX_CLIENTS", "50")))
 SYMBOLS = [s.strip().upper() for s in os.getenv("SETTRADE_REALTIME_SYMBOLS", "").split(",") if s.strip()]
 
@@ -479,6 +480,8 @@ def _connectivity_proof() -> Dict[str, Any]:
         "settrade_environment": SETTRADE_ENV,
         "execution_ledger_configured": execution_ledger_configured(),
         "order_auth_configured": bool(ORDER_AUTH_KEY),
+        "marketdata_ingest_configured": bool(MARKETDATA_INGEST_KEY),
+        "public_authorized_feed_enabled": PUBLIC_AUTHORIZED_FEED_ENABLED,
         "primary_provider": PRIMARY_PROVIDER,
         "authorized_backup_provider": "SET_API",
         "coverage": coverage,
@@ -1811,6 +1814,9 @@ async def quotes_stream(websocket: WebSocket):
 @app.websocket("/quotes/public-stream")
 async def public_quotes_stream(websocket: WebSocket):
     if not PUBLIC_STREAM_ENABLED:
+        await websocket.close(code=4403)
+        return
+    if PROVIDER_MODE in {"SETTRADE", "SET_API"} and not PUBLIC_AUTHORIZED_FEED_ENABLED:
         await websocket.close(code=4403)
         return
 
