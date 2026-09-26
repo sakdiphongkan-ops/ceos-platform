@@ -16,6 +16,7 @@ import app
 app._connectivity_proof = lambda: {
     "live_execution_ready": True,
 }
+app._selected_provider = "SETTRADE"
 
 class Payload:
     def __init__(self, client_order_id="test-order-1", symbol="AAA", side="BUY", price=100.1, volume=100):
@@ -33,6 +34,7 @@ with app._quote_lock:
         "ask": 100.1,
         "bid_size": 1000,
         "ask_size": 1000,
+        "source": "settrade-open-api-realtime",
         "_ingested_ts": time.time(),
     }
 
