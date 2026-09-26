@@ -371,8 +371,12 @@ def _system_status() -> str:
     proof = _connectivity_proof()
     if LIVE_ARMED and proof["live_execution_ready"] and not GATEWAY_KILL_SWITCH and GATEWAY_ORDER_GATE_ENABLED:
         return "LIVE_READY"
-    if not LIVE_ARMED and proof["checks"]["settrade_sdk_loaded"]:
-        return "PAPER_ONLY"
+    if not LIVE_ARMED:
+        if proof["checks"]["authorized_marketdata_selected"] and proof["checks"]["fresh_coverage_sufficient"]:
+            return "PAPER_READY"
+        if proof["checks"]["realtime_enabled"] and proof["coverage"]["quoted_count"] > 0:
+            return "PAPER_DEGRADED"
+        return "LOCKED"
     if proof["checks"]["realtime_enabled"] and proof["coverage"]["quoted_count"] > 0:
         return "DEGRADED"
     return "LOCKED"
