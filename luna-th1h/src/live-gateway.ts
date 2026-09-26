@@ -133,7 +133,7 @@ export async function liveGatewayHealth(){
   const res=await fetch(`${config.liveGatewayUrl}/health`,{headers:headers()});
   const body=await res.json().catch(()=>({}));
   if(!res.ok) throw new Error(`GATEWAY_HEALTH_HTTP_${res.status}: ${JSON.stringify(body)}`);
-  return body as {ok:boolean;live_armed:boolean;provider:string};
+  return body as {ok:boolean;status:string;live_armed:boolean;timestamp:number};
 }
 
 export async function liveGatewayDiagnostics(){
