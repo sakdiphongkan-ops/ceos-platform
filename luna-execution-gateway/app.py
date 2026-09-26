@@ -220,6 +220,16 @@ def realtime_marketdata_client(inv):
     raise ProviderUnavailable("settrade_realtime_connection_unavailable")
 
 
+def historical_marketdata_client(inv):
+    """Return Settrade historical market-data client."""
+    if not hasattr(inv, "MarketData"):
+        raise ProviderUnavailable("settrade_marketdata_client_unavailable")
+    try:
+        return inv.MarketData()
+    except Exception as exc:
+        raise ProviderUnavailable(f"settrade_marketdata_client_error:{exc}") from exc
+
+
 def live_gate():
     if not LIVE_ARMED:
         raise HTTPException(status_code=423, detail="live_trading_not_armed")
@@ -1418,6 +1428,77 @@ class MarketQuote(BaseModel):
 class MarketQuoteBatch(BaseModel):
     quotes: list[MarketQuote] = Field(min_length=1, max_length=500)
 
+
+
+@app.get("/historical-candles/{symbol}")
+def historical_candles(
+    symbol: str,
+    interval: str = "15m",
+    limit: int = 500,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+    normalized: bool = True,
+    x_luna_gateway: Optional[str] = Header(default=None),
+):
+    """
+    Fetch historical OHLCV candles from Settrade Open API.
+
+    This endpoint is research-only: it never uses adjusted prices or
+    point-in-time fundamentals implicitly. Corporate actions and PIT
+    fundamental data remain separate data products.
+    """
+    auth(x_luna_gateway)
+
+    symbol = symbol.strip().upper()
+    allowed_intervals = {
+        "1m", "3m", "5m", "10m", "15m", "30m",
+        "60m", "120m", "240m", "1d", "1w", "1M",
+    }
+    if not symbol:
+        raise HTTPException(status_code=400, detail="invalid_symbol")
+    if interval not in allowed_intervals:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "invalid_interval", "allowed": sorted(allowed_intervals)},
+        )
+    try:
+        limit = int(limit)
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid_limit")
+    if limit < 1 or limit > 5000:
+        raise HTTPException(status_code=400, detail="limit_out_of_range")
+
+    try:
+        inv = investor_client()
+        marketdata = historical_marketdata_client(inv)
+        payload = marketdata.get_candlestick(
+            symbol=symbol,
+            interval=interval,
+            limit=limit,
+            start=start,
+            end=end,
+            normalized=normalized or None,
+        )
+    except ProviderUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "settrade_historical_failed", "error": str(exc)},
+        ) from exc
+
+    return {
+        "ok": True,
+        "source": "settrade-open-api-historical",
+        "symbol": symbol,
+        "interval": interval,
+        "limit": limit,
+        "start": start,
+        "end": end,
+        "normalized": normalized,
+        "fetched_at": _now_iso(),
+        "data": payload,
+    }
 
 
 @app.get("/health")
