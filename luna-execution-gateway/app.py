@@ -120,6 +120,10 @@ APP_ID = os.getenv("LUNA_SETTRADE_APP_ID") or os.getenv("SETTRADE_APP_ID", "")
 APP_SECRET = os.getenv("LUNA_SETTRADE_APP_SECRET") or os.getenv("SETTRADE_APP_SECRET", "")
 APP_CODE = os.getenv("LUNA_SETTRADE_APP_CODE") or os.getenv("SETTRADE_APP_CODE", "")
 SETTRADE_ENV = (os.getenv("LUNA_SETTRADE_ENV") or os.getenv("SETTRADE_ENV", "prod")).lower()
+EXECUTION_LEDGER_URL = os.getenv("LUNA_EXECUTION_LEDGER_URL", "https://wigzicwgcsrhdummrbjx.supabase.co/functions/v1/luna-execution-gateway").rstrip("/")
+EXECUTION_LEDGER_KEY = os.getenv("LUNA_AGENT_KEY", "")
+EXECUTION_LEDGER_ENABLED = os.getenv("LUNA_EXECUTION_LEDGER_ENABLED", "false").lower() == "true"
+ORDER_AUTH_KEY = os.getenv("LUNA_ORDER_AUTH_KEY", "")
 try:
     SETTRADE_SDK_VERSION = package_version("settrade-v2")
 except PackageNotFoundError:  # pragma: no cover
@@ -201,6 +205,89 @@ _channel_status: Dict[str, Dict[str, Any]] = {
 def auth(x_luna_gateway: Optional[str]):
     if not GATEWAY_KEY or x_luna_gateway != GATEWAY_KEY:
         raise HTTPException(status_code=401, detail="unauthorized")
+
+
+def order_auth(x_luna_gateway: Optional[str], x_luna_order: Optional[str]):
+    auth(x_luna_gateway)
+    if not ORDER_AUTH_KEY or x_luna_order != ORDER_AUTH_KEY:
+        raise HTTPException(status_code=401, detail="order_authorization_required")
+
+
+def execution_ledger_configured() -> bool:
+    return EXECUTION_LEDGER_ENABLED and bool(EXECUTION_LEDGER_URL) and bool(EXECUTION_LEDGER_KEY)
+
+
+def _ledger_request(action: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    if not execution_ledger_configured():
+        raise ProviderUnavailable("execution_ledger_unconfigured")
+    body = dict(payload)
+    body["action"] = action
+    request = Request(
+        EXECUTION_LEDGER_URL,
+        headers={
+            "Content-Type": "application/json",
+            "Cache-Control": "no-store",
+            "x-luna-agent": EXECUTION_LEDGER_KEY,
+        },
+        data=json.dumps(body).encode("utf-8"),
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=5.0) as response:
+            raw = response.read().decode("utf-8")
+            status = getattr(response, "status", 200)
+    except HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise ProviderUnavailable(f"execution_ledger_http_{exc.code}:{detail}") from exc
+    except URLError as exc:
+        raise ProviderUnavailable(f"execution_ledger_network:{exc.reason}") from exc
+    except Exception as exc:
+        raise ProviderUnavailable(f"execution_ledger_request:{exc}") from exc
+    try:
+        result = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ProviderUnavailable("execution_ledger_invalid_json") from exc
+    if status >= 400:
+        raise ProviderUnavailable(f"execution_ledger_status_{status}:{result}")
+    return result
+
+
+def _ledger_admit(payload: Any) -> Dict[str, Any]:
+    result = _ledger_request("admit", {
+        "session_id": str(payload.session_id),
+        "strategy_version": str(payload.strategy_version),
+        "mode": "live",
+        "symbol": str(payload.symbol).strip().upper(),
+        "side": str(payload.side).upper(),
+        "qty": int(payload.volume),
+        "limit_price": float(payload.price),
+        "client_order_id": str(payload.client_order_id),
+        "idempotency_key": str(payload.client_order_id),
+    })
+    if not result.get("admitted"):
+        status = 409 if result.get("decision") == "DUPLICATE" else 423
+        code = "persistent_idempotency_replay" if status == 409 else "persistent_execution_admission_denied"
+        raise HTTPException(status_code=status, detail={"code": code, "ledger": result})
+    if not result.get("request_id"):
+        raise ProviderUnavailable("execution_ledger_missing_request_id")
+    return result
+
+
+def _ledger_mark_submitted(request_id: str, broker_order_id: str, broker_result: Dict[str, Any]) -> Dict[str, Any]:
+    return _ledger_request("mark_submitted", {
+        "request_id": request_id,
+        "broker_order_id": broker_order_id,
+        "ack_kind": "broker_native" if extract_broker_native_submitted_at_ms(broker_result) is not None else "gateway_response",
+        "broker_native_submitted_at_ms": extract_broker_native_submitted_at_ms(broker_result),
+    })
+
+
+def _ledger_mark_denied(request_id: str, reason: str) -> Dict[str, Any]:
+    return _ledger_request("mark_denied", {"request_id": request_id, "reason": reason})
+
+
+def _ledger_lookup_broker_order(broker_order_id: str) -> Dict[str, Any]:
+    return _ledger_request("lookup", {"broker_order_id": broker_order_id})
 
 
 def investor_client():
@@ -1536,6 +1623,8 @@ def startup():
 
 class PlaceOrder(BaseModel):
     client_order_id: str = Field(min_length=8, max_length=200)
+    session_id: str = Field(min_length=8, max_length=200)
+    strategy_version: str = Field(min_length=1, max_length=200)
     symbol: str = Field(min_length=1, max_length=32)
     side: str
     price: float = Field(gt=0)
