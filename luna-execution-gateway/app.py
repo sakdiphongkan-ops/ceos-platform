@@ -446,6 +446,12 @@ def _connectivity_proof() -> Dict[str, Any]:
         "settrade_sdk_loaded": Investor is not None,
         "settrade_sdk_v2": SETTRADE_SDK_VERSION.startswith("2."),
         "broker_credentials_configured": settrade_configured(),
+        "broker_execution_credentials_configured": (
+            settrade_configured()
+            and bool(os.getenv("SETTRADE_ACCOUNT_NO", ""))
+            and bool(os.getenv("SETTRADE_PIN", ""))
+        ),
+        "order_auth_configured": bool(ORDER_AUTH_KEY),
         "authorized_marketdata_selected": _selected_provider in {"SETTRADE", "SET_API"},
         "execution_ledger_configured": execution_ledger_configured(),
         "selected_provider_credentials_configured": (
@@ -465,6 +471,8 @@ def _connectivity_proof() -> Dict[str, Any]:
             and checks["settrade_sdk_loaded"]
             and checks["settrade_sdk_v2"]
             and checks["broker_credentials_configured"]
+            and checks["broker_execution_credentials_configured"]
+            and checks["order_auth_configured"]
             and checks["authorized_marketdata_selected"]
             and checks["selected_provider_credentials_configured"]
             and checks["execution_ledger_configured"]
