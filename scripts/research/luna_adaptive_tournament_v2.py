@@ -214,7 +214,7 @@ def main():
       "pit_financial_statements_sha256":pit_financial_sha256,
       "pit_financial_revision_count":pit_financial_revision_count,
       "pit_financial_factor_coverage":pit_financial_factor_coverage,
-      "excluded_sparse_factors":[f for f in FACTORS if f not in active_factors],
+      "excluded_sparse_factors":[f for f in factor_columns if f not in active_factors],
       "geometric_monthly_return":adaptive_stats["geometric_monthly_return"],
       "cumulative_return":adaptive_stats["cumulative_return"],
       "positive_month_pct":adaptive_stats["positive_month_pct"],
