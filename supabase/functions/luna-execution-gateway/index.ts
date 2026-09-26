@@ -71,7 +71,22 @@ Deno.serve(async (req: Request) => {
       });
 
       if (error) return json({ ok: false, error: "EXECUTION_GATE_ERROR", detail: error.message }, 500);
-      const result = data ?? { admitted: false, reason: "EMPTY_GATE_RESPONSE" };
+      let result = data ?? { admitted: false, reason: "EMPTY_GATE_RESPONSE" };
+      if (result.admitted === true && !result.request_id) {
+        const lookup = await supabase
+          .from("luna_execution_requests")
+          .select("request_id,decision,decision_reason,payload_hash")
+          .eq("idempotency_key", String(body.idempotency_key))
+          .limit(1)
+          .maybeSingle();
+        if (lookup.error) {
+          return json({ ok: false, error: "EXECUTION_LEDGER_LOOKUP_ERROR", detail: lookup.error.message }, 500);
+        }
+        if (!lookup.data?.request_id) {
+          return json({ ok: false, error: "EXECUTION_LEDGER_REQUEST_ID_MISSING" }, 500);
+        }
+        result = { ...result, ...lookup.data };
+      }
       const status = result.admitted === true ? 200 : result.decision === "DUPLICATE" ? 409 : 423;
       return json({ ok: true, ...result }, status);
     }
