@@ -348,6 +348,10 @@ def _connectivity_proof() -> Dict[str, Any]:
         "settrade_sdk_v2": SETTRADE_SDK_VERSION.startswith("2."),
         "broker_credentials_configured": settrade_configured(),
         "authorized_marketdata_selected": _selected_provider in {"SETTRADE", "SET_API"},
+        "selected_provider_credentials_configured": (
+            (_selected_provider == "SETTRADE" and settrade_configured())
+            or (_selected_provider == "SET_API" and set_api_configured())
+        ),
         "set_api_backup_configured": set_api_configured(),
         "realtime_enabled": REALTIME_ENABLED,
         "symbols_configured": coverage["target_count"] > 0,
