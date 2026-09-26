@@ -180,6 +180,8 @@ jobs:
           assert set(body) <= {"ok", "status", "live_armed", "timestamp"}
           assert "provider_candidates" not in body
           assert "settrade_configured" not in body
+          assert app.PUBLIC_AUTHORIZED_FEED_ENABLED is False
+          assert app.MARKETDATA_INGEST_KEY == ""
           print("LUNA_SECURITY_HEALTH_SMOKE_OK")
           PY
 
