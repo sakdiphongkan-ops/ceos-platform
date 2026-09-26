@@ -36,6 +36,9 @@ def main():
     ap.add_argument("--k",type=int,default=20)
     ap.add_argument("--seed",type=int,default=20260920)
     ap.add_argument("--financial-statements",default=os.getenv("LUNA_PIT_FINANCIAL_STATEMENTS"))
+    ap.add_argument("--trading-calendar",default=os.getenv("LUNA_TRADING_CALENDAR"))
+    ap.add_argument("--pit-availability-rule",choices=["next_trading_day","source_available_at"],default=os.getenv("LUNA_PIT_AVAILABILITY_RULE","next_trading_day"))
+    ap.add_argument("--max-financial-age-days",type=int,default=int(os.getenv("LUNA_MAX_FINANCIAL_AGE_DAYS","180")))
     ap.add_argument("--enable-pit-fundamentals",action="store_true",default=str(os.getenv("LUNA_ENABLE_PIT_FUNDAMENTALS","false")).lower()=="true")
     args=ap.parse_args()
     pit_financials_enabled=bool(args.enable_pit_fundamentals or args.financial_statements)
@@ -43,6 +46,9 @@ def main():
     pit_financial_factor_coverage={}
     pit_financial_revision_count=0
     pit_financial_sha256=None
+    pit_calendar_sha256=None
+    pit_available_at_rule=None
+    pit_validation_error=None
     if not args.membership:
         raise SystemExit("PIT_UNIVERSE_MEMBERSHIP_REQUIRED")
     out=Path(args.output); out.mkdir(parents=True,exist_ok=True)
@@ -63,16 +69,48 @@ def main():
             raise SystemExit(f"PIT_FINANCIAL_STATEMENTS_NOT_FOUND: {statement_path}")
         pit_engine=PointInTimeFinancials()
         statements=pit_engine.load(statement_path)
+        pit_financial_sha256=hashlib.sha256(statement_path.read_bytes()).hexdigest()
+
+        if args.pit_availability_rule == "next_trading_day":
+            if not args.trading_calendar:
+                raise SystemExit("PIT_TRADING_CALENDAR_REQUIRED")
+            calendar_path=Path(args.trading_calendar)
+            if not calendar_path.exists():
+                raise SystemExit(f"PIT_TRADING_CALENDAR_NOT_FOUND: {calendar_path}")
+            calendar_raw=pd.read_csv(calendar_path)
+            calendar_col=next((c for c in ("date","trading_date","datetime") if c in calendar_raw.columns),None)
+            if calendar_col is None:
+                raise SystemExit("PIT_TRADING_CALENDAR_DATE_COLUMN_REQUIRED")
+            calendar=calendar_raw[calendar_col]
+            statements=pit_engine.assign_available_at(statements,calendar)
+            pit_calendar_sha256=hashlib.sha256(calendar_path.read_bytes()).hexdigest()
+        elif "available_at" not in statements.columns:
+            raise SystemExit("PIT_SOURCE_AVAILABLE_AT_REQUIRED")
+
+        pit_available_at_rule=args.pit_availability_rule
         statements=pit_engine.detect_revisions(statements)
         pit_financial_revision_count=int(statements["is_restated"].sum())
-        pit_financial_sha256=hashlib.sha256(statement_path.read_bytes()).hexdigest()
+
         obs=df[["snapshot_date","symbol"]].rename(columns={"snapshot_date":"date","symbol":"ticker"})
         attached=pit_engine.merge_prices(statements,obs)
         attached=add_common_financial_factors(attached)
+        attached["financial_age_days"]=(attached["date"]-attached["available_at"]).dt.days
+        attached["fundamental_eligible"]=attached["financial_age_days"].between(0,args.max_financial_age_days)
+        for f in FINANCIAL_FACTORS:
+            if f in attached.columns:
+                attached.loc[~attached["fundamental_eligible"],f]=np.nan
+
+        pit_validation=attached[["ticker","date","available_at"]].copy()
+        try:
+            from pit_financials import validate_pit
+            validate_pit(pit_validation,args.max_financial_age_days)
+        except Exception as exc:
+            pit_validation_error=str(exc)
+
         available_financial=[f for f in FINANCIAL_FACTORS if f in attached.columns]
         if not available_financial:
             raise SystemExit("NO_PIT_FINANCIAL_FACTORS_AVAILABLE")
-        attached=attached[["date","ticker",*available_financial]].drop_duplicates(["date","ticker"])
+        attached=attached[["date","ticker","available_at","financial_age_days","fundamental_eligible",*available_financial]].drop_duplicates(["date","ticker"])
         df=df.merge(attached,left_on=["snapshot_date","symbol"],right_on=["date","ticker"],how="left",validate="many_to_one")
         df.drop(columns=["date","ticker"],inplace=True)
         for f in available_financial:
@@ -214,6 +252,10 @@ def main():
       "pit_financial_statements_sha256":pit_financial_sha256,
       "pit_financial_revision_count":pit_financial_revision_count,
       "pit_financial_factor_coverage":pit_financial_factor_coverage,
+      "pit_available_at_rule":pit_available_at_rule,
+      "pit_trading_calendar_sha256":pit_calendar_sha256,
+      "pit_max_financial_age_days":args.max_financial_age_days,
+      "pit_validation_error":pit_validation_error,
       "excluded_sparse_factors":[f for f in factor_columns if f not in active_factors],
       "geometric_monthly_return":adaptive_stats["geometric_monthly_return"],
       "cumulative_return":adaptive_stats["cumulative_return"],
