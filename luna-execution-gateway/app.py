@@ -446,6 +446,7 @@ def _connectivity_proof() -> Dict[str, Any]:
         "settrade_sdk_v2": SETTRADE_SDK_VERSION.startswith("2."),
         "broker_credentials_configured": settrade_configured(),
         "authorized_marketdata_selected": _selected_provider in {"SETTRADE", "SET_API"},
+        "execution_ledger_configured": execution_ledger_configured(),
         "selected_provider_credentials_configured": (
             (_selected_provider == "SETTRADE" and settrade_configured())
             or (_selected_provider == "SET_API" and set_api_configured())
@@ -465,6 +466,7 @@ def _connectivity_proof() -> Dict[str, Any]:
             and checks["broker_credentials_configured"]
             and checks["authorized_marketdata_selected"]
             and checks["selected_provider_credentials_configured"]
+            and checks["execution_ledger_configured"]
             and checks["realtime_enabled"]
             and checks["symbols_configured"]
             and checks["fresh_coverage_sufficient"]
@@ -475,6 +477,8 @@ def _connectivity_proof() -> Dict[str, Any]:
         "settrade_sdk": "settrade-v2",
         "settrade_sdk_version": SETTRADE_SDK_VERSION,
         "settrade_environment": SETTRADE_ENV,
+        "execution_ledger_configured": execution_ledger_configured(),
+        "order_auth_configured": bool(ORDER_AUTH_KEY),
         "primary_provider": PRIMARY_PROVIDER,
         "authorized_backup_provider": "SET_API",
         "coverage": coverage,
@@ -1754,52 +1758,10 @@ def connectivity_proof(
 
 @app.get("/health")
 def health():
-    with _quote_lock:
-        quote_count = len(_quotes)
-    bridge_age = (time.time() - _external_bridge_last_ts) if _external_bridge_last_ts else None
-    effective_provider = "SETTRADE_LOCAL_BRIDGE" if bridge_age is not None and bridge_age <= EXTERNAL_BRIDGE_MAX_AGE_SEC else _selected_provider
-    proof = _connectivity_proof()
     return {
         "ok": True,
-        "system_status": _system_status(),
-        "connectivity_proof": proof,
-        "version": APP_VERSION,
-        "source_revision": RELEASE_SOURCE_REVISION,
-        "public_stream_release": PUBLIC_STREAM_RELEASE,
+        "status": _system_status(),
         "live_armed": LIVE_ARMED,
-        "hard_order_gate_enabled": GATEWAY_ORDER_GATE_ENABLED,
-        "gateway_kill_switch": GATEWAY_KILL_SWITCH,
-        "safety": _safety_snapshot(),
-        "provider_mode": PROVIDER_MODE,
-        "selected_provider": effective_provider,
-        "provider_candidates": _provider_order(),
-        "set_api_configured": set_api_configured(),
-        "settrade_configured": settrade_configured(),
-        "toptrader_backup_enabled": TOPTRADER_ENABLED,
-        "toptrader_ws_enabled": TOPTRADER_WS_ENABLED,
-        "toptrader_ws_dependency_available": websockets is not None,
-        "public_fallback_enabled": PUBLIC_FALLBACK_ENABLED,
-        "realtime_marketdata_enabled": REALTIME_ENABLED,
-        "realtime_bid_offer_enabled": REALTIME_BOOK,
-        "realtime_symbol_target": len(SYMBOLS),
-        "realtime_quote_count": quote_count,
-        "latest_quote_age_sec": _latest_quote_age_sec(),
-        "stale_after_sec": STALE_AFTER_SEC,
-        "collector_started": _collector_started,
-        "collector_error": _collector_error,
-        "provider_failures": dict(_provider_failures),
-        "channel_status": _channel_snapshot(),
-        "external_bridge_active": bridge_age is not None and bridge_age <= EXTERNAL_BRIDGE_MAX_AGE_SEC,
-        "external_bridge_age_sec": bridge_age,
-        "external_bridge_max_age_sec": EXTERNAL_BRIDGE_MAX_AGE_SEC,
-        "public_stream_enabled": PUBLIC_STREAM_ENABLED,
-        "public_stream_clients": len(_public_stream_clients),
-        "public_stream_max_clients": PUBLIC_STREAM_MAX_CLIENTS,
-        "marketdata_ingest_enabled": INGEST_ENABLED,
-        "external_bridge_active": bridge_age is not None and bridge_age <= EXTERNAL_BRIDGE_MAX_AGE_SEC,
-        "external_bridge_age_sec": bridge_age,
-        "external_bridge_max_age_sec": EXTERNAL_BRIDGE_MAX_AGE_SEC,
-        "market_phase": market_phase_now(),
         "timestamp": int(time.time()),
     }
 
@@ -2005,10 +1967,17 @@ def marketdata_ingest(payload: MarketQuoteBatch, x_luna_gateway: Optional[str] =
 
 
 @app.post("/place")
-def place(payload: PlaceOrder, x_luna_gateway: Optional[str] = Header(default=None)):
-    auth(x_luna_gateway)
+def place(
+    payload: PlaceOrder,
+    x_luna_gateway: Optional[str] = Header(default=None),
+    x_luna_order: Optional[str] = Header(default=None),
+):
+    order_auth(x_luna_gateway, x_luna_order)
     _hard_order_gate(payload)
+    if not execution_ledger_configured():
+        raise HTTPException(status_code=503, detail={"code": "persistent_execution_ledger_required"})
     eq = client()
+    ledger_admission = _ledger_admit(payload)
 
     try:
         broker_result = eq.place_order(
@@ -2025,6 +1994,11 @@ def place(payload: PlaceOrder, x_luna_gateway: Optional[str] = Header(default=No
     broker_data = (broker_result or {}).get("data", {}) if isinstance(broker_result, dict) else {}
     if isinstance(broker_result, dict) and broker_result.get("success") is False:
         _record_broker_failure("BROKER_REJECTED")
+        try:
+            _ledger_mark_denied(str(ledger_admission["request_id"]), "BROKER_REJECTED")
+        except ProviderUnavailable:
+            with _safety_lock:
+                _broker_circuit_tripped = True
         raise HTTPException(status_code=502, detail={"code": "broker_rejected"})
     broker_id = str(
         broker_data.get("order_id")
@@ -2035,6 +2009,18 @@ def place(payload: PlaceOrder, x_luna_gateway: Optional[str] = Header(default=No
     if not broker_id:
         _record_broker_failure("BROKER_ACK_MISSING_ORDER_ID")
         raise HTTPException(status_code=502, detail={"code": "broker_ack_missing_order_id"})
+    try:
+        _ledger_mark_submitted(
+            str(ledger_admission["request_id"]),
+            broker_id,
+            broker_result if isinstance(broker_result, dict) else {},
+        )
+    except ProviderUnavailable as exc:
+        with _safety_lock:
+            _broker_circuit_tripped = True
+            _broker_last_failure = f"EXECUTION_LEDGER_COMMIT_FAILED:{exc}"
+        raise HTTPException(status_code=503, detail={"code": "execution_ledger_commit_failed"}) from exc
+
     _record_broker_success()
     with _safety_lock:
         _seen_client_orders.add(str(payload.client_order_id))
@@ -2056,9 +2042,25 @@ def place(payload: PlaceOrder, x_luna_gateway: Optional[str] = Header(default=No
 
 
 @app.post("/cancel")
-def cancel(payload: CancelOrder, x_luna_gateway: Optional[str] = Header(default=None)):
-    auth(x_luna_gateway)
+def cancel(
+    payload: CancelOrder,
+    x_luna_gateway: Optional[str] = Header(default=None),
+    x_luna_order: Optional[str] = Header(default=None),
+):
+    order_auth(x_luna_gateway, x_luna_order)
     eq = client()
+    try:
+        ledger = _ledger_lookup_broker_order(payload.broker_order_id)
+    except ProviderUnavailable as exc:
+        raise HTTPException(status_code=503, detail={"code": "execution_ledger_lookup_failed"}) from exc
+    request = ledger.get("request") if isinstance(ledger, dict) else None
+    if (
+        not request
+        or not request.get("executed")
+        or str(request.get("broker_order_id")) != payload.broker_order_id
+    ):
+        raise HTTPException(status_code=409, detail={"code": "cancel_order_not_bound_to_persisted_execution"})
+
     if not hasattr(eq, "cancel_order"):
         raise HTTPException(status_code=501, detail="cancel_order_method_unavailable_in_sdk")
     result = eq.cancel_order(
