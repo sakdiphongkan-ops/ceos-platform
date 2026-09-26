@@ -1,4 +1,4 @@
-# LUNA production deploy trigger pinned to the current master source revision.
+# LUNA production deploy trigger: Settrade Open API v2 gateway.
 FROM python:3.9-slim
 WORKDIR /app
 COPY requirements.txt ./
