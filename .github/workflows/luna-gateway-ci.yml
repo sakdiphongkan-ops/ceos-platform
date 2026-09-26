@@ -99,6 +99,61 @@ jobs:
           print("LUNA_PROVIDER_SOURCE_BINDING_OK")
           PY
 
+      - name: Smoke-test provider switch and verified-book gate
+        env:
+          LUNA_DEPLOY_SOURCE_SHA: ci
+          LUNA_EXPECTED_SOURCE_SHA: ci
+          LUNA_PRIMARY_MARKETDATA_PROVIDER: SETTRADE
+          LUNA_MARKETDATA_PROVIDER: SETTRADE
+          REALTIME_MARKETDATA_ENABLED: "true"
+          REALTIME_BID_OFFER_ENABLED: "true"
+          SETTRADE_REALTIME_SYMBOLS: "AOT"
+          SETTRADE_BROKER_ID: "broker"
+          SETTRADE_APP_ID: "app"
+          SETTRADE_APP_SECRET: "secret"
+          SETTRADE_APP_CODE: "code"
+          LUNA_LIVE_MIN_REALTIME_COVERAGE: "1.0"
+        run: |
+          python - <<'PY'
+          import time
+          import app
+          app._selected_provider = "SETTRADE"
+          app._quote_payload(
+              symbol="AOT",
+              last=10.0,
+              bid=9.9,
+              ask=10.1,
+              bid_size=100,
+              ask_size=100,
+              source="toptrader-public-rest",
+          )
+          app._quote_payload(
+              symbol="AOT",
+              last=10.05,
+              source="settrade-open-api-realtime",
+          )
+          q = app._quotes["AOT"]
+          assert q["bid"] is None and q["ask"] is None
+          assert q["bid_size"] is None and q["ask_size"] is None
+          proof = app._connectivity_proof()
+          assert proof["coverage"]["fresh_quote_count"] == 1
+          assert proof["coverage"]["verified_book_count"] == 0
+          assert proof["checks"]["verified_book_coverage_sufficient"] is False
+          assert proof["live_execution_ready"] is False
+          app._quote_payload(
+              symbol="AOT",
+              bid=9.9,
+              ask=10.1,
+              bid_size=100,
+              ask_size=100,
+              source="settrade-open-api-realtime",
+          )
+          proof = app._connectivity_proof()
+          assert proof["coverage"]["verified_book_count"] == 1
+          assert proof["live_execution_ready"] is True
+          print("LUNA_PROVIDER_SWITCH_BOOK_GATE_OK")
+          PY
+
       - name: Verify Settrade Open API v2 surface
         run: |
           python - <<'PY'
