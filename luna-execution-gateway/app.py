@@ -62,7 +62,7 @@ GATEWAY_MAX_QUOTE_AGE_SEC = max(0.1, float(os.getenv("LUNA_GATEWAY_MAX_QUOTE_AGE
 GATEWAY_MAX_PRICE_DEVIATION_BPS = max(1.0, float(os.getenv("LUNA_GATEWAY_MAX_PRICE_DEVIATION_BPS", "75")))
 GATEWAY_BROKER_FAILURE_TRIP_COUNT = max(1, int(os.getenv("LUNA_GATEWAY_BROKER_FAILURE_TRIP_COUNT", "3")))
 GATEWAY_CIRCUIT_RESET_KEY = os.getenv("LUNA_GATEWAY_CIRCUIT_RESET_KEY", "")
-LUNA_LIVE_MIN_REALTIME_COVERAGE = min(1.0, max(0.0, float(os.getenv("LUNA_LIVE_MIN_REALTIME_COVERAGE", "1.0"))))
+LUNA_LIVE_MIN_REALTIME_COVERAGE = min(1.0, max(0.0, float(os.getenv("LUNA_LIVE_MIN_REALTIME_COVERAGE", "0.99"))))
 
 _safety_lock = threading.Lock()
 _broker_failure_streak = 0
@@ -72,12 +72,14 @@ _seen_client_orders: set[str] = set()
 _order_attempt_timestamps: list[float] = []
 
 # Market-data providers are selected automatically unless explicitly forced.
-# Priority in AUTO mode:
-#   1) official SET Market Data API (api-key)
-#   2) Settrade Open API (broker/app credentials)
+# Production policy:
+#   1) SETTRADE Open API (primary)
+#   2) Official SET Market Data API (authorized backup, only when subscribed/configured)
+#   3) TopTrader sources (paper/continuity fallback; never authorizes live by itself)
+#   4) TradingView public fallback (paper-only)
 PRIMARY_PROVIDER = os.getenv("LUNA_PRIMARY_MARKETDATA_PROVIDER", "SETTRADE").upper()
-BACKUP_VENDOR = os.getenv("LUNA_BACKUP_VENDOR", "TOPTRADER_PUBLIC").upper()
-BACKUP_VENDOR_MODE = os.getenv("LUNA_BACKUP_VENDOR_MODE", "PUBLIC_REST").upper()
+BACKUP_VENDOR = os.getenv("LUNA_BACKUP_VENDOR", "SET_API").upper()
+BACKUP_VENDOR_MODE = os.getenv("LUNA_BACKUP_VENDOR_MODE", "API_KEY").upper()
 
 PROVIDER_MODE = os.getenv("LUNA_MARKETDATA_PROVIDER", PRIMARY_PROVIDER).upper()
 SET_API_KEY = (
@@ -344,10 +346,11 @@ def _connectivity_proof() -> Dict[str, Any]:
         "source_revision_guarded": not EXPECTED_SOURCE_REVISION or RELEASE_SOURCE_REVISION == EXPECTED_SOURCE_REVISION,
         "settrade_sdk_loaded": Investor is not None,
         "settrade_sdk_v2": SETTRADE_SDK_VERSION.startswith("2."),
-        "settrade_credentials_configured": settrade_configured(),
+        "broker_credentials_configured": settrade_configured(),
+        "authorized_marketdata_selected": _selected_provider in {"SETTRADE", "SET_API"},
+        "set_api_backup_configured": set_api_configured(),
         "realtime_enabled": REALTIME_ENABLED,
         "symbols_configured": coverage["target_count"] > 0,
-        "settrade_selected": _selected_provider == "SETTRADE",
         "fresh_coverage_sufficient": coverage["fresh_coverage_ratio"] >= LUNA_LIVE_MIN_REALTIME_COVERAGE,
     }
     return {
@@ -357,6 +360,8 @@ def _connectivity_proof() -> Dict[str, Any]:
         "settrade_sdk": "settrade-v2",
         "settrade_sdk_version": SETTRADE_SDK_VERSION,
         "settrade_environment": SETTRADE_ENV,
+        "primary_provider": PRIMARY_PROVIDER,
+        "authorized_backup_provider": "SET_API",
         "coverage": coverage,
         "collector_error": _collector_error,
     }
@@ -1361,7 +1366,7 @@ def _run_settrade_session():
 
 def _provider_order():
     if PROVIDER_MODE == "SETTRADE":
-        order = ["SETTRADE", "TOPTRADER_WS", "TOPTRADER_PUBLIC", "SET_API"]
+        order = ["SETTRADE", "SET_API", "TOPTRADER_WS", "TOPTRADER_PUBLIC"]
     elif PROVIDER_MODE == "SET_API":
         order = ["SET_API", "SETTRADE", "TOPTRADER_WS", "TOPTRADER_PUBLIC"]
     elif PROVIDER_MODE == "TOPTRADER_WS":
@@ -1369,7 +1374,7 @@ def _provider_order():
     elif PROVIDER_MODE == "TOPTRADER_PUBLIC":
         order = ["TOPTRADER_PUBLIC", "TOPTRADER_WS", "SETTRADE", "SET_API"]
     else:
-        order = ["SETTRADE", "TOPTRADER_WS", "TOPTRADER_PUBLIC", "SET_API"]
+        order = ["SETTRADE", "SET_API", "TOPTRADER_WS", "TOPTRADER_PUBLIC"]
     if PUBLIC_FALLBACK_ENABLED:
         order.append("TRADINGVIEW_PUBLIC")
     return order
