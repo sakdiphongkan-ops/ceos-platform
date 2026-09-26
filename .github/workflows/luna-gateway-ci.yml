@@ -154,6 +154,29 @@ jobs:
           print("LUNA_PROVIDER_SWITCH_BOOK_GATE_OK")
           PY
 
+      - name: Security smoke checks
+        env:
+          LUNA_DEPLOY_SOURCE_SHA: ci
+          LUNA_EXPECTED_SOURCE_SHA: ci
+          LUNA_EXECUTION_LEDGER_ENABLED: "true"
+          LUNA_AGENT_KEY: "test-ledger-key"
+          LUNA_ORDER_AUTH_KEY: "test-order-key"
+        run: |
+          python - <<'PY'
+          import app
+          assert app.execution_ledger_configured() is True
+          assert app.ORDER_AUTH_KEY == "test-order-key"
+          from fastapi.testclient import TestClient
+          client = TestClient(app.app)
+          health = client.get("/health")
+          assert health.status_code == 200
+          body = health.json()
+          assert set(body) <= {"ok", "status", "live_armed", "timestamp"}
+          assert "provider_candidates" not in body
+          assert "settrade_configured" not in body
+          print("LUNA_SECURITY_HEALTH_SMOKE_OK")
+          PY
+
       - name: Verify Settrade Open API v2 surface
         run: |
           python - <<'PY'
