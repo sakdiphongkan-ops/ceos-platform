@@ -1,3 +1,4 @@
+# LUNA production deploy trigger pinned to the current master source revision.
 FROM python:3.9-slim
 WORKDIR /app
 COPY requirements.txt ./
