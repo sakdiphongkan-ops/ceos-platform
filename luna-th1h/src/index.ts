@@ -777,6 +777,8 @@ async function executeSignal(
       if(!safetyApproval) throw new Error("LIVE_SAFETY_APPROVAL_MISSING");
       const brokerOrder=await placeLiveOrder({
         clientOrderId,
+        sessionId:expectedSessionId!,
+        strategyVersion:signal.strategyVersion,
         symbol:plan.symbol,
         side:plan.side,
         qty:plan.qty,

@@ -51,7 +51,7 @@ print(
 
 LIVE_ARMED = os.getenv("LIVE_TRADING_ARMED", "false").lower() == "true"
 GATEWAY_KEY = os.getenv("LUNA_GATEWAY_KEY", "")
-MARKETDATA_INGEST_KEY = os.getenv("LUNA_MARKETDATA_INGEST_KEY") or GATEWAY_KEY
+MARKETDATA_INGEST_KEY = os.getenv("LUNA_MARKETDATA_INGEST_KEY", "")
 
 
 GATEWAY_ORDER_GATE_ENABLED = os.getenv("LUNA_GATEWAY_ORDER_GATE_ENABLED", "false").lower() == "true"
@@ -120,6 +120,10 @@ APP_ID = os.getenv("LUNA_SETTRADE_APP_ID") or os.getenv("SETTRADE_APP_ID", "")
 APP_SECRET = os.getenv("LUNA_SETTRADE_APP_SECRET") or os.getenv("SETTRADE_APP_SECRET", "")
 APP_CODE = os.getenv("LUNA_SETTRADE_APP_CODE") or os.getenv("SETTRADE_APP_CODE", "")
 SETTRADE_ENV = (os.getenv("LUNA_SETTRADE_ENV") or os.getenv("SETTRADE_ENV", "prod")).lower()
+EXECUTION_LEDGER_URL = os.getenv("LUNA_EXECUTION_LEDGER_URL", "https://wigzicwgcsrhdummrbjx.supabase.co/functions/v1/luna-execution-gateway").rstrip("/")
+EXECUTION_LEDGER_KEY = os.getenv("LUNA_AGENT_KEY", "")
+EXECUTION_LEDGER_ENABLED = os.getenv("LUNA_EXECUTION_LEDGER_ENABLED", "false").lower() == "true"
+ORDER_AUTH_KEY = os.getenv("LUNA_ORDER_AUTH_KEY", "")
 try:
     SETTRADE_SDK_VERSION = package_version("settrade-v2")
 except PackageNotFoundError:  # pragma: no cover
@@ -137,6 +141,7 @@ INGEST_ENABLED = bool(MARKETDATA_INGEST_KEY)
 EXTERNAL_BRIDGE_MAX_AGE_SEC = max(5.0, float(os.getenv("LUNA_EXTERNAL_BRIDGE_MAX_AGE_SEC", "10")))
 _external_bridge_last_ts = 0.0
 PUBLIC_STREAM_ENABLED = os.getenv("LUNA_PUBLIC_STREAM_ENABLED", "true").lower() == "true"
+PUBLIC_AUTHORIZED_FEED_ENABLED = os.getenv("LUNA_PUBLIC_AUTHORIZED_FEED_ENABLED", "false").lower() == "true"
 PUBLIC_STREAM_MAX_CLIENTS = max(1, int(os.getenv("LUNA_PUBLIC_STREAM_MAX_CLIENTS", "50")))
 SYMBOLS = [s.strip().upper() for s in os.getenv("SETTRADE_REALTIME_SYMBOLS", "").split(",") if s.strip()]
 
@@ -201,6 +206,89 @@ _channel_status: Dict[str, Dict[str, Any]] = {
 def auth(x_luna_gateway: Optional[str]):
     if not GATEWAY_KEY or x_luna_gateway != GATEWAY_KEY:
         raise HTTPException(status_code=401, detail="unauthorized")
+
+
+def order_auth(x_luna_gateway: Optional[str], x_luna_order: Optional[str]):
+    auth(x_luna_gateway)
+    if not ORDER_AUTH_KEY or x_luna_order != ORDER_AUTH_KEY:
+        raise HTTPException(status_code=401, detail="order_authorization_required")
+
+
+def execution_ledger_configured() -> bool:
+    return EXECUTION_LEDGER_ENABLED and bool(EXECUTION_LEDGER_URL) and bool(EXECUTION_LEDGER_KEY)
+
+
+def _ledger_request(action: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    if not execution_ledger_configured():
+        raise ProviderUnavailable("execution_ledger_unconfigured")
+    body = dict(payload)
+    body["action"] = action
+    request = Request(
+        EXECUTION_LEDGER_URL,
+        headers={
+            "Content-Type": "application/json",
+            "Cache-Control": "no-store",
+            "x-luna-agent": EXECUTION_LEDGER_KEY,
+        },
+        data=json.dumps(body).encode("utf-8"),
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=5.0) as response:
+            raw = response.read().decode("utf-8")
+            status = getattr(response, "status", 200)
+    except HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise ProviderUnavailable(f"execution_ledger_http_{exc.code}:{detail}") from exc
+    except URLError as exc:
+        raise ProviderUnavailable(f"execution_ledger_network:{exc.reason}") from exc
+    except Exception as exc:
+        raise ProviderUnavailable(f"execution_ledger_request:{exc}") from exc
+    try:
+        result = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ProviderUnavailable("execution_ledger_invalid_json") from exc
+    if status >= 400:
+        raise ProviderUnavailable(f"execution_ledger_status_{status}:{result}")
+    return result
+
+
+def _ledger_admit(payload: Any) -> Dict[str, Any]:
+    result = _ledger_request("admit", {
+        "session_id": str(payload.session_id),
+        "strategy_version": str(payload.strategy_version),
+        "mode": "live",
+        "symbol": str(payload.symbol).strip().upper(),
+        "side": str(payload.side).upper(),
+        "qty": int(payload.volume),
+        "limit_price": float(payload.price),
+        "client_order_id": str(payload.client_order_id),
+        "idempotency_key": str(payload.client_order_id),
+    })
+    if not result.get("admitted"):
+        status = 409 if result.get("decision") == "DUPLICATE" else 423
+        code = "persistent_idempotency_replay" if status == 409 else "persistent_execution_admission_denied"
+        raise HTTPException(status_code=status, detail={"code": code, "ledger": result})
+    if not result.get("request_id"):
+        raise ProviderUnavailable("execution_ledger_missing_request_id")
+    return result
+
+
+def _ledger_mark_submitted(request_id: str, broker_order_id: str, broker_result: Dict[str, Any]) -> Dict[str, Any]:
+    return _ledger_request("mark_submitted", {
+        "request_id": request_id,
+        "broker_order_id": broker_order_id,
+        "ack_kind": "broker_native" if extract_broker_native_submitted_at_ms(broker_result) is not None else "gateway_response",
+        "broker_native_submitted_at_ms": extract_broker_native_submitted_at_ms(broker_result),
+    })
+
+
+def _ledger_mark_denied(request_id: str, reason: str) -> Dict[str, Any]:
+    return _ledger_request("mark_denied", {"request_id": request_id, "reason": reason})
+
+
+def _ledger_lookup_broker_order(broker_order_id: str) -> Dict[str, Any]:
+    return _ledger_request("lookup", {"broker_order_id": broker_order_id})
 
 
 def investor_client():
@@ -358,7 +446,14 @@ def _connectivity_proof() -> Dict[str, Any]:
         "settrade_sdk_loaded": Investor is not None,
         "settrade_sdk_v2": SETTRADE_SDK_VERSION.startswith("2."),
         "broker_credentials_configured": settrade_configured(),
+        "broker_execution_credentials_configured": (
+            settrade_configured()
+            and bool(os.getenv("SETTRADE_ACCOUNT_NO", ""))
+            and bool(os.getenv("SETTRADE_PIN", ""))
+        ),
+        "order_auth_configured": bool(ORDER_AUTH_KEY),
         "authorized_marketdata_selected": _selected_provider in {"SETTRADE", "SET_API"},
+        "execution_ledger_configured": execution_ledger_configured(),
         "selected_provider_credentials_configured": (
             (_selected_provider == "SETTRADE" and settrade_configured())
             or (_selected_provider == "SET_API" and set_api_configured())
@@ -376,8 +471,11 @@ def _connectivity_proof() -> Dict[str, Any]:
             and checks["settrade_sdk_loaded"]
             and checks["settrade_sdk_v2"]
             and checks["broker_credentials_configured"]
+            and checks["broker_execution_credentials_configured"]
+            and checks["order_auth_configured"]
             and checks["authorized_marketdata_selected"]
             and checks["selected_provider_credentials_configured"]
+            and checks["execution_ledger_configured"]
             and checks["realtime_enabled"]
             and checks["symbols_configured"]
             and checks["fresh_coverage_sufficient"]
@@ -388,6 +486,10 @@ def _connectivity_proof() -> Dict[str, Any]:
         "settrade_sdk": "settrade-v2",
         "settrade_sdk_version": SETTRADE_SDK_VERSION,
         "settrade_environment": SETTRADE_ENV,
+        "execution_ledger_configured": execution_ledger_configured(),
+        "order_auth_configured": bool(ORDER_AUTH_KEY),
+        "marketdata_ingest_configured": bool(MARKETDATA_INGEST_KEY),
+        "public_authorized_feed_enabled": PUBLIC_AUTHORIZED_FEED_ENABLED,
         "primary_provider": PRIMARY_PROVIDER,
         "authorized_backup_provider": "SET_API",
         "coverage": coverage,
@@ -1536,6 +1638,8 @@ def startup():
 
 class PlaceOrder(BaseModel):
     client_order_id: str = Field(min_length=8, max_length=200)
+    session_id: str = Field(min_length=8, max_length=200)
+    strategy_version: str = Field(min_length=1, max_length=200)
     symbol: str = Field(min_length=1, max_length=32)
     side: str
     price: float = Field(gt=0)
@@ -1665,52 +1769,10 @@ def connectivity_proof(
 
 @app.get("/health")
 def health():
-    with _quote_lock:
-        quote_count = len(_quotes)
-    bridge_age = (time.time() - _external_bridge_last_ts) if _external_bridge_last_ts else None
-    effective_provider = "SETTRADE_LOCAL_BRIDGE" if bridge_age is not None and bridge_age <= EXTERNAL_BRIDGE_MAX_AGE_SEC else _selected_provider
-    proof = _connectivity_proof()
     return {
         "ok": True,
-        "system_status": _system_status(),
-        "connectivity_proof": proof,
-        "version": APP_VERSION,
-        "source_revision": RELEASE_SOURCE_REVISION,
-        "public_stream_release": PUBLIC_STREAM_RELEASE,
+        "status": _system_status(),
         "live_armed": LIVE_ARMED,
-        "hard_order_gate_enabled": GATEWAY_ORDER_GATE_ENABLED,
-        "gateway_kill_switch": GATEWAY_KILL_SWITCH,
-        "safety": _safety_snapshot(),
-        "provider_mode": PROVIDER_MODE,
-        "selected_provider": effective_provider,
-        "provider_candidates": _provider_order(),
-        "set_api_configured": set_api_configured(),
-        "settrade_configured": settrade_configured(),
-        "toptrader_backup_enabled": TOPTRADER_ENABLED,
-        "toptrader_ws_enabled": TOPTRADER_WS_ENABLED,
-        "toptrader_ws_dependency_available": websockets is not None,
-        "public_fallback_enabled": PUBLIC_FALLBACK_ENABLED,
-        "realtime_marketdata_enabled": REALTIME_ENABLED,
-        "realtime_bid_offer_enabled": REALTIME_BOOK,
-        "realtime_symbol_target": len(SYMBOLS),
-        "realtime_quote_count": quote_count,
-        "latest_quote_age_sec": _latest_quote_age_sec(),
-        "stale_after_sec": STALE_AFTER_SEC,
-        "collector_started": _collector_started,
-        "collector_error": _collector_error,
-        "provider_failures": dict(_provider_failures),
-        "channel_status": _channel_snapshot(),
-        "external_bridge_active": bridge_age is not None and bridge_age <= EXTERNAL_BRIDGE_MAX_AGE_SEC,
-        "external_bridge_age_sec": bridge_age,
-        "external_bridge_max_age_sec": EXTERNAL_BRIDGE_MAX_AGE_SEC,
-        "public_stream_enabled": PUBLIC_STREAM_ENABLED,
-        "public_stream_clients": len(_public_stream_clients),
-        "public_stream_max_clients": PUBLIC_STREAM_MAX_CLIENTS,
-        "marketdata_ingest_enabled": INGEST_ENABLED,
-        "external_bridge_active": bridge_age is not None and bridge_age <= EXTERNAL_BRIDGE_MAX_AGE_SEC,
-        "external_bridge_age_sec": bridge_age,
-        "external_bridge_max_age_sec": EXTERNAL_BRIDGE_MAX_AGE_SEC,
-        "market_phase": market_phase_now(),
         "timestamp": int(time.time()),
     }
 
@@ -1760,6 +1822,9 @@ async def quotes_stream(websocket: WebSocket):
 @app.websocket("/quotes/public-stream")
 async def public_quotes_stream(websocket: WebSocket):
     if not PUBLIC_STREAM_ENABLED:
+        await websocket.close(code=4403)
+        return
+    if PROVIDER_MODE in {"SETTRADE", "SET_API"} and not PUBLIC_AUTHORIZED_FEED_ENABLED:
         await websocket.close(code=4403)
         return
 
@@ -1916,10 +1981,26 @@ def marketdata_ingest(payload: MarketQuoteBatch, x_luna_gateway: Optional[str] =
 
 
 @app.post("/place")
-def place(payload: PlaceOrder, x_luna_gateway: Optional[str] = Header(default=None)):
-    auth(x_luna_gateway)
+def place(
+    payload: PlaceOrder,
+    x_luna_gateway: Optional[str] = Header(default=None),
+    x_luna_order: Optional[str] = Header(default=None),
+):
+    global _broker_circuit_tripped, _broker_last_failure
+    order_auth(x_luna_gateway, x_luna_order)
     _hard_order_gate(payload)
+    if not execution_ledger_configured():
+        raise HTTPException(status_code=503, detail={"code": "persistent_execution_ledger_required"})
     eq = client()
+    try:
+        ledger_admission = _ledger_admit(payload)
+    except HTTPException:
+        raise
+    except ProviderUnavailable as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "execution_ledger_unavailable"},
+        ) from exc
 
     try:
         broker_result = eq.place_order(
@@ -1936,6 +2017,11 @@ def place(payload: PlaceOrder, x_luna_gateway: Optional[str] = Header(default=No
     broker_data = (broker_result or {}).get("data", {}) if isinstance(broker_result, dict) else {}
     if isinstance(broker_result, dict) and broker_result.get("success") is False:
         _record_broker_failure("BROKER_REJECTED")
+        try:
+            _ledger_mark_denied(str(ledger_admission["request_id"]), "BROKER_REJECTED")
+        except ProviderUnavailable:
+            with _safety_lock:
+                _broker_circuit_tripped = True
         raise HTTPException(status_code=502, detail={"code": "broker_rejected"})
     broker_id = str(
         broker_data.get("order_id")
@@ -1946,6 +2032,18 @@ def place(payload: PlaceOrder, x_luna_gateway: Optional[str] = Header(default=No
     if not broker_id:
         _record_broker_failure("BROKER_ACK_MISSING_ORDER_ID")
         raise HTTPException(status_code=502, detail={"code": "broker_ack_missing_order_id"})
+    try:
+        _ledger_mark_submitted(
+            str(ledger_admission["request_id"]),
+            broker_id,
+            broker_result if isinstance(broker_result, dict) else {},
+        )
+    except ProviderUnavailable as exc:
+        with _safety_lock:
+            _broker_circuit_tripped = True
+            _broker_last_failure = f"EXECUTION_LEDGER_COMMIT_FAILED:{exc}"
+        raise HTTPException(status_code=503, detail={"code": "execution_ledger_commit_failed"}) from exc
+
     _record_broker_success()
     with _safety_lock:
         _seen_client_orders.add(str(payload.client_order_id))
@@ -1967,9 +2065,25 @@ def place(payload: PlaceOrder, x_luna_gateway: Optional[str] = Header(default=No
 
 
 @app.post("/cancel")
-def cancel(payload: CancelOrder, x_luna_gateway: Optional[str] = Header(default=None)):
-    auth(x_luna_gateway)
+def cancel(
+    payload: CancelOrder,
+    x_luna_gateway: Optional[str] = Header(default=None),
+    x_luna_order: Optional[str] = Header(default=None),
+):
+    order_auth(x_luna_gateway, x_luna_order)
     eq = client()
+    try:
+        ledger = _ledger_lookup_broker_order(payload.broker_order_id)
+    except ProviderUnavailable as exc:
+        raise HTTPException(status_code=503, detail={"code": "execution_ledger_lookup_failed"}) from exc
+    request = ledger.get("request") if isinstance(ledger, dict) else None
+    if (
+        not request
+        or not request.get("executed")
+        or str(request.get("broker_order_id")) != payload.broker_order_id
+    ):
+        raise HTTPException(status_code=409, detail={"code": "cancel_order_not_bound_to_persisted_execution"})
+
     if not hasattr(eq, "cancel_order"):
         raise HTTPException(status_code=501, detail="cancel_order_method_unavailable_in_sdk")
     result = eq.cancel_order(

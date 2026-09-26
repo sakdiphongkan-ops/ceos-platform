@@ -12,6 +12,12 @@ os.environ["LUNA_GATEWAY_MAX_PRICE_DEVIATION_BPS"] = "75"
 
 import app
 
+# Unit-test the downstream order guards in isolation; connectivity proof is covered separately.
+app._connectivity_proof = lambda: {
+    "live_execution_ready": True,
+}
+app._selected_provider = "SETTRADE"
+
 class Payload:
     def __init__(self, client_order_id="test-order-1", symbol="AAA", side="BUY", price=100.1, volume=100):
         self.client_order_id = client_order_id
@@ -28,6 +34,7 @@ with app._quote_lock:
         "ask": 100.1,
         "bid_size": 1000,
         "ask_size": 1000,
+        "source": "settrade-open-api-realtime",
         "_ingested_ts": time.time(),
     }
 

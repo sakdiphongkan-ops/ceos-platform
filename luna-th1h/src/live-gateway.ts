@@ -15,17 +15,24 @@ export interface LiveBrokerOrder{
   raw:unknown;
 }
 
-function headers(){
-  return {
+function headers(orderScoped=false){
+  const headers:{
+    "Content-Type":string;
+    "x-luna-gateway":string;
+    "x-luna-order-key"?:string;
+  }={
     "Content-Type":"application/json",
     "x-luna-gateway":config.liveGatewayKey
   };
+  if(orderScoped) headers["x-luna-order-key"]=config.liveGatewayOrderKey;
+  return headers;
 }
 
 function ensureConfigured(){
   if(config.executionMode!=="live") throw new Error("LIVE_EXECUTION_NOT_SELECTED");
   if(!config.liveGatewayUrl) throw new Error("LUNA_LIVE_GATEWAY_URL_NOT_CONFIGURED");
   if(!config.liveGatewayKey) throw new Error("LUNA_LIVE_GATEWAY_KEY_NOT_CONFIGURED");
+  if(!config.liveGatewayOrderKey) throw new Error("LUNA_LIVE_GATEWAY_ORDER_KEY_NOT_CONFIGURED");
 }
 
 export interface LiveOpenOrder{
@@ -126,7 +133,7 @@ export async function liveGatewayHealth(){
   const res=await fetch(`${config.liveGatewayUrl}/health`,{headers:headers()});
   const body=await res.json().catch(()=>({}));
   if(!res.ok) throw new Error(`GATEWAY_HEALTH_HTTP_${res.status}: ${JSON.stringify(body)}`);
-  return body as {ok:boolean;live_armed:boolean;provider:string};
+  return body as {ok:boolean;status:string;live_armed:boolean;timestamp:number};
 }
 
 export async function liveGatewayDiagnostics(){
@@ -147,6 +154,8 @@ function validateApproval(approval:LiveSafetyApproval){
 
 export async function placeLiveOrder(order:{
   clientOrderId:string;
+  sessionId:string;
+  strategyVersion:string;
   symbol:string;
   side:Side;
   qty:number;
@@ -158,9 +167,11 @@ export async function placeLiveOrder(order:{
   validateApproval(order.safetyApproval);
   const res=await fetch(`${config.liveGatewayUrl}/place`,{
     method:"POST",
-    headers:headers(),
+    headers:headers(true),
     body:JSON.stringify({
       client_order_id:order.clientOrderId,
+      session_id:order.sessionId,
+      strategy_version:order.strategyVersion,
       symbol:order.symbol,
       side:order.side,
       volume:order.qty,

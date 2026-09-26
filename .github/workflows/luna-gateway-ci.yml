@@ -51,7 +51,12 @@ jobs:
           SETTRADE_APP_ID: "app"
           SETTRADE_APP_SECRET: "secret"
           SETTRADE_APP_CODE: "code"
+          SETTRADE_ACCOUNT_NO: "account"
+          SETTRADE_PIN: "pin"
+          LUNA_ORDER_AUTH_KEY: "test-order-key"
           LUNA_LIVE_MIN_REALTIME_COVERAGE: "0.0"
+          LUNA_EXECUTION_LEDGER_ENABLED: "true"
+          LUNA_AGENT_KEY: "test-ledger-key"
         run: |
           python - <<'PY'
           import app
@@ -76,6 +81,8 @@ jobs:
           SETTRADE_APP_SECRET: "secret"
           SETTRADE_APP_CODE: "code"
           LUNA_LIVE_MIN_REALTIME_COVERAGE: "1.0"
+          LUNA_EXECUTION_LEDGER_ENABLED: "true"
+          LUNA_AGENT_KEY: "test-ledger-key"
         run: |
           python - <<'PY'
           import time
@@ -112,7 +119,12 @@ jobs:
           SETTRADE_APP_ID: "app"
           SETTRADE_APP_SECRET: "secret"
           SETTRADE_APP_CODE: "code"
+          SETTRADE_ACCOUNT_NO: "account"
+          SETTRADE_PIN: "pin"
+          LUNA_ORDER_AUTH_KEY: "test-order-key"
           LUNA_LIVE_MIN_REALTIME_COVERAGE: "1.0"
+          LUNA_EXECUTION_LEDGER_ENABLED: "true"
+          LUNA_AGENT_KEY: "test-ledger-key"
         run: |
           python - <<'PY'
           import time
@@ -152,6 +164,27 @@ jobs:
           assert proof["coverage"]["verified_book_count"] == 1
           assert proof["live_execution_ready"] is True
           print("LUNA_PROVIDER_SWITCH_BOOK_GATE_OK")
+          PY
+
+      - name: Security smoke checks
+        env:
+          LUNA_DEPLOY_SOURCE_SHA: ci
+          LUNA_EXPECTED_SOURCE_SHA: ci
+          LUNA_EXECUTION_LEDGER_ENABLED: "true"
+          LUNA_AGENT_KEY: "test-ledger-key"
+          LUNA_ORDER_AUTH_KEY: "test-order-key"
+        run: |
+          python - <<'PY'
+          import app
+          assert app.execution_ledger_configured() is True
+          assert app.ORDER_AUTH_KEY == "test-order-key"
+          body = app.health()
+          assert set(body) <= {"ok", "status", "live_armed", "timestamp"}
+          assert "provider_candidates" not in body
+          assert "settrade_configured" not in body
+          assert app.PUBLIC_AUTHORIZED_FEED_ENABLED is False
+          assert app.MARKETDATA_INGEST_KEY == ""
+          print("LUNA_SECURITY_HEALTH_SMOKE_OK")
           PY
 
       - name: Verify Settrade Open API v2 surface
