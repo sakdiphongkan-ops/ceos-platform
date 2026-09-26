@@ -21,9 +21,11 @@ from pydantic import BaseModel, Field
 from broker_timing import extract_broker_native_submitted_at_ms
 
 try:
-    from settrade.openapi import Investor
+    from settrade_v2 import Investor
+    from settrade_v2.config import config as settrade_config
 except Exception:  # pragma: no cover
     Investor = None
+    settrade_config = {}
 
 APP_VERSION = "0.7.2"
 RELEASE_SOURCE_REVISION = (
@@ -113,6 +115,13 @@ BROKER_ID = os.getenv("LUNA_SETTRADE_BROKER_ID") or os.getenv("SETTRADE_BROKER_I
 APP_ID = os.getenv("LUNA_SETTRADE_APP_ID") or os.getenv("SETTRADE_APP_ID", "")
 APP_SECRET = os.getenv("LUNA_SETTRADE_APP_SECRET") or os.getenv("SETTRADE_APP_SECRET", "")
 APP_CODE = os.getenv("LUNA_SETTRADE_APP_CODE") or os.getenv("SETTRADE_APP_CODE", "")
+SETTRADE_ENV = (os.getenv("LUNA_SETTRADE_ENV") or os.getenv("SETTRADE_ENV", "prod")).lower()
+
+try:
+    if isinstance(settrade_config, dict):
+        settrade_config["environment"] = SETTRADE_ENV
+except Exception:
+    pass
 
 REALTIME_ENABLED = os.getenv("REALTIME_MARKETDATA_ENABLED", "false").lower() == "true"
 REALTIME_BOOK = os.getenv("REALTIME_BID_OFFER_ENABLED", "true").lower() == "true"
