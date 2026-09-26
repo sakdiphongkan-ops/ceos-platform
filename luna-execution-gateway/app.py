@@ -1977,7 +1977,15 @@ def place(
     if not execution_ledger_configured():
         raise HTTPException(status_code=503, detail={"code": "persistent_execution_ledger_required"})
     eq = client()
-    ledger_admission = _ledger_admit(payload)
+    try:
+        ledger_admission = _ledger_admit(payload)
+    except HTTPException:
+        raise
+    except ProviderUnavailable as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "execution_ledger_unavailable"},
+        ) from exc
 
     try:
         broker_result = eq.place_order(
