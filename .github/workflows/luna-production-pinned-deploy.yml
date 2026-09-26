@@ -39,7 +39,7 @@ jobs:
         run: |
           echo "Deploying commit: $GITHUB_SHA"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-      - name: Wait for actual LUNA CI on this exact commit
+      - name: Wait for all required CI on this exact commit
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -48,17 +48,37 @@ jobs:
             rows=$(gh api repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs --paginate --jq '.check_runs[] | [.name,.status,.conclusion] | @tsv' || true)
             echo "$rows"
             gateway=$(printf '%s\n' "$rows" | awk -F '\t' '$1=="gateway-ci"{print $2" "$3; exit}')
+            typecheck=$(printf '%s\n' "$rows" | awk -F '\t' '$1=="typecheck"{print $2" "$3; exit}')
+            build=$(printf '%s\n' "$rows" | awk -F '\t' '$1=="build"{print $2" "$3; exit}')
             execution=$(printf '%s\n' "$rows" | awk -F '\t' '$1=="execution-gate"{print $2" "$3; exit}')
 
-            if printf '%s' "$gateway" | grep -q '^completed success$'; then
-              if [ -z "$execution" ] || printf '%s' "$execution" | grep -q '^completed success$'; then
-                echo "Required LUNA CI passed for $GITHUB_SHA"
-                break
-              fi
+            gateway_ok=$(printf '%s' "$gateway" | grep -q '^completed success$' && echo yes || echo no)
+            typecheck_ok=$(printf '%s' "$typecheck" | grep -q '^completed success$' && echo yes || echo no)
+            build_ok=$(printf '%s' "$build" | grep -q '^completed success$' && echo yes || echo no)
+            execution_ok=$(printf '%s' "$execution" | grep -q '^completed success$' && echo yes || echo no)
+
+            typecheck_required=$([ -n "$typecheck" ] && echo yes || echo no)
+            build_required=$([ -n "$build" ] && echo yes || echo no)
+            execution_required=$([ -n "$execution" ] && echo yes || echo no)
+
+            if [ "$gateway_ok" = yes ] \
+              && { [ "$typecheck_required" = no ] || [ "$typecheck_ok" = yes ]; } \
+              && { [ "$build_required" = no ] || [ "$build_ok" = yes ]; } \
+              && { [ "$execution_required" = no ] || [ "$execution_ok" = yes ]; }; then
+              echo "Required LUNA CI passed for $GITHUB_SHA"
+              break
             fi
 
             if printf '%s' "$gateway" | grep -q 'completed failure\|completed cancelled\|completed timed_out'; then
               echo "Gateway CI failed on $GITHUB_SHA"
+              exit 1
+            fi
+            if printf '%s' "$typecheck" | grep -q 'completed failure\|completed cancelled\|completed timed_out'; then
+              echo "LUNA typecheck failed on $GITHUB_SHA"
+              exit 1
+            fi
+            if printf '%s' "$build" | grep -q 'completed failure\|completed cancelled\|completed timed_out'; then
+              echo "CEOS build failed on $GITHUB_SHA"
               exit 1
             fi
             if printf '%s' "$execution" | grep -q 'completed failure\|completed cancelled\|completed timed_out'; then
@@ -67,7 +87,7 @@ jobs:
             fi
 
             if [ $(date +%s) -ge $deadline ]; then
-              echo "Timed out waiting for actual LUNA CI"
+              echo "Timed out waiting for all required CI"
               exit 1
             fi
             sleep 15
