@@ -4,7 +4,7 @@
 
 body {
   margin: 0;
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-manrope), var(--font-noto-thai), "Segoe UI", system-ui, sans-serif;
   background: #f7f7f5;
   color: #111827;
 }
@@ -42,7 +42,7 @@ body {
     radial-gradient(circle at 75% -5%,rgba(80,180,120,.09),transparent 25%),
     radial-gradient(circle at 8% 20%,rgba(80,120,100,.05),transparent 22%),
     var(--bg);
-  font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  font-family:var(--font-manrope),var(--font-noto-thai),"Segoe UI",ui-sans-serif,system-ui,sans-serif;
   letter-spacing:-.01em;
 }
 .luna-shell button,.luna-shell input{font:inherit}
@@ -774,3 +774,10 @@ tbody tr:hover,tbody tr.selected-row{background:rgba(111,128,110,.055)}
 .runtime-banner-icon{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;flex:0 0 32px;background:rgba(111,128,110,.12);color:var(--accent-strong)}
 .runtime-banner-copy{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}.runtime-banner-copy strong{font-size:15px;letter-spacing:.02em;color:var(--text-strong)}.runtime-banner-copy span{font-size:13px;color:var(--text);opacity:.78;line-height:1.45}.runtime-banner-meta{display:flex;flex-direction:column;align-items:flex-end;gap:3px;font-size:10px;letter-spacing:.09em;color:var(--muted);white-space:nowrap}.runtime-chip{font-weight:700;letter-spacing:.04em}.runtime-active .runtime-banner-icon{background:rgba(92,125,91,.14);color:#55785a}.runtime-standby .runtime-banner-icon{background:rgba(172,150,109,.14);color:#8f774f}.runtime-degraded .runtime-banner-icon{background:rgba(173,110,105,.14);color:#a15f5b}.runtime-offline .runtime-banner-icon{background:rgba(117,117,117,.14);color:#757575}.runtime-degraded{border-color:rgba(173,110,105,.28)}.session-runtime-active{border-color:rgba(92,125,91,.24)}.session-runtime-standby{border-color:rgba(172,150,109,.30)}.session-runtime-degraded{border-color:rgba(173,110,105,.28)}
 @media (max-width:900px){.runtime-banner{align-items:flex-start}.runtime-banner-meta{align-items:flex-start}.session-chip{max-width:100%}}
+
+
+/* Premium finance typography */
+.luna-shell{font-synthesis:none;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
+.luna-shell .metric-value,.luna-shell .price-block>div,.luna-shell table,.luna-shell .control-stat strong{font-variant-numeric:tabular-nums lining-nums;}
+.luna-shell h1,.luna-shell h2,.luna-shell h3,.luna-shell .card-title,.luna-shell .control-room-title,.luna-shell .detail-symbol{font-weight:700;}
+.luna-shell .brand h1{letter-spacing:-.02em;}
