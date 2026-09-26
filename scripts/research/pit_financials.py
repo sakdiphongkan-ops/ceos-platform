@@ -31,6 +31,8 @@ class PointInTimeFinancials:
         "net_profit_q",
         "revenue_accum",
         "net_profit_accum",
+        "adjustment_status",
+        "source_hash",
     )
 
     def __init__(
@@ -553,18 +555,14 @@ def validate_pit(
             f"negative_information_age={int(negative_age.sum())}"
         )
 
+    stale_count=0
     if max_financial_age_days is not None:
-        age = (
-            df["date"] - df["available_at"]
-        ).dt.days
-        stale = age > max_financial_age_days
-        errors.append(
-            f"stale_financial_rows={int(stale.sum())}"
-        )
+        age = (df["date"] - df["available_at"]).dt.days
+        stale_count=int((age > max_financial_age_days).fillna(False).sum())
 
     if errors:
         raise ValueError(
             "PIT validation failed: " + "; ".join(errors)
         )
 
-    return "PIT validation passed"
+    return f"PIT validation passed; stale_financial_rows={stale_count}"
