@@ -40,6 +40,7 @@ export const config={
   executionMode:process.env.LUNA_EXECUTION_MODE ?? "paper",
   liveGatewayUrl:process.env.LUNA_LIVE_GATEWAY_URL ?? "",
   liveGatewayKey:process.env.LUNA_LIVE_GATEWAY_KEY ?? "",
+  liveGatewayOrderKey:process.env.LUNA_LIVE_GATEWAY_ORDER_KEY ?? "",
   timezone:MARKET_TIMEZONE,
   // Fail closed to the real gateway when no provider is explicitly configured.
   // Mock data must be opt-in via MARKET_DATA_PROVIDER=mock.
