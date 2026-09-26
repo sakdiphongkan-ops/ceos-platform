@@ -178,11 +178,7 @@ jobs:
           import app
           assert app.execution_ledger_configured() is True
           assert app.ORDER_AUTH_KEY == "test-order-key"
-          from fastapi.testclient import TestClient
-          client = TestClient(app.app)
-          health = client.get("/health")
-          assert health.status_code == 200
-          body = health.json()
+          body = app.health()
           assert set(body) <= {"ok", "status", "live_armed", "timestamp"}
           assert "provider_candidates" not in body
           assert "settrade_configured" not in body
