@@ -3,6 +3,11 @@ name: LUNA production pinned deploy
 on:
   push:
     branches: [master]
+    paths:
+      - 'luna-th1h/**'
+      - 'luna-execution-gateway/**'
+      - 'package.json'
+      - 'package-lock.json'
   workflow_dispatch:
     inputs:
       confirm:
