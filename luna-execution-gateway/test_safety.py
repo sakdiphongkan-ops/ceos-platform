@@ -12,6 +12,11 @@ os.environ["LUNA_GATEWAY_MAX_PRICE_DEVIATION_BPS"] = "75"
 
 import app
 
+# Unit-test the downstream order guards in isolation; connectivity proof is covered separately.
+app._connectivity_proof = lambda: {
+    "live_execution_ready": True,
+}
+
 class Payload:
     def __init__(self, client_order_id="test-order-1", symbol="AAA", side="BUY", price=100.1, volume=100):
         self.client_order_id = client_order_id
