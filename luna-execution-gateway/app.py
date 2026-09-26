@@ -367,9 +367,22 @@ def _connectivity_proof() -> Dict[str, Any]:
         "realtime_enabled": REALTIME_ENABLED,
         "symbols_configured": coverage["target_count"] > 0,
         "fresh_coverage_sufficient": coverage["fresh_coverage_ratio"] >= LUNA_LIVE_MIN_REALTIME_COVERAGE,
+        "verified_book_coverage_sufficient": coverage["verified_book_coverage_ratio"] >= LUNA_LIVE_MIN_REALTIME_COVERAGE,
     }
     return {
-        "live_execution_ready": all(checks.values()),
+        "live_execution_ready": (
+            checks["source_revision_known"]
+            and checks["source_revision_guarded"]
+            and checks["settrade_sdk_loaded"]
+            and checks["settrade_sdk_v2"]
+            and checks["broker_credentials_configured"]
+            and checks["authorized_marketdata_selected"]
+            and checks["selected_provider_credentials_configured"]
+            and checks["realtime_enabled"]
+            and checks["symbols_configured"]
+            and checks["fresh_coverage_sufficient"]
+            and checks["verified_book_coverage_sufficient"]
+        ),
         "checks": checks,
         "selected_provider": _selected_provider,
         "settrade_sdk": "settrade-v2",
@@ -771,17 +784,19 @@ def _quote_payload(
     now = _now_iso()
     with _quote_lock:
         prior = dict(_quotes.get(symbol, {}))
+        effective_source = source or prior.get("source")
+        same_source = bool(prior) and effective_source == prior.get("source")
         quote = {
             "symbol": symbol,
             "ts": now,
             "source_ts": source_ts,
-            "bid": _num(bid) if bid is not None else prior.get("bid"),
-            "ask": _num(ask) if ask is not None else prior.get("ask"),
-            "last": _num(last) if last is not None else prior.get("last"),
-            "bid_size": _num(bid_size) if bid_size is not None else prior.get("bid_size"),
-            "ask_size": _num(ask_size) if ask_size is not None else prior.get("ask_size"),
-            "total_volume": _num(total_volume) if total_volume is not None else prior.get("total_volume"),
-            "source": source or prior.get("source"),
+            "bid": _num(bid) if bid is not None else (prior.get("bid") if same_source else None),
+            "ask": _num(ask) if ask is not None else (prior.get("ask") if same_source else None),
+            "last": _num(last) if last is not None else (prior.get("last") if same_source else None),
+            "bid_size": _num(bid_size) if bid_size is not None else (prior.get("bid_size") if same_source else None),
+            "ask_size": _num(ask_size) if ask_size is not None else (prior.get("ask_size") if same_source else None),
+            "total_volume": _num(total_volume) if total_volume is not None else (prior.get("total_volume") if same_source else None),
+            "source": effective_source,
             "raw": raw,
             "_ingested_ts": time.time(),
         }
