@@ -7,6 +7,7 @@ import uuid
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from typing import Any, Dict, Optional
+from importlib.metadata import PackageNotFoundError, version as package_version
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
@@ -61,6 +62,7 @@ GATEWAY_MAX_QUOTE_AGE_SEC = max(0.1, float(os.getenv("LUNA_GATEWAY_MAX_QUOTE_AGE
 GATEWAY_MAX_PRICE_DEVIATION_BPS = max(1.0, float(os.getenv("LUNA_GATEWAY_MAX_PRICE_DEVIATION_BPS", "75")))
 GATEWAY_BROKER_FAILURE_TRIP_COUNT = max(1, int(os.getenv("LUNA_GATEWAY_BROKER_FAILURE_TRIP_COUNT", "3")))
 GATEWAY_CIRCUIT_RESET_KEY = os.getenv("LUNA_GATEWAY_CIRCUIT_RESET_KEY", "")
+LUNA_LIVE_MIN_REALTIME_COVERAGE = min(1.0, max(0.0, float(os.getenv("LUNA_LIVE_MIN_REALTIME_COVERAGE", "0.99"))))
 
 _safety_lock = threading.Lock()
 _broker_failure_streak = 0
@@ -70,12 +72,14 @@ _seen_client_orders: set[str] = set()
 _order_attempt_timestamps: list[float] = []
 
 # Market-data providers are selected automatically unless explicitly forced.
-# Priority in AUTO mode:
-#   1) official SET Market Data API (api-key)
-#   2) Settrade Open API (broker/app credentials)
+# Production policy:
+#   1) SETTRADE Open API (primary)
+#   2) Official SET Market Data API (authorized backup, only when subscribed/configured)
+#   3) TopTrader sources (paper/continuity fallback; never authorizes live by itself)
+#   4) TradingView public fallback (paper-only)
 PRIMARY_PROVIDER = os.getenv("LUNA_PRIMARY_MARKETDATA_PROVIDER", "SETTRADE").upper()
-BACKUP_VENDOR = os.getenv("LUNA_BACKUP_VENDOR", "TOPTRADER_PUBLIC").upper()
-BACKUP_VENDOR_MODE = os.getenv("LUNA_BACKUP_VENDOR_MODE", "PUBLIC_REST").upper()
+BACKUP_VENDOR = os.getenv("LUNA_BACKUP_VENDOR", "SET_API").upper()
+BACKUP_VENDOR_MODE = os.getenv("LUNA_BACKUP_VENDOR_MODE", "API_KEY").upper()
 
 PROVIDER_MODE = os.getenv("LUNA_MARKETDATA_PROVIDER", PRIMARY_PROVIDER).upper()
 SET_API_KEY = (
@@ -116,6 +120,10 @@ APP_ID = os.getenv("LUNA_SETTRADE_APP_ID") or os.getenv("SETTRADE_APP_ID", "")
 APP_SECRET = os.getenv("LUNA_SETTRADE_APP_SECRET") or os.getenv("SETTRADE_APP_SECRET", "")
 APP_CODE = os.getenv("LUNA_SETTRADE_APP_CODE") or os.getenv("SETTRADE_APP_CODE", "")
 SETTRADE_ENV = (os.getenv("LUNA_SETTRADE_ENV") or os.getenv("SETTRADE_ENV", "prod")).lower()
+try:
+    SETTRADE_SDK_VERSION = package_version("settrade-v2")
+except PackageNotFoundError:  # pragma: no cover
+    SETTRADE_SDK_VERSION = "unavailable"
 
 try:
     if isinstance(settrade_config, dict):
@@ -295,6 +303,81 @@ def _prune_order_attempts(now: float):
         _order_attempt_timestamps.pop(0)
 
 
+def _quote_coverage_snapshot() -> Dict[str, Any]:
+    """Return fresh-quote coverage evidence for the configured realtime universe."""
+    now = time.time()
+    target_symbols = set(SYMBOLS)
+    with _quote_lock:
+        target_quotes = {symbol: _quotes.get(symbol) for symbol in target_symbols}
+    fresh_symbols = set()
+    verified_book_symbols = set()
+    for symbol, quote in target_quotes.items():
+        if not quote:
+            continue
+        ts = quote.get("_ingested_ts")
+        if ts is None:
+            continue
+        age = now - float(ts)
+        if 0.0 <= age <= GATEWAY_MAX_QUOTE_AGE_SEC:
+            fresh_symbols.add(symbol)
+            bid = _num(quote.get("bid")); ask = _num(quote.get("ask"))
+            bs = _num(quote.get("bid_size")); ass = _num(quote.get("ask_size"))
+            if bid and bid > 0 and ask and ask > 0 and ask >= bid and bs and bs > 0 and ass and ass > 0:
+                verified_book_symbols.add(symbol)
+    target_count = len(target_symbols)
+    return {
+        "target_count": target_count,
+        "quoted_count": sum(1 for q in target_quotes.values() if q),
+        "fresh_quote_count": len(fresh_symbols),
+        "verified_book_count": len(verified_book_symbols),
+        "fresh_coverage_ratio": round(len(fresh_symbols) / target_count, 6) if target_count else 0.0,
+        "verified_book_coverage_ratio": round(len(verified_book_symbols) / target_count, 6) if target_count else 0.0,
+        "required_live_coverage_ratio": LUNA_LIVE_MIN_REALTIME_COVERAGE,
+        "max_quote_age_sec": GATEWAY_MAX_QUOTE_AGE_SEC,
+        "latest_quote_age_sec": _latest_quote_age_sec(),
+    }
+
+
+def _connectivity_proof() -> Dict[str, Any]:
+    """Machine-readable readiness evidence; no network calls."""
+    coverage = _quote_coverage_snapshot()
+    checks = {
+        "source_revision_known": RELEASE_SOURCE_REVISION != "unknown",
+        "source_revision_guarded": not EXPECTED_SOURCE_REVISION or RELEASE_SOURCE_REVISION == EXPECTED_SOURCE_REVISION,
+        "settrade_sdk_loaded": Investor is not None,
+        "settrade_sdk_v2": SETTRADE_SDK_VERSION.startswith("2."),
+        "broker_credentials_configured": settrade_configured(),
+        "authorized_marketdata_selected": _selected_provider in {"SETTRADE", "SET_API"},
+        "set_api_backup_configured": set_api_configured(),
+        "realtime_enabled": REALTIME_ENABLED,
+        "symbols_configured": coverage["target_count"] > 0,
+        "fresh_coverage_sufficient": coverage["fresh_coverage_ratio"] >= LUNA_LIVE_MIN_REALTIME_COVERAGE,
+    }
+    return {
+        "live_execution_ready": all(checks.values()),
+        "checks": checks,
+        "selected_provider": _selected_provider,
+        "settrade_sdk": "settrade-v2",
+        "settrade_sdk_version": SETTRADE_SDK_VERSION,
+        "settrade_environment": SETTRADE_ENV,
+        "primary_provider": PRIMARY_PROVIDER,
+        "authorized_backup_provider": "SET_API",
+        "coverage": coverage,
+        "collector_error": _collector_error,
+    }
+
+
+def _system_status() -> str:
+    proof = _connectivity_proof()
+    if LIVE_ARMED and proof["live_execution_ready"] and not GATEWAY_KILL_SWITCH and GATEWAY_ORDER_GATE_ENABLED:
+        return "LIVE_READY"
+    if not LIVE_ARMED and proof["checks"]["settrade_sdk_loaded"]:
+        return "PAPER_ONLY"
+    if proof["checks"]["realtime_enabled"] and proof["coverage"]["quoted_count"] > 0:
+        return "DEGRADED"
+    return "LOCKED"
+
+
 def _hard_order_gate(payload: Any):
     if not GATEWAY_ORDER_GATE_ENABLED:
         raise HTTPException(status_code=423, detail={"code": "hard_order_gate_disabled"})
@@ -302,6 +385,10 @@ def _hard_order_gate(payload: Any):
         raise HTTPException(status_code=423, detail={"code": "gateway_kill_switch_active"})
     if not LIVE_ARMED:
         raise HTTPException(status_code=423, detail={"code": "live_trading_not_armed"})
+
+    proof = _connectivity_proof()
+    if not proof["live_execution_ready"]:
+        raise HTTPException(status_code=503, detail={"code": "live_connectivity_gate", "proof": proof})
 
     with _safety_lock:
         if _broker_circuit_tripped:
@@ -1279,7 +1366,7 @@ def _run_settrade_session():
 
 def _provider_order():
     if PROVIDER_MODE == "SETTRADE":
-        order = ["SETTRADE", "TOPTRADER_WS", "TOPTRADER_PUBLIC", "SET_API"]
+        order = ["SETTRADE", "SET_API", "TOPTRADER_WS", "TOPTRADER_PUBLIC"]
     elif PROVIDER_MODE == "SET_API":
         order = ["SET_API", "SETTRADE", "TOPTRADER_WS", "TOPTRADER_PUBLIC"]
     elif PROVIDER_MODE == "TOPTRADER_WS":
@@ -1287,7 +1374,7 @@ def _provider_order():
     elif PROVIDER_MODE == "TOPTRADER_PUBLIC":
         order = ["TOPTRADER_PUBLIC", "TOPTRADER_WS", "SETTRADE", "SET_API"]
     else:
-        order = ["SETTRADE", "TOPTRADER_WS", "TOPTRADER_PUBLIC", "SET_API"]
+        order = ["SETTRADE", "SET_API", "TOPTRADER_WS", "TOPTRADER_PUBLIC"]
     if PUBLIC_FALLBACK_ENABLED:
         order.append("TRADINGVIEW_PUBLIC")
     return order
@@ -1510,14 +1597,44 @@ def historical_candles(
     }
 
 
+@app.get("/connectivity/proof")
+def connectivity_proof(
+    symbol: str,
+    interval: str = "15m",
+    x_luna_gateway: Optional[str] = Header(default=None),
+):
+    """Authenticated end-to-end historical Settrade connectivity probe."""
+    auth(x_luna_gateway)
+    symbol = symbol.strip().upper()
+    if not symbol:
+        raise HTTPException(status_code=400, detail="invalid_symbol")
+    try:
+        inv = investor_client()
+        marketdata = historical_marketdata_client(inv)
+        payload = marketdata.get_candlestick(symbol=symbol, interval=interval, limit=1, start=None, end=None, normalized=True)
+    except ProviderUnavailable as exc:
+        raise HTTPException(status_code=503, detail={"code": str(exc), "proof": _connectivity_proof()}) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail={"code": "settrade_historical_probe_failed", "error": str(exc), "proof": _connectivity_proof()}) from exc
+    data_nonempty = payload is not None and payload != [] and payload != {}
+    proof = _connectivity_proof()
+    proof["checks"]["historical_probe_nonempty"] = data_nonempty
+    proof["historical_probe"] = {"symbol": symbol, "interval": interval, "nonempty": data_nonempty}
+    proof["historical_end_to_end_verified"] = data_nonempty
+    return {"ok": data_nonempty, **proof}
+
+
 @app.get("/health")
 def health():
     with _quote_lock:
         quote_count = len(_quotes)
     bridge_age = (time.time() - _external_bridge_last_ts) if _external_bridge_last_ts else None
     effective_provider = "SETTRADE_LOCAL_BRIDGE" if bridge_age is not None and bridge_age <= EXTERNAL_BRIDGE_MAX_AGE_SEC else _selected_provider
+    proof = _connectivity_proof()
     return {
         "ok": True,
+        "system_status": _system_status(),
+        "connectivity_proof": proof,
         "version": APP_VERSION,
         "source_revision": RELEASE_SOURCE_REVISION,
         "public_stream_release": PUBLIC_STREAM_RELEASE,
@@ -1670,6 +1787,7 @@ def quotes(x_luna_gateway: Optional[str] = Header(default=None)):
         "generated_at": _now_iso(),
         "count": len(data),
         "target": len(SYMBOLS),
+        "coverage": _quote_coverage_snapshot(),
         "provider_mode": PROVIDER_MODE,
         "selected_provider": _selected_provider,
         "collector_started": _collector_started,
@@ -1847,6 +1965,7 @@ def diagnostics(x_luna_gateway: Optional[str] = Header(default=None)):
         "settrade_missing_credentials": missing_settrade_credentials(),
         "python_sdk_loaded": Investor is not None,
         "settrade_sdk": "settrade-v2",
+        "settrade_sdk_version": SETTRADE_SDK_VERSION,
         "settrade_environment": SETTRADE_ENV,
         "realtime_marketdata_enabled": REALTIME_ENABLED,
         "realtime_bid_offer_enabled": REALTIME_BOOK,
@@ -1858,5 +1977,7 @@ def diagnostics(x_luna_gateway: Optional[str] = Header(default=None)):
         "collector_error": _collector_error,
         "provider_failures": dict(_provider_failures),
         "channel_status": _channel_snapshot(),
+        "system_status": _system_status(),
+        "connectivity_proof": _connectivity_proof(),
     }
 # LUNA production release marker: public quote stream
