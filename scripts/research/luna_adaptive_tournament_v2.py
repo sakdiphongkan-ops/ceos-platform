@@ -88,7 +88,7 @@ def main():
     df["adj_close"]=pd.to_numeric(df.adj_close,errors="coerce")
     for f in factor_columns: df[f]=pd.to_numeric(df[f],errors="coerce")
     factor_coverage={f:float(df[f].notna().mean()) for f in factor_columns}
-    active_factors=[f for f in FACTORS if factor_coverage[f] >= 0.20]
+    active_factors=[f for f in factor_columns if factor_coverage[f] >= 0.20]
     excluded_factors=[f for f in factor_columns if f not in active_factors]
     if "mom1" not in active_factors or len(active_factors) < 2:
         raise SystemExit(f"insufficient usable factors: {factor_coverage}")
@@ -102,9 +102,9 @@ def main():
         np.nan,
     )
     df.drop(columns=["_next_month","_next_adj_close"],inplace=True)
-    for f in FACTORS: df[f]=pd.to_numeric(df[f],errors="coerce")
-    factor_coverage={f:float(df[f].notna().mean()) for f in FACTORS}
-    active_factors=[f for f in FACTORS if factor_coverage[f] >= 0.80]
+    for f in factor_columns: df[f]=pd.to_numeric(df[f],errors="coerce")
+    factor_coverage={f:float(df[f].notna().mean()) for f in factor_columns}
+    active_factors=[f for f in factor_columns if factor_coverage[f] >= 0.80]
     if len(active_factors) < 3:
         raise SystemExit(f"Need at least 3 factors with >=80% coverage; coverage={factor_coverage}")
     months=sorted(df.month_end.dropna().unique())
