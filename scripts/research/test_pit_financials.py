@@ -1,5 +1,4 @@
 import pandas as pd
-import pytest
 from pit_financials import PointInTimeFinancials
 
 def make_rows():
@@ -35,7 +34,12 @@ def test_price_merge_is_point_in_time():
 def test_invalid_availability_order_is_rejected():
     m=PointInTimeFinancials(); rows=make_rows()
     rows.loc[0,"retrieved_at"]="2025-05-09T09:01:00+07:00"
-    with pytest.raises(ValueError): m.detect_revisions(rows)
+    try:
+        m.detect_revisions(rows)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("invalid availability order was accepted")
 
 def test_safe_pct_change_handles_zero():
     m=PointInTimeFinancials()
