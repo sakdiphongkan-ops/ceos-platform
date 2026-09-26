@@ -52,6 +52,8 @@ jobs:
           SETTRADE_APP_SECRET: "secret"
           SETTRADE_APP_CODE: "code"
           LUNA_LIVE_MIN_REALTIME_COVERAGE: "0.0"
+          LUNA_EXECUTION_LEDGER_ENABLED: "true"
+          LUNA_AGENT_KEY: "test-ledger-key"
         run: |
           python - <<'PY'
           import app
