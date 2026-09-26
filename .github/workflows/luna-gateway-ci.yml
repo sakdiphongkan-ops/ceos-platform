@@ -1,0 +1,45 @@
+name: LUNA gateway CI
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "luna-execution-gateway/**"
+      - ".github/workflows/luna-gateway-ci.yml"
+  pull_request:
+    paths:
+      - "luna-execution-gateway/**"
+      - ".github/workflows/luna-gateway-ci.yml"
+
+jobs:
+  gateway-ci:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: luna-execution-gateway
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install gateway dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+
+      - name: Compile gateway source
+        run: python -m py_compile app.py broker_timing.py
+
+      - name: Verify Settrade Open API v2 surface
+        run: |
+          python - <<'PY'
+          from importlib.metadata import version
+          from settrade_v2 import Investor
+          from settrade_v2.config import config
+
+          print("settrade-v2", version("settrade-v2"))
+          assert hasattr(Investor, "MarketData"), "Investor.MarketData missing"
+          assert hasattr(Investor, "RealtimeDataConnection"), "Investor.RealtimeDataConnection missing"
+          assert isinstance(config, dict), "settrade_v2.config.config must be a dict"
+          print("SETTRADE_V2_SURFACE_OK")
+          PY
