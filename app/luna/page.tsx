@@ -12,7 +12,7 @@ import {
 } from "../../lib/luna-runtime";
 import {
   connectRealtimeMarketStream, fetchControlRoom, fetchPortfolioState, fetchShadowStatus,
-  fetchTournament100, type ControlRoomState, type LunaFeed, type RealtimeQuote,
+  fetchTournament100, CLIENT_DEFAULTS, type ControlRoomState, type LunaFeed, type RealtimeQuote,
   type RuntimeStatus, type ShadowStatus, type Tournament100Result,
 } from "../../lib/luna-client";
 
@@ -95,6 +95,21 @@ export default function LunaPortfolioPage() {
       shadowInFlight.current=false;
     }
   },[]);
+
+  // Load authoritative HTTP state on mount and keep the control room fresh.
+  // The WebSocket is auxiliary only; failed WS connectivity must not block the UI.
+  useEffect(()=>{
+    void load();
+    void loadShadowStatus();
+
+    const feedTimer=setInterval(()=>{ void load(); },CLIENT_DEFAULTS.refreshMs);
+    const shadowTimer=setInterval(()=>{ void loadShadowStatus(); },CLIENT_DEFAULTS.shadowRefreshMs);
+
+    return()=>{
+      clearInterval(feedTimer);
+      clearInterval(shadowTimer);
+    };
+  },[load,loadShadowStatus]);
 
   useEffect(()=>{
     return connectRealtimeMarketStream({
