@@ -3,7 +3,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
-import { createClient } from "../../lib/supabase/client";
+import { createClient } from "../../../lib/supabase/client";
 
 export default function LunaLoginPage() {
   const [email, setEmail] = useState("");
