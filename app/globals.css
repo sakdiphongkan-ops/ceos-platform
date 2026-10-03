@@ -1,3 +1,8 @@
+:root {
+  --font-manrope: "Manrope";
+  --font-noto-thai: "Noto Sans Thai";
+}
+
 * {
   box-sizing: border-box;
 }
@@ -19,8 +24,6 @@ body {
     grid-template-columns: repeat(3, 1fr);
   }
 }
-
-
 .luna-shell{
   --bg:#090c0a;
   --panel:#0f1411;
