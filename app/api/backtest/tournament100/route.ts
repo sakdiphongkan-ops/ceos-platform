@@ -1,3 +1,4 @@
+import { requireBacktestAccess } from "../../../../lib/luna2/request-guards";
 import { NextResponse } from "next/server";
 import {
   ENTRY_PCT,
