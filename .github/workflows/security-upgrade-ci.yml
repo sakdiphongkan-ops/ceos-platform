@@ -1,0 +1,28 @@
+name: Next.js Security Upgrade CI
+
+on:
+  push:
+    branches:
+      - security/next-15-5-27
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  compatibility:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Audit high severity
+        run: npm audit --audit-level=high
+
+      - name: Production build
+        run: npm run build
