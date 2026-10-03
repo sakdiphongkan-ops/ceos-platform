@@ -16,7 +16,15 @@ export default function LunaLoginPage() {
   const next = useMemo(() => {
     if (typeof window === "undefined") return "/luna";
     const value = new URLSearchParams(window.location.search).get("next");
-    return value?.startsWith("/") ? value : "/luna";
+    if (!value) return "/luna";
+
+    try {
+      const candidate = new URL(value, window.location.origin);
+      if (candidate.origin !== window.location.origin) return "/luna";
+      return candidate.pathname + candidate.search + candidate.hash;
+    } catch {
+      return "/luna";
+    }
   }, []);
 
   async function submit(event: FormEvent) {
