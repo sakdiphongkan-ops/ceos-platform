@@ -1,3 +1,4 @@
+import { requireBacktestAccess } from "../../../../lib/luna2/request-guards";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -190,7 +191,9 @@ function run(data:Map<string,Bar[]>, scores:Map<string,any>) {
   };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const access = await requireBacktestAccess(request, "ceos-snapshot");
+  if (access.response) return access.response;
   const end=Math.floor(Date.parse("2026-09-19T00:00:00+07:00")/1000);
   const start=Math.floor(Date.parse("2026-07-22T00:00:00+07:00")/1000);
   const [fund, ...bars] = await Promise.all([
