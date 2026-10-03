@@ -1,3 +1,4 @@
+import { requireBacktestAccess } from "../../../../lib/luna2/request-guards";
 import {NextResponse} from "next/server";
 
 export const runtime="nodejs";
@@ -56,7 +57,9 @@ function tradesFor(st:Strategy,sym:string,s:Series,ctx:Ctx,days:Set<string>|unde
 
 async function fetchBars(symbol:string,start:number,end:number){const url="https://query1.finance.yahoo.com/v8/finance/chart/"+symbol+".BK?period1="+start+"&period2="+end+"&interval=5m&includePrePost=false&events=div%2Csplits";const r=await fetch(url,{headers:{"User-Agent":"Mozilla/5.0","Accept":"application/json"},cache:"no-store"});if(!r.ok)throw new Error("Yahoo HTTP "+r.status);const j=await r.json(),x=j?.chart?.result?.[0];if(!x)throw new Error("Yahoo missing result");const q=x.indicators?.quote?.[0]??{};return(x.timestamp??[]).map((t:number,i:number)=>({ts:t,open:Number(q.open?.[i]),high:Number(q.high?.[i]),low:Number(q.low?.[i]),close:Number(q.close?.[i]),volume:Number(q.volume?.[i]??0)})).filter((b:Bar)=>[b.open,b.high,b.low,b.close].every(Number.isFinite)&&b.close>0)}
 
-export async function GET(){
+export async function GET(request: Request) {
+  const access = await requireBacktestAccess(request, "multitimeframe");
+  if (access.response) return access.response;
 const end=Math.floor(Date.now()/1000),start=Math.floor((Date.now()-LOOKBACK_DAYS*86400000)/1000);
 const fetched=await Promise.allSettled(SYMBOLS.map(s=>fetchBars(s,start,end))),raw=new Map<string,Bar[]>(),errors:string[]=[];
 fetched.forEach((x,i)=>x.status==="fulfilled"?raw.set(SYMBOLS[i],x.value):errors.push(SYMBOLS[i]));
