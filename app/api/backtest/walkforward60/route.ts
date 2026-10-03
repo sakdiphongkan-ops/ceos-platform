@@ -91,6 +91,8 @@ function monteCarlo(rows:Trade[],iterations=3000){
 }
 
 export async function GET(req:Request){
+ const access = await requireBacktestAccess(req, "walkforward60");
+ if (access.response) return access.response;
  const u=new URL(req.url);
  const batch=Math.max(0,Math.min(4,Number(u.searchParams.get("batch")??"0")));
  const requestedLookbackDays=Math.max(30,Math.min(60,Number(u.searchParams.get("days")??"60")));
