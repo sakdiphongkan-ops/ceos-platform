@@ -784,3 +784,14 @@ tbody tr:hover,tbody tr.selected-row{background:rgba(111,128,110,.055)}
 .luna-shell .metric-value,.luna-shell .price-block>div,.luna-shell table,.luna-shell .control-stat strong{font-variant-numeric:tabular-nums lining-nums;}
 .luna-shell h1,.luna-shell h2,.luna-shell h3,.luna-shell .card-title,.luna-shell .control-room-title,.luna-shell .detail-symbol{font-weight:700;}
 .luna-shell .brand h1{letter-spacing:-.02em;}
+
+/* Global keyboard focus visibility for pages outside .luna-shell (WCAG 2.1 AA 2.4.7). */
+body a:focus-visible,
+body button:focus-visible,
+body input:focus-visible,
+body select:focus-visible,
+body textarea:focus-visible,
+body [tabindex]:focus-visible {
+  outline: 3px solid #536452 !important;
+  outline-offset: 2px;
+}
