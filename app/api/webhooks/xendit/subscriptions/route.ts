@@ -3,7 +3,7 @@ import {
   mapXenditSubscriptionState,
   subscriptionReference,
   type XenditWebhook,
-} from "../../../../../../lib/luna2/billing/xendit";
+} from "../../../../../lib/luna2/billing/xendit";
 
 export const runtime = "nodejs";
 
