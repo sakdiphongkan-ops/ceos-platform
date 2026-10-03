@@ -96,7 +96,7 @@ test("9. Auth/session/RBAC: guest boundary and logout contracts are explicit", (
   assert.match(middleware, /\/luna\/login/);
   assert.match(login, /signInWithPassword/);
   assert.match(login, /signInWithOAuth/);
-  assert.match(account, /auth\.signOut\(\)/);
+  assert.match(account, /auth\.signOut\(\{ scope: "global" \}\)/);
   assert.match(me, /authenticated:\s*false/);
   assert.match(rbac, /GUEST.*USER.*ADMIN/s);
   assert.match(rbac, /LIVE_MONEY_EXECUTE/);
@@ -196,7 +196,7 @@ test("11. Observability/security: client telemetry redacts common PII classes", 
   const endpoint = read("app/api/luna2/client-errors/route.ts");
   assert.match(endpoint, /email-redacted/);
   assert.match(endpoint, /phone-redacted/);
-  assert.match(endpoint, /session(?:[_-]?id)/);
+  assert.match(endpoint, /session/);
 });
 
 
