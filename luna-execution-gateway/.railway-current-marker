@@ -1,0 +1,3 @@
+LUNA Railway sync marker
+Source sync: 2026-10-04
+Purpose: trigger Railway deployment from current master without changing runtime code.
