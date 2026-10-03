@@ -1,0 +1,58 @@
+name: LUNA Vercel pinned production deploy
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type DEPLOY to run the pinned production deployment"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.confirm == 'DEPLOY') ||
+      (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[LUNA-VERCEL-DEPLOY]'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify pinned Vercel project
+        run: |
+          test -f .vercel/project.json
+          node -e "const p=require('./.vercel/project.json'); if(p.projectId!=='prj_Zl2Xs9PREpxW6pHnnudqb604Yloa'||p.orgId!=='team_2TAZ4KjwLsycf8764AzDHap5') process.exit(1)"
+          echo "Pinned Vercel project verified."
+
+      - name: Verify exact source revision
+        run: |
+          echo "Deploying $GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+
+      - name: Verify Vercel credential is available
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: test -n "$VERCEL_TOKEN"
+
+      - name: Pull Vercel production configuration
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: npx vercel@latest pull --yes --environment=production --token "$VERCEL_TOKEN"
+
+      - name: Build exact source with Vercel
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: npx vercel@latest build --prod --token "$VERCEL_TOKEN"
+
+      - name: Deploy exact prebuilt source to production
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: npx vercel@latest deploy --prebuilt --prod --yes --token "$VERCEL_TOKEN"
