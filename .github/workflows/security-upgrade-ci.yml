@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - security/next-15-5-27
+  pull_request:
+    branches:
+      - master
 
 jobs:
   compatibility:
