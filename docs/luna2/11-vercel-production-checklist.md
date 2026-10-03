@@ -25,3 +25,5 @@ When Vercel Git webhook deployment or the connected Vercel deploy action is unav
 - The workflow builds with Vercel first, then deploys the prebuilt output to the pinned production project.
 
 Do not promote the deployment to the production domain until the checks above pass.
+
+<!-- Vercel Git integration deployment probe: 2026-10-03 -->
