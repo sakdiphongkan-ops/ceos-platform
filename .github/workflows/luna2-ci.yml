@@ -29,6 +29,33 @@ jobs:
           lib/luna2/decision-engine.ts
           lib/luna2/entitlements.ts
           lib/luna2/adapters/luna-feed.ts
+          lib/luna2/rbac.ts
+          lib/luna2/observability-client.ts
 
       - name: Production build
         run: npm run build
+
+      - name: Full-stack architecture tests
+        run: npm run test:architecture
+
+  browser-compatibility:
+    runs-on: ubuntu-latest
+    needs: build-and-typecheck
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install browser engines
+        run: npx playwright install --with-deps chromium firefox webkit
+
+      - name: Production build
+        run: npm run build
+
+      - name: Cross-browser and mobile smoke
+        run: npm run test:browser
