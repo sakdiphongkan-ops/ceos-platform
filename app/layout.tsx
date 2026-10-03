@@ -1,4 +1,5 @@
 import './globals.css';
+import ObservabilityClient from './observability-client';
 
 export const metadata = {
   title: 'LUNA-TH1H · Control Room',
@@ -10,7 +11,10 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <ObservabilityClient />
+        {children}
+      </body>
     </html>
   );
 }
