@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArrowLeft, CreditCard, LogOut, ShieldCheck, UserCircle } from "lucide-react";
-import { createClient } from "../../lib/supabase/client";
+import { createClient } from "../../../lib/supabase/client";
 
 type Account = {
   email: string | null;
