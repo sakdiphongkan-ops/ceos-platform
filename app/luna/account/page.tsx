@@ -39,9 +39,14 @@ export default function AccountPage() {
   useEffect(() => { void load(); }, []);
 
   async function signOut() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    window.location.assign("/luna");
+    try {
+      const supabase = createClient();
+      const { error: signOutError } = await supabase.auth.signOut({ scope: "global" });
+      if (signOutError) throw signOutError;
+      window.location.assign("/luna");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to sign out");
+    }
   }
 
   return (
