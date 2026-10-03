@@ -8,10 +8,20 @@ type ClientErrorBody = {
 
 const WINDOW_MS = 60_000;
 const MAX_REQUESTS_PER_WINDOW = 20;
+const MAX_BODY_BYTES = 8_000;
+const MAX_RATE_STATE_ENTRIES = 10_000;
 const rateState = new Map<string, { startedAt: number; count: number }>();
 
 function getClientKey(request: Request): string {
   return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "anonymous";
+}
+
+function pruneRateState(now: number) {
+  if (rateState.size < MAX_RATE_STATE_ENTRIES) return;
+  for (const [key, value] of rateState) {
+    if (now - value.startedAt >= WINDOW_MS) rateState.delete(key);
+    if (rateState.size < MAX_RATE_STATE_ENTRIES) break;
+  }
 }
 
 function sanitize(value: unknown, max = 500): string {
@@ -29,12 +39,17 @@ export async function POST(request: Request) {
 
   try {
     const contentLength = Number(request.headers.get("content-length") || 0);
-    if (contentLength > 8_000) {
+    if (contentLength > MAX_BODY_BYTES) {
       return NextResponse.json({ ok: false, error: "PAYLOAD_TOO_LARGE" }, { status: 413 });
     }
 
-    const parsed = await request.json();
-    if (!parsed || typeof parsed !== "object") {
+    const raw = await request.text();
+    if (new TextEncoder().encode(raw).byteLength > MAX_BODY_BYTES) {
+      return NextResponse.json({ ok: false, error: "PAYLOAD_TOO_LARGE" }, { status: 413 });
+    }
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       return NextResponse.json({ ok: false, error: "INVALID_PAYLOAD" }, { status: 400 });
     }
     body = parsed as ClientErrorBody;
@@ -47,6 +62,7 @@ export async function POST(request: Request) {
   const current = rateState.get(key);
 
   if (!current || now - current.startedAt >= WINDOW_MS) {
+    pruneRateState(now);
     rateState.set(key, { startedAt: now, count: 1 });
   } else {
     current.count += 1;
