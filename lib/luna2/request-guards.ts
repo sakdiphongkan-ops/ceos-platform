@@ -5,6 +5,7 @@ type BucketState = { startedAt: number; count: number };
 
 const state = new Map<string, BucketState>();
 const WINDOW_MS = 60_000;
+const MAX_STATE_ENTRIES = 10_000;
 const LIMITS: Record<string, number> = {
   "ceos-snapshot": 5,
   "multitimeframe": 3,
@@ -13,7 +14,16 @@ const LIMITS: Record<string, number> = {
   yahoo: 5,
 };
 
+function pruneExpired(now: number) {
+  if (state.size < MAX_STATE_ENTRIES) return;
+  for (const [key, value] of state) {
+    if (now - value.startedAt >= WINDOW_MS) state.delete(key);
+    if (state.size < MAX_STATE_ENTRIES) break;
+  }
+}
+
 export async function requireBacktestAccess(request: Request, bucket: keyof typeof LIMITS) {
+  void request;
   try {
     const user = await getLunaUser();
     if (!user) {
@@ -32,6 +42,7 @@ export async function requireBacktestAccess(request: Request, bucket: keyof type
     const limit = LIMITS[bucket] ?? 3;
 
     if (!current || now - current.startedAt >= WINDOW_MS) {
+      pruneExpired(now);
       state.set(key, { startedAt: now, count: 1 });
     } else {
       current.count += 1;
