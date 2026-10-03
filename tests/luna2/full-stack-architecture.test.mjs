@@ -155,3 +155,46 @@ test("11. Observability: source logging cannot directly print credential-bearing
   walk("lib");
   assert.deepEqual(bad, []);
 });
+
+
+test("5. Security configuration: OAuth callback rejects cross-origin redirects", () => {
+  const callback = read("app/auth/callback/route.ts");
+  assert.match(callback, /candidate\.origin !== origin/);
+  assert.match(callback, /new URL\(next, url\.origin\)/);
+});
+
+test("5. Security configuration: baseline response headers are defined", () => {
+  const config = read("next.config.mjs");
+  for (const header of [
+    "X-Content-Type-Options",
+    "X-Frame-Options",
+    "Referrer-Policy",
+    "Permissions-Policy",
+    "Strict-Transport-Security",
+  ]) {
+    assert.match(config, new RegExp(header));
+  }
+});
+
+test("8. API integration/security: expensive backtests fail closed and rate limit", () => {
+  const routes = [
+    ["app/api/backtest/ceos-snapshot/route.ts", "ceos-snapshot"],
+    ["app/api/backtest/multitimeframe/route.ts", "multitimeframe"],
+    ["app/api/backtest/tournament100/route.ts", "tournament100"],
+    ["app/api/backtest/walkforward60/route.ts", "walkforward60"],
+    ["app/api/backtest/yahoo/route.ts", "yahoo"],
+  ];
+
+  for (const [file, bucket] of routes) {
+    const source = read(file);
+    assert.match(source, /requireBacktestAccess/);
+    assert.match(source, new RegExp(bucket));
+  }
+});
+
+test("11. Observability/security: client telemetry redacts common PII classes", () => {
+  const endpoint = read("app/api/luna2/client-errors/route.ts");
+  assert.match(endpoint, /email-redacted/);
+  assert.match(endpoint, /phone-redacted/);
+  assert.match(endpoint, /session(?:[_-]?id)/);
+});
