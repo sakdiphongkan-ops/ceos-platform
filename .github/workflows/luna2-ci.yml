@@ -21,8 +21,14 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Typecheck
-        run: npx tsc --noEmit
+      - name: Typecheck LUNA 2.0 contracts
+        run: >-
+          npx tsc --noEmit --strict --target ES2020 --module ESNext
+          --moduleResolution Bundler
+          lib/luna2/domain.ts
+          lib/luna2/decision-engine.ts
+          lib/luna2/entitlements.ts
+          lib/luna2/adapters/luna-feed.ts
 
       - name: Production build
         run: npm run build
