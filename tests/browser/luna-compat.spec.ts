@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
 
 test.describe("LUNA cross-browser compatibility", () => {
   test("core pages render without horizontal overflow", async ({ page }) => {
@@ -52,4 +53,46 @@ test.describe("LUNA cross-browser compatibility", () => {
     expect(serialized).not.toContain("super-secret");
     expect(serialized).not.toContain("should-not-leak");
   });
+});
+
+
+test("4. WCAG 2.1 AA automated scan: core pages", async ({ page }) => {
+  for (const route of ["/luna", "/luna/login"]) {
+    await page.goto(route, { waitUntil: "domcontentloaded" });
+    const results = await new AxeBuilder({ page }).analyze();
+    const serious = results.violations.filter((v) => ["critical", "serious"].includes(v.impact ?? ""));
+    expect(
+      serious,
+      "Critical/serious accessibility violations on " + route + ": " +
+        serious.map((v) => v.id + " " + v.help).join("; "),
+    ).toEqual([]);
+  }
+});
+
+test("12. Performance smoke: collect LCP and CLS for the control room", async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as any).__lunaVitals = { lcp: null, cls: 0 };
+    const lcpObserver = new PerformanceObserver((list) => {
+      const entries = list.getEntries();
+      const last = entries[entries.length - 1] as PerformanceEntry | undefined;
+      if (last) (window as any).__lunaVitals.lcp = last.startTime;
+    });
+    lcpObserver.observe({ type: "largest-contentful-paint", buffered: true });
+
+    let cls = 0;
+    const clsObserver = new PerformanceObserver((list) => {
+      for (const entry of list.getEntries() as any[]) {
+        if (!entry.hadRecentInput) cls += entry.value;
+      }
+      (window as any).__lunaVitals.cls = cls;
+    });
+    clsObserver.observe({ type: "layout-shift", buffered: true });
+  });
+
+  await page.goto("/luna", { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(1000);
+
+  const vitals = await page.evaluate(() => (window as any).__lunaVitals);
+  expect(vitals.lcp == null || vitals.lcp < 4000).toBeTruthy();
+  expect(vitals.cls == null || vitals.cls < 0.25).toBeTruthy();
 });
