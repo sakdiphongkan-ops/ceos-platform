@@ -198,3 +198,11 @@ test("11. Observability/security: client telemetry redacts common PII classes", 
   assert.match(endpoint, /phone-redacted/);
   assert.match(endpoint, /session(?:[_-]?id)/);
 });
+
+
+test("4. Accessibility source contract: interactive portfolio rows have keyboard activation", () => {
+  const page = read("app/luna/page.tsx");
+  assert.match(page, /tabIndex=\{0\}/);
+  assert.match(page, /aria-selected=/);
+  assert.match(page, /onKeyDown=\{\(event\)=>\{if\(event\.key==="Enter"\|\|event\.key===" "/);
+});
