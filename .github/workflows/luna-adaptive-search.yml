@@ -5,6 +5,10 @@ on:
     branches: [master]
     paths:
       - "scripts/research/monthly_walk_forward_adaptive_search.py"
+      - "scripts/research/export_supabase_monthly_factors.py"
+      - "scripts/research/apply_pit_universe.py"
+      - "tests/research/test_luna_monthly_return_guards.py"
+      - "tests/research/test_luna_meta_ensemble_data_contract.py"
       - ".github/workflows/luna-adaptive-search.yml"
   workflow_dispatch:
 
@@ -34,6 +38,31 @@ jobs:
           python -m pip install --upgrade pip
           pip install pandas numpy requests
 
+      - name: Run LUNA research regression guards
+        run: |
+          python tests/research/test_luna_monthly_return_guards.py
+          python tests/research/test_luna_meta_ensemble_data_contract.py
+
+      - name: Validate point-in-time membership input
+        env:
+          LUNA_PIT_UNIVERSE_MEMBERSHIP: ${{ vars.LUNA_PIT_UNIVERSE_MEMBERSHIP }}
+        run: |
+          if [ -z "$LUNA_PIT_UNIVERSE_MEMBERSHIP" ]; then
+            echo "::error::Missing repository variable LUNA_PIT_UNIVERSE_MEMBERSHIP. Provide a versioned, source-verified historical membership CSV; do not substitute today's constituent list."
+            exit 1
+          fi
+          if [ ! -f "$LUNA_PIT_UNIVERSE_MEMBERSHIP" ]; then
+            echo "::error::PIT membership file does not exist at configured path: $LUNA_PIT_UNIVERSE_MEMBERSHIP"
+            exit 1
+          fi
+          python - <<'PY'
+          import os
+          from scripts.research.apply_pit_universe import load_membership
+          path = os.environ["LUNA_PIT_UNIVERSE_MEMBERSHIP"]
+          rows = load_membership(path)
+          print({"membership_rows": len(rows), "source_file": path})
+          PY
+
       - name: Export completed monthly factor dataset
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -43,9 +72,18 @@ jobs:
           python scripts/research/export_supabase_monthly_factors.py             --output data/luna_monthly/monthly_price_factors.csv             --start 2021-09-01             --end 2026-08-01
 
       - name: Run Adaptive Search v1
+        env:
+          LUNA_PIT_UNIVERSE_MEMBERSHIP: ${{ vars.LUNA_PIT_UNIVERSE_MEMBERSHIP }}
         run: |
           rm -rf research/luna_monthly_adaptive_v1
-          python scripts/research/monthly_walk_forward_adaptive_search.py             --input data/luna_monthly/monthly_price_factors.csv             --output research/luna_monthly_adaptive_v1             --lookback-months 24             --min-history-months 12             --cost-bps 20             --k-values 5,10,20
+          python scripts/research/monthly_walk_forward_adaptive_search.py \
+            --input data/luna_monthly/monthly_price_factors.csv \
+            --output research/luna_monthly_adaptive_v1 \
+            --membership "$LUNA_PIT_UNIVERSE_MEMBERSHIP" \
+            --lookback-months 24 \
+            --min-history-months 12 \
+            --cost-bps 20 \
+            --k-values 5,10,20
 
       - name: Validate output
         run: |
