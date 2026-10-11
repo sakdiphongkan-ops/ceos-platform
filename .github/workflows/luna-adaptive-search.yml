@@ -7,6 +7,9 @@ on:
       - "scripts/research/monthly_walk_forward_adaptive_search.py"
       - "scripts/research/export_supabase_monthly_factors.py"
       - "scripts/research/apply_pit_universe.py"
+      - "scripts/research/luna_formula_identity.py"
+      - "scripts/research/luna_direct_supabase_1000_v1.py"
+      - "tests/research/test_luna_formula_identity.py"
       - "tests/research/test_luna_monthly_return_guards.py"
       - "tests/research/test_luna_meta_ensemble_data_contract.py"
       - ".github/workflows/luna-adaptive-search.yml"
@@ -40,6 +43,7 @@ jobs:
 
       - name: Run LUNA research regression guards
         run: |
+          python tests/research/test_luna_formula_identity.py
           python tests/research/test_luna_monthly_return_guards.py
           python tests/research/test_luna_meta_ensemble_data_contract.py
 
@@ -89,12 +93,18 @@ jobs:
         run: |
           test -s research/luna_monthly_adaptive_v1/summary.json
           test -s research/luna_monthly_adaptive_v1/adaptive_selection_ledger.csv
+          test -s research/luna_monthly_adaptive_v1/candidate-catalog.v2.json
           python - <<'PY'
           import json
           p="research/luna_monthly_adaptive_v1/summary.json"
           x=json.load(open(p))
+          catalog=json.load(open("research/luna_monthly_adaptive_v1/candidate-catalog.v2.json"))
           assert x["leakage_guard"]
           assert x["months_traded"] >= 40
+          assert x["run_id"] == catalog["manifest"]["run_id"]
+          assert x["formula_catalog_sha256"] == catalog["catalog_sha256"]
+          ids=[f["formula_uid"] for f in catalog["formulas"]]
+          assert len(ids) == len(set(ids)), "formula_uid collision inside one run"
           print(json.dumps(x, indent=2))
           PY
 
@@ -106,9 +116,10 @@ jobs:
         run: |
           mkdir -p research-results/luna-monthly-adaptive-v1
           cp research/luna_monthly_adaptive_v1/adaptive_selection_ledger.csv             research-results/luna-monthly-adaptive-v1/selection-ledger.csv
+          cp research/luna_monthly_adaptive_v1/candidate-catalog.v2.json             research-results/luna-monthly-adaptive-v1/candidate-catalog.v2.json
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add research-results/luna-monthly-adaptive-v1-result.json             research-results/luna-monthly-adaptive-v1/selection-ledger.csv
+          git add research-results/luna-monthly-adaptive-v1-result.json             research-results/luna-monthly-adaptive-v1/selection-ledger.csv             research-results/luna-monthly-adaptive-v1/candidate-catalog.v2.json
           git diff --cached --quiet || git commit -m "Save LUNA adaptive search v1 result"
           git push
 
@@ -119,5 +130,6 @@ jobs:
           path: |
             research/luna_monthly_adaptive_v1/summary.json
             research/luna_monthly_adaptive_v1/adaptive_selection_ledger.csv
+            research/luna_monthly_adaptive_v1/candidate-catalog.v2.json
           compression-level: 0
           retention-days: 14
