@@ -1,0 +1,54 @@
+{
+  "schema_version": "1.0",
+  "record_type": "research_run_invalidation",
+  "created_at": "2026-10-12",
+  "timezone": "Asia/Bangkok",
+  "status": "INVALIDATED",
+  "historical_formula": {
+    "formula_id": "LUNA_MR_70_30_V1",
+    "version": "1.0.0",
+    "formula_sha256": "b8be7f0fcd9ad0f9d4c7d08becd6971fce8dd5a0821ed18f7bbfe3f678cca866",
+    "database_formula_id": 2000,
+    "database_formula_name": "LUNA_MR_70_30_V1_20261011_PAPER_ONLY"
+  },
+  "invalidated_run": {
+    "run_id": "1c2cadeb-7522-4013-9154-aa756b12c4ff",
+    "database_table": "public.luna_research_runs",
+    "status_after_audit": "FAILED",
+    "stored_monthly_return_rows": 57,
+    "stored_month_range": ["2021-12-01", "2026-08-01"],
+    "valid_for_performance_claim": false
+  },
+  "reason": {
+    "finding": "The initial replay conditioned eligibility/ranking on next-month price availability before fixing the top-20 portfolio.",
+    "why_invalid": "Forward-outcome availability can influence selection. A stock with no next-month price can be removed and replaced by rank 21, introducing selection bias/look-ahead through the outcome availability mask.",
+    "required_rule": "Calculate scores and freeze the selected top 20 using formation-date signal fields only. Check next-calendar-month outcomes afterwards. If any selected outcome is missing, mark the month and run incomplete; never substitute the next-ranked name.",
+    "action": "The run was marked FAILED in Supabase. The 57 monthly rows remain as audit history and must not be used for ranking, metrics or promotion."
+  },
+  "strict_replacement": {
+    "formula_id": "LUNA_MR_70_30_V1",
+    "version": "1.0.1",
+    "database_formula_id": 2001,
+    "run_id": "b1f44b4e-ba1b-4097-95ef-eedfa8ebd601",
+    "status": "FAILED_PARTIAL_VALID_HISTORY_ONLY",
+    "valid_monthly_return_rows": 56,
+    "valid_return_month_range": ["2021-12-01", "2026-07-01"],
+    "missing_formation_month": "2026-08-01",
+    "missing_selected_symbol": "F&D",
+    "valid_for_performance_claim": false,
+    "reason": "Strict replay preserved F&D in the chosen portfolio and failed closed when the next-calendar-month adjusted close was missing. No rank-21 substitute was used."
+  },
+  "next_family_run": {
+    "run_id": "acd03a11-a233-47e0-9875-500b6ba45e01",
+    "status": "FAILED_AS_COMPLETE_FAMILY",
+    "candidate_formula_ids": [2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009],
+    "valid_monthly_series_artifact": "luna-theory-driven-8-candidate-family-20261012-monthly-series.json",
+    "limitations": [
+      "Five of eight candidates have a missing selected F&D outcome for formation month 2026-08.",
+      "Three candidates are complete over the observed return horizon, but none passes the full PIT/data-integrity and prospective-validation gates.",
+      "The 925-symbol universe is survivor-oriented; point-in-time SET/mai membership and delisted/terminal price history remain unverified.",
+      "No formula from this family is approved for real-money execution."
+    ]
+  },
+  "preservation_rule": "Do not delete the invalidated rows or rewrite the old formula as if it had never existed. Preserve the original artifact and run, mark the invalidation as a separate append-only audit record, and use only the strict replacement for any future rerun."
+}
