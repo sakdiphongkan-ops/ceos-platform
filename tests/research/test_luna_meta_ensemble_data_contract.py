@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 import tempfile
 from pathlib import Path
 
@@ -14,6 +15,7 @@ SCRIPT = ROOT / "scripts" / "research" / "luna_meta_ensemble_lab_v1.py"
 SPEC = importlib.util.spec_from_file_location("luna_meta_ensemble_lab_v1", SCRIPT)
 LAB = importlib.util.module_from_spec(SPEC)
 assert SPEC and SPEC.loader
+sys.modules[SPEC.name] = LAB
 SPEC.loader.exec_module(LAB)
 
 
