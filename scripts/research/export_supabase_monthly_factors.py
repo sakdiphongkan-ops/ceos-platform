@@ -66,6 +66,10 @@ def main() -> None:
         if c not in {"symbol", "month_end"}:
             df[c] = pd.to_numeric(df[c], errors="coerce")
     df["month_end"] = pd.to_datetime(df["month_end"])
+    # snapshot_date is the date at which the month-end signal was formed.
+    # It is not a substitute for PIT membership evidence; it only supplies
+    # the correct observation timestamp to the separate lifecycle filter.
+    df["snapshot_date"] = df["month_end"]
     df = df.sort_values(["month_end", "symbol"]).drop_duplicates(
         ["month_end", "symbol"]
     )
