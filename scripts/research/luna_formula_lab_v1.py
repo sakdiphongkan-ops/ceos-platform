@@ -312,13 +312,76 @@ def summarize_monthly(monthly: pd.DataFrame) -> pd.DataFrame:
 
 
 def run_lab(input_path: str | Path, output_dir: str | Path, run_id: str | None = None,
-            costs_bps: tuple[float, ...] = (20.0, 30.0, 40.0)) -> dict[str, Any]:
+            costs_bps: tuple[float, ...] = (20.0, 30.0, 40.0),
+            source_manifest_path: str | Path | None = None) -> dict[str, Any]:
     input_path = Path(input_path)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     frame = load_monthly_factors(input_path)
     run_id = run_id or str(uuid.uuid4())
     dataset_hash = hashlib.sha256(input_path.read_bytes()).hexdigest()
+
+    # Verify the byte-level export sidecar when supplied or available by convention.
+    # This proves the runner read the same CSV bytes declared by the exporter, but
+    # does not independently prove that the upstream source or PIT universe is correct.
+    export_manifest_path = (
+        Path(source_manifest_path) if source_manifest_path
+        else input_path.with_suffix(".manifest.json")
+    )
+    if source_manifest_path and not export_manifest_path.is_file():
+        raise ValueError(f"Source export manifest not found: {export_manifest_path}")
+
+    export_manifest_record: dict[str, Any] = {
+        "status": "MISSING_UNVERIFIED_EXPORT_MANIFEST",
+        "file_name": None,
+        "manifest_sha256": None,
+        "source_table": None,
+        "dataset_ids": [],
+        "declared_rows": None,
+        "declared_symbols": None,
+        "exported_at_utc": None,
+    }
+    if export_manifest_path.is_file():
+        export_manifest = json.loads(export_manifest_path.read_text(encoding="utf-8"))
+        expected_csv_hash = export_manifest.get("output_sha256")
+        if not expected_csv_hash or expected_csv_hash != dataset_hash:
+            raise ValueError(
+                "Export manifest SHA-256 mismatch: "
+                f"manifest={expected_csv_hash!r} actual={dataset_hash!r}"
+            )
+        declared_rows = export_manifest.get("rows")
+        if declared_rows is None or int(declared_rows) != len(frame):
+            raise ValueError(
+                f"Export manifest row-count mismatch: declared={declared_rows!r} actual={len(frame)}"
+            )
+        declared_symbols = export_manifest.get("symbols")
+        actual_symbols = int(frame["symbol"].nunique())
+        if declared_symbols is None or int(declared_symbols) != actual_symbols:
+            raise ValueError(
+                f"Export manifest symbol-count mismatch: declared={declared_symbols!r} actual={actual_symbols}"
+            )
+        declared_dataset_ids = sorted(str(x) for x in export_manifest.get("dataset_ids", []))
+        actual_dataset_ids = (
+            sorted(str(x) for x in frame["dataset_id"].dropna().unique())
+            if "dataset_id" in frame.columns else []
+        )
+        if "dataset_id" in frame.columns and declared_dataset_ids != actual_dataset_ids:
+            raise ValueError(
+                "Export manifest dataset-ID mismatch: "
+                f"declared={declared_dataset_ids!r} actual={actual_dataset_ids!r}"
+            )
+        export_manifest_record = {
+            "status": "VERIFIED_EXPORT_FILE_HASH_AND_COUNTS",
+            "file_name": export_manifest_path.name,
+            "manifest_sha256": hashlib.sha256(export_manifest_path.read_bytes()).hexdigest(),
+            "source_table": export_manifest.get("source_table"),
+            "dataset_ids": declared_dataset_ids,
+            "declared_rows": int(declared_rows),
+            "declared_symbols": int(declared_symbols),
+            "exported_at_utc": export_manifest.get("exported_at_utc"),
+            "upstream_source_lineage_verified": False,
+            "pit_membership_verified": False,
+        }
 
     all_monthly, all_selected, candidate_manifest = [], [], []
     for candidate in CANDIDATES:
@@ -357,6 +420,7 @@ def run_lab(input_path: str | Path, output_dir: str | Path, run_id: str | None =
         "run_id": run_id,
         "input_path_name": input_path.name,
         "dataset_sha256": dataset_hash,
+        "source_export_manifest": export_manifest_record,
         "input_rows": int(len(frame)),
         "input_symbols": int(frame["symbol"].nunique()),
         "input_months": sorted(str(m) for m in frame["month_period"].dropna().unique()),
@@ -386,12 +450,13 @@ def main() -> int:
     parser.add_argument("--output", required=True, help="Directory for the manifest and audit outputs")
     parser.add_argument("--run-id", default=None, help="Stable caller-supplied research run ID; generated if omitted")
     parser.add_argument("--cost-bps", default="20,30,40", help="Comma-separated bps per full turnover unit")
+    parser.add_argument("--source-manifest", default=None, help="Export sidecar manifest; defaults to <input>.manifest.json when present")
     args = parser.parse_args()
     try:
         costs = tuple(float(value.strip()) for value in args.cost_bps.split(",") if value.strip())
         if not costs or any(value < 0 for value in costs):
             raise ValueError("cost-bps must contain non-negative values")
-        manifest = run_lab(args.input, args.output, args.run_id, costs)
+        manifest = run_lab(args.input, args.output, args.run_id, costs, args.source_manifest)
     except (OSError, ValueError, KeyError) as exc:
         parser.error(str(exc))
     print(json.dumps({
