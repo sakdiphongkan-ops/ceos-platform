@@ -4,7 +4,7 @@ import AxeBuilder from "@axe-core/playwright";
 test.describe("LUNA cross-browser compatibility", () => {
   test("core pages render without horizontal overflow", async ({ page }) => {
     for (const route of ["/luna", "/luna/login"]) {
-      await page.goto(route, { waitUntil: "domcontentloaded" });
+      await page.goto(route, { waitUntil: "load" });
       await expect(page.locator("body")).toBeVisible();
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       expect(overflow).toBeLessThanOrEqual(1);
@@ -12,7 +12,7 @@ test.describe("LUNA cross-browser compatibility", () => {
   });
 
   test("login controls remain touch-friendly and keyboard-safe", async ({ page }) => {
-    await page.goto("/luna/login", { waitUntil: "domcontentloaded" });
+    await page.goto("/luna/login", { waitUntil: "load" });
     const inputs = page.locator("input");
     await expect(inputs).toHaveCount(2);
 
@@ -39,7 +39,7 @@ test.describe("LUNA cross-browser compatibility", () => {
       await route.fulfill({ status: 202, contentType: "application/json", body: JSON.stringify({ ok: true, accepted: true }) });
     });
 
-    await page.goto("/luna", { waitUntil: "domcontentloaded" });
+    await page.goto("/luna", { waitUntil: "load" });
     await page.waitForFunction(() => (window as Window & { __lunaClientObservabilityReady?: boolean }).__lunaClientObservabilityReady === true);
     await page.evaluate(() => {
       window.dispatchEvent(new ErrorEvent("error", { message: "password=super-secret access_token=should-not-leak" }));
@@ -59,7 +59,7 @@ test.describe("LUNA cross-browser compatibility", () => {
 
 test("4. WCAG 2.1 AA automated scan: core pages", async ({ page }) => {
   for (const route of ["/luna", "/luna/login"]) {
-    await page.goto(route, { waitUntil: "domcontentloaded" });
+    await page.goto(route, { waitUntil: "load" });
     const results = await new AxeBuilder({ page }).analyze();
     const serious = results.violations.filter((v) => ["critical", "serious"].includes(v.impact ?? ""));
     expect(
@@ -90,7 +90,7 @@ test("12. Performance smoke: collect LCP and CLS for the control room", async ({
     clsObserver.observe({ type: "layout-shift", buffered: true });
   });
 
-  await page.goto("/luna", { waitUntil: "domcontentloaded" });
+  await page.goto("/luna", { waitUntil: "load" });
   await page.waitForTimeout(1000);
 
   const vitals = await page.evaluate(() => (window as any).__lunaVitals);
