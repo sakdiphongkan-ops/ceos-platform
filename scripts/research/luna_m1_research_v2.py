@@ -96,21 +96,21 @@ def make_candidates() -> list[Candidate]:
             for vw in (0.00, 0.10):
                 for trend_floor in (0.00, 0.20):
                     for liq_floor in (0.00, 0.20):
-                    for lq_style in ("SAFE", "CONTRARIAN"):
-                        # Positive weights are normalized; lq uses lower turnover and
-                        # lower price-to-52-week-high distance as positive signals.
-                        total = mw + lqw + vw
-                        if total <= 0:
-                            continue
-                        idx += 1
-                        name = (
-                            f"B{idx:03d}_MW{mw:.2f}_LQ{lqw:.2f}_VW{vw:.2f}"
-                            f"_TF{trend_floor:.2f}_LF{liq_floor:.2f}_{lq_style}"
-                        )
-                        out.append(Candidate(
-                            name=name,mom_w=mw/total,lq_w=lqw/total,vol_w=vw/total,
-                            trend_floor=trend_floor,liq_floor=liq_floor,lq_style=lq_style
-                        ))
+                        for lq_style in ("SAFE", "CONTRARIAN"):
+                            # Positive weights are normalized; lq uses lower turnover and
+                            # lower price-to-52-week-high distance as positive signals.
+                            total = mw + lqw + vw
+                            if total <= 0:
+                                continue
+                            idx += 1
+                            name = (
+                                f"B{idx:03d}_MW{mw:.2f}_LQ{lqw:.2f}_VW{vw:.2f}"
+                                f"_TF{trend_floor:.2f}_LF{liq_floor:.2f}_{lq_style}"
+                            )
+                            out.append(Candidate(
+                                name=name,mom_w=mw/total,lq_w=lqw/total,vol_w=vw/total,
+                                trend_floor=trend_floor,liq_floor=liq_floor,lq_style=lq_style
+                            ))
     return out
 
 def load_monthly(path: str) -> pd.DataFrame:
