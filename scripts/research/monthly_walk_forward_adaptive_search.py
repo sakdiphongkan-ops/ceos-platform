@@ -31,15 +31,49 @@ def geo(x: pd.Series) -> float:
     return float(np.expm1(np.log1p(x).mean()))
 
 
+def add_strict_forward_returns(df: pd.DataFrame) -> pd.DataFrame:
+    """Calculate next-calendar-month returns and retain missing outcomes for QA."""
+    out = df.copy()
+    out["month_end"] = pd.to_datetime(out["month_end"]).dt.to_period("M").dt.to_timestamp("M")
+    out = out.sort_values(["symbol", "month_end"]).drop_duplicates(
+        ["symbol", "month_end"], keep="last"
+    ).reset_index(drop=True)
+    out["adj_close"] = pd.to_numeric(out["adj_close"], errors="coerce")
+    next_month = out.groupby("symbol")["month_end"].shift(-1)
+    next_close = out.groupby("symbol")["adj_close"].shift(-1)
+    expected = out["month_end"] + pd.offsets.MonthEnd(1)
+    out["fwd1"] = np.where(
+        next_month.eq(expected),
+        next_close / out["adj_close"] - 1.0,
+        np.nan,
+    )
+    # Only exclude the last global month, which cannot yet have a complete
+    # following-month outcome. Gaps for individual symbols stay visible.
+    final_month = out["month_end"].max()
+    if pd.isna(final_month):
+        raise SystemExit("NO_MONTHLY_OBSERVATIONS")
+    return out.loc[out["month_end"] < final_month].copy().reset_index(drop=True)
+
+
 def ranked_symbols(df: pd.DataFrame, factor: str, direction: str, k: int) -> pd.Series:
-    x = df[["symbol", "month_end", factor, "fwd1"]].copy()
+    # Ranking must depend only on factors known at formation time, never on fwd1.
+    x = df[["symbol", "month_end", factor]].copy()
     x["rank_pct"] = x.groupby("month_end")[factor].rank(pct=True, method="average")
-    x = x.dropna(subset=["rank_pct", "fwd1"])
+    x = x.dropna(subset=["rank_pct"])
     ascending = direction == "LOW"
     x = x.sort_values(
         ["month_end", "rank_pct", "symbol"],
         ascending=[True, ascending, True],
     )
+    eligible_counts = x.groupby("month_end")["symbol"].size()
+    insufficient = eligible_counts[eligible_counts < k]
+    if not insufficient.empty:
+        month, count = insufficient.items().__iter__().__next__()
+        raise SystemExit(
+            "INSUFFICIENT_FACTOR_ELIGIBLE_UNIVERSE: "
+            f"factor={factor} month={pd.Timestamp(month).strftime('%Y-%m')} "
+            f"eligible={int(count)} required_k={k}"
+        )
     return x.groupby("month_end", sort=True).head(k).set_index("month_end")["symbol"]
 
 
@@ -57,14 +91,27 @@ def candidate_return(
 
     for month, symbols in groups:
         current = set(symbols.tolist())
-        gross = (
-            df.loc[
-                (df["month_end"] == month)
-                & (df["symbol"].isin(current)),
-                "fwd1",
-            ]
-            .mean()
-        )
+        holding_rows = df.loc[
+            (df["month_end"] == month) & (df["symbol"].isin(current)),
+            ["symbol", "fwd1"],
+        ].copy()
+        if len(current) != k or holding_rows["symbol"].nunique() != k:
+            raise SystemExit(
+                "INSUFFICIENT_SELECTED_HOLDINGS: "
+                f"month={pd.Timestamp(month).strftime('%Y-%m')} "
+                f"selected={holding_rows['symbol'].nunique()} required_k={k}"
+            )
+        holding_rows["fwd1"] = pd.to_numeric(holding_rows["fwd1"], errors="coerce")
+        if not np.isfinite(holding_rows["fwd1"].to_numpy(dtype=float)).all():
+            missing_symbols = holding_rows.loc[
+                ~np.isfinite(holding_rows["fwd1"].to_numpy(dtype=float)), "symbol"
+            ].astype(str).tolist()
+            raise SystemExit(
+                "MISSING_FORWARD_RETURN_FOR_SELECTED_SYMBOLS: "
+                f"month={pd.Timestamp(month).strftime('%Y-%m')} symbols={missing_symbols}; "
+                "supply defensible terminal/delisting returns or quarantine the run"
+            )
+        gross = float(holding_rows["fwd1"].mean())
         overlap = len(current & previous)
         turnover = 1.0 if not previous else 1.0 - overlap / float(k)
         net = float(gross) - turnover * cost_bps / 10000.0
@@ -121,9 +168,7 @@ def main() -> None:
         ["symbol", "month_end"]
     )
     df["adj_close"] = pd.to_numeric(df["adj_close"], errors="coerce")
-    df["fwd1"] = (
-        df.groupby("symbol")["adj_close"].shift(-1) / df["adj_close"] - 1.0
-    )
+    df = add_strict_forward_returns(df)
     for f in FACTORS:
         df[f] = pd.to_numeric(df[f], errors="coerce")
 
@@ -243,8 +288,15 @@ def main() -> None:
             "cost = turnover * cost_bps / 10000"
         ),
         "leakage_guard": (
-            "candidate return for traded month is never included in its "
-            "selection history"
+            "candidate selection uses only prior realized months; "
+            "current formation ranking does not depend on forward-return availability"
+        ),
+        "forward_return_definition": (
+            "same-symbol next calendar month only; gaps are NaN and never treated as one-month returns"
+        ),
+        "outcome_integrity_guard": (
+            "selected holdings with missing next-month outcomes fail closed; "
+            "defensible terminal/delisting returns or quarantine are required"
         ),
     }
     (out / "summary.json").write_text(
