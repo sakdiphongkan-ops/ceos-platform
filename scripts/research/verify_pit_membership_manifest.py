@@ -55,6 +55,10 @@ def verify(membership: Path, manifest: Path, allowed_domains: tuple[str, ...] = 
         "retrieved_at",
         "membership_file_sha256",
         "membership_row_count",
+        "source_artifact_file",
+        "source_artifact_sha256",
+        "source_artifact_format",
+        "derivation_method",
         "universe_definition",
     )
     for key in required:
@@ -69,6 +73,33 @@ def verify(membership: Path, manifest: Path, allowed_domains: tuple[str, ...] = 
     actual_hash = sha256(membership)
     if str(m["membership_file_sha256"]).lower() != actual_hash:
         raise ValueError("PIT_MEMBERSHIP_SHA256_MISMATCH")
+
+    # A URL and a hash of the derived CSV are not enough to audit the derivation.
+    # Keep the actual downloaded/captured source artifact beside the manifest.
+    # This verifies byte identity and bounds the path; a reviewer still verifies
+    # that the artifact genuinely came from the official source URL.
+    artifact_rel = Path(str(m["source_artifact_file"]))
+    if artifact_rel.is_absolute() or ".." in artifact_rel.parts or not artifact_rel.parts:
+        raise ValueError("PIT_SOURCE_ARTIFACT_PATH_MUST_BE_RELATIVE_AND_CONTAINED")
+    manifest_root = manifest.resolve().parent
+    artifact_path = (manifest_root / artifact_rel).resolve()
+    try:
+        artifact_path.relative_to(manifest_root)
+    except ValueError as exc:
+        raise ValueError("PIT_SOURCE_ARTIFACT_PATH_ESCAPES_MANIFEST_DIRECTORY") from exc
+    if not artifact_path.is_file():
+        raise ValueError(f"PIT_SOURCE_ARTIFACT_MISSING:{artifact_rel.as_posix()}")
+    if artifact_path == membership.resolve():
+        raise ValueError("PIT_SOURCE_ARTIFACT_MUST_BE_DISTINCT_FROM_DERIVED_MEMBERSHIP")
+    if not SHA256_RE.fullmatch(str(m["source_artifact_sha256"]).lower()):
+        raise ValueError("PIT_SOURCE_ARTIFACT_SHA256_FORMAT_INVALID")
+    actual_artifact_hash = sha256(artifact_path)
+    if str(m["source_artifact_sha256"]).lower() != actual_artifact_hash:
+        raise ValueError("PIT_SOURCE_ARTIFACT_SHA256_MISMATCH")
+    if not str(m["source_artifact_format"]).strip():
+        raise ValueError("PIT_SOURCE_ARTIFACT_FORMAT_REQUIRED")
+    if not str(m["derivation_method"]).strip():
+        raise ValueError("PIT_DERIVATION_METHOD_REQUIRED")
 
     retrieved_at = datetime.fromisoformat(str(m["retrieved_at"]).replace("Z", "+00:00"))
     if retrieved_at.tzinfo is None:
@@ -92,6 +123,10 @@ def verify(membership: Path, manifest: Path, allowed_domains: tuple[str, ...] = 
     return {
         "status": "PASS",
         "membership_sha256": actual_hash,
+        "source_artifact_file": artifact_rel.as_posix(),
+        "source_artifact_sha256": actual_artifact_hash,
+        "source_artifact_format": m["source_artifact_format"],
+        "derivation_method": m["derivation_method"],
         "membership_rows": len(rows),
         "unique_symbols": len({row[0] for row in rows}),
         "source_url": m["source_url"],

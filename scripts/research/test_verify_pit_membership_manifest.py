@@ -27,7 +27,12 @@ SPEC.loader.exec_module(MODULE)
 def write_fixture(root: Path, membership_text: str, **manifest_changes):
     membership = root / "membership.csv"
     manifest = root / "membership.csv.manifest.json"
+    source_artifact = root / "set-source-capture.html"
     membership.write_text(membership_text, encoding="utf-8")
+    source_artifact.write_text(
+        "<html><title>Synthetic source artifact fixture only</title><table><tr><td>test data</td></tr></table></html>",
+        encoding="utf-8",
+    )
     metadata = {
         "schema_version": "LUNA-PIT-MEMBERSHIP-V1",
         "provider": "The Stock Exchange of Thailand",
@@ -36,6 +41,10 @@ def write_fixture(root: Path, membership_text: str, **manifest_changes):
         "retrieved_at": "2026-10-11T00:00:00Z",
         "membership_file_sha256": hashlib.sha256(membership.read_bytes()).hexdigest(),
         "membership_row_count": 2,
+        "source_artifact_file": "set-source-capture.html",
+        "source_artifact_sha256": hashlib.sha256(source_artifact.read_bytes()).hexdigest(),
+        "source_artifact_format": "HTML",
+        "derivation_method": "Synthetic fixture transform; not a production source transformation",
         "universe_definition": "Synthetic fixture for test only; not production membership evidence",
     }
     metadata.update(manifest_changes)
@@ -119,10 +128,44 @@ def test_rejects_row_count_mismatch() -> None:
             raise AssertionError("row-count mismatch must fail closed")
 
 
+def test_rejects_source_artifact_checksum_mismatch() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        membership, manifest = write_fixture(
+            root,
+            "symbol,start_date,end_date\nPTT,2001-01-01,\nABC,2020-01-01,2024-12-31\n",
+            source_artifact_sha256="0" * 64,
+        )
+        try:
+            MODULE.verify(membership, manifest)
+        except ValueError as exc:
+            assert "PIT_SOURCE_ARTIFACT_SHA256_MISMATCH" in str(exc)
+        else:
+            raise AssertionError("missing or changed source artifact must fail closed")
+
+
+def test_rejects_source_artifact_path_traversal() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        membership, manifest = write_fixture(
+            root,
+            "symbol,start_date,end_date\nPTT,2001-01-01,\nABC,2020-01-01,2024-12-31\n",
+            source_artifact_file="../outside.html",
+        )
+        try:
+            MODULE.verify(membership, manifest)
+        except ValueError as exc:
+            assert "PIT_SOURCE_ARTIFACT_PATH_MUST_BE_RELATIVE_AND_CONTAINED" in str(exc)
+        else:
+            raise AssertionError("source artifact paths must not escape the manifest folder")
+
+
 if __name__ == "__main__":
     test_valid_provenance_and_hash()
     test_rejects_bad_checksum()
     test_rejects_non_authoritative_host()
     test_rejects_overlapping_symbol_intervals()
     test_rejects_row_count_mismatch()
+    test_rejects_source_artifact_checksum_mismatch()
+    test_rejects_source_artifact_path_traversal()
     print("LUNA PIT membership manifest regression: OK")
