@@ -361,6 +361,8 @@ def run_lab(input_path: str | Path, output_dir: str | Path, run_id: str | None =
                 f"Export manifest symbol-count mismatch: declared={declared_symbols!r} actual={actual_symbols}"
             )
         declared_dataset_ids = sorted(str(x) for x in export_manifest.get("dataset_ids", []))
+        if declared_dataset_ids and "dataset_id" not in frame.columns:
+            raise ValueError("Export manifest declares dataset IDs but the CSV has no dataset_id column")
         actual_dataset_ids = (
             sorted(str(x) for x in frame["dataset_id"].dropna().unique())
             if "dataset_id" in frame.columns else []
