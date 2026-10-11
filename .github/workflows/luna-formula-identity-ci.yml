@@ -5,6 +5,8 @@ on:
     branches: [master]
     paths:
       - "scripts/research/luna_formula_identity.py"
+      - "scripts/research/compare_monthly_return_series.py"
+      - "tests/research/test_compare_monthly_return_series.py"
       - "scripts/research/luna_direct_supabase_1000_v1.py"
       - "scripts/research/monthly_walk_forward_adaptive_search.py"
       - "scripts/research/luna_meta_ensemble_lab_v1.py"
@@ -46,6 +48,8 @@ jobs:
         run: python -m compileall -q scripts/research tests/research
       - name: M1 candidate family regression
         run: python tests/research/test_luna_m1_research_v2_candidate_generation.py
+      - name: Canonical monthly benchmark identity regression
+        run: python tests/research/test_compare_monthly_return_series.py
       - name: Formula identity regression
         run: python tests/research/test_luna_formula_identity.py
       - name: Forward-return and look-ahead regressions
