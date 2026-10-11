@@ -2,14 +2,13 @@
 
 function sanitizeTelemetryText(value: unknown, max = 500): string {
   return String(value ?? "")
-    .replace(/https?:\\/\\/\\S+/gi, "[url-redacted]")
-    .replace(/(bearer\\s+)[a-z0-9._-]+/gi, "$1[redacted]")
-    .replace(/(access[_-]?token|refresh[_-]?token|password|secret|api[_-]?key|authorization|cookie|session(?:[_-]?id)?)\\s*[:=]\\s*[^\\s,;]+/gi, "$1=[redacted]")
-    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi, "[email-redacted]")
-    .replace(/(?:\\+?\\d[\\d\\s().-]{7,}\\d)/g, "[phone-redacted]")
+    .replace(/https?:\/\/\S+/gi, "[url-redacted]")
+    .replace(/(bearer\s+)[a-z0-9._-]+/gi, "$1[redacted]")
+    .replace(/(access[_-]?token|refresh[_-]?token|password|secret|api[_-]?key|authorization|cookie|session(?:[_-]?id)?)\s*[:=]\s*[^\s,;]+/gi, "$1=[redacted]")
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email-redacted]")
+    .replace(/(?:\+?\d[\d\s().-]{7,}\d)/g, "[phone-redacted]")
     .slice(0, max);
 }
-
 function safeMessage(value: unknown): string {
   if (value instanceof Error) return sanitizeTelemetryText(value.message);
   return sanitizeTelemetryText(value ?? "Unknown client error");
