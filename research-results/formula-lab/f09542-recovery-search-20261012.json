@@ -5,7 +5,12 @@
   "timezone": "Asia/Bangkok",
   "target": {
     "formula_label": "F09542",
-    "reported_metric_fingerprint_pct": [0.68, 79.98, 18.57, 76.86],
+    "reported_metric_fingerprint_pct": [
+      0.68,
+      79.98,
+      18.57,
+      76.86
+    ],
     "metric_order_and_definitions": "Not supplied; do not infer what each percentage means."
   },
   "result": "NOT_RECOVERED_FROM_INSPECTED_SOURCES",
@@ -99,26 +104,78 @@
     "adaptive_tournament_v2": {
       "file": "research-results/luna-adaptive-tournament-v2/formula-catalog.json",
       "terms": [
-        ["mom3", 0.3001732139766602],
-        ["mom12", -0.3740439489787888],
-        ["avg_amount20", 0.325782837044551]
+        [
+          "mom3",
+          0.3001732139766602
+        ],
+        [
+          "mom12",
+          -0.3740439489787888
+        ],
+        [
+          "avg_amount20",
+          0.325782837044551
+        ]
       ],
       "file_blob_sha": "bfba1bbc16f64f21e4e1ab8ac04d8067902a9b04"
     },
     "adaptive_tournament_v3_public": {
       "file": "research-results/luna-adaptive-tournament-v3-public/formula-catalog.json",
       "terms": [
-        ["MOM_120", 0.3001732139766602],
-        ["ATR_PCT", -0.3740439489787888],
-        ["MOM_60", 0.325782837044551]
+        [
+          "MOM_120",
+          0.3001732139766602
+        ],
+        [
+          "ATR_PCT",
+          -0.3740439489787888
+        ],
+        [
+          "MOM_60",
+          0.325782837044551
+        ]
       ],
       "file_blob_sha": "e403dfa651cd8cf55f684e3528b56acd2b286abb"
     },
     "interpretation": "Same display ID, different feature-schema labels; this is itself an identity/provenance warning, not evidence that either is F09542."
   },
   "metric_fingerprint_search": {
-    "values_tested_as_numeric_strings": ["0.68", "79.98", "18.57", "76.86", "0.0068", "0.7998", "0.1857", "0.7686"],
-    "matches": "No artifact contained the exact formula label or the complete metric tuple. One isolated 0.7686-like number appeared as a generated factor weight, not as a performance metric; it is not a match."
+    "values_tested_as_numeric_strings": [
+      "0.68",
+      "79.98",
+      "18.57",
+      "76.86",
+      "0.0068",
+      "0.7998",
+      "0.1857",
+      "0.7686"
+    ],
+    "complete_tuple_match": false,
+    "interpretation": "No exact F09542 record or full metric tuple was found in the inspected legacy catalogs, summaries, holdout reports, selection ledgers, connected knowledge base, Library search or Dropbox search.",
+    "isolated_false_positives": [
+      {
+        "value": "18.57",
+        "file": "research-results/tournament100-result.json",
+        "branch": "ci/luna-steelman-validation-20260922",
+        "meaning_in_source": "winRate for an unrelated 100-strategy tournament signal group (280 signals)",
+        "accompanying_metrics": {
+          "avgNetBps": -48.81,
+          "medianNetBps": -45,
+          "profitFactor": 0.15,
+          "positiveSignals": 52,
+          "negativeSignals": 228,
+          "totalNetBps": -13665
+        },
+        "reason_rejected": "A lone percentage value without the F09542 identifier and without matching remaining metrics. The strategy-family label also differs between legacy branches, another provenance caution."
+      },
+      {
+        "value": "0.7686-like",
+        "file": "research-results/luna-direct-supabase-1000-v1-formula-catalog.json",
+        "meaning_in_source": "an isolated generated factor weight in a formula definition",
+        "reason_rejected": "A formula weight is not a reported performance metric and does not match the complete four-number tuple."
+      }
+    ],
+    "matches": "No authoritative match. Do not infer formula identity from one isolated numeric coincidence."
   },
   "next_recovery_steps": [
     "Search any user-owned export of earlier ChatGPT conversations for F09542 and the four numbers; the connected knowledge base did not include a matching source.",
