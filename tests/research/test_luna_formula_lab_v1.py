@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import sys
 import tempfile
 import unittest
@@ -16,6 +18,7 @@ from scripts.research.luna_formula_lab_v1 import (
     EXPECTED_FORMULA_HASHES,
     evaluate_candidate,
     load_monthly_factors,
+    run_lab,
 )
 
 
@@ -37,6 +40,7 @@ class LunaFormulaLabTests(unittest.TestCase):
                 if symbol == missing_symbol and month == pd.Period("2026-09", "M"):
                     continue
                 rows.append({
+                    "dataset_id": "synthetic-set",
                     "symbol": symbol,
                     "month_end": month.to_timestamp(),
                     "adj_close": 100.0 + position + month_index,
@@ -76,6 +80,55 @@ class LunaFormulaLabTests(unittest.TestCase):
             self.assertTrue(pd.isna(august["net_return_20bps"]))
         finally:
             Path(path).unlink(missing_ok=True)
+
+    def _write_export_manifest(self, csv_path: str, output_sha256: str | None = None) -> Path:
+        frame = pd.read_csv(csv_path)
+        payload = {
+            "schema_version": "1.0",
+            "record_type": "supabase_monthly_factor_export_manifest",
+            "source_table": "public.synthetic_monthly_factors",
+            "dataset_ids": ["synthetic-set"],
+            "rows": int(len(frame)),
+            "symbols": int(frame["symbol"].nunique()),
+            "output_sha256": output_sha256 or hashlib.sha256(Path(csv_path).read_bytes()).hexdigest(),
+            "exported_at_utc": "2026-10-12T00:00:00+00:00",
+        }
+        path = Path(csv_path).with_suffix(".manifest.json")
+        path.write_text(json.dumps(payload, indent=2) + "\\n", encoding="utf-8")
+        return path
+
+    def test_runner_verifies_export_manifest_hash_and_counts(self) -> None:
+        csv_path = self._write_synthetic_panel()
+        try:
+            self._write_export_manifest(csv_path)
+            with tempfile.TemporaryDirectory() as out_dir:
+                manifest = run_lab(csv_path, out_dir)
+                self.assertEqual(
+                    manifest["source_export_manifest"]["status"],
+                    "VERIFIED_EXPORT_FILE_HASH_AND_COUNTS",
+                )
+                self.assertEqual(
+                    manifest["source_export_manifest"]["dataset_ids"],
+                    ["synthetic-set"],
+                )
+                self.assertEqual(
+                    manifest["dataset_sha256"],
+                    hashlib.sha256(Path(csv_path).read_bytes()).hexdigest(),
+                )
+        finally:
+            Path(csv_path).unlink(missing_ok=True)
+            Path(csv_path).with_suffix(".manifest.json").unlink(missing_ok=True)
+
+    def test_runner_rejects_mismatched_export_manifest(self) -> None:
+        csv_path = self._write_synthetic_panel()
+        try:
+            manifest_path = self._write_export_manifest(csv_path, output_sha256="0" * 64)
+            with tempfile.TemporaryDirectory() as out_dir:
+                with self.assertRaisesRegex(ValueError, "Export manifest SHA-256 mismatch"):
+                    run_lab(csv_path, out_dir)
+        finally:
+            Path(csv_path).unlink(missing_ok=True)
+            Path(csv_path).with_suffix(".manifest.json").unlink(missing_ok=True)
 
     def test_valid_month_net_returns_apply_turnover_cost(self) -> None:
         path = self._write_synthetic_panel()
