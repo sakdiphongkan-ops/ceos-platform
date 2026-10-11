@@ -7,8 +7,12 @@ on:
       - "scripts/research/luna_formula_identity.py"
       - "scripts/research/compare_monthly_return_series.py"
       - "scripts/research/validate_formula_registry.py"
+      - "scripts/research/luna_formula_lab_v1.py"
       - "tests/research/test_formula_registry.py"
+      - "tests/research/test_luna_formula_lab_v1.py"
       - "research-results/formula-registry/**"
+      - "research-results/formula-lab/**"
+      - "research-results/luna-formula-lab-methodology-and-experiment-log-20261012.md"
       - "research-results/luna-formula-recovery-and-new-candidate-20261011.md"
       - "tests/research/test_compare_monthly_return_series.py"
       - "scripts/research/luna_direct_supabase_1000_v1.py"
@@ -28,8 +32,12 @@ on:
     paths:
       - "scripts/research/luna_formula_identity.py"
       - "scripts/research/validate_formula_registry.py"
+      - "scripts/research/luna_formula_lab_v1.py"
       - "tests/research/test_formula_registry.py"
+      - "tests/research/test_luna_formula_lab_v1.py"
       - "research-results/formula-registry/**"
+      - "research-results/formula-lab/**"
+      - "research-results/luna-formula-lab-methodology-and-experiment-log-20261012.md"
       - "research-results/luna-formula-recovery-and-new-candidate-20261011.md"
       - "scripts/research/luna_direct_supabase_1000_v1.py"
       - "scripts/research/monthly_walk_forward_adaptive_search.py"
@@ -62,6 +70,8 @@ jobs:
         run: python scripts/research/validate_formula_registry.py --root research-results/formula-registry
       - name: Formula registry contract tests
         run: python tests/research/test_formula_registry.py
+      - name: Theory-driven formula lab regression tests
+        run: python tests/research/test_luna_formula_lab_v1.py
       - name: PIT membership provenance regression
         run: python scripts/research/test_verify_pit_membership_manifest.py
       - name: M1 candidate family regression
