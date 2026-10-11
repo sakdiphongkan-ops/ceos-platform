@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.0",
+  "record_type": "canonical_database_snapshot_fingerprint",
+  "created_at": "2026-10-12T00:00:00+07:00",
+  "timezone": "Asia/Bangkok",
+  "dataset": {
+    "id": "1af83c59-a56f-461f-b03e-f3d04e67e384",
+    "name": "LUNA_RESEARCH_PRICES_DAILY_5Y_COMPACT_20260919",
+    "source": "YAHOO_FINANCE_CHART",
+    "status": "READY",
+    "source_ingest_dataset_id": "e0536957-d3b8-4f97-bc64-a04ec54a0dbf",
+    "source_table": "public.luna_research_monthly_price_factors",
+    "rows": 52485,
+    "distinct_symbols": 925,
+    "first_month_end": "2021-09-01",
+    "last_month_end": "2026-09-01",
+    "table_rows_created_at": "2026-09-19T15:16:54.550842+00:00"
+  },
+  "fingerprint": {
+    "algorithm": "SHA-256",
+    "sha256": "c718f4d28a9657f4715018b7125157acc1853959cffe4ba719f1a5edc6688b69",
+    "canonical_bytes": 11116402,
+    "canonical_row_count": 52485,
+    "canonicalization": {
+      "row_order": "ORDER BY month_end ASC, symbol ASC",
+      "row_encoding": "UTF-8",
+      "row_fields_in_order": [
+        "symbol",
+        "month_end",
+        "adj_close",
+        "mom1",
+        "mom3",
+        "mom6",
+        "mom12",
+        "high52_ratio",
+        "vol20",
+        "maxdd60",
+        "avg_amount20"
+      ],
+      "date_encoding": "YYYY-MM-DD",
+      "numeric_encoding": "PostgreSQL numeric::text output",
+      "null_encoding": "<NULL>",
+      "field_separator": "|",
+      "row_separator": "LF (U+000A)",
+      "digest_expression": "encode(digest(string_agg(line, E'\\n' ORDER BY month_end, symbol), 'sha256'), 'hex')"
+    },
+    "important": "This is a canonical fingerprint of the current monthly-factor rows, not the SHA-256 of an original raw CSV export and not the SHA-256 of the daily OHLCV history."
+  },
+  "data_quality": {
+    "survivorship_bias_warning": true,
+    "point_in_time_membership_verified": false,
+    "delisted_price_history_complete": false,
+    "factor_builder_version_known": false,
+    "factor_builder_input_sha256_known": false,
+    "factor_builder_output_sha256_known": false,
+    "maxdd60_non_null_rows": 0,
+    "maxdd60_total_rows": 52485,
+    "excluded_symbols_in_dataset_metadata": ["ACAP", "BLISS", "GSTEEL", "WELL"]
+  },
+  "use_policy": [
+    "Use this value to identify the exact observed monthly-factor snapshot in current audit records.",
+    "If any row or factor value changes, recompute the canonical fingerprint and create a new run ID.",
+    "Do not present this fingerprint as proof that the upstream daily source, corporate-action adjustments or PIT membership are correct.",
+    "No formula is promoted based on this snapshot alone."
+  ]
+}
