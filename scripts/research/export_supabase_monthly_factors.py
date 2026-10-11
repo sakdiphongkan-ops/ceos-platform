@@ -30,6 +30,7 @@ def main() -> None:
     ap.add_argument("--output", required=True)
     ap.add_argument("--start", default="2021-09-01")
     ap.add_argument("--end", default="2026-08-01")
+    ap.add_argument("--dataset-id", default=None, help="Exact dataset UUID to export; required when the table contains multiple dataset IDs")
     ap.add_argument("--page-size", type=int, default=1000)
     args = ap.parse_args()
 
@@ -51,6 +52,8 @@ def main() -> None:
         "order": "month_end.asc,symbol.asc",
         "limit": args.page_size,
     }
+    if args.dataset_id:
+        params_base["dataset_id"] = f"eq.{args.dataset_id}"
 
     while True:
         params = {**params_base, "offset": offset}
@@ -65,6 +68,13 @@ def main() -> None:
 
     df = pd.DataFrame(rows, columns=COLUMNS)
     df = df[df["month_end"] <= args.end].copy()
+    dataset_ids = sorted(df["dataset_id"].dropna().astype(str).unique().tolist())
+    if not dataset_ids:
+        raise SystemExit("NO_DATASET_ID_ROWS: verify the table and date window")
+    if args.dataset_id and dataset_ids != [str(args.dataset_id)]:
+        raise SystemExit(f"DATASET_ID_MISMATCH: requested={args.dataset_id!r} returned={dataset_ids!r}")
+    if not args.dataset_id and len(dataset_ids) > 1:
+        raise SystemExit(f"MULTIPLE_DATASET_IDS: {dataset_ids!r}; pass --dataset-id to avoid mixing snapshots")
     for c in COLUMNS:
         if c not in {"dataset_id", "symbol", "month_end"}:
             df[c] = pd.to_numeric(df[c], errors="coerce")
@@ -100,7 +110,7 @@ def main() -> None:
         "pit_membership_verified": False,
     }
     manifest_path = out.with_suffix(".manifest.json")
-    manifest_path.write_text(json.dumps(export_manifest, indent=2, ensure_ascii=False) + "\\n", encoding="utf-8")
+    manifest_path.write_text(json.dumps(export_manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
     print({
         "rows": int(len(df)),
