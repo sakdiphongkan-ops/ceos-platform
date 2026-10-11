@@ -27,8 +27,11 @@
     "net_return": "gross_return - 0.002*turnover"
   },
   "research_run": {
-    "run_id": null,
-    "database_formula_id": null,
+    "run_id": "1c2cadeb-7522-4013-9154-aa756b12c4ff",
+    "database_formula_id": 2000,
+    "database_formula_name": "LUNA_MR_70_30_V1_20261011_PAPER_ONLY",
+    "database_monthly_return_rows": 57,
+    "stored_return_month_range": ["2021-12-01", "2026-08-01"],
     "dataset_id": "1af83c59-a56f-461f-b03e-f3d04e67e384",
     "dataset_name": "LUNA_RESEARCH_PRICES_DAILY_5Y_COMPACT_20260919",
     "source": "YAHOO_FINANCE_CHART",
@@ -38,6 +41,9 @@
     "monthly_factor_table": "public.luna_research_monthly_price_factors",
     "factor_rows": 52485,
     "factor_date_labels": ["2021-09-01", "2026-09-01"],
+    "run_table": "public.luna_research_runs",
+    "formula_catalog_table": "public.luna_research_formula_catalog_v2",
+    "monthly_returns_table": "public.luna_research_formula_returns_v2",
     "lookahead_method": "factor ranks are computed per month; return uses the following monthly adjusted close; eligible score factors mom1 and mom3 only",
     "cost_calibration": "0.002 return fraction per 1.0 portfolio turnover inferred from stored gross_return/net_return records"
   },
