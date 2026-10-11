@@ -72,8 +72,8 @@ class LunaFormulaLabTests(unittest.TestCase):
             self.assertEqual(august["missing_selected_symbols"], ["S00"])
             self.assertIn("S00", august_names)
             self.assertNotIn("S20", august_names)
-            self.assertIsNone(august["gross_return"])
-            self.assertIsNone(august["net_return_20bps"])
+            self.assertTrue(pd.isna(august["gross_return"]))
+            self.assertTrue(pd.isna(august["net_return_20bps"]))
         finally:
             Path(path).unlink(missing_ok=True)
 
