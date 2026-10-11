@@ -1,0 +1,133 @@
+{
+  "schema_version": "1.0",
+  "record_type": "immutable_formula_candidate",
+  "formula_id": "LUNA_MR_60_40_V1",
+  "version": "1.0.0",
+  "created_at": "2026-10-12",
+  "timezone": "Asia/Bangkok",
+  "status": "PAPER_SHADOW_ONLY",
+  "promotion_approved": false,
+  "recovered_original": false,
+  "related_missing_formula": "F09542",
+  "related_missing_formula_status": "NOT_RECOVERED; this is a distinct experimental candidate",
+  "formula_sha256": "a5b71f9bdca598656c54e0caeb40bbadc4a7ac7b22d5d5cbf5369a7163155e36",
+  "hash_payload": {
+    "formula_id": "LUNA_MR_60_40_V1",
+    "version": "1.0.0",
+    "factors": [
+      {
+        "column": "mom1",
+        "weight": -0.6
+      },
+      {
+        "column": "mom3",
+        "weight": -0.4
+      }
+    ],
+    "transform": "percent_rank_ascending_within_month_on_non_null_factor_values",
+    "score_expression": "-0.60*prank(mom1)-0.40*prank(mom3)",
+    "holdings": 20,
+    "rebalance": "monthly",
+    "weighting": "equal_weight",
+    "tie_break": "symbol ASC",
+    "gross_return": "mean(next_adj_close/current_adj_close - 1)",
+    "turnover": "1 - count(current_holdings intersect previous_month_holdings)/20",
+    "cost_model": "net_return = gross_return - 0.002 * turnover",
+    "missing_outcome_policy": "fail_closed_month_if_any_selected_symbol_has_no_next_calendar_month_adjusted_close; never_filter_by_forward_outcome_before_ranking; never_substitute_rank_21"
+  },
+  "definition": {
+    "factors": [
+      {
+        "column": "mom1",
+        "weight": -0.6
+      },
+      {
+        "column": "mom3",
+        "weight": -0.4
+      }
+    ],
+    "factor_transform": "percent_rank_ascending_within_month_on_non_null_factor_values",
+    "score_expression": "-0.60*prank(mom1)-0.40*prank(mom3)",
+    "selection": "score descending; choose top 20; never filter by future outcome availability before ranking",
+    "portfolio_weighting": "equal_weight",
+    "rebalance_frequency": "monthly",
+    "tie_break": "symbol ascending",
+    "gross_return": "average(next-calendar-month adjusted close/current adjusted close - 1) across the same selected 20 symbols",
+    "turnover": "1 - overlap(current_top20, prior_month_top20)/20; first-month turnover is 1.0",
+    "net_return": "gross_return - 0.002*turnover",
+    "missing_outcome_policy": "If a selected security has no valid next-calendar-month adjusted close, fail that month/run; do not replace with rank 21."
+  },
+  "research_run": {
+    "run_id": "acd03a11-a233-47e0-9875-500b6ba45e01",
+    "run_status": "FAILED_CANDIDATE_FAMILY",
+    "database_formula_id": 2004,
+    "database_formula_name": "LUNA_MR_60_40_V1_FAM_20261012",
+    "database_monthly_return_rows": 56,
+    "stored_return_month_range": [
+      "2021-12-01",
+      "2026-07-01"
+    ],
+    "outcome_audit": "F&D lacks next-month price at formation 2026-08; no rank-21 substitute",
+    "dataset_id": "1af83c59-a56f-461f-b03e-f3d04e67e384",
+    "dataset_name": "LUNA_RESEARCH_PRICES_DAILY_5Y_COMPACT_20260919",
+    "source": "YAHOO_FINANCE_CHART",
+    "daily_rows": 1047656,
+    "symbols": 925,
+    "daily_range": [
+      "2021-09-20",
+      "2026-09-18"
+    ],
+    "monthly_factor_table": "public.luna_research_monthly_price_factors",
+    "factor_rows": 52485,
+    "factor_date_labels": [
+      "2021-09-01",
+      "2026-09-01"
+    ],
+    "return_table": "public.luna_research_formula_returns_v2",
+    "cost_calibration": "0.002, 0.003 and 0.004 return fraction per 1.0 turnover were stress tested; basis-point labels mean 20/30/40 bp per full turnover unit."
+  },
+  "historical_diagnostics_at_20bp_cost": {
+    "train": {
+      "observations": 33,
+      "cumulative_net_return_pct": 2.69,
+      "annualized_sharpe": 0.21,
+      "max_drawdown_pct": -36.47,
+      "positive_months_pct": 54.5,
+      "mean_turnover_pct": 81.7
+    },
+    "retrospective_oos": {
+      "observations": 12,
+      "cumulative_net_return_pct": 0.46,
+      "annualized_sharpe": 0.18,
+      "max_drawdown_pct": -35.52,
+      "positive_months_pct": 50,
+      "mean_turnover_pct": 82.9
+    },
+    "posthoc_not_virgin_holdout": {
+      "observations": 11,
+      "cumulative_net_return_pct": 17.38,
+      "annualized_sharpe": 0.88,
+      "max_drawdown_pct": -3.81,
+      "positive_months_pct": 54.5,
+      "mean_turnover_pct": 80.5
+    },
+    "selection_note": "Do not select this formula using the post-hoc window. All historical results are exploratory."
+  },
+  "limitations": [
+    "Historical results are exploratory: the 925-symbol universe is survivor-oriented and point-in-time SET/mai membership has not been validated.",
+    "The current data panel omits known delisted-name price histories; survivorship bias can materially distort all folds.",
+    "The 2024-09 to 2025-08 window was evaluated after those dates were observed and is a retrospective diagnostic, not a clean unseen out-of-sample.",
+    "The 2025-09 onward window is post-hoc and must not be used to choose a formula.",
+    "Factor ranks use only non-null formation-date signal values; selected forward outcomes are checked only after the portfolio is fixed.",
+    "A missing selected next-month return invalidates that month; no rank-21 substitution is allowed.",
+    "No candidate is approved for real-money execution.",
+    "F&D lacks next-month price at formation 2026-08; no rank-21 substitute"
+  ],
+  "promotion_gates": [
+    "Reconstruct source-verified PIT SET/mai memberships and delisted price/terminal-return history.",
+    "Resolve missing F&D next-calendar-month outcome in affected candidate months or keep those months quarantined.",
+    "Run 20, 30, and 40 bps-per-turnover cost stress on complete inputs.",
+    "Use an untouched prospective paper-only validation window after formula definition, data snapshot, and score are frozen.",
+    "Require reproducible run/config/dataset identity, all monthly returns, CI validation, drawdown and consistency gates before promotion."
+  ]
+}

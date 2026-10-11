@@ -1,0 +1,109 @@
+{
+  "schema_version": "1.0",
+  "record_type": "immutable_formula_candidate",
+  "formula_id": "LUNA_MR_70_30_V1",
+  "version": "1.0.0",
+  "created_at": "2026-10-11",
+  "timezone": "Asia/Bangkok",
+  "status": "PAPER_SHADOW_ONLY",
+  "promotion_approved": false,
+  "recovered_original": false,
+  "related_missing_formula": "F09542",
+  "related_missing_formula_status": "NOT_RECOVERED; no equivalence is claimed",
+  "formula_sha256": "b8be7f0fcd9ad0f9d4c7d08becd6971fce8dd5a0821ed18f7bbfe3f678cca866",
+  "hash_payload": {
+    "formula_id": "LUNA_MR_70_30_V1",
+    "version": "1.0.0",
+    "factors": [
+      {"column": "mom1", "weight": -0.7},
+      {"column": "mom3", "weight": -0.3}
+    ],
+    "transform": "percent_rank_ascending_within_month",
+    "score_expression": "-0.70*prank(mom1)-0.30*prank(mom3)",
+    "holdings": 20,
+    "rebalance": "monthly",
+    "weighting": "equal_weight",
+    "tie_break": "symbol ASC",
+    "gross_return": "mean(next_adj_close/current_adj_close - 1)",
+    "turnover": "1 - count(current_holdings intersect previous_month_holdings)/20",
+    "cost_model": "net_return = gross_return - 0.002 * turnover"
+  },
+  "definition": {
+    "factors": [
+      {"column": "mom1", "weight": -0.7},
+      {"column": "mom3", "weight": -0.3}
+    ],
+    "factor_transform": "percent_rank ascending within each month cross-section",
+    "score_expression": "-0.70*prank(mom1)-0.30*prank(mom3)",
+    "selection": "top 20 symbols by score descending",
+    "portfolio_weighting": "equal weight",
+    "rebalance_frequency": "monthly",
+    "tie_break": "symbol ascending",
+    "gross_return": "average(next_month_adj_close/current_adj_close - 1) across selected symbols",
+    "turnover": "1 - intersection_count(current_top20, prior_month_top20)/20",
+    "net_return": "gross_return - 0.002*turnover"
+  },
+  "research_run": {
+    "run_id": "1c2cadeb-7522-4013-9154-aa756b12c4ff",
+    "database_formula_id": 2000,
+    "database_formula_name": "LUNA_MR_70_30_V1_20261011_PAPER_ONLY",
+    "database_monthly_return_rows": 57,
+    "stored_return_month_range": ["2021-12-01", "2026-08-01"],
+    "dataset_id": "1af83c59-a56f-461f-b03e-f3d04e67e384",
+    "dataset_name": "LUNA_RESEARCH_PRICES_DAILY_5Y_COMPACT_20260919",
+    "source": "YAHOO_FINANCE_CHART",
+    "daily_rows": 1047656,
+    "symbols": 925,
+    "daily_range": ["2021-09-20", "2026-09-18"],
+    "monthly_factor_table": "public.luna_research_monthly_price_factors",
+    "factor_rows": 52485,
+    "factor_date_labels": ["2021-09-01", "2026-09-01"],
+    "run_table": "public.luna_research_runs",
+    "formula_catalog_table": "public.luna_research_formula_catalog_v2",
+    "monthly_returns_table": "public.luna_research_formula_returns_v2",
+    "lookahead_method": "factor ranks are computed per month; return uses the following monthly adjusted close; eligible score factors mom1 and mom3 only",
+    "cost_calibration": "0.002 return fraction per 1.0 portfolio turnover inferred from stored gross_return/net_return records"
+  },
+  "historical_diagnostics": {
+    "train": {
+      "observations": 33,
+      "window_end": "2024-08",
+      "cumulative_net_return_pct": 4.44,
+      "annualized_sharpe": 0.22,
+      "max_drawdown_pct": -32.82
+    },
+    "oos_retrospective": {
+      "observations": 12,
+      "window": ["2024-09", "2025-08"],
+      "cumulative_net_return_pct": 13.31,
+      "annualized_sharpe": 0.49,
+      "max_drawdown_pct": -34.23,
+      "positive_months_pct": 58.3,
+      "mean_monthly_turnover_pct": 85.0
+    },
+    "posthoc_holdout_not_virgin": {
+      "observations": 12,
+      "window": ["2025-09", "2026-08"],
+      "cumulative_net_return_pct": 14.66,
+      "annualized_sharpe": 0.74,
+      "max_drawdown_pct": -8.10,
+      "positive_months_pct": 58.3
+    }
+  },
+  "limitations": [
+    "The 925-symbol dataset is survivor-oriented; historical point-in-time index/listing membership has not been validated.",
+    "Known delisted-symbol price histories are missing from the inspected dataset; survivorship bias can materially inflate or distort results.",
+    "The 2024-09 to 2025-08 window is a retrospective diagnostic, not a clean prospective out-of-sample because research and candidate search occur after those dates.",
+    "The 2025-09 to 2026-08 window is explicitly post-hoc and must not be used as a virgin holdout or to claim validation.",
+    "Train contains 33 usable monthly observations; it is not the full 35-month intended training window.",
+    "The field maxdd60 is NULL for all 52,485 rows in the current monthly factor table and must not be used in candidate scoring.",
+    "The formula is a research candidate only and must not be routed to real-money execution."
+  ],
+  "promotion_gates": [
+    "Reconstruct and verify point-in-time SET/mai membership with official source artifacts, SHA-256 manifest, delisted securities, IPO dates, and non-overlapping membership intervals.",
+    "Rebuild prices including delisted names and reconcile adjusted-price/action handling.",
+    "Run independent transaction-cost/slippage sensitivity at 20, 30, and 40 basis points per turnover unit.",
+    "Freeze definition and data snapshot before a prospective paper-only validation window.",
+    "Require reproducible run ID, dataset fingerprint, formula hash, monthly return series, benchmark alignment, and CI integrity checks before any promotion."
+  ]
+}

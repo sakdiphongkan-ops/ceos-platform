@@ -1,0 +1,71 @@
+{
+  "audit_id": "luna-benchmark-identity-audit-20261011-v1",
+  "generated_at_utc": "2026-10-11T06:10:00Z",
+  "status": "MISMATCH_RETURNS",
+  "purpose": "Determine whether public.luna_research_formula_returns_v2 formula_id=0 is the same monthly return series as the locked production M1 strategy. This is an identity check, not a relative-performance ranking.",
+  "source": {
+    "project_ref": "wigzicwgcsrhdummrbjx",
+    "candidate_table": "public.luna_research_formula_returns_v2",
+    "candidate_filter": "formula_id = 0",
+    "reference_table": "public.luna_strategy_portfolio_monthly",
+    "reference_filter": "strategy_version = luna-m1s0k20rev-v1",
+    "date_alignment": "date_trunc('month', month_end)::date; inner join on month key",
+    "threshold": {
+      "delta_abs_greater_than": 0.000001,
+      "unit": "decimal return (0.000001 = 0.0001 percentage point)"
+    },
+    "series_fingerprint": {
+      "algorithm": "PostgreSQL md5 over string_agg(month_key || ':' || net_return::text, '|' ordered by month_key)",
+      "reference_md5": "a276f1bf9b815d1236e31c1eb216b1bb",
+      "candidate_md5": "424fefa306a77e4e9f6677f46489b315",
+      "caveat": "Fingerprints verify the exact ordered text representation returned by PostgreSQL for this query; they are not SHA-256 source-file hashes."
+    }
+  },
+  "metrics": {
+    "aligned_months": 59,
+    "first_month": "2021-10",
+    "last_month": "2026-08",
+    "return_correlation": 0.955969681617646,
+    "mean_delta_candidate_minus_reference": -0.002229392894921433,
+    "mean_absolute_delta": 0.01506707094402492,
+    "mean_absolute_delta_percentage_points": 1.506707094402492,
+    "max_absolute_delta": 0.14268399783414473,
+    "max_absolute_delta_percentage_points": 14.268399783414472,
+    "months_with_abs_delta_over_1e_6": 50,
+    "aligned_months_with_abs_delta_over_threshold_pct": 84.7457627118644
+  },
+  "interpretation": [
+    "The alias is not an apples-to-apples benchmark for the locked production M1 monthly series.",
+    "High correlation alone is insufficient to establish identity.",
+    "Do not rank or promote formulas using the alias as if it were the exact M1 benchmark."
+  ],
+  "related_holdings_check": {
+    "formation_rule": "Cross-sectional mom1 ascending, top 20 symbols by month_end in public.luna_research_monthly_price_factors",
+    "reference": "Top 20 rank_no holdings for luna-m1s0k20rev-v1 in public.luna_strategy_monthly_holdings",
+    "months": 59,
+    "avg_candidate_holdings": 20,
+    "avg_reference_holdings": 20,
+    "avg_shared_symbols": 16.627118644067796,
+    "median_shared_symbols": 17,
+    "min_shared_symbols": 10,
+    "max_shared_symbols": 20,
+    "avg_overlap_fraction_of_max_portfolio_size": 0.8313559322033898,
+    "interpretation": "The candidate proxy reproduces some, but not all, production selections. This is not the same holdings series."
+  },
+  "dataset_coverage": {
+    "source_table": "public.luna_research_monthly_price_factors",
+    "row_count": 52485,
+    "distinct_symbols": 925,
+    "first_month": "2021-09",
+    "last_month": "2026-09",
+    "membership_provenance_validated": false,
+    "warning": "Panel coverage alone does not prove point-in-time listing/universe membership."
+  },
+  "formula_recovery": {
+    "requested_display_id": "F09542",
+    "exact_matches_in_checked_supabase_research_and_audit_tables": 0,
+    "related_display_id_found": "F0954",
+    "related_formula_definition_matches_reported_metrics": false,
+    "instruction": "Do not reconstruct or infer the missing formula definition from its similar label."
+  }
+}

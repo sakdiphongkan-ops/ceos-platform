@@ -703,7 +703,8 @@ tbody tr:hover,tbody tr.selected-row{background:rgba(111,128,110,.055)}
   color:#8f5f5a;background:rgba(173,110,105,.07);border-color:rgba(173,110,105,.20)
 }
 .system-status.loading{
-  color:#7a827a;background:#efebe3;border-color:#d7d2c8
+  /* Keep the loading state readable on the light control-room surface (WCAG AA). */
+  color:#50594f;background:#efebe3;border-color:#b5b7ad
 }
 .control-grid{gap:9px}
 .control-stat{
@@ -794,4 +795,197 @@ body textarea:focus-visible,
 body [tabindex]:focus-visible {
   outline: 3px solid #536452 !important;
   outline-offset: 2px;
+}
+
+
+/* WCAG 2.1 AA: secondary text must remain legible on LUNA's warm-light surfaces. */
+.luna-shell .metric-label,
+.luna-shell .metric-sub,
+.luna-shell .muted,
+.luna-shell .card-subtitle,
+.luna-shell .tabs button:not(.active),
+.luna-shell .tabs span,
+.luna-shell .symbol-cell span,
+.luna-shell .empty-table,
+.luna-shell .loading-state,
+.luna-shell .detail-item span,
+.luna-shell .section-label,
+.luna-shell .timeline-item span,
+.luna-shell .empty-detail span,
+.luna-shell .control-list span,
+.luna-shell .coverage-strip span,
+.luna-shell .coverage-strip small,
+.luna-shell .control-room-sub,
+.luna-shell .control-stat span,
+.luna-shell .control-stat small,
+.luna-shell .gate-row,
+.luna-shell .forecast-meta,
+.luna-shell .stage-chip:not(.ready),
+.luna-shell .top-symbols span,
+.luna-shell .audit-kpis span,
+.luna-shell .audit-note,
+.luna-shell .live-operating-strip span,
+.luna-shell .live-operating-strip small,
+.luna-shell .hash-line,
+.luna-shell .research-grid strong,
+.luna-shell .research-source span {
+  color: #555e56 !important;
+}
+
+
+/* Login page styles are explicit CSS; this project does not compile Tailwind utility classes. */
+.luna-login-page {
+  min-height: calc(100vh - 4rem);
+  min-height: calc(100dvh - 4rem);
+  width: 100%;
+  padding: 48px 20px;
+  background: #f7f7f4;
+  color: #171817;
+  font-family: var(--font-manrope), var(--font-noto-thai), "Segoe UI", system-ui, sans-serif;
+}
+.luna-login-layout { width: 100%; max-width: 448px; margin: 0 auto; }
+.luna-login-back {
+  display: inline-flex; min-height: 44px; max-width: 100%; align-items: center; gap: 8px;
+  color: #4f544c; font-size: 12px; line-height: 1.4; text-decoration: none;
+}
+.luna-login-back:hover { color: #171817; text-decoration: underline; text-underline-offset: 4px; }
+.luna-login-card {
+  margin-top: 24px; width: 100%; min-width: 0; padding: 28px;
+  border: 1px solid #deded6; border-radius: 28px; background: #fff;
+  box-shadow: 0 18px 60px rgba(30,30,20,.06);
+}
+.luna-login-mark {
+  display: flex; width: 44px; height: 44px; align-items: center; justify-content: center;
+  border-radius: 16px; background: #f1f1eb; color: #30352e;
+}
+.luna-login-eyebrow {
+  margin-top: 24px; color: #5b5e56; font-size: 11px; font-weight: 700;
+  line-height: 1.5; letter-spacing: .24em;
+}
+.luna-login-title {
+  margin: 8px 0 0; color: #171817; font-size: 30px; line-height: 1.2;
+  font-weight: 550; letter-spacing: -.035em;
+}
+.luna-login-description { margin: 12px 0 0; color: #555a52; font-size: 14px; line-height: 1.7; }
+.luna-login-form { display: grid; gap: 16px; margin-top: 28px; }
+.luna-login-field { display: block; min-width: 0; }
+.luna-login-label { display: block; margin-bottom: 8px; color: #464b43; font-size: 12px; line-height: 1.5; font-weight: 650; }
+.luna-login-email-control {
+  display: flex; min-width: 0; min-height: 48px; align-items: center; gap: 8px;
+  padding: 0 14px; border: 1px solid #dcdcd4; border-radius: 16px; background: #fafaf7;
+}
+.luna-login-mail-icon { flex: 0 0 auto; color: #656a61; }
+.luna-login-input {
+  display: block; width: 100%; min-width: 0; min-height: 48px; margin: 0; padding: 0 14px;
+  border: 1px solid #dcdcd4; border-radius: 16px; outline: none; background: #fafaf7; color: #171817;
+  font-family: inherit; font-size: 16px !important; line-height: 1.4; font-weight: 400; box-sizing: border-box;
+}
+.luna-login-email { border: 0; padding: 0; background: transparent; border-radius: 0; }
+.luna-login-input:focus { border-color: #777e71; box-shadow: 0 0 0 3px rgba(90,105,82,.15); }
+.luna-login-email-control:focus-within { border-color: #777e71; box-shadow: 0 0 0 3px rgba(90,105,82,.15); }
+.luna-login-email:focus { box-shadow: none; }
+.luna-login-alert { padding: 12px 14px; border-radius: 16px; font-size: 14px; line-height: 1.55; overflow-wrap: anywhere; }
+.luna-login-error { border: 1px solid #e8c5bf; background: #fff7f5; color: #7a3028; }
+.luna-login-success { border: 1px solid #d2ddbc; background: #f8faef; color: #46552b; }
+.luna-login-button {
+  display: flex; width: 100%; min-width: 0; min-height: 48px; align-items: center; justify-content: center;
+  padding: 12px 16px; border-radius: 16px; font-family: inherit; font-size: 14px; line-height: 1.4;
+  font-weight: 650; cursor: pointer; white-space: normal; overflow-wrap: anywhere;
+}
+.luna-login-submit { border: 1px solid #171817; background: #171817; color: #fff; }
+.luna-login-submit:hover:not(:disabled) { background: #30352f; }
+.luna-login-google { border: 1px solid #d8d8d0; background: #fff; color: #252822; }
+.luna-login-google:hover:not(:disabled) { background: #f8f8f4; border-color: #a9ada2; }
+.luna-login-button:disabled { opacity: .58; cursor: wait; }
+.luna-login-separator { display: flex; align-items: center; gap: 12px; margin: 20px 0; color: #555a52; font-size: 11px; line-height: 1.4; }
+.luna-login-separator-line { flex: 1 1 auto; height: 1px; min-width: 0; background: #e2e3dc; }
+.luna-login-mode-switch {
+  display: flex; width: 100%; min-height: 44px; align-items: center; justify-content: center; padding: 10px 6px;
+  border: 0; background: transparent; color: #464b43; font-family: inherit; font-size: 12px;
+  line-height: 1.5; text-align: center; text-decoration: underline; text-underline-offset: 4px; cursor: pointer;
+}
+.luna-login-mode-switch:hover { color: #171817; }
+.luna-login-security { display: flex; align-items: flex-start; gap: 12px; margin-top: 28px; padding-top: 20px; border-top: 1px solid #e5e6df; }
+.luna-login-security-icon { flex: 0 0 auto; margin-top: 2px; color: #555f48; }
+.luna-login-security-copy { margin: 0; color: #4f544c; font-size: 11px; line-height: 1.7; }
+.luna-login-page button:focus-visible,
+.luna-login-page a:focus-visible,
+.luna-login-page input:focus-visible { outline: 3px solid #687b58; outline-offset: 2px; }
+@media (max-width: 480px) {
+  .luna-login-page { padding: 28px 16px; }
+  .luna-login-card { padding: 22px; border-radius: 24px; }
+  .luna-login-title { font-size: 28px; }
+}
+
+
+/* Mobile Safari: reflow the desktop command bar instead of forcing its three-column min-content width. */
+@media (max-width: 700px) {
+  .luna-shell,
+  .luna-shell * {
+    min-width: 0;
+  }
+  .luna-shell {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: clip;
+  }
+  .topbar {
+    height: auto;
+    min-height: 74px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 12px 15px;
+  }
+  .brand {
+    min-width: 0;
+    max-width: 100%;
+    gap: 8px;
+  }
+  .brand h1 {
+    font-size: 14px;
+    overflow-wrap: anywhere;
+  }
+  .top-nav {
+    display: none;
+  }
+  .top-actions {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-width: 0;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 6px;
+  }
+  .market-status,
+  .session-chip,
+  .timeframe-chip {
+    max-width: 100%;
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .session-chip {
+    flex: 1 1 100%;
+    justify-content: flex-start;
+  }
+  .icon-button {
+    flex: 0 0 auto;
+  }
+  .page {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    padding-left: 15px;
+    padding-right: 15px;
+  }
+  .hero-row,
+  .hero-meta,
+  .summary-grid,
+  .content-grid,
+  .bottom-grid,
+  .live-operating-strip,
+  .research-grid {
+    min-width: 0;
+    max-width: 100%;
+  }
 }

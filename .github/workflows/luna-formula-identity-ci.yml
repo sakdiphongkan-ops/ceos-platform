@@ -1,0 +1,86 @@
+name: LUNA formula research integrity CI
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - "scripts/research/luna_formula_identity.py"
+      - "scripts/research/compare_monthly_return_series.py"
+      - "scripts/research/validate_formula_registry.py"
+      - "scripts/research/luna_formula_lab_v1.py"
+      - "tests/research/test_formula_registry.py"
+      - "tests/research/test_luna_formula_lab_v1.py"
+      - "research-results/formula-registry/**"
+      - "research-results/formula-lab/**"
+      - "research-results/luna-formula-lab-methodology-and-experiment-log-20261012.md"
+      - "research-results/luna-formula-recovery-and-new-candidate-20261011.md"
+      - "tests/research/test_compare_monthly_return_series.py"
+      - "scripts/research/luna_direct_supabase_1000_v1.py"
+      - "scripts/research/monthly_walk_forward_adaptive_search.py"
+      - "scripts/research/luna_meta_ensemble_lab_v1.py"
+      - "scripts/research/apply_pit_universe.py"
+      - "scripts/research/verify_pit_membership_manifest.py"
+      - "scripts/research/test_verify_pit_membership_manifest.py"
+      - "scripts/research/luna_m1_research_v2.py"
+      - "tests/research/test_luna_m1_research_v2_candidate_generation.py"
+      - "tests/research/test_luna_formula_identity.py"
+      - "tests/research/test_luna_monthly_return_guards.py"
+      - "tests/research/test_luna_meta_ensemble_data_contract.py"
+      - ".github/workflows/luna-formula-identity-ci.yml"
+  push:
+    branches: [master]
+    paths:
+      - "scripts/research/luna_formula_identity.py"
+      - "scripts/research/validate_formula_registry.py"
+      - "scripts/research/luna_formula_lab_v1.py"
+      - "tests/research/test_formula_registry.py"
+      - "tests/research/test_luna_formula_lab_v1.py"
+      - "research-results/formula-registry/**"
+      - "research-results/formula-lab/**"
+      - "research-results/luna-formula-lab-methodology-and-experiment-log-20261012.md"
+      - "research-results/luna-formula-recovery-and-new-candidate-20261011.md"
+      - "scripts/research/luna_direct_supabase_1000_v1.py"
+      - "scripts/research/monthly_walk_forward_adaptive_search.py"
+      - "scripts/research/luna_meta_ensemble_lab_v1.py"
+      - "scripts/research/apply_pit_universe.py"
+      - "scripts/research/verify_pit_membership_manifest.py"
+      - "scripts/research/test_verify_pit_membership_manifest.py"
+      - "tests/research/test_luna_formula_identity.py"
+      - "tests/research/test_luna_monthly_return_guards.py"
+      - "tests/research/test_luna_meta_ensemble_data_contract.py"
+      - ".github/workflows/luna-formula-identity-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  research-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test dependencies
+        run: python -m pip install --upgrade pip && pip install numpy pandas requests
+      - name: Compile LUNA research scripts
+        run: python -m compileall -q scripts/research tests/research
+      - name: Validate immutable formula registry
+        run: python scripts/research/validate_formula_registry.py --root research-results/formula-registry
+      - name: Formula registry contract tests
+        run: python tests/research/test_formula_registry.py
+      - name: Theory-driven formula lab regression tests
+        run: python tests/research/test_luna_formula_lab_v1.py
+      - name: PIT membership provenance regression
+        run: python scripts/research/test_verify_pit_membership_manifest.py
+      - name: M1 candidate family regression
+        run: python tests/research/test_luna_m1_research_v2_candidate_generation.py
+      - name: Canonical monthly benchmark identity regression
+        run: python tests/research/test_compare_monthly_return_series.py
+      - name: Formula identity regression
+        run: python tests/research/test_luna_formula_identity.py
+      - name: Forward-return and look-ahead regressions
+        run: python tests/research/test_luna_monthly_return_guards.py
+      - name: Meta-ensemble data-contract regressions
+        run: python tests/research/test_luna_meta_ensemble_data_contract.py
