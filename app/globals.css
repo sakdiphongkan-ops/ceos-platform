@@ -795,3 +795,38 @@ body [tabindex]:focus-visible {
   outline: 3px solid #536452 !important;
   outline-offset: 2px;
 }
+
+
+/* WCAG 2.1 AA: secondary text must remain legible on LUNA's warm-light surfaces. */
+.luna-shell .metric-label,
+.luna-shell .metric-sub,
+.luna-shell .muted,
+.luna-shell .card-subtitle,
+.luna-shell .tabs button:not(.active),
+.luna-shell .tabs span,
+.luna-shell .symbol-cell span,
+.luna-shell .empty-table,
+.luna-shell .loading-state,
+.luna-shell .detail-item span,
+.luna-shell .section-label,
+.luna-shell .timeline-item span,
+.luna-shell .empty-detail span,
+.luna-shell .control-list span,
+.luna-shell .coverage-strip span,
+.luna-shell .coverage-strip small,
+.luna-shell .control-room-sub,
+.luna-shell .control-stat span,
+.luna-shell .control-stat small,
+.luna-shell .gate-row,
+.luna-shell .forecast-meta,
+.luna-shell .stage-chip:not(.ready),
+.luna-shell .top-symbols span,
+.luna-shell .audit-kpis span,
+.luna-shell .audit-note,
+.luna-shell .live-operating-strip span,
+.luna-shell .live-operating-strip small,
+.luna-shell .hash-line,
+.luna-shell .research-grid strong,
+.luna-shell .research-source span {
+  color: #555e56 !important;
+}
