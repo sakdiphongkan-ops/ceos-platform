@@ -94,7 +94,7 @@ class LunaFormulaLabTests(unittest.TestCase):
             "exported_at_utc": "2026-10-12T00:00:00+00:00",
         }
         path = Path(csv_path).with_suffix(".manifest.json")
-        path.write_text(json.dumps(payload, indent=2) + "\\n", encoding="utf-8")
+        path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
         return path
 
     def test_runner_verifies_export_manifest_hash_and_counts(self) -> None:
