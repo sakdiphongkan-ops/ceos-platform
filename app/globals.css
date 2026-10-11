@@ -703,7 +703,8 @@ tbody tr:hover,tbody tr.selected-row{background:rgba(111,128,110,.055)}
   color:#8f5f5a;background:rgba(173,110,105,.07);border-color:rgba(173,110,105,.20)
 }
 .system-status.loading{
-  color:#7a827a;background:#efebe3;border-color:#d7d2c8
+  /* Keep the loading state readable on the light control-room surface (WCAG AA). */
+  color:#50594f;background:#efebe3;border-color:#b5b7ad
 }
 .control-grid{gap:9px}
 .control-stat{
