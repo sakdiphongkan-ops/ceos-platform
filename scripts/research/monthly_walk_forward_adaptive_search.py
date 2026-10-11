@@ -66,15 +66,14 @@ def ranked_symbols(df: pd.DataFrame, factor: str, direction: str, k: int) -> pd.
         ascending=[True, ascending, True],
     )
     eligible_counts = x.groupby("month_end")["symbol"].size()
-    insufficient = eligible_counts[eligible_counts < k]
-    if not insufficient.empty:
-        month, count = insufficient.items().__iter__().__next__()
-        raise SystemExit(
-            "INSUFFICIENT_FACTOR_ELIGIBLE_UNIVERSE: "
-            f"factor={factor} month={pd.Timestamp(month).strftime('%Y-%m')} "
-            f"eligible={int(count)} required_k={k}"
-        )
-    return x.groupby("month_end", sort=True).head(k).set_index("month_end")["symbol"]
+    executable_months = eligible_counts[eligible_counts >= k].index
+    # If this factor cannot produce K names in a month, that candidate has no
+    # tradable portfolio observation for that month. It is not allowed to use
+    # future outcomes to fill the gap; the selector will omit it for that date.
+    x = x[x["month_end"].isin(executable_months)]
+    result = x.groupby("month_end", sort=True).head(k).set_index("month_end")["symbol"]
+    result.index.name = "month_end"
+    return result
 
 
 def candidate_return(
@@ -126,6 +125,11 @@ def candidate_return(
         )
         previous = current
 
+    if not rows:
+        return pd.DataFrame(
+            columns=["gross_return", "turnover", "cost", "net_return"],
+            index=pd.DatetimeIndex([], name="month_end"),
+        )
     return pd.DataFrame(rows).set_index("month_end")
 
 
@@ -180,14 +184,32 @@ def main() -> None:
     ]
 
     returns = {}
+    rejected_candidates = []
     for factor, direction, k in configs:
-        returns[(factor, direction, k)] = candidate_return(
-            df, factor, direction, k, args.cost_bps
-        )
+        config = (factor, direction, k)
+        try:
+            result = candidate_return(df, factor, direction, k, args.cost_bps)
+        except SystemExit as exc:
+            reason = str(exc)
+            if not (
+                reason.startswith("MISSING_FORWARD_RETURN_FOR_SELECTED_SYMBOLS")
+                or reason.startswith("INSUFFICIENT_SELECTED_HOLDINGS")
+            ):
+                raise
+            rejected_candidates.append({
+                "factor": factor, "direction": direction, "k": int(k), "reason": reason
+            })
+            continue
+        if not result.empty:
+            returns[config] = result
 
-    months = sorted(
-        set().union(*(set(s.index) for s in returns.values()))
-    )
+    if not returns:
+        raise SystemExit(
+            "NO_VALID_ADAPTIVE_CANDIDATES: all candidates were rejected or lacked factor coverage"
+        )
+    months = sorted(set().union(*(set(frame.index) for frame in returns.values())))
+    if not months:
+        raise SystemExit("NO_EXECUTABLE_MONTHS")
 
     rows = []
     for month in months:
@@ -197,6 +219,10 @@ def main() -> None:
 
         eligible = []
         for cfg, frame in returns.items():
+            # A candidate must be executable at this formation date before it
+            # can be selected; this uses signal coverage only, not its outcome.
+            if month not in frame.index:
+                continue
             hist = frame.reindex(prior)["net_return"].dropna()
             if len(hist) < args.min_history_months:
                 continue
@@ -253,6 +279,9 @@ def main() -> None:
         "engine": "luna-monthly-walk-forward-adaptive-v1",
         "pit_membership": args.membership,
         "pit_excluded_rows": int(pit_excluded_rows),
+        "candidate_count_valid": len(returns),
+        "candidate_count_rejected": len(rejected_candidates),
+        "rejected_candidate_sample": rejected_candidates[:100],
         "pit_active_symbols": int(pit_active_symbols),
         "dataset_sha256": hashlib.sha256(
             Path(args.input).read_bytes()
