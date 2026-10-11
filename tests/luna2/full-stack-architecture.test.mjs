@@ -111,11 +111,19 @@ test("9. Auth/session: production guest redirect is verified when LUNA_BASE_URL 
   assert.match(location, /\/luna\/login/);
 });
 
-test("10. Cross-browser architecture: login avoids mobile viewport zoom and layout hazards", () => {
+test("10. Cross-browser architecture: login CSS prevents mobile viewport zoom and layout hazards", () => {
   const login = read("app/luna/login/page.tsx");
-  assert.match(login, /min-h-\[calc\(100dvh-4rem\)\]/);
-  assert.match(login, /text-\[16px\].*autoComplete="email"/s);
-  assert.match(login, /text-\[16px\].*autoComplete=\{mode === "signin" \? "current-password" : "new-password"\}/s);
+  const css = read("app/globals.css");
+
+  // This app has no Tailwind compiler, so verify the semantic classes actually
+  // have compiled CSS rules rather than accepting utility class strings alone.
+  assert.match(login, /className="luna-login-page"/);
+  assert.match(login, /className="luna-login-input luna-login-email".*autoComplete="email"/s);
+  assert.match(login, /className="luna-login-input luna-login-password".*autoComplete=\{mode === "signin" \? "current-password" : "new-password"\}/s);
+  assert.match(css, /\.luna-login-page\s*\{[^}]*min-height:\s*calc\(100dvh\s*-\s*4rem\)/s);
+  assert.match(css, /\.luna-login-input\s*\{[^}]*font-size:\s*16px\s*!important/s);
+  assert.match(css, /\.luna-login-button\s*\{[^}]*min-height:\s*48px/s);
+  assert.match(css, /\.luna-login-mode-switch\s*\{[^}]*min-height:\s*44px/s);
 });
 
 test("11. Observability: global handlers exist and error payload is sanitized", () => {
