@@ -18,9 +18,11 @@ The two workstreams must never be merged. A newly created candidate cannot inher
 
 ## 2. Recovery finding: F09542
 
-Searches of the current Supabase research tables/catalog, repository code and commit search, and the connected knowledge-base search did not locate a matching F09542 definition. The four remembered values (0.68%, 79.98%, 18.57%, 76.86%) could not be tied to a uniquely identified formula and run.
+Searches of the current Supabase research tables/catalog, repository and commit search, connected knowledge-base search, and a legacy GitHub research branch did not locate an exact `F09542` definition or the full metric fingerprint (0.68%, 79.98%, 18.57%, 76.86%). I inspected 42 non-empty artifacts on `ci/luna-steelman-validation-20260922`, including formula catalogs, selection ledgers, holdout summaries, seed-replication outputs and formula-archaeology files. The auditable list is saved in [f09542-recovery-search-20261012.json](./formula-lab/f09542-recovery-search-20261012.json).
 
-This means **not recovered from the sources inspected**; it does not prove the formula never existed in an unsearched historical chat, branch, export or external workspace. The current catalog contains several incompatible definitions under the shorter label F0954. Using that nearby name as a substitute would fabricate provenance, so we will not do it.
+The legacy catalogs do contain `F0954`, but not `F09542`. In adaptive tournament v2 it maps to `mom3 +0.3001732, mom12 -0.3740439, avg_amount20 +0.3257828`; in the public v3 catalog the same display ID maps to `MOM_120 +0.3001732, ATR_PCT -0.3740439, MOM_60 +0.3257828`. That is direct evidence that a close display label cannot prove formula identity. A standalone value resembling 0.7686 also appears as a factor weight in a generated catalog, but the full four-number metric fingerprint was not found; it is not a match.
+
+This means **not recovered from the sources inspected**; it does not prove the formula never existed in an unsearched historical ChatGPT conversation, database backup, export or external workspace. We will not relabel one of these nearby candidates as F09542 or attach the remembered metrics to it.
 
 ### Why historical formula traceability failed
 
