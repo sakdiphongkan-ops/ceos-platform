@@ -198,7 +198,7 @@ Then run the frozen candidate family:
 
     python scripts/research/luna_formula_lab_v1.py --input /tmp/luna_monthly_factors.csv --output /tmp/luna-formula-lab-run --cost-bps 20,30,40
 
-The runner is read-only with respect to Supabase; it writes local research artifacts only. A new data snapshot or formula change must produce a new run ID, input hash and formula hash. CI is the gate for the runner and its regression tests; the latest rerun is in progress after correcting two test-discovered issues (the MR 70/30 registry version and pandas NaN assertions).
+The runner is read-only with respect to Supabase; it writes local research artifacts only. A new data snapshot or formula change must produce a new run ID, input hash and formula hash. The runner and formula-registry tests passed in [LUNA formula research integrity CI](https://github.com/sakdiphongkan-ops/ceos-platform/actions/runs/38161715917) on commit 2ef8e2f60b0faed2fabc7fd6199c20f424dcf2fc. That run validated all ten immutable formula JSON records and passed the new regression cases for formula hashes, top-20 preservation under a missing forward outcome, and the 20/30/40-bps cost arithmetic. The newer report-only revision has started another CI cycle.
 
 ## 10. Next research queue
 
