@@ -179,7 +179,28 @@ A candidate cannot be promoted merely because its best historical window looks a
 
 The eight formula weights were theory-motivated and hand-specified. They were not fit with regression or optimized to maximize the post-hoc period. We still need broader, pre-registered family testing and an untouched prospective period to make a credible statement about reliability. If a future candidate is selected by comparing many formulas, the selection procedure itself must be considered a source of backtest overfitting.
 
-## 9. Next research queue
+## 9. Executable replay and validation contract
+
+The deterministic runner is now stored at scripts/research/luna_formula_lab_v1.py. It recomputes the same eight candidate rules from an exported monthly-factor CSV, recalculates cross-sectional percent ranks with PostgreSQL-compatible tie handling, fixes the top-20 portfolio before reading forward outcomes, and writes:
+
+- run_manifest.json, including dataset SHA-256 and every formula's canonical definition hash;
+- monthly_returns.csv, with selection completeness, missing names, turnover and net returns at 20/30/40 bps per turnover unit;
+- selected_holdings.csv, including all top-20 names and their outcome-availability flag;
+- summary.csv, with Train, retrospective OOS and post-hoc diagnostics clearly labeled.
+
+The missing-outcome policy is tested explicitly: a selected stock with no next-calendar-month adjusted close remains in the chosen top 20; the month is incomplete and no rank-21 substitute is allowed. Other tests assert the exact saved formula hashes and the arithmetic for turnover costs.
+
+To replay against the current database, first export the monthly factor table with credentials supplied only through environment variables:
+
+    python scripts/research/export_supabase_monthly_factors.py --url "$SUPABASE_URL" --table luna_research_monthly_price_factors --start 2021-09-01 --end 2026-09-01 --output /tmp/luna_monthly_factors.csv
+
+Then run the frozen candidate family:
+
+    python scripts/research/luna_formula_lab_v1.py --input /tmp/luna_monthly_factors.csv --output /tmp/luna-formula-lab-run --cost-bps 20,30,40
+
+The runner is read-only with respect to Supabase; it writes local research artifacts only. A new data snapshot or formula change must produce a new run ID, input hash and formula hash. CI is the gate for the runner and its regression tests; the latest rerun is in progress after correcting two test-discovered issues (the MR 70/30 registry version and pandas NaN assertions).
+
+## 10. Next research queue
 
 - Recover F09542 only from exact authoritative artifacts; keep searching historical exports/branches where available without using F0954 as a proxy.
 - Bind the existing monthly price-factor dataset to the exact factor-builder version and its input/output checksums. The current dataset metadata does not yet prove this lineage.
