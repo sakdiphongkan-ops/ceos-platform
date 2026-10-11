@@ -179,6 +179,8 @@ A candidate cannot be promoted merely because its best historical window looks a
 
 The eight formula weights were theory-motivated and hand-specified. They were not fit with regression or optimized to maximize the post-hoc period. We still need broader, pre-registered family testing and an untouched prospective period to make a credible statement about reliability. If a future candidate is selected by comparing many formulas, the selection procedure itself must be considered a source of backtest overfitting.
 
+To prevent goalpost-moving, a proposed measurable promotion policy is saved in [prospective-promotion-gates-v1.json](./formula-lab/prospective-promotion-gates-v1.json). Its gates include 100% PIT/outcome coverage, at least 24 non-overlapping OOS months across two or more walk-forward folds, net-positive aggregate OOS after 40 bps per full turnover unit, annualized Sharpe of at least 0.75, MaxDD no worse than -25%, a positive lower bound from a moving-block-bootstrap interval, and a frozen 12-month prospective paper test. These are conservative research screening rules—not a promise of performance or authorization for live trading.
+
 ## 9. Executable replay and validation contract
 
 The deterministic runner is now stored at scripts/research/luna_formula_lab_v1.py. It recomputes the same eight candidate rules from an exported monthly-factor CSV, recalculates cross-sectional percent ranks with PostgreSQL-compatible tie handling, fixes the top-20 portfolio before reading forward outcomes, and writes:
