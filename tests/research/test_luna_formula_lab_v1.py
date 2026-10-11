@@ -119,6 +119,16 @@ class LunaFormulaLabTests(unittest.TestCase):
             Path(csv_path).unlink(missing_ok=True)
             Path(csv_path).with_suffix(".manifest.json").unlink(missing_ok=True)
 
+    def test_runner_requires_export_manifest(self) -> None:
+        csv_path = self._write_synthetic_panel()
+        try:
+            with tempfile.TemporaryDirectory() as out_dir:
+                with self.assertRaisesRegex(ValueError, "EXPORT_MANIFEST_REQUIRED"):
+                    run_lab(csv_path, out_dir)
+        finally:
+            Path(csv_path).unlink(missing_ok=True)
+            Path(csv_path).with_suffix(".manifest.json").unlink(missing_ok=True)
+
     def test_runner_rejects_mismatched_export_manifest(self) -> None:
         csv_path = self._write_synthetic_panel()
         try:
