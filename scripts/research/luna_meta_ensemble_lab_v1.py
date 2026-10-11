@@ -15,6 +15,31 @@ FACTORS = [
     "mom1","mom2","mom3","mom4","mom6","mom12","high52_ratio","vol20","maxdd60","avg_amount20"
 ]
 
+# Explicit rank-equivalent adapters from build_factor_dataset.py output to the
+# canonical factors this lab was originally written against. MOM_* horizons
+# are trading-day approximations; DIST_HIGH_252 is price/high252 - 1 (same rank
+# ordering as a price/high252 ratio); AMOUNT is the 20-day mean traded amount.
+SOURCE_FACTOR_ALIASES = {
+    "mom1": "MOM_20",
+    "mom2": "MOM_40",
+    "mom3": "MOM_60",
+    "mom4": "MOM_80",
+    "mom6": "MOM_120",
+    "mom12": "MOM_252",
+    "high52_ratio": "DIST_HIGH_252",
+    "vol20": "VOL_20",
+    "maxdd60": "MAXDD_60",
+    "avg_amount20": "AMOUNT",
+}
+
+def normalize_factor_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Add canonical aliases for available source factors without overwriting them."""
+    df = df.copy()
+    for canonical, source in SOURCE_FACTOR_ALIASES.items():
+        if canonical not in df.columns and source in df.columns:
+            df[canonical] = df[source]
+    return df
+
 COMPONENTS = {
     "REV1": {"mom1": -1.0},
     "REV2": {"mom2": -1.0},
@@ -59,7 +84,7 @@ def stats(a):
     }
 
 def prepare(csv):
-    df=pd.read_csv(csv)
+    df=normalize_factor_columns(pd.read_csv(csv))
     need={"date","symbol","adj_close"} | set(FACTORS)
     missing=sorted(need-set(df.columns))
     if missing: raise SystemExit(f"missing columns: {missing}")
@@ -77,7 +102,15 @@ def prepare(csv):
     m=m.merge(target,on=["symbol","month"],how="left")
     m["fwd1"]=m["_next_px"]/m["adj_close"]-1
     m.drop(columns=["_next_px"],inplace=True)
-    m=m[m["fwd1"].notna()].copy()
+
+    # Never restrict the month-t signal universe by whether month-(t+1) has
+    # a return. That would remove delisted / missing-next-month names using
+    # information unavailable at the decision time. Only remove the final
+    # dataset month globally: no complete forward month exists for it at all.
+    last_month=m["month"].max()
+    if pd.isna(last_month):
+        raise SystemExit("NO_MONTHLY_OBSERVATIONS")
+    m=m[m["month"] < last_month].copy()
     months=sorted(m["month"].unique())
     panels=[]
     for month in months:
@@ -95,6 +128,25 @@ def prepare(csv):
                        "fwd":g["fwd1"].to_numpy(dtype=float)})
     return panels
 
+def validate_origin_coverage(panels, origins):
+    """Fail closed when any declared train or holdout window is incomplete."""
+    available={pd.Timestamp(p["month"]).strftime("%Y-%m") for p in panels}
+    for name,t0,t1,h0,h1 in origins:
+        for label,start,end in (("TRAIN",t0,t1),("HOLDOUT",h0,h1)):
+            expected=[str(x) for x in pd.period_range(
+                pd.Period(start,freq="M"),pd.Period(end,freq="M"),freq="M"
+            )]
+            missing=[month for month in expected if month not in available]
+            if missing:
+                raise SystemExit(
+                    "INCOMPLETE_ORIGIN_DATA: "
+                    f"origin={name} window={label} expected_months={len(expected)} "
+                    f"available_months={len(expected)-len(missing)} "
+                    f"missing_months={missing} "
+                    f"panel_start={min(available) if available else 'none'} "
+                    f"panel_end={max(available) if available else 'none'}"
+                )
+
 def component_paths(panels,k,cost_bps):
     names=list(COMPONENTS)
     paths={n:np.full(len(panels),np.nan) for n in names}
@@ -107,7 +159,17 @@ def component_paths(panels,k,cost_bps):
             cur=set(p["symbols"][order].tolist())
             overlap=len(cur&prev)
             turnover=1.0 if mi==0 else 1.0-overlap/float(k)
-            paths[name][mi]=float(np.mean(p["fwd"][order]))-turnover*cost_bps/10000.0
+            selected_fwd=p["fwd"][order]
+            if not np.isfinite(selected_fwd).all():
+                missing_symbols=p["symbols"][order][~np.isfinite(selected_fwd)].tolist()
+                raise SystemExit(
+                    "MISSING_FORWARD_RETURN_FOR_SELECTED_SYMBOLS: "
+                    f"month={pd.Timestamp(p['month']).strftime('%Y-%m')} "
+                    f"component={name} symbols={missing_symbols}. "
+                    "Supply a defensible delisting/terminal return or quarantine the run; "
+                    "do not silently remove these symbols from the signal universe."
+                )
+            paths[name][mi]=float(np.mean(selected_fwd))-turnover*cost_bps/10000.0
             prev=cur
     return paths
 
@@ -155,6 +217,9 @@ def run():
         ("O2_2025","2023-01-31","2024-12-31","2025-01-31","2025-12-31"),
         ("O3_2026","2024-01-31","2025-12-31","2026-01-31","2026-08-31"),
     ]
+    # Validate every origin up front so the workflow cannot emit a partial
+    # OOS/HOLDOUT row set and mistakenly label it a complete evaluation.
+    validate_origin_coverage(panels,origins)
     all_rows=[]
     selected=[]
     for name,t0,t1,h0,h1 in origins:
@@ -211,6 +276,9 @@ def run():
       "origins":selected,
       "scenario_grid":"K=10/20/50; cost=0/20/45/60",
       "target_geometric_monthly":0.07,
+      "factor_aliases":SOURCE_FACTOR_ALIASES,
+      "outcome_integrity_guard":"selected holdings must all have contiguous next-month returns; missing selected outcomes fail closed",
+      "window_integrity_guard":"all declared training and holdout calendar months must be present; partial windows fail closed",
       "selection_guard":"weights are selected using training months only; holdout is frozen",
       "purpose":"test whether diversified mechanism combinations reduce single-formula/seed instability",
     }
