@@ -184,29 +184,17 @@ def main() -> None:
     ]
 
     returns = {}
-    rejected_candidates = []
     for factor, direction, k in configs:
         config = (factor, direction, k)
-        try:
-            result = candidate_return(df, factor, direction, k, args.cost_bps)
-        except SystemExit as exc:
-            reason = str(exc)
-            if not (
-                reason.startswith("MISSING_FORWARD_RETURN_FOR_SELECTED_SYMBOLS")
-                or reason.startswith("INSUFFICIENT_SELECTED_HOLDINGS")
-            ):
-                raise
-            rejected_candidates.append({
-                "factor": factor, "direction": direction, "k": int(k), "reason": reason
-            })
-            continue
+        # Fail the entire experiment if selected outcomes are incomplete. Excluding
+        # only candidates that encounter future missingness would itself be a
+        # look-ahead filter on the formula search.
+        result = candidate_return(df, factor, direction, k, args.cost_bps)
         if not result.empty:
             returns[config] = result
 
     if not returns:
-        raise SystemExit(
-            "NO_VALID_ADAPTIVE_CANDIDATES: all candidates were rejected or lacked factor coverage"
-        )
+        raise SystemExit("NO_VALID_ADAPTIVE_CANDIDATES: no candidate has sufficient factor coverage")
     months = sorted(set().union(*(set(frame.index) for frame in returns.values())))
     if not months:
         raise SystemExit("NO_EXECUTABLE_MONTHS")
@@ -279,9 +267,7 @@ def main() -> None:
         "engine": "luna-monthly-walk-forward-adaptive-v1",
         "pit_membership": args.membership,
         "pit_excluded_rows": int(pit_excluded_rows),
-        "candidate_count_valid": len(returns),
-        "candidate_count_rejected": len(rejected_candidates),
-        "rejected_candidate_sample": rejected_candidates[:100],
+        "candidate_count_evaluated": len(returns),
         "pit_active_symbols": int(pit_active_symbols),
         "dataset_sha256": hashlib.sha256(
             Path(args.input).read_bytes()
