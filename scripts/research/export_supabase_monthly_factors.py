@@ -8,14 +8,17 @@ must never be committed to the repository or printed to logs.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
 import requests
 
 COLUMNS = [
-    "symbol", "month_end", "adj_close", "mom1", "mom3", "mom6", "mom12",
+    "dataset_id", "symbol", "month_end", "adj_close", "mom1", "mom3", "mom6", "mom12",
     "high52_ratio", "vol20", "maxdd60", "avg_amount20",
 ]
 
@@ -63,7 +66,7 @@ def main() -> None:
     df = pd.DataFrame(rows, columns=COLUMNS)
     df = df[df["month_end"] <= args.end].copy()
     for c in COLUMNS:
-        if c not in {"symbol", "month_end"}:
+        if c not in {"dataset_id", "symbol", "month_end"}:
             df[c] = pd.to_numeric(df[c], errors="coerce")
     df["month_end"] = pd.to_datetime(df["month_end"])
     # snapshot_date is the date at which the month-end signal was formed.
@@ -76,12 +79,37 @@ def main() -> None:
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(out, index=False)
+
+    # Byte-level manifest: the formula lab validates this exact CSV before replay.
+    # This is file provenance, not a substitute for PIT-universe or upstream-source validation.
+    export_manifest = {
+        "schema_version": "1.0",
+        "record_type": "supabase_monthly_factor_export_manifest",
+        "exported_at_utc": datetime.now(timezone.utc).isoformat(),
+        "source_table": f"public.{args.table}",
+        "dataset_ids": sorted(df["dataset_id"].dropna().astype(str).unique().tolist()),
+        "rows": int(len(df)),
+        "symbols": int(df["symbol"].nunique()),
+        "min_month": str(df["month_end"].min().date()),
+        "max_month": str(df["month_end"].max().date()),
+        "columns": list(df.columns),
+        "output_file": out.name,
+        "output_byte_count": int(out.stat().st_size),
+        "output_sha256": hashlib.sha256(out.read_bytes()).hexdigest(),
+        "source_lineage_verified": False,
+        "pit_membership_verified": False,
+    }
+    manifest_path = out.with_suffix(".manifest.json")
+    manifest_path.write_text(json.dumps(export_manifest, indent=2, ensure_ascii=False) + "\\n", encoding="utf-8")
+
     print({
         "rows": int(len(df)),
         "symbols": int(df["symbol"].nunique()),
         "min_month": str(df["month_end"].min().date()),
         "max_month": str(df["month_end"].max().date()),
         "output": str(out),
+        "output_sha256": export_manifest["output_sha256"],
+        "manifest": str(manifest_path),
     })
 
 
