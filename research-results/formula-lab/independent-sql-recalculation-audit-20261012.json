@@ -1,0 +1,59 @@
+{
+  "schema_version": "1.0",
+  "record_type": "independent_sql_recalculation_audit",
+  "created_at": "2026-10-12",
+  "database": {
+    "project_id": "wigzicwgcsrhdummrbjx",
+    "factor_table": "public.luna_research_monthly_price_factors",
+    "returns_table": "public.luna_research_formula_returns_v2",
+    "dataset_id": "1af83c59-a56f-461f-b03e-f3d04e67e384",
+    "canonical_factor_fingerprint_sha256": "c718f4d28a9657f4715018b7125157acc1853959cffe4ba719f1a5edc6688b69"
+  },
+  "procedure": {
+    "method": "Recalculate percent_rank cross-sectional signal, top-20 portfolio, next-calendar-month gross return, monthly overlap turnover, and net return directly in SQL from the factor table, then compare with persisted result rows.",
+    "rank_method": "PostgreSQL percent_rank ascending within each month, over non-null factor values.",
+    "selection": "Score descending, symbol ascending tie-break, top 20 frozen before reading the forward outcome.",
+    "missing_outcome": "Count selected forward outcomes after selection; any missing result invalidates the month/run; do not substitute rank 21.",
+    "turnover": "1 - overlap(current_top20, previous_month_top20)/20; first month turnover=1.0.",
+    "cost": "net_return = gross_return - 0.002 * turnover; this represents 20 bps per full turnover unit."
+  },
+  "checks": [
+    {
+      "formula_id": 2003,
+      "formula_name": "LUNA_MR_70_30_V1_FAM_20261012",
+      "score_expression": "-0.70*prank(mom1)-0.30*prank(mom3)",
+      "persisted_rows_compared": 56,
+      "first_month": "2021-12-01",
+      "last_month": "2026-07-01",
+      "selected_count_mismatch_months": 0,
+      "missing_outcome_months": 0,
+      "net_return_mismatch_months_tolerance_1e_10": 0,
+      "max_absolute_net_return_difference": 4.85722573273506e-16,
+      "max_absolute_gross_return_difference": 4.71844785465692e-16,
+      "max_absolute_turnover_difference": 0.0,
+      "conclusion": "Persisted 20-bps monthly returns exactly match the independent SQL recalculation to floating-point precision over all 56 persisted months. August 2026 is intentionally absent because F&D's next-calendar-month adjusted close is missing."
+    },
+    {
+      "formula_id": 2007,
+      "formula_name": "LUNA_REV_LOWVOL_LIQ_V1_FAM_20261012",
+      "score_expression": "-0.55*prank(mom1)-0.25*prank(mom3)-0.15*prank(vol20)+0.05*prank(avg_amount20)",
+      "persisted_rows_compared": 57,
+      "first_month": "2021-12-01",
+      "last_month": "2026-08-01",
+      "selected_count_mismatch_months": 0,
+      "missing_outcome_months": 0,
+      "net_return_mismatch_months_tolerance_1e_10": 0,
+      "max_absolute_net_return_difference": 4.85722573273506e-16,
+      "max_absolute_gross_return_difference": 4.71844785465692e-16,
+      "max_absolute_turnover_difference": 0.0,
+      "conclusion": "Persisted 20-bps monthly returns match the independent SQL recalculation to floating-point precision over all 57 persisted months, including August 2026."
+    }
+  ],
+  "limitations": [
+    "This verifies arithmetic and portfolio selection against the current stored factor panel, not source correctness.",
+    "The monthly universe is survivor-oriented and PIT SET/mai membership is not verified.",
+    "The dataset's exact factor-builder version, source daily input hash and corporate-action adjustment lineage remain unknown.",
+    "Two candidate arithmetic checks do not independently validate the other six formula implementations or prove predictive alpha.",
+    "Historical OOS and post-hoc windows have already been inspected; an untouched prospective paper period is required."
+  ]
+}
