@@ -15,7 +15,11 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
+import uuid
 from pathlib import Path
+
+from luna_formula_identity import build_identity_catalog
 
 import numpy as np
 import pandas as pd
@@ -142,7 +146,9 @@ def main() -> None:
     ap.add_argument("--min-history-months", type=int, default=12)
     ap.add_argument("--cost-bps", type=float, default=20.0)
     ap.add_argument("--k", type=int, default=20)
+    ap.add_argument("--run-id", default=os.getenv("LUNA_RESEARCH_RUN_ID"))
     args = ap.parse_args()
+    run_id = str(args.run_id or uuid.uuid4().hex)
 
     out = Path(args.output)
     out.mkdir(parents=True, exist_ok=True)
@@ -175,6 +181,28 @@ def main() -> None:
         raise SystemExit("NO_MONTHLY_OBSERVATIONS")
 
     formulas = generate_formulas(args.formula_count)
+    dataset_sha256 = hashlib.sha256(Path(args.input).read_bytes()).hexdigest()
+    formula_identity_catalog = build_identity_catalog(
+        formulas,
+        engine="luna-direct-supabase-1000-v1",
+        run_id=run_id,
+        dataset_sha256=dataset_sha256,
+        config={
+            "formula_count_requested": args.formula_count,
+            "factor_schema": FACTORS,
+            "lookback_months": args.lookback_months,
+            "min_history_months": args.min_history_months,
+            "k": args.k,
+            "cost_bps": args.cost_bps,
+            "forward_return_rule": "same-symbol next calendar month only; gaps are missing",
+            "portfolio_rule": "equal-weight top-K with turnover-based cost",
+        },
+        code_revision=os.getenv("GITHUB_SHA"),
+    )
+    formula_uid_by_id = {
+        item["formula_id"]: item["formula_uid"]
+        for item in formula_identity_catalog["formulas"]
+    }
     factor_pos = {f: i for i, f in enumerate(FACTORS)}
     month_arrays = {
         m: np.where(df["month_end"].to_numpy() == m)[0] for m in months
@@ -249,6 +277,8 @@ def main() -> None:
                 "history_start": history[0],
                 "history_end": history[-1],
                 "formula_id": fid,
+                "formula_uid": formula_uid_by_id[fid],
+                "run_id": run_id,
                 "selected_geo": selected_geo,
                 "selected_positive": selected_positive,
                 "gross_return": rr["gross_return"],
@@ -279,13 +309,24 @@ def main() -> None:
             "final_baht": float(equity[-1]),
         }
 
+    # Preserve the legacy label-only file for older readers; all new consumers
+    # should use formula-catalog.v2.json, which contains immutable run-scoped IDs.
     catalog = out / "formula-catalog.json"
     catalog.write_text(json.dumps(formulas, indent=2), encoding="utf-8")
+    identity_catalog_path = out / "formula-catalog.v2.json"
+    identity_catalog_path.write_text(
+        json.dumps(formula_identity_catalog, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
 
     full_formula_stats = []
     for fid, frame in candidates.items():
         x = frame["net_return"].to_numpy(dtype=float)
-        full_formula_stats.append({"id": fid, **perf(x)})
+        full_formula_stats.append({
+            "id": fid,
+            "formula_uid": formula_uid_by_id[fid],
+            **perf(x),
+        })
     full_formula_stats.sort(
         key=lambda x: (
             -x["geometric_monthly_return"],
@@ -297,9 +338,13 @@ def main() -> None:
     summary = {
         "status": "COMPLETED",
         "engine": "luna-direct-supabase-1000-v1",
-        "dataset_sha256": hashlib.sha256(
-            Path(args.input).read_bytes()
-        ).hexdigest(),
+        "run_id": run_id,
+        "experiment_sha256": formula_identity_catalog["manifest"]["experiment_sha256"],
+        "formula_identity_schema": formula_identity_catalog["identity_schema"],
+        "formula_catalog_v2": str(identity_catalog_path),
+        "formula_catalog_sha256": formula_identity_catalog["catalog_sha256"],
+        "git_commit_sha": os.getenv("GITHUB_SHA"),
+        "dataset_sha256": dataset_sha256,
         "formula_count_requested": len(formulas),
         "formula_count_evaluated": len(candidates),
         "k": args.k,
