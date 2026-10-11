@@ -321,28 +321,20 @@ def run_lab(input_path: str | Path, output_dir: str | Path, run_id: str | None =
     run_id = run_id or str(uuid.uuid4())
     dataset_hash = hashlib.sha256(input_path.read_bytes()).hexdigest()
 
-    # Verify the byte-level export sidecar when supplied or available by convention.
-    # This proves the runner read the same CSV bytes declared by the exporter, but
-    # does not independently prove that the upstream source or PIT universe is correct.
+    # Fail closed if the byte-level export sidecar is missing. This proves that
+    # the runner read the exact CSV bytes declared by the exporter, not that the
+    # upstream source, adjustments or PIT universe are independently correct.
     export_manifest_path = (
         Path(source_manifest_path) if source_manifest_path
         else input_path.with_suffix(".manifest.json")
     )
-    if source_manifest_path and not export_manifest_path.is_file():
-        raise ValueError(f"Source export manifest not found: {export_manifest_path}")
+    if not export_manifest_path.is_file():
+        raise ValueError(
+            f"EXPORT_MANIFEST_REQUIRED: {export_manifest_path}; "
+            "export the Supabase factor snapshot with export_supabase_monthly_factors.py first"
+        )
 
-    export_manifest_record: dict[str, Any] = {
-        "status": "MISSING_UNVERIFIED_EXPORT_MANIFEST",
-        "file_name": None,
-        "manifest_sha256": None,
-        "source_table": None,
-        "dataset_ids": [],
-        "declared_rows": None,
-        "declared_symbols": None,
-        "exported_at_utc": None,
-    }
-    if export_manifest_path.is_file():
-        export_manifest = json.loads(export_manifest_path.read_text(encoding="utf-8"))
+    export_manifest = json.loads(export_manifest_path.read_text(encoding="utf-8"))
         expected_csv_hash = export_manifest.get("output_sha256")
         if not expected_csv_hash or expected_csv_hash != dataset_hash:
             raise ValueError(
@@ -372,18 +364,18 @@ def run_lab(input_path: str | Path, output_dir: str | Path, run_id: str | None =
                 "Export manifest dataset-ID mismatch: "
                 f"declared={declared_dataset_ids!r} actual={actual_dataset_ids!r}"
             )
-        export_manifest_record = {
-            "status": "VERIFIED_EXPORT_FILE_HASH_AND_COUNTS",
-            "file_name": export_manifest_path.name,
-            "manifest_sha256": hashlib.sha256(export_manifest_path.read_bytes()).hexdigest(),
-            "source_table": export_manifest.get("source_table"),
-            "dataset_ids": declared_dataset_ids,
-            "declared_rows": int(declared_rows),
-            "declared_symbols": int(declared_symbols),
-            "exported_at_utc": export_manifest.get("exported_at_utc"),
-            "upstream_source_lineage_verified": False,
-            "pit_membership_verified": False,
-        }
+    export_manifest_record = {
+        "status": "VERIFIED_EXPORT_FILE_HASH_AND_COUNTS",
+        "file_name": export_manifest_path.name,
+        "manifest_sha256": hashlib.sha256(export_manifest_path.read_bytes()).hexdigest(),
+        "source_table": export_manifest.get("source_table"),
+        "dataset_ids": declared_dataset_ids,
+        "declared_rows": int(declared_rows),
+        "declared_symbols": int(declared_symbols),
+        "exported_at_utc": export_manifest.get("exported_at_utc"),
+        "upstream_source_lineage_verified": False,
+        "pit_membership_verified": False,
+    }
 
     all_monthly, all_selected, candidate_manifest = [], [], []
     for candidate in CANDIDATES:
