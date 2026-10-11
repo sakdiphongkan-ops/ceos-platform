@@ -10,7 +10,7 @@
   "recovered_original": false,
   "related_missing_formula": "F09542",
   "related_missing_formula_status": "NOT_RECOVERED; this is a distinct experimental candidate",
-  "formula_sha256": "5faaaac8b9161e0e01be15023f738c1d065cc006fff0afc045b92f42de55cea1",
+  "formula_sha256": "f52ec3ebeb36211ad60f89d616701864df4a6d6286f271648394c74cb52ea185",
   "hash_payload": {
     "formula_id": "LUNA_BASE_M1_REV_V1",
     "version": "1.0.0",
