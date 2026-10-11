@@ -335,35 +335,35 @@ def run_lab(input_path: str | Path, output_dir: str | Path, run_id: str | None =
         )
 
     export_manifest = json.loads(export_manifest_path.read_text(encoding="utf-8"))
-        expected_csv_hash = export_manifest.get("output_sha256")
-        if not expected_csv_hash or expected_csv_hash != dataset_hash:
-            raise ValueError(
-                "Export manifest SHA-256 mismatch: "
-                f"manifest={expected_csv_hash!r} actual={dataset_hash!r}"
-            )
-        declared_rows = export_manifest.get("rows")
-        if declared_rows is None or int(declared_rows) != len(frame):
-            raise ValueError(
-                f"Export manifest row-count mismatch: declared={declared_rows!r} actual={len(frame)}"
-            )
-        declared_symbols = export_manifest.get("symbols")
-        actual_symbols = int(frame["symbol"].nunique())
-        if declared_symbols is None or int(declared_symbols) != actual_symbols:
-            raise ValueError(
-                f"Export manifest symbol-count mismatch: declared={declared_symbols!r} actual={actual_symbols}"
-            )
-        declared_dataset_ids = sorted(str(x) for x in export_manifest.get("dataset_ids", []))
-        if declared_dataset_ids and "dataset_id" not in frame.columns:
-            raise ValueError("Export manifest declares dataset IDs but the CSV has no dataset_id column")
-        actual_dataset_ids = (
-            sorted(str(x) for x in frame["dataset_id"].dropna().unique())
-            if "dataset_id" in frame.columns else []
+    expected_csv_hash = export_manifest.get("output_sha256")
+    if not expected_csv_hash or expected_csv_hash != dataset_hash:
+        raise ValueError(
+            "Export manifest SHA-256 mismatch: "
+            f"manifest={expected_csv_hash!r} actual={dataset_hash!r}"
         )
-        if "dataset_id" in frame.columns and declared_dataset_ids != actual_dataset_ids:
-            raise ValueError(
-                "Export manifest dataset-ID mismatch: "
-                f"declared={declared_dataset_ids!r} actual={actual_dataset_ids!r}"
-            )
+    declared_rows = export_manifest.get("rows")
+    if declared_rows is None or int(declared_rows) != len(frame):
+        raise ValueError(
+            f"Export manifest row-count mismatch: declared={declared_rows!r} actual={len(frame)}"
+        )
+    declared_symbols = export_manifest.get("symbols")
+    actual_symbols = int(frame["symbol"].nunique())
+    if declared_symbols is None or int(declared_symbols) != actual_symbols:
+        raise ValueError(
+            f"Export manifest symbol-count mismatch: declared={declared_symbols!r} actual={actual_symbols}"
+        )
+    declared_dataset_ids = sorted(str(x) for x in export_manifest.get("dataset_ids", []))
+    if declared_dataset_ids and "dataset_id" not in frame.columns:
+        raise ValueError("Export manifest declares dataset IDs but the CSV has no dataset_id column")
+    actual_dataset_ids = (
+        sorted(str(x) for x in frame["dataset_id"].dropna().unique())
+        if "dataset_id" in frame.columns else []
+    )
+    if "dataset_id" in frame.columns and declared_dataset_ids != actual_dataset_ids:
+        raise ValueError(
+            "Export manifest dataset-ID mismatch: "
+            f"declared={declared_dataset_ids!r} actual={actual_dataset_ids!r}"
+        )
     export_manifest_record = {
         "status": "VERIFIED_EXPORT_FILE_HASH_AND_COUNTS",
         "file_name": export_manifest_path.name,
