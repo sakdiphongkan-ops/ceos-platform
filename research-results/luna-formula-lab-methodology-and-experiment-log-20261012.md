@@ -102,6 +102,23 @@ Returns below are cumulative, net of the simplified 20-basis-point-per-turnover-
 | TREND_MOM_4F | Positive mom3/mom6/mom12 and 52-week-high proximity | -12.67% / -0.39 / -23.17% | +2.04% / 0.19 / -21.37% | +32.99% / 1.76 / -1.65% |
 | TREND_RISK_ADJ_4F | Positive medium/long momentum and high52_ratio, negative vol20 | -7.66% / -0.41 / -11.20% | -2.95% / -0.28 / -10.72% | +32.39% / 2.48 / -1.69% |
 
+### Design cards: why each formula exists and what would falsify it
+
+| Candidate | Score formula | Design rationale and testable counter-hypothesis |
+|---|---|---|
+| BASE_M1_REV | -1.00 × PR(mom1) | Control/baseline: isolates short-term reversal with no blending. It tests whether one-month losers rebound. If it only works in one regime or costs erase the edge, do not retain it as an alpha source. |
+| MR_70_30 | -0.70 × PR(mom1) - 0.30 × PR(mom3) | Gives the 1-month reversal hypothesis the larger weight, but adds a smaller 3-month reversal term to reduce dependence on one short lookback. The 70/30 split is a deliberately simple starting point, not an estimated optimum. |
+| MR_60_40 | -0.60 × PR(mom1) - 0.40 × PR(mom3) | A controlled weight perturbation of MR_70_30. It asks whether a less short-horizon-dominant reversal signal is more stable. It has very weak OOS return here, so the alternative weight split did not show a robust benefit. |
+| MR_MIX_50_30_20 | -0.50 × PR(mom1) - 0.30 × PR(mom3) + 0.20 × PR(mom6) | Tests “buy a short pullback inside a medium-term uptrend”: short factors favour recent weakness while the 6-month term favours medium-term winners. The counter-hypothesis is that a six-month trend term conflicts with reversal and can amplify losses when trends change. Train and OOS results are poor in this run. |
+| MR_MIX_70_20_10 | -0.70 × PR(mom1) - 0.20 × PR(mom3) + 0.10 × PR(mom6) | Same idea as the prior blend, but keeps reversal dominant and makes the trend term small. Its OOS return is positive but drawdown remains about -34% and Train is negative, so the apparent OOS strength is not enough. |
+| REV_LOWVOL_LIQ | -0.55 × PR(mom1) - 0.25 × PR(mom3) - 0.15 × PR(vol20) + 0.05 × PR(avg_amount20) | Adds two implementability hypotheses: prefer lower realized volatility and higher traded-value liquidity. This tries to avoid the riskiest, least investable short-term losers. It performed poorly in Train and OOS, so these penalties did not rescue this particular rule on this data panel. |
+| TREND_MOM_4F | +0.20 × PR(mom3) + 0.30 × PR(mom6) + 0.30 × PR(mom12) + 0.20 × PR(high52_ratio) | A clean trend-following alternative: mid/long momentum plus proximity to the 52-week high. It tests persistence rather than reversal. The post-hoc return is strikingly strong, but Train and OOS are weak/negative; selecting it would be post-hoc fitting. |
+| TREND_RISK_ADJ_4F | +0.35 × PR(mom6) + 0.35 × PR(mom12) + 0.20 × PR(high52_ratio) - 0.10 × PR(vol20) | Tries to keep medium/long trend exposure and high-price strength while penalizing high volatility. The hypothesis is better risk-adjusted trend exposure, not higher raw returns at any cost. Train and OOS remain negative, despite a strong post-hoc period; it is not promoted. |
+
+PR(x) is the ascending percentile rank among non-null values in that formation month. A negative coefficient selects lower raw factor values; a positive coefficient selects higher raw values. The same rank scale keeps unlike units (returns, volatility, traded value) from dominating solely because of their measurement units. The linear coefficients still express subjective prior emphasis and should be frozen before validation.
+
+**Not included in these eight formulas:** no direct psychology/sentiment signal, no RSI/MACD, no fundamental valuation or quality factor. Those should be added only as new, separately named hypothesis families with clear source timing, coverage and out-of-sample tests.
+
 **Interpretation:** no candidate qualifies as a winner. MR_70_30 is positive in Train and retrospective OOS but has a roughly 34% drawdown, a Sharpe below 0.5 in OOS and high turnover. Its OOS sample contains only 12 monthly observations. Under the 20-bps cost model, its OOS mean-monthly-return confidence interval is approximately -5.77% to +9.07%, which includes zero. Cost stress at 30 and 40 bps reduces OOS cumulative return from +13.31% to +12.16% and +11.02%, while Sharpe falls from 0.489 to 0.464 and 0.438. These data do not establish a reliable positive expectancy.
 
 The two trend variants look very strong only in the post-hoc window, while their Train/OOS diagnostics are negative or weak. That is a direct example of why a result that looks impressive after the fact is not enough to select a formula.
