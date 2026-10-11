@@ -1,0 +1,129 @@
+{
+  "schema_version": "1.0",
+  "record_type": "formula_recovery_search_audit",
+  "created_at": "2026-10-12",
+  "timezone": "Asia/Bangkok",
+  "target": {
+    "formula_label": "F09542",
+    "reported_metric_fingerprint_pct": [0.68, 79.98, 18.57, 76.86],
+    "metric_order_and_definitions": "Not supplied; do not infer what each percentage means."
+  },
+  "result": "NOT_RECOVERED_FROM_INSPECTED_SOURCES",
+  "important_caveat": "This records a documented search with no match; it does not prove the formula never existed in an unsearched historical ChatGPT conversation, external export, hidden branch, or database backup.",
+  "sources_inspected": [
+    {
+      "source": "Supabase",
+      "project_id": "wigzicwgcsrhdummrbjx",
+      "checks": [
+        "Current formula catalog, formula monthly returns, candidate tables, candidate monthly returns and tournament results.",
+        "Serialized-content search across 15 high-relevance research/result tables.",
+        "LUNA direct 1,000 and 1,500 formula catalog ranges and latest research run metadata."
+      ],
+      "result": "No exact F09542 record or metric fingerprint identified."
+    },
+    {
+      "source": "GitHub code and commit search",
+      "repository": "sakdiphongkan-ops/ceos-platform",
+      "checks": [
+        "F09542 exact label and metric fingerprint in repository search.",
+        "Relevant current research registry, scripts, result and summary files."
+      ],
+      "result": "No exact matching formula source or matching metric record identified."
+    },
+    {
+      "source": "Legacy GitHub research branch",
+      "branch": "ci/luna-steelman-validation-20260922",
+      "branch_commit": "d622c9a301cac7d7b1694bd6399ea9fcea0aac98",
+      "checked_nonempty_artifact_files": 42,
+      "result": "No exact F09542 or four-value numeric fingerprint found in the inspected formula catalogs, tournament summaries, holdout summaries, selection ledgers, candidate results, seed-replication summaries, or formula-archaeology files.",
+      "key_files": [
+        "research-results/luna-formula-archaeology-v1/recurring_formulas.csv",
+        "research-results/luna-formula-archaeology-v1/summary.json",
+        "research-results/luna-adaptive-tournament-v2/formula-catalog.json",
+        "research-results/luna-adaptive-tournament-v2/selection-ledger.csv",
+        "research-results/luna-adaptive-tournament-v2-summary.json",
+        "research-results/luna-adaptive-tournament-v2-window-audit.json",
+        "research-results/luna-adaptive-tournament-v2-independent/formula-catalog.json",
+        "research-results/luna-adaptive-tournament-v3-public/formula-catalog.json",
+        "research-results/luna-adaptive-tournament-v3-public/holdout-summary.json",
+        "research-results/luna-direct-supabase-1000-v1-formula-catalog.json",
+        "research-results/luna-direct-current-supabase-adaptive-1000-v1-formula-catalog.json",
+        "research-results/luna-direct-supabase-1000-v1-summary.json",
+        "research-results/luna-direct-supabase-1000-v2-result.json",
+        "research-results/luna-direct-frozen-holdout-v1-result.json",
+        "research-results/luna-direct-supabase-freshseed-B.json",
+        "research-results/luna-direct-supabase-freshseed-v2.json",
+        "research-results/luna-failure-driven-search-v1/final-selection-board.csv",
+        "research-results/luna-independent-holdout-v1/holdout-ranked.csv",
+        "research-results/luna-independent-holdout-v1-summary.json",
+        "research-results/luna-independent-seed-replication-v1-summary.json",
+        "research-results/luna-prior-leader-holdout-v1.json",
+        "research-results/luna-robust-window-selection-v1.json",
+        "research-results/luna-structured-family-holdout-v1.json",
+        "research-results/luna-structured-interaction-v1/formula-catalog.json",
+        "research-results/luna-theory-family-search-v1/formula_catalog.json",
+        "research-results/luna-theory-family-search-v1/frozen_oos_holdout.csv",
+        "research-results/luna-tradingview-v1/candidate-results.csv",
+        "research-results/luna-v4/seed-20260920-summary.json",
+        "research-results/luna-v4/seed-20260920-holdout-summary.json",
+        "research-results/luna-v4/seed-20260921-summary.json",
+        "research-results/luna-v4/seed-20260921-holdout-summary.json",
+        "research-results/luna-v4/seed-20260922-summary.json",
+        "research-results/luna-v4/seed-20260922-holdout-summary.json"
+      ]
+    },
+    {
+      "source": "Connected knowledge base",
+      "checks": [
+        "Direct F09542 plus the four reported percentages.",
+        "LUNA formula tournament / candidate catalog.",
+        "Backtest performance / Sharpe / drawdown / turnover.",
+        "Historical archived research reports and strategy version notes.",
+        "Research persistence and source-traceability workflow."
+      ],
+      "result": "No passages were returned by these searches."
+    },
+    {
+      "source": "Library semantic search",
+      "checks": [
+        "Exact formula label",
+        "Four-number metric fingerprint",
+        "LUNA formula identity and historical returns"
+      ],
+      "result": "No relevant document was surfaced; results were unrelated library files."
+    }
+  ],
+  "near_match_not_equivalent": {
+    "label": "F0954",
+    "reason": "The label exists in legacy catalogs but it is not F09542, and cannot be used as a substitute for the missing formula.",
+    "adaptive_tournament_v2": {
+      "file": "research-results/luna-adaptive-tournament-v2/formula-catalog.json",
+      "terms": [
+        ["mom3", 0.3001732139766602],
+        ["mom12", -0.3740439489787888],
+        ["avg_amount20", 0.325782837044551]
+      ],
+      "file_blob_sha": "bfba1bbc16f64f21e4e1ab8ac04d8067902a9b04"
+    },
+    "adaptive_tournament_v3_public": {
+      "file": "research-results/luna-adaptive-tournament-v3-public/formula-catalog.json",
+      "terms": [
+        ["MOM_120", 0.3001732139766602],
+        ["ATR_PCT", -0.3740439489787888],
+        ["MOM_60", 0.325782837044551]
+      ],
+      "file_blob_sha": "e403dfa651cd8cf55f684e3528b56acd2b286abb"
+    },
+    "interpretation": "Same display ID, different feature-schema labels; this is itself an identity/provenance warning, not evidence that either is F09542."
+  },
+  "metric_fingerprint_search": {
+    "values_tested_as_numeric_strings": ["0.68", "79.98", "18.57", "76.86", "0.0068", "0.7998", "0.1857", "0.7686"],
+    "matches": "No artifact contained the exact formula label or the complete metric tuple. One isolated 0.7686-like number appeared as a generated factor weight, not as a performance metric; it is not a match."
+  },
+  "next_recovery_steps": [
+    "Search any user-owned export of earlier ChatGPT conversations for F09542 and the four numbers; the connected knowledge base did not include a matching source.",
+    "Search any Supabase dump / backup and unindexed repo archive that is not reachable through the inspected project branch.",
+    "If an exact original artifact appears, verify factor names, weights, full monthly return series, metric definitions, dataset fingerprint, run ID and creation timestamp before accepting it.",
+    "Do not map F09542 to F0954 or copy a similar historical score."
+  ]
+}
