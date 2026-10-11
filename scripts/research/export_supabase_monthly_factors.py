@@ -46,17 +46,19 @@ def main() -> None:
         "Authorization": f"Bearer {key}",
         "Accept": "application/json",
     }
-    params_base = {
-        "select": ",".join(COLUMNS),
-        "month_end": f"gte.{args.start}",
-        "order": "month_end.asc,symbol.asc",
-        "limit": args.page_size,
-    }
+    # Use the PostgREST logical AND to bound the query on both sides.
+    # Fetching only rows inside the declared time window keeps export output deterministic.
+    params_base: list[tuple[str, str | int]] = [
+        ("select", ",".join(COLUMNS)),
+        ("and", f"(month_end.gte.{args.start},month_end.lte.{args.end})"),
+        ("order", "month_end.asc,symbol.asc"),
+        ("limit", args.page_size),
+    ]
     if args.dataset_id:
-        params_base["dataset_id"] = f"eq.{args.dataset_id}"
+        params_base.append(("dataset_id", f"eq.{args.dataset_id}"))
 
     while True:
-        params = {**params_base, "offset": offset}
+        params = [*params_base, ("offset", offset)]
         resp = requests.get(url, headers=headers, params=params, timeout=60)
         resp.raise_for_status()
         page = resp.json()
