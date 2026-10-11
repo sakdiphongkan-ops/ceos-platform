@@ -9,6 +9,8 @@ on:
       - "scripts/research/apply_pit_universe.py"
       - "scripts/research/verify_pit_membership_manifest.py"
       - "scripts/research/luna_formula_identity.py"
+      - "scripts/research/compare_monthly_return_series.py"
+      - "tests/research/test_compare_monthly_return_series.py"
       - "scripts/research/test_verify_pit_membership_manifest.py"
       - "scripts/research/luna_direct_supabase_1000_v1.py"
       - "tests/research/test_luna_formula_identity.py"
@@ -46,6 +48,7 @@ jobs:
       - name: Run LUNA research regression guards
         run: |
           python scripts/research/test_verify_pit_membership_manifest.py
+          python tests/research/test_compare_monthly_return_series.py
           python tests/research/test_luna_formula_identity.py
           python tests/research/test_luna_monthly_return_guards.py
           python tests/research/test_luna_meta_ensemble_data_contract.py
