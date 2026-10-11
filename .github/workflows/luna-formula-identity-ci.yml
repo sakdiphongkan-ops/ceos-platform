@@ -1,0 +1,50 @@
+name: LUNA formula research integrity CI
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - "scripts/research/luna_formula_identity.py"
+      - "scripts/research/luna_direct_supabase_1000_v1.py"
+      - "scripts/research/monthly_walk_forward_adaptive_search.py"
+      - "scripts/research/luna_meta_ensemble_lab_v1.py"
+      - "scripts/research/apply_pit_universe.py"
+      - "tests/research/test_luna_formula_identity.py"
+      - "tests/research/test_luna_monthly_return_guards.py"
+      - "tests/research/test_luna_meta_ensemble_data_contract.py"
+      - ".github/workflows/luna-formula-identity-ci.yml"
+  push:
+    branches: [master]
+    paths:
+      - "scripts/research/luna_formula_identity.py"
+      - "scripts/research/luna_direct_supabase_1000_v1.py"
+      - "scripts/research/monthly_walk_forward_adaptive_search.py"
+      - "scripts/research/luna_meta_ensemble_lab_v1.py"
+      - "scripts/research/apply_pit_universe.py"
+      - "tests/research/test_luna_formula_identity.py"
+      - "tests/research/test_luna_monthly_return_guards.py"
+      - "tests/research/test_luna_meta_ensemble_data_contract.py"
+      - ".github/workflows/luna-formula-identity-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  research-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test dependencies
+        run: python -m pip install --upgrade pip && pip install numpy pandas requests
+      - name: Compile LUNA research scripts
+        run: python -m compileall -q scripts/research tests/research
+      - name: Formula identity regression
+        run: python tests/research/test_luna_formula_identity.py
+      - name: Forward-return and look-ahead regressions
+        run: python tests/research/test_luna_monthly_return_guards.py
+      - name: Meta-ensemble data-contract regressions
+        run: python tests/research/test_luna_meta_ensemble_data_contract.py
