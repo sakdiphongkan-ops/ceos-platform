@@ -13,7 +13,30 @@
     "range": [
       "2021-09-20",
       "2026-09-18"
-    ]
+    ],
+    "canonical_fingerprint": {
+      "sha256": "c718f4d28a9657f4715018b7125157acc1853959cffe4ba719f1a5edc6688b69",
+      "method": "canonical_sha256_over_symbol_month_adj_close_and_stored_factor_columns",
+      "row_count": 52485,
+      "canonical_bytes": 11116402,
+      "source_table": "public.luna_research_monthly_price_factors",
+      "raw_csv_sha256_known": false,
+      "factor_builder_version_known": false,
+      "pit_membership_verified": false
+    },
+    "data_quality": {
+      "survivorship_bias_warning": true,
+      "point_in_time_membership_verified": false,
+      "delisted_price_history_complete": false,
+      "maxdd60_non_null_rows": 0,
+      "maxdd60_total_rows": 52485,
+      "excluded_symbols": [
+        "ACAP",
+        "BLISS",
+        "GSTEEL",
+        "WELL"
+      ]
+    }
   },
   "cost_model": {
     "turnover_definition": "1 - overlap(current_top20, prior_month_top20)/20; first formation month turnover = 1",
