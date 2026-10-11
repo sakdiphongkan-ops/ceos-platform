@@ -181,56 +181,56 @@ def main() -> None:
     }
 
     candidates: dict[str, pd.DataFrame] = {}
+    rejected_formulas: list[dict[str, str]] = []
     for formula in formulas:
-        weights = np.zeros(len(FACTORS))
-        for f, w in formula["terms"]:
-            weights[factor_pos[f]] = w
-
         ret = []
         previous: set[str] = set()
-        for m in months:
-            ix = month_arrays[m]
-            chosen = select_formula_positions(
-                ranks=ranks,
-                month_positions=ix,
-                terms=formula["terms"],
-                factor_pos=factor_pos,
-                k=args.k,
-                formula_id=formula["id"],
-                month=m,
-            )
-            require_selected_outcomes(
-                outcomes=y, chosen=chosen, symbols=df["symbol"],
-                formula_id=formula["id"], month=m,
-            )
-            gross = float(np.mean(y[chosen]))
-            current = set(df.loc[chosen, "symbol"].astype(str))
-            turnover = (
-                1.0 if not previous
-                else 1.0 - len(current & previous) / float(args.k)
-            )
-            cost = turnover * args.cost_bps / 10000.0
-            ret.append(
-                (
-                    m,
-                    gross - cost,
-                    gross,
-                    turnover,
-                    cost,
+        try:
+            for m in months:
+                ix = month_arrays[m]
+                chosen = select_formula_positions(
+                    ranks=ranks,
+                    month_positions=ix,
+                    terms=formula["terms"],
+                    factor_pos=factor_pos,
+                    k=args.k,
+                    formula_id=formula["id"],
+                    month=m,
                 )
-            )
-            previous = current
+                require_selected_outcomes(
+                    outcomes=y, chosen=chosen, symbols=df["symbol"],
+                    formula_id=formula["id"], month=m,
+                )
+                gross = float(np.mean(y[chosen]))
+                current = set(df.loc[chosen, "symbol"].astype(str))
+                turnover = (
+                    1.0 if not previous
+                    else 1.0 - len(current & previous) / float(args.k)
+                )
+                cost = turnover * args.cost_bps / 10000.0
+                ret.append((m, gross - cost, gross, turnover, cost))
+                previous = current
+        except SystemExit as exc:
+            reason = str(exc)
+            rejected_formulas.append({"id": formula["id"], "reason": reason})
+            # The locked M1 benchmark is mandatory. If its input outcomes are
+            # incomplete, the entire experiment is invalid rather than silently
+            # comparing candidates to a missing or altered benchmark.
+            if formula["id"] == "M1_REV_K20":
+                raise SystemExit(f"LOCKED_BENCHMARK_INVALID: {reason}") from exc
+            continue
 
         candidates[formula["id"]] = pd.DataFrame(
             ret,
-            columns=[
-                "month_end",
-                "net_return",
-                "gross_return",
-                "turnover",
-                "cost",
-            ],
+            columns=["month_end", "net_return", "gross_return", "turnover", "cost"],
         ).set_index("month_end")
+
+    if "M1_REV_K20" not in candidates:
+        raise SystemExit("LOCKED_BENCHMARK_MISSING")
+    if len(candidates) < 2:
+        raise SystemExit(
+            f"INSUFFICIENT_VALID_FORMULAS: valid={len(candidates)} rejected={len(rejected_formulas)}"
+        )
 
     ledger = []
     for j, month in enumerate(months):
@@ -310,7 +310,10 @@ def main() -> None:
         "dataset_sha256": hashlib.sha256(
             Path(args.input).read_bytes()
         ).hexdigest(),
-        "formula_count": len(formulas),
+        "formula_count_requested": len(formulas),
+        "formula_count_valid": len(candidates),
+        "formula_count_rejected": len(rejected_formulas),
+        "rejected_formula_sample": rejected_formulas[:100],
         "k": args.k,
         "cost_bps": args.cost_bps,
         "lookback_months": args.lookback_months,
