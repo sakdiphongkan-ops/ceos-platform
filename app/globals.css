@@ -915,3 +915,76 @@ body [tabindex]:focus-visible {
   .luna-login-card { padding: 22px; border-radius: 24px; }
   .luna-login-title { font-size: 28px; }
 }
+
+
+/* Mobile Safari: reflow the desktop command bar instead of forcing its three-column min-content width. */
+@media (max-width: 700px) {
+  .luna-shell,
+  .luna-shell * {
+    min-width: 0;
+  }
+  .luna-shell {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: clip;
+  }
+  .topbar {
+    height: auto;
+    min-height: 74px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 12px 15px;
+  }
+  .brand {
+    min-width: 0;
+    max-width: 100%;
+    gap: 8px;
+  }
+  .brand h1 {
+    font-size: 14px;
+    overflow-wrap: anywhere;
+  }
+  .top-nav {
+    display: none;
+  }
+  .top-actions {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-width: 0;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 6px;
+  }
+  .market-status,
+  .session-chip,
+  .timeframe-chip {
+    max-width: 100%;
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .session-chip {
+    flex: 1 1 100%;
+    justify-content: flex-start;
+  }
+  .icon-button {
+    flex: 0 0 auto;
+  }
+  .page {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    padding-left: 15px;
+    padding-right: 15px;
+  }
+  .hero-row,
+  .hero-meta,
+  .summary-grid,
+  .content-grid,
+  .bottom-grid,
+  .live-operating-strip,
+  .research-grid {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
