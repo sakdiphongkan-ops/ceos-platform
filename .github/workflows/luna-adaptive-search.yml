@@ -7,7 +7,9 @@ on:
       - "scripts/research/monthly_walk_forward_adaptive_search.py"
       - "scripts/research/export_supabase_monthly_factors.py"
       - "scripts/research/apply_pit_universe.py"
+      - "scripts/research/verify_pit_membership_manifest.py"
       - "scripts/research/luna_formula_identity.py"
+      - "scripts/research/test_verify_pit_membership_manifest.py"
       - "scripts/research/luna_direct_supabase_1000_v1.py"
       - "tests/research/test_luna_formula_identity.py"
       - "tests/research/test_luna_monthly_return_guards.py"
@@ -43,28 +45,41 @@ jobs:
 
       - name: Run LUNA research regression guards
         run: |
+          python scripts/research/test_verify_pit_membership_manifest.py
           python tests/research/test_luna_formula_identity.py
           python tests/research/test_luna_monthly_return_guards.py
           python tests/research/test_luna_meta_ensemble_data_contract.py
 
-      - name: Validate point-in-time membership input
+      - name: Validate point-in-time membership provenance
         env:
           LUNA_PIT_UNIVERSE_MEMBERSHIP: ${{ vars.LUNA_PIT_UNIVERSE_MEMBERSHIP }}
+          LUNA_PIT_UNIVERSE_MANIFEST: ${{ vars.LUNA_PIT_UNIVERSE_MANIFEST }}
         run: |
           if [ -z "$LUNA_PIT_UNIVERSE_MEMBERSHIP" ]; then
             echo "::error::Missing repository variable LUNA_PIT_UNIVERSE_MEMBERSHIP. Provide a versioned, source-verified historical membership CSV; do not substitute today's constituent list."
+            exit 1
+          fi
+          if [ -z "$LUNA_PIT_UNIVERSE_MANIFEST" ]; then
+            echo "::error::Missing repository variable LUNA_PIT_UNIVERSE_MANIFEST. The membership CSV must have a versioned provenance manifest and matching SHA-256."
             exit 1
           fi
           if [ ! -f "$LUNA_PIT_UNIVERSE_MEMBERSHIP" ]; then
             echo "::error::PIT membership file does not exist at configured path: $LUNA_PIT_UNIVERSE_MEMBERSHIP"
             exit 1
           fi
+          if [ ! -f "$LUNA_PIT_UNIVERSE_MANIFEST" ]; then
+            echo "::error::PIT membership manifest does not exist at configured path: $LUNA_PIT_UNIVERSE_MANIFEST"
+            exit 1
+          fi
+          python scripts/research/verify_pit_membership_manifest.py \
+            --membership "$LUNA_PIT_UNIVERSE_MEMBERSHIP" \
+            --manifest "$LUNA_PIT_UNIVERSE_MANIFEST"
           python - <<'PY'
           import os
           from scripts.research.apply_pit_universe import load_membership
           path = os.environ["LUNA_PIT_UNIVERSE_MEMBERSHIP"]
           rows = load_membership(path)
-          print({"membership_rows": len(rows), "source_file": path})
+          print({"validated_membership_rows": len(rows), "source_file": path})
           PY
 
       - name: Export completed monthly factor dataset
