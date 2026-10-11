@@ -53,7 +53,7 @@ def geo(x: np.ndarray | pd.Series) -> float:
 def add_strict_forward_returns(df: pd.DataFrame) -> pd.DataFrame:
     """Compute a one-calendar-month return; keep missing outcomes visible."""
     out = df.copy()
-    out["month_end"] = pd.to_datetime(out["month_end"]).dt.to_period("M").dt.to_timestamp("MS")
+    out["month_end"] = pd.to_datetime(out["month_end"]).dt.to_period("M").dt.to_timestamp()
     out = out.sort_values(["symbol", "month_end"]).drop_duplicates(
         ["month_end", "symbol"], keep="last"
     ).reset_index(drop=True)
