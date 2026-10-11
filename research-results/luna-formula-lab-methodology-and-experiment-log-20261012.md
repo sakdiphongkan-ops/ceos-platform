@@ -211,15 +211,15 @@ The deterministic runner is now stored at scripts/research/luna_formula_lab_v1.p
 
 The missing-outcome policy is tested explicitly: a selected stock with no next-calendar-month adjusted close remains in the chosen top 20; the month is incomplete and no rank-21 substitute is allowed. Other tests assert the exact saved formula hashes and the arithmetic for turnover costs.
 
-To replay against the current database, first export the monthly factor table with credentials supplied only through environment variables:
+To replay against the current database, first export one exact dataset. Supply credentials only through environment variables, never as source-code literals or command-line arguments. The UUID below is the current snapshot identifier observed in Supabase:
 
-    python scripts/research/export_supabase_monthly_factors.py --url "$SUPABASE_URL" --table luna_research_monthly_price_factors --start 2021-09-01 --end 2026-09-01 --output /tmp/luna_monthly_factors.csv
+    python scripts/research/export_supabase_monthly_factors.py --url "$SUPABASE_URL" --table luna_research_monthly_price_factors --dataset-id 1af83c59-a56f-461f-b03e-f3d04e67e384 --start 2021-09-01 --end 2026-09-01 --output /tmp/luna_monthly_factors.csv
 
-Then run the frozen candidate family:
+The exporter writes both `/tmp/luna_monthly_factors.csv` and `/tmp/luna_monthly_factors.manifest.json`. The sidecar pins the dataset UUID, row/symbol counts, source table, export timestamp and SHA-256 of the exact CSV bytes. The runner requires that sidecar, checks the CSV hash and declared counts, and confirms dataset IDs match before scoring:
 
     python scripts/research/luna_formula_lab_v1.py --input /tmp/luna_monthly_factors.csv --output /tmp/luna-formula-lab-run --cost-bps 20,30,40
 
-The runner is read-only with respect to Supabase; it writes local research artifacts only. A new data snapshot or formula change must produce a new run ID, input hash and formula hash. The runner and formula-registry tests passed in [LUNA formula research integrity CI](https://github.com/sakdiphongkan-ops/ceos-platform/actions/runs/38161715917) on commit 2ef8e2f60b0faed2fabc7fd6199c20f424dcf2fc. That run validated all ten immutable formula JSON records and passed the new regression cases for formula hashes, top-20 preservation under a missing forward outcome, and the 20/30/40-bps cost arithmetic. The newer report-only revision has started another CI cycle.
+This verifies export-file identity; it does **not** independently validate the upstream Yahoo history, adjusted prices or point-in-time membership. The runner writes local artifacts only; it does not mutate Supabase. A new data snapshot or formula change must produce a new run ID, input hash and formula hash. The runner and formula-registry test suite passed on earlier revisions, including formula identity and fail-closed missing-outcome checks. Each subsequent change to the exporter or runner re-triggers the same CI workflow, and its latest result must be checked before merging.
 
 ## 10. Next research queue
 
