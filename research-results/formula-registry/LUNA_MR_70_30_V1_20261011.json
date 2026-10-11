@@ -11,6 +11,23 @@
   "related_missing_formula": "F09542",
   "related_missing_formula_status": "NOT_RECOVERED; no equivalence is claimed",
   "formula_sha256": "b8be7f0fcd9ad0f9d4c7d08becd6971fce8dd5a0821ed18f7bbfe3f678cca866",
+  "hash_payload": {
+    "formula_id": "LUNA_MR_70_30_V1",
+    "version": "1.0.0",
+    "factors": [
+      {"column": "mom1", "weight": -0.7},
+      {"column": "mom3", "weight": -0.3}
+    ],
+    "transform": "percent_rank_ascending_within_month",
+    "score_expression": "-0.70*prank(mom1)-0.30*prank(mom3)",
+    "holdings": 20,
+    "rebalance": "monthly",
+    "weighting": "equal_weight",
+    "tie_break": "symbol ASC",
+    "gross_return": "mean(next_adj_close/current_adj_close - 1)",
+    "turnover": "1 - count(current_holdings intersect previous_month_holdings)/20",
+    "cost_model": "net_return = gross_return - 0.002 * turnover"
+  },
   "definition": {
     "factors": [
       {"column": "mom1", "weight": -0.7},
