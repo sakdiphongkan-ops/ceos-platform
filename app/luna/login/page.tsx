@@ -75,7 +75,7 @@ export default function LunaLoginPage() {
   return (
     <main className="min-h-[calc(100vh-4rem)] min-h-[calc(100dvh-4rem)] bg-[#f7f7f4] px-5 py-12 sm:px-8">
       <div className="mx-auto max-w-md">
-        <Link href="/luna" className="inline-flex items-center gap-2 text-xs text-[#777970]">
+        <Link href="/luna" className="inline-flex min-h-[44px] items-center gap-2 text-xs text-[#5b5e56]">
           <ArrowLeft size={14} /> Back to LUNA
         </Link>
 
@@ -97,14 +97,14 @@ export default function LunaLoginPage() {
               <span className="flex items-center gap-2 rounded-2xl border border-[#dcdcd4] bg-[#fafaf7] px-4">
                 <Mail size={16} className="text-[#85877f]" />
                 <input required type="email" value={email} onChange={(e)=>setEmail(e.target.value)}
-                  className="h-12 w-full bg-transparent text-[16px] outline-none sm:text-sm" autoComplete="email" />
+                  className="h-12 w-full bg-transparent text-[16px] outline-none" autoComplete="email" />
               </span>
             </label>
 
             <label className="block">
               <span className="mb-2 block text-xs font-medium text-[#55574f]">Password</span>
               <input required minLength={6} type="password" value={password} onChange={(e)=>setPassword(e.target.value)}
-                className="h-12 w-full rounded-2xl border border-[#dcdcd4] bg-[#fafaf7] px-4 text-[16px] outline-none focus:border-[#9b9d93] sm:text-sm"
+                className="h-12 w-full rounded-2xl border border-[#dcdcd4] bg-[#fafaf7] px-4 text-[16px] outline-none focus:border-[#9b9d93]"
                 autoComplete={mode === "signin" ? "current-password" : "new-password"} />
             </label>
 
@@ -116,7 +116,7 @@ export default function LunaLoginPage() {
             </button>
           </form>
 
-          <div className="my-5 flex items-center gap-3 text-[11px] text-[#999a93]">
+          <div className="my-5 flex items-center gap-3 text-[11px] text-[#62655d]">
             <span className="h-px flex-1 bg-[#e8e8e1]" /> OR <span className="h-px flex-1 bg-[#e8e8e1]" />
           </div>
 
@@ -126,13 +126,13 @@ export default function LunaLoginPage() {
           </button>
 
           <button onClick={()=>{setMode(mode === "signin" ? "signup" : "signin");setError("");setMessage("");}}
-            className="mt-5 w-full text-xs text-[#66685f] underline underline-offset-4">
+            className="mt-5 flex min-h-[44px] w-full items-center justify-center py-2 text-xs text-[#55574f] underline underline-offset-4">
             {mode === "signin" ? "Create a new LUNA account" : "I already have an account"}
           </button>
 
           <div className="mt-7 flex items-start gap-3 border-t border-[#ecece5] pt-5">
             <ShieldCheck size={17} className="mt-0.5 shrink-0 text-[#6b725b]" />
-            <p className="text-[11px] leading-5 text-[#777970]">
+            <p className="text-[11px] leading-5 text-[#5b5e56]">
               Authentication is separated from trading execution. No live-money permission is granted by signing in.
             </p>
           </div>
