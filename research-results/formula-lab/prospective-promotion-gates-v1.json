@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.0",
+  "protocol_id": "LUNA_FORMULA_PROMOTION_GATES_V1",
+  "created_at": "2026-10-12",
+  "status": "PROPOSED_RESEARCH_POLICY",
+  "purpose": "Prevent formula selection by post-hoc return, inconsistent criteria, or incomplete market data.",
+  "warning": "These are conservative research gates, not a guarantee of future performance and not authorization for live trading.",
+  "mandatory_data_integrity_gates": {
+    "source_verified_point_in_time_membership": true,
+    "pit_membership_coverage_pct_min": 100,
+    "known_delisted_and_terminal_outcomes_covered": true,
+    "factor_builder_version_and_source_input_output_hashes": true,
+    "formula_definition_hash_matches_registry": true,
+    "dataset_hash_and_run_id_required": true,
+    "all_selected_next_period_outcomes_available_pct_min": 100,
+    "duplicate_symbol_month_rows": 0,
+    "lookahead_or_survivorship_warning_unresolved": false,
+    "benchmark_month_coverage_mismatches": 0,
+    "ci_and_registry_validation_must_pass": true
+  },
+  "evaluation_protocol": {
+    "train": "Research and candidate construction only.",
+    "development": "Use for weight and parameter decisions; no final promotion claim.",
+    "oos": "At least 24 non-overlapping monthly OOS observations across at least two sequential walk-forward folds before claiming historical robustness.",
+    "final_holdout": "Freeze formula, data snapshot, cost assumptions and thresholds before opening the final holdout. Never change weights after seeing it.",
+    "prospective_paper": "At least 12 consecutive calendar months in shadow/paper mode after the formula is frozen. Log every signal, excluded stock, selected holding, price, simulated execution, cost and missing-data event.",
+    "posthoc_periods": "Can be described as historical diagnostics only; cannot be used to select or validate a winner."
+  },
+  "minimum_risk_adjusted_promotion_gates": {
+    "minimum_oos_net_cumulative_return_at_40bps_pct": 0,
+    "minimum_positive_oos_folds": 2,
+    "minimum_aggregate_oos_annualized_sharpe_rf0": 0.75,
+    "maximum_aggregate_oos_drawdown_pct_abs": 25,
+    "minimum_block_bootstrap_95pct_lower_bound_mean_monthly_net_return": 0,
+    "bootstrap_method": "Moving-block bootstrap on monthly net returns",
+    "bootstrap_block_length_months": 3,
+    "bootstrap_resamples_min": 10000,
+    "required_cost_sensitivity_bps_per_full_turnover_unit": [20, 30, 40],
+    "cost_model_must_include": [
+      "broker commission and exchange fees",
+      "bid-ask spread / crossing cost",
+      "slippage and market impact",
+      "liquidity and position-size constraints",
+      "corporate actions and terminal/delisting returns"
+    ],
+    "calmar_and_consistency_report_required": true,
+    "benchmark_comparison_required_after_benchmark_identity_is_verified": true,
+    "all_gates_are_conjunctive": true
+  },
+  "decision_states": {
+    "REJECTED": "Fails data integrity, has incomplete outcomes, or fails pre-registered risk-adjusted gates.",
+    "RESEARCH_CANDIDATE": "Theory-driven, reproducible and not yet independently validated.",
+    "PAPER_SHADOW_ONLY": "Data lineage is verified and historical gates pass, but prospective paper validation is still ongoing.",
+    "PAPER_VALIDATED": "All historical gates and the frozen prospective 12-month paper test pass; this is still not live-trading approval.",
+    "LIVE_TRADING_REVIEW_REQUIRED": "Requires a separate authorization, execution-risk review, capital limits, operational monitoring and explicit user approval."
+  },
+  "current_family_assessment": {
+    "run_id": "acd03a11-a233-47e0-9875-500b6ba45e01",
+    "status": "FAILED_AS_COMPLETE_FAMILY",
+    "all_pit_gates_pass": false,
+    "oos_months": 12,
+    "prospective_paper_months": 0,
+    "winner_declared": false,
+    "reason": "PIT/delisted-price lineage is unresolved, five candidates have an incomplete selected outcome in 2026-08, OOS sample is too short, and observed candidates fail or do not convincingly pass the risk-adjusted gates."
+  }
+}
