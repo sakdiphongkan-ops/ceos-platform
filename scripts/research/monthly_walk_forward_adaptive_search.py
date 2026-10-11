@@ -13,10 +13,12 @@ import hashlib
 import json
 from pathlib import Path
 import os
+import uuid
 
 import numpy as np
 import pandas as pd
 from apply_pit_universe import filter_dataframe_by_date
+from luna_formula_identity import build_identity_catalog
 
 FACTORS = [
     "mom1", "mom3", "mom6", "mom12",
@@ -142,7 +144,9 @@ def main() -> None:
     ap.add_argument("--cost-bps", type=float, default=20.0)
     ap.add_argument("--membership", default=os.getenv("LUNA_PIT_UNIVERSE_MEMBERSHIP"))
     ap.add_argument("--k-values", default="5,10,20")
+    ap.add_argument("--run-id", default=os.getenv("LUNA_RESEARCH_RUN_ID"))
     args = ap.parse_args()
+    run_id = str(args.run_id or uuid.uuid4().hex)
 
     if not args.membership:
         raise SystemExit("PIT_UNIVERSE_MEMBERSHIP_REQUIRED")
@@ -176,12 +180,50 @@ def main() -> None:
     for f in FACTORS:
         df[f] = pd.to_numeric(df[f], errors="coerce")
 
+    try:
+        k_values = list(dict.fromkeys(int(value.strip()) for value in args.k_values.split(",") if value.strip()))
+    except ValueError as exc:
+        raise SystemExit("INVALID_K_VALUES: expected comma-separated positive integers") from exc
+    if not k_values or any(k < 1 for k in k_values):
+        raise SystemExit("INVALID_K_VALUES: expected comma-separated positive integers")
     configs = [
-        (f, d, int(k))
+        (f, d, k)
         for f in FACTORS
         for d in ("HIGH", "LOW")
-        for k in args.k_values.split(",")
+        for k in k_values
     ]
+    dataset_sha256 = hashlib.sha256(Path(args.input).read_bytes()).hexdigest()
+    membership_sha256 = hashlib.sha256(Path(args.membership).read_bytes()).hexdigest()
+    formula_definitions = [
+        {
+            "id": f"{factor}:{direction}:K{k}",
+            "terms": [(factor, 1.0 if direction == "HIGH" else -1.0)],
+            "parameters": {"direction": direction, "k": k, "ranking": "factor percentile"},
+        }
+        for factor, direction, k in configs
+    ]
+    formula_identity_catalog = build_identity_catalog(
+        formula_definitions,
+        engine="luna-monthly-walk-forward-adaptive-v1",
+        run_id=run_id,
+        dataset_sha256=dataset_sha256,
+        config={
+            "lookback_months": args.lookback_months,
+            "min_history_months": args.min_history_months,
+            "cost_bps": args.cost_bps,
+            "k_values": k_values,
+            "factor_schema": FACTORS,
+            "pit_membership_sha256": membership_sha256,
+            "snapshot_column": "snapshot_date",
+            "forward_return_rule": "same-symbol next calendar month only; gaps are missing",
+            "portfolio_rule": "equal-weight top-K with turnover-based cost",
+        },
+        code_revision=os.getenv("GITHUB_SHA"),
+    )
+    identity_by_config = {
+        config: item
+        for config, item in zip(configs, formula_identity_catalog["formulas"], strict=True)
+    }
 
     returns = {}
     for factor, direction, k in configs:
@@ -247,6 +289,8 @@ def main() -> None:
                 "factor": chosen[0],
                 "direction": chosen[1],
                 "k": chosen[2],
+                "run_id": run_id,
+                "selected_formula_uid": identity_by_config[chosen]["formula_uid"],
                 "gross_return": realized_gross,
                 "turnover": realized_turnover,
                 "transaction_cost": realized_cost,
@@ -256,6 +300,11 @@ def main() -> None:
 
     ledger = pd.DataFrame(rows)
     ledger.to_csv(out / "adaptive_selection_ledger.csv", index=False)
+    identity_catalog_path = out / "candidate-catalog.v2.json"
+    identity_catalog_path.write_text(
+        json.dumps(formula_identity_catalog, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
 
     result = (
         ledger["realized_return"].dropna()
@@ -269,9 +318,14 @@ def main() -> None:
         "pit_excluded_rows": int(pit_excluded_rows),
         "candidate_count_evaluated": len(returns),
         "pit_active_symbols": int(pit_active_symbols),
-        "dataset_sha256": hashlib.sha256(
-            Path(args.input).read_bytes()
-        ).hexdigest(),
+        "run_id": run_id,
+        "experiment_sha256": formula_identity_catalog["manifest"]["experiment_sha256"],
+        "formula_identity_schema": formula_identity_catalog["identity_schema"],
+        "formula_catalog_v2": str(identity_catalog_path),
+        "formula_catalog_sha256": formula_identity_catalog["catalog_sha256"],
+        "git_commit_sha": os.getenv("GITHUB_SHA"),
+        "dataset_sha256": dataset_sha256,
+        "pit_membership_sha256": membership_sha256,
         "months_traded": int(len(result)),
         "geometric_monthly_return": geo(result),
         "cumulative_return": (
