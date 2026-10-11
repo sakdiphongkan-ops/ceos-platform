@@ -154,7 +154,7 @@ def component_paths(panels,k,cost_bps):
         prev=set()
         for mi,p in enumerate(panels):
             score=np.zeros(len(p["fwd"]),dtype=float)
-            for f,w in terms: score += w*p["ranks"][f]
+            for f,w in terms.items(): score += w*p["ranks"][f]
             order=np.argsort(-score,kind="mergesort")[:k]
             cur=set(p["symbols"][order].tolist())
             overlap=len(cur&prev)
