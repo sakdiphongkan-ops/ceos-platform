@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import copy
-import hashlib
-import json
+import sys
 import unittest
 from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.research.validate_formula_registry import (
     RegistryValidationError,
@@ -60,8 +63,7 @@ def sample_record() -> dict:
 
 class FormulaRegistryValidatorTests(unittest.TestCase):
     def test_accepts_complete_hashed_paper_only_record(self) -> None:
-        record = sample_record()
-        validate_record(record, Path("valid.json"))
+        validate_record(sample_record(), Path("valid.json"))
 
     def test_rejects_tampered_formula_hash(self) -> None:
         record = sample_record()
