@@ -70,7 +70,7 @@ class Candidate:
 CANDIDATES: tuple[Candidate, ...] = (
     Candidate("LUNA_BASE_M1_REV_V1", "1.0.0", (("mom1", -1),),
               "-1.00*prank(mom1)", 2002, "LUNA_BASE_M1_REV_V1_FAM_20261012"),
-    Candidate("LUNA_MR_70_30_V1", "1.0.0", (("mom1", -0.70), ("mom3", -0.30)),
+    Candidate("LUNA_MR_70_30_V1", "1.0.1", (("mom1", -0.70), ("mom3", -0.30)),
               "-0.70*prank(mom1)-0.30*prank(mom3)", 2003, "LUNA_MR_70_30_V1_FAM_20261012"),
     Candidate("LUNA_MR_60_40_V1", "1.0.0", (("mom1", -0.60), ("mom3", -0.40)),
               "-0.60*prank(mom1)-0.40*prank(mom3)", 2004, "LUNA_MR_60_40_V1_FAM_20261012"),
