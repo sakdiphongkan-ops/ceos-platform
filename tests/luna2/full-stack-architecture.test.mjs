@@ -206,3 +206,13 @@ test("4. Accessibility source contract: interactive portfolio rows have keyboard
   assert.match(page, /aria-selected=/);
   assert.match(page, /onKeyDown=\{\(event\)=>\{if\(event\.key==="Enter"\|\|event\.key===" "/);
 });
+
+
+test("LUNA portfolio never invents equity or cash when the verified snapshot is missing", () => {
+  const page = read("app/luna/page.tsx");
+  assert.match(page, /session\?\.initial_capital\?\?30000/);
+  assert.match(page, /hasVerifiedPortfolioSnapshot=sessionSnapshot\?\.cash!=null && sessionSnapshot\?\.market_value!=null/);
+  assert.match(page, /value=\{hasVerifiedPortfolioSnapshot \? `฿\$\{money\(equity\)\}` : "—"\}/);
+  assert.match(page, /value=\{sessionSnapshot\?\.cash!=null \? `฿\$\{money\(cash\)\}` : "—"\}/);
+  assert.doesNotMatch(page, /initial_capital\?\?1000000/);
+});
