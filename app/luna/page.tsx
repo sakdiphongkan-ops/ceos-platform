@@ -439,7 +439,7 @@ export default function LunaPortfolioPage() {
     </header>
     <div className="page">
       <section className="hero-row"><div><div className="eyebrow">INTRADAY CONTROL · OPERATIONAL OVERVIEW</div><h2>LUNA command center</h2><p>See capital, risk, execution and research state at a glance.</p></div><div className="hero-meta"><div className={`data-chip runtime-chip runtime-${runtimeTone.toLowerCase()}`}><span className="data-dot"/>{runtimeDisplayLabel}</div><div className="safe-badge"><ShieldCheck size={15}/> {safetyBadge}</div></div></section>
-      <section className={`runtime-banner runtime-${runtimeTone.toLowerCase()}`} aria-live="polite">
+      <MarketHistoryPanel />\n      <section className={`runtime-banner runtime-${runtimeTone.toLowerCase()}`} aria-live="polite">
         <div className="runtime-banner-icon"><CircleDot size={15}/></div>
         <div className="runtime-banner-copy"><strong>{runtimeDisplayLabel}</strong><span>{runtimeDisplayDetail}</span></div>
         <div className="runtime-banner-meta"><span>API {live ? "CONNECTED" : "UNREACHABLE"}</span><span>BACKEND {backendRuntime?.state??"UNKNOWN"}</span><span>LAST TICK {runtimeAgeMs!=null ? Math.round(runtimeAgeMs)+" ms" : "—"}</span></div>
