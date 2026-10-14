@@ -795,3 +795,46 @@ body [tabindex]:focus-visible {
   outline: 3px solid #536452 !important;
   outline-offset: 2px;
 }
+
+
+/* JEX-inspired, evidence-backed decision trace inside the existing LUNA control room. */
+.luna-shell .agent-reasoning-card{margin:18px 0 22px;padding:22px;border:1px solid var(--line,#e2e5df);border-radius:18px;background:var(--panel,#fff);box-shadow:0 8px 28px rgba(24,32,24,.035)}
+.luna-shell .agent-reasoning-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}
+.luna-shell .agent-reasoning-head h3{margin:5px 0 6px;font-size:19px;letter-spacing:-.025em}
+.luna-shell .agent-reasoning-head p{margin:0;color:var(--muted,#73796f);font-size:12px;line-height:1.5}
+.luna-shell .agent-cycle-status{display:inline-flex;align-items:center;gap:7px;padding:8px 10px;border-radius:999px;white-space:nowrap;font-size:10px;font-weight:800;letter-spacing:.06em}
+.luna-shell .agent-cycle-status.verified{color:#527354;background:#edf4eb}
+.luna-shell .agent-cycle-status.blocked{color:#8d6d42;background:#f6f0e4}
+.luna-shell .agent-reasoning-meta{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:18px 0}
+.luna-shell .agent-reasoning-meta>span{display:flex;flex-direction:column;gap:5px;padding:12px;border:1px solid var(--line,#e2e5df);border-radius:12px;min-width:0}
+.luna-shell .agent-reasoning-meta small,.luna-shell .agent-factor-grid small{color:var(--muted,#73796f);font-size:10px}
+.luna-shell .agent-reasoning-meta strong{font-size:14px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.luna-shell .agent-blockers{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px;padding:11px 13px;border-radius:10px;background:#faf4e9;color:#8a6b3f;font-size:12px}
+.luna-shell .agent-blockers strong{font-weight:800}
+.luna-shell .agent-decision-list{display:flex;flex-direction:column;gap:8px}
+.luna-shell .agent-decision{border:1px solid var(--line,#e2e5df);border-radius:12px;overflow:hidden}
+.luna-shell .agent-decision summary{display:grid;grid-template-columns:minmax(70px,.6fr) auto minmax(90px,.7fr) auto;align-items:center;gap:12px;padding:13px 14px;cursor:pointer;list-style:none}
+.luna-shell .agent-decision summary::-webkit-details-marker{display:none}
+.luna-shell .agent-decision-symbol{font-size:13px;font-weight:800}
+.luna-shell .agent-action{padding:4px 7px;border-radius:6px;font-size:10px;font-weight:800;text-align:center}
+.luna-shell .agent-action.buy{color:#557b57;background:#edf4eb}
+.luna-shell .agent-action.sell{color:#a15f5b;background:#f8eeed}
+.luna-shell .agent-action.hold{color:#8b774f;background:#f6f1e6}
+.luna-shell .agent-decision-time,.luna-shell .agent-expand{color:var(--muted,#73796f);font-size:11px}
+.luna-shell .agent-expand{text-align:right}
+.luna-shell .agent-decision[open] .agent-expand{color:var(--text,#30362f)}
+.luna-shell .agent-decision-body{padding:0 14px 14px}
+.luna-shell .agent-decision-body>p{margin:0 0 12px;font-size:13px;line-height:1.55}
+.luna-shell .agent-factor-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.luna-shell .agent-factor-grid>span{display:flex;flex-direction:column;gap:4px;padding:9px;border-radius:9px;background:var(--surface,#f7f8f5);min-width:0}
+.luna-shell .agent-factor-grid strong{font-size:12px;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.luna-shell .agent-candidate-warning{margin-top:11px;padding-top:10px;border-top:1px solid var(--line,#e2e5df);color:var(--muted,#73796f);font-size:10px;line-height:1.5;letter-spacing:.035em}
+.luna-shell .agent-empty-state{padding:18px;border:1px dashed var(--line,#d5d9d1);border-radius:12px;color:var(--muted,#73796f);font-size:12px;text-align:center}
+@media(max-width:700px){
+  .luna-shell .agent-reasoning-card{padding:15px;margin:14px 0}
+  .luna-shell .agent-reasoning-head{flex-direction:column}
+  .luna-shell .agent-reasoning-meta{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:14px 0}
+  .luna-shell .agent-decision summary{grid-template-columns:minmax(55px,.7fr) auto minmax(75px,.7fr);gap:8px;padding:11px}
+  .luna-shell .agent-expand{grid-column:1/-1;text-align:left}
+  .luna-shell .agent-factor-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
