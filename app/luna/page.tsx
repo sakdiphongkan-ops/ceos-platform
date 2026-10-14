@@ -453,6 +453,7 @@ export default function LunaPortfolioPage() {
         <div><span>LIVE ORDER GATE</span><strong>{liveExecution ? "READY" : "LOCKED"}</strong><small>broker bridge status</small></div>
         <div><span>MARKET FEED</span><strong>{realtimeFresh ? "REALTIME STREAM" : realtimeAgeMs!=null ? "STREAM STALE" : marketFeedLabel}</strong><small>{realtimeFresh ? "public WS · " + marketFeedAge : realtimeAgeMs!=null ? "last UI tick · " + marketFeedAge : marketFeedSource + " · " + marketFeedAge}</small></div><div><span>SHADOW ENGINE</span><strong>{shadow ? `${shadow.buy_candidates??0} BUY · ${shadow.sell_candidates??0} SELL` : "SYNCING"}</strong><small>{shadow?.blockers?.length ? shadow.blockers.join(" · ") : "v1.4 observe · no order"}</small></div><div className="live-operating-note"><ShieldCheck size={15}/><span>{marketPhase==="ACTIVE" ? "Market session active — backend re-checks phase immediately before every execution." : "Market execution is locked at this phase; stale signals are shown as HOLD until a fresh in-session signal arrives."}</span></div>
       </section>
+      <AgentDecisionPanel shadow={shadow} generatedAt={shadowStatus?.generated_at}/>
       {error&&<div className="error-banner"><span>{error}</span><button onClick={load}>Retry</button></div>}
       <section className="summary-grid"><Metric label="Market ticks" value={String(sessionTicks.length)} sub="Latest session feed"/><Metric label="Shadow BUY" value={String(shadow?.buy_candidates??0)} sub="v1.4 candidates"/><Metric label="Shadow SELL" value={String(shadow?.sell_candidates??0)} sub="v1.4 candidates"/><Metric label="Signals" value={String(sessionSignals.length)} sub="Execution signals"/><Metric label="Orders" value={String(sessionOrders.length)} sub="Recorded this session"/>
         <Metric label="Total Equity" value={hasVerifiedPortfolioSnapshot ? `฿${money(equity)}` : "—"} sub={hasVerifiedPortfolioSnapshot ? `Initial ฿${money(initial)}` : "Awaiting verified portfolio snapshot"} positive={hasVerifiedPortfolioSnapshot ? equity>=initial : undefined}/>
@@ -505,6 +506,64 @@ export default function LunaPortfolioPage() {
   </main>
 }
 
+
+
+function AgentDecisionPanel({shadow,generatedAt}:{shadow:NonNullable<ShadowStatus["shadow"]>|undefined;generatedAt?:string}) {
+  const decisions=shadow?.decisions??[];
+  const blockers=shadow?.blockers??[];
+  const lastEvaluated=generatedAt && Number.isFinite(Date.parse(generatedAt))
+    ? new Date(generatedAt).toLocaleTimeString("en-GB",{hour12:false})
+    : "—";
+  const verified=shadow?.orders_allowed===true && blockers.length===0;
+  return <section className="agent-reasoning-card" aria-labelledby="agent-reasoning-title">
+    <div className="agent-reasoning-head">
+      <div>
+        <div className="section-label">LUNA AGENT · DECISION TRACE</div>
+        <h3 id="agent-reasoning-title">What the engine evaluated</h3>
+        <p>Candidate reasoning from the existing shadow-status API. A candidate is not an order or a fill.</p>
+      </div>
+      <div className={"agent-cycle-status "+(verified?"verified":"blocked")}>
+        <CircleDot size={12}/>{verified?"GATES CLEAR":"OBSERVE / BLOCKED"}
+      </div>
+    </div>
+    <div className="agent-reasoning-meta">
+      <span><small>Last evaluation</small><strong>{lastEvaluated}</strong></span>
+      <span><small>BUY candidates</small><strong>{shadow?.buy_candidates??"—"}</strong></span>
+      <span><small>SELL candidates</small><strong>{shadow?.sell_candidates??"—"}</strong></span>
+      <span><small>Orders permitted</small><strong>{shadow?.orders_allowed===true?"YES":"NO / UNKNOWN"}</strong></span>
+    </div>
+    {blockers.length>0&&<div className="agent-blockers"><strong>Blocking reasons</strong><span>{blockers.join(" · ")}</span></div>}
+    <div className="agent-decision-list">
+      {decisions.slice(0,5).map((decision,index)=>{
+        const action=String(decision.candidate_action??"UNKNOWN").toUpperCase();
+        const actionClass=action==="BUY"?"buy":action==="SELL"?"sell":"hold";
+        return <details className="agent-decision" key={decision.symbol+"-"+decision.bar_end+"-"+index}>
+          <summary>
+            <span className="agent-decision-symbol">{decision.symbol}</span>
+            <span className={"agent-action "+actionClass}>{action}</span>
+            <span className="agent-decision-time">{decision.bar_end&&Number.isFinite(Date.parse(decision.bar_end))?new Date(decision.bar_end).toLocaleTimeString("en-GB",{hour12:false}):"time unavailable"}</span>
+            <span className="agent-expand">View reasoning</span>
+          </summary>
+          <div className="agent-decision-body">
+            <p>{decision.reason||"No decision explanation was recorded by the backend."}</p>
+            <div className="agent-factor-grid">
+              <span><small>Close</small><strong>{Number.isFinite(Number(decision.close))?Number(decision.close).toFixed(2):"—"}</strong></span>
+              <span><small>EMA 5</small><strong>{Number.isFinite(Number(decision.ema5))?Number(decision.ema5).toFixed(3):"—"}</strong></span>
+              <span><small>EMA 20</small><strong>{Number.isFinite(Number(decision.ema20))?Number(decision.ema20).toFixed(3):"—"}</strong></span>
+              <span><small>Momentum</small><strong>{Number.isFinite(Number(decision.momentum_1))?Number(decision.momentum_1).toFixed(4):"—"}</strong></span>
+              <span><small>Bars evaluated</small><strong>{decision.bar_count??"—"}</strong></span>
+              <span><small>Feed verified</small><strong>{decision.feed_verified===true?"YES":decision.feed_verified===false?"NO":"UNKNOWN"}</strong></span>
+              <span><small>Execution book</small><strong>{decision.verified_book===true?"VERIFIED":decision.verified_book===false?"UNVERIFIED":"UNKNOWN"}</strong></span>
+              <span><small>Execution state</small><strong>{decision.execution_blocked===true?"BLOCKED":decision.execution_blocked===false?"NOT BLOCKED":"UNKNOWN"}</strong></span>
+            </div>
+            <div className="agent-candidate-warning">RESEARCH CANDIDATE ONLY · This panel does not place orders. Execution must pass backend risk and source-verification gates.</div>
+          </div>
+        </details>;
+      })}
+      {!decisions.length&&<div className="agent-empty-state">No verified decision trace returned by the shadow API. LUNA will not invent a reasoning record.</div>}
+    </div>
+  </section>;
+}
 
 function SystemControlRoom({strategy,asOf}:{strategy:string;asOf:string}) {
   const [state,setState]=useState<ControlRoomState|null>(null);
