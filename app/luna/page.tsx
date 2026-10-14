@@ -317,6 +317,7 @@ export default function LunaPortfolioPage() {
   const updatedAt=feed?.generated_at ? new Date(feed.generated_at).toLocaleTimeString("en-GB",{hour12:false}) : "—";
   const initial=Number(session?.initial_capital??30000);
   const liveMarketValue=positions.reduce((s,p)=>s+p.qty*p.last,0);
+  const hasMarketValue=positions.length>0 || sessionSnapshot?.market_value!=null;
   const marketValue=positions.length ? liveMarketValue : Number(sessionSnapshot?.market_value??0);
   const hasVerifiedPortfolioSnapshot=sessionSnapshot?.cash!=null && sessionSnapshot?.market_value!=null;
   const cash=Number(sessionSnapshot?.cash??0);
@@ -455,11 +456,11 @@ export default function LunaPortfolioPage() {
       {error&&<div className="error-banner"><span>{error}</span><button onClick={load}>Retry</button></div>}
       <section className="summary-grid"><Metric label="Market ticks" value={String(sessionTicks.length)} sub="Latest session feed"/><Metric label="Shadow BUY" value={String(shadow?.buy_candidates??0)} sub="v1.4 candidates"/><Metric label="Shadow SELL" value={String(shadow?.sell_candidates??0)} sub="v1.4 candidates"/><Metric label="Signals" value={String(sessionSignals.length)} sub="Execution signals"/><Metric label="Orders" value={String(sessionOrders.length)} sub="Recorded this session"/>
         <Metric label="Total Equity" value={hasVerifiedPortfolioSnapshot ? `฿${money(equity)}` : "—"} sub={hasVerifiedPortfolioSnapshot ? `Initial ฿${money(initial)}` : "Awaiting verified portfolio snapshot"} positive={hasVerifiedPortfolioSnapshot ? equity>=initial : undefined}/>
-        <Metric label="Market Value" value={`฿${money(marketValue)}`} sub={`${exposure.toFixed(1)}% exposure`}/>
+        <Metric label="Market Value" value={hasMarketValue ? `฿${money(marketValue)}` : "—"} sub={hasMarketValue ? `${exposure.toFixed(1)}% exposure` : "Awaiting verified positions / snapshot"}/>
         <Metric label="Cash" value={sessionSnapshot?.cash!=null ? `฿${money(cash)}` : "—"} sub={sessionSnapshot?.cash!=null ? "Verified snapshot cash" : "Awaiting verified portfolio snapshot"}/>
-        <Metric label="Unrealized P&L" value={signed(unrealized)} sub="Current open positions" positive={unrealized>=0}/>
-        <Metric label="Realized P&L" value={signed(realized)} sub="Closed / executed" positive={realized>=0}/>
-        <Metric label="Fees" value={`-฿${money(fees)}`} sub="Recorded execution cost"/>
+        <Metric label="Unrealized P&L" value={positions.length>0 || sessionSnapshot?.unrealized_pnl!=null ? signed(unrealized) : "—"} sub={positions.length>0 || sessionSnapshot?.unrealized_pnl!=null ? "Current open positions" : "Awaiting verified portfolio data"} positive={positions.length>0 || sessionSnapshot?.unrealized_pnl!=null ? unrealized>=0 : undefined}/>
+        <Metric label="Realized P&L" value={sessionSnapshot?.realized_pnl!=null ? signed(realized) : "—"} sub={sessionSnapshot?.realized_pnl!=null ? "Verified snapshot" : "Awaiting verified portfolio snapshot"} positive={sessionSnapshot?.realized_pnl!=null ? realized>=0 : undefined}/>
+        <Metric label="Fees" value={sessionSnapshot?.fees!=null ? `-฿${money(fees)}` : "—"} sub={sessionSnapshot?.fees!=null ? "Recorded execution cost" : "Awaiting verified portfolio snapshot"}/>
         <LatencyMetric label="Latency p95" metric={feed?.latency?.summary?.end_to_end_ms?.p95} sampleCount={feed?.latency?.summary?.sample_count??0} sub="real executions"/>
         <LatencyMetric label="Latency p99" metric={feed?.latency?.summary?.end_to_end_ms?.p99} sampleCount={feed?.latency?.summary?.sample_count??0} sub={feed?.latency?.summary?.queue_wait_ms?.p95 != null ? "queue p95 " + feed.latency.summary.queue_wait_ms.p95.toFixed(1) + " ms" : "queue p95 not measured"}/>
       </section>
