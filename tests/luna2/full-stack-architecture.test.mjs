@@ -228,3 +228,31 @@ test("LUNA JEX-inspired decision trace uses only backend shadow evidence and nev
   assert.match(page, /decision\.feed_verified===true/);
   assert.match(page, /decision\.verified_book===true/);
 });
+
+
+test("LUNA historical market bars are authenticated, source-verified, bounded, and fail closed", () => {
+  const route = read("app/api/luna/market-bars/route.ts");
+  assert.match(route, /getLunaUser/);
+  assert.match(route, /AUTHENTICATION_REQUIRED/);
+  assert.match(route, /LUNA_GATEWAY_URL/);
+  assert.match(route, /LUNA_GATEWAY_KEY/);
+  assert.match(route, /MAX_REQUESTS_PER_WINDOW/);
+  assert.match(route, /ALLOWED_INTERVALS/);
+  assert.match(route, /MARKET_HISTORY_SOURCE_UNVERIFIED/);
+  assert.match(route, /MARKET_HISTORY_EMPTY_OR_INVALID/);
+  assert.match(route, /normalizeCandle/);
+  assert.match(route, /Cache-Control.*private, no-store/);
+});
+
+test("LUNA JEX-inspired candles render only validated Settrade OHLC and never expose gateway secrets", () => {
+  const page = read("app/luna/page.tsx");
+  const panel = read("app/luna/market-history-panel.tsx");
+  const client = read("lib/luna-client.ts");
+  assert.match(page, /<MarketHistoryPanel \/>/);
+  assert.match(panel, /settrade-open-api-historical/);
+  assert.match(panel, /No chart has been fabricated/);
+  assert.match(panel, /MARKET_HISTORY_OHLC_FORMAT_UNSUPPORTED/);
+  assert.match(client, /\/api\/luna\/market-bars/);
+  assert.doesNotMatch(panel, /LUNA_GATEWAY_KEY/);
+  assert.doesNotMatch(panel, /mockQuotes|synthetic candle|Math\.random/);
+});
