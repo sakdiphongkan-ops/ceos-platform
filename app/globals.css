@@ -838,3 +838,60 @@ body [tabindex]:focus-visible {
   .luna-shell .agent-expand{grid-column:1/-1;text-align:left}
   .luna-shell .agent-factor-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+
+/* Responsive and WCAG AA regression fixes identified by the cross-browser suite. */
+@media(max-width:640px){
+  .luna-shell .topbar{
+    display:flex;flex-direction:column;align-items:stretch;justify-content:center;
+    width:100%;height:auto;min-height:74px;gap:10px;padding:12px 15px;
+  }
+  .luna-shell .brand{min-width:0;width:100%}
+  .luna-shell .top-actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;width:100%;min-width:0;gap:7px}
+  .luna-shell .session-chip{max-width:100%;min-width:0;white-space:normal;overflow-wrap:anywhere}
+  .luna-shell .runtime-banner{max-width:100%;min-width:0;flex-wrap:wrap}
+  .luna-shell .runtime-banner-copy{min-width:0;overflow-wrap:anywhere}
+  .luna-shell .runtime-banner-meta{max-width:100%;white-space:normal;overflow-wrap:anywhere}
+  .luna-shell .page,.luna-shell .content-grid,.luna-shell .main-card,.luna-shell .side-card,.luna-shell .control-room-card{min-width:0;max-width:100%}
+}
+/* Text roles use dark, neutral ink on the light-luxury palette; retain the muted visual hierarchy without failing contrast. */
+.luna-shell .tabs span{color:#4f5a51!important}
+.luna-shell .system-status.loading{color:#4f5b51!important}
+.luna-shell .muted,
+.luna-shell .metric-sub,
+.luna-shell .card-subtitle,
+.luna-shell .control-room-sub,
+.luna-shell .symbol-cell span,
+.luna-shell .section-label,
+.luna-shell .control-list span,
+.luna-shell .detail-item span,
+.luna-shell .timeline-item span,
+.luna-shell .empty-detail span,
+.luna-shell .coverage-strip span,
+.luna-shell .coverage-strip small,
+.luna-shell .control-stat span,
+.luna-shell .control-stat small,
+.luna-shell .forecast-meta,
+.luna-shell .audit-kpis span,
+.luna-shell .audit-note,
+.luna-shell .live-operating-strip span,
+.luna-shell .live-operating-strip small,
+.luna-shell .hash-line,
+.luna-shell .research-grid strong,
+.luna-shell .research-source span,
+.luna-shell .gate-row,
+.luna-shell .weight-cell span{color:#566156!important}
+.luna-shell .error-banner,
+.luna-shell .error-banner button{color:#873b35!important}
+.luna-shell .agent-cycle-status.blocked{color:#765328!important}
+.luna-shell .agent-blockers{color:#765328}
+.luna-shell .agent-action.hold{color:#745328}
+.luna-shell .signal-badge.hold,
+.luna-shell .status-badge.partial,
+.luna-shell .system-status.live_ready,
+.luna-shell .gate-badge.fail{color:#745328}
+.luna-shell .signal-badge.sell,
+.luna-shell .side-badge.sell,
+.luna-shell .status-badge.rejected,
+.luna-shell .negative{color:#923d37}
+.luna-shell .research-source span{letter-spacing:.04em}
