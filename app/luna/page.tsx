@@ -10,6 +10,7 @@ import {
   bangkokClock, bangkokDate, isRealtimeFresh, LUNA_PUBLIC_MARKET_STREAM, LUNA_STRATEGY,
   marketPhaseHint, marketPhaseLabel, TIMEFRAME, uiMarketPhase, type RuntimeState,
 } from "../../lib/luna-runtime";
+import MarketHistoryPanel from "./market-history-panel";
 import {
   connectRealtimeMarketStream, fetchControlRoom, fetchPortfolioState, fetchShadowStatus,
   fetchTournament100, CLIENT_DEFAULTS, type ControlRoomState, type LunaFeed, type RealtimeQuote,
