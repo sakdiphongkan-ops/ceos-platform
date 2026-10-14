@@ -1,0 +1,15 @@
+create table if not exists public.luna_erp_agents (agent_key text primary key, display_name text not null, department text not null, role_description text not null, enabled boolean not null default true, health_status text not null default 'NOT_CONNECTED' check (health_status in ('HEALTHY','DEGRADED','NOT_CONNECTED','DISABLED')), policy_version text not null default 'v1', last_heartbeat_at timestamptz, created_at timestamptz not null default now());
+
+create table if not exists public.luna_erp_work_orders (id uuid primary key default gen_random_uuid(), idempotency_key text not null unique, title text not null, description text not null, work_type text not null, status text not null default 'QUEUED' check (status in ('DRAFT','QUEUED','RUNNING','BLOCKED','VALIDATION','RISK_REVIEW','PAPER_TRIAL','COMPLETED','FAILED','CANCELLED')), priority smallint not null default 3 check (priority between 1 and 5), owner_agent_key text references public.luna_erp_agents(agent_key), dependency_ids uuid[] not null default '{}', acceptance_criteria jsonb not null default '[]'::jsonb, evidence jsonb not null default '[]'::jsonb, blocker_code text, blocker_detail text, risk_level text not null default 'LOW' check (risk_level in ('LOW','MEDIUM','HIGH','CRITICAL')), paper_only boolean not null default true check (paper_only = true), requires_human_gate boolean not null default false, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+
+create table if not exists public.luna_erp_approvals (id uuid primary key default gen_random_uuid(), work_order_id uuid not null references public.luna_erp_work_orders(id) on delete restrict, gate_type text not null check (gate_type in ('PRODUCTION_PUBLISH','DESTRUCTIVE_DATA_CHANGE','SECRET_ACCESS','POLICY_CHANGE','LIVE_TRADING')), status text not null default 'PENDING' check (status in ('PENDING','APPROVED','REJECTED','EXPIRED')), requested_by text not null, decided_by text, rationale text, created_at timestamptz not null default now(), decided_at timestamptz, unique (work_order_id, gate_type));
+
+create table if not exists public.luna_erp_audit_events (id bigint generated always as identity primary key, event_id uuid not null default gen_random_uuid() unique, work_order_id uuid references public.luna_erp_work_orders(id) on delete restrict, actor_type text not null check (actor_type in ('SYSTEM','AGENT','HUMAN')), actor_key text not null, event_type text not null, previous_status text, next_status text, details jsonb not null default '{}'::jsonb, correlation_id uuid, idempotency_key text, created_at timestamptz not null default now());
+
+create index if not exists luna_erp_work_orders_status_created_idx on public.luna_erp_work_orders(status, created_at desc);
+create index if not exists luna_erp_audit_work_order_idx on public.luna_erp_audit_events(work_order_id, created_at desc);
+
+alter table public.luna_erp_agents enable row level security;
+alter table public.luna_erp_work_orders enable row level security;
+alter table public.luna_erp_approvals enable row level security;
+alter table public.luna_erp_audit_events enable row level security;
