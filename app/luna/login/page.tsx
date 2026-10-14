@@ -97,14 +97,14 @@ export default function LunaLoginPage() {
               <span className="flex items-center gap-2 rounded-2xl border border-[#dcdcd4] bg-[#fafaf7] px-4">
                 <Mail size={16} className="text-[#85877f]" />
                 <input required type="email" value={email} onChange={(e)=>setEmail(e.target.value)}
-                  className="h-12 w-full bg-transparent text-[16px] outline-none sm:text-sm" autoComplete="email" />
+                  className="h-12 w-full bg-transparent text-base outline-none" autoComplete="email" />
               </span>
             </label>
 
             <label className="block">
               <span className="mb-2 block text-xs font-medium text-[#55574f]">Password</span>
               <input required minLength={6} type="password" value={password} onChange={(e)=>setPassword(e.target.value)}
-                className="h-12 w-full rounded-2xl border border-[#dcdcd4] bg-[#fafaf7] px-4 text-[16px] outline-none focus:border-[#9b9d93] sm:text-sm"
+                className="h-12 w-full rounded-2xl border border-[#dcdcd4] bg-[#fafaf7] px-4 text-base outline-none focus:border-[#9b9d93]"
                 autoComplete={mode === "signin" ? "current-password" : "new-password"} />
             </label>
 
@@ -126,7 +126,7 @@ export default function LunaLoginPage() {
           </button>
 
           <button onClick={()=>{setMode(mode === "signin" ? "signup" : "signin");setError("");setMessage("");}}
-            className="mt-5 w-full text-xs text-[#66685f] underline underline-offset-4">
+            className="mt-5 min-h-11 w-full rounded-xl px-3 py-2 text-sm text-[#55574f] underline underline-offset-4">
             {mode === "signin" ? "Create a new LUNA account" : "I already have an account"}
           </button>
 
