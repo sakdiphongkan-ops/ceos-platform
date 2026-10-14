@@ -1,8 +1,14 @@
 "use client";
 
 function safeMessage(value: unknown): string {
-  if (value instanceof Error) return value.message.slice(0, 500);
-  return String(value ?? "Unknown client error").slice(0, 500);
+  const raw = value instanceof Error ? value.message : String(value ?? "Unknown client error");
+  return raw
+    .replace(/https?:\\/\\/\\S+/gi, "[url-redacted]")
+    .replace(/(bearer\\s+)[a-z0-9._-]+/gi, "$1[redacted]")
+    .replace(/(access[_-]?token|refresh[_-]?token|password|secret|api[_-]?key|authorization|cookie|session(?:[_-]?id)?)\\s*[:=]\\s*[^\\s,;]+/gi, "$1=[redacted]")
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi, "[email-redacted]")
+    .replace(/(?:\\+?\\d[\\d\\s().-]{7,}\\d)/g, "[phone-redacted]")
+    .slice(0, 500);
 }
 
 export async function reportClientError(
@@ -39,9 +45,11 @@ export function registerClientObservability(): () => void {
 
   window.addEventListener("error", onError);
   window.addEventListener("unhandledrejection", onUnhandledRejection);
+  (window as Window & { __lunaObservabilityReady?: boolean }).__lunaObservabilityReady = true;
 
   return () => {
     window.removeEventListener("error", onError);
     window.removeEventListener("unhandledrejection", onUnhandledRejection);
+    (window as Window & { __lunaObservabilityReady?: boolean }).__lunaObservabilityReady = false;
   };
 }
