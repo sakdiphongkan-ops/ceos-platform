@@ -60,3 +60,16 @@ LUNA's current client contract does not expose a verified historical OHLC/candle
 
 - Static regression coverage asserts the decision trace reads from the existing shadow API, shows an empty state if no decision evidence is returned, and does not imply a fill.
 - The existing branch's full browser compatibility CI must still be green before merge. Build/typecheck passing alone is not release approval.
+## Verified historical chart integration
+
+The existing `luna-execution-gateway` already exposes an authenticated `/historical-candles/{symbol}` endpoint backed by Settrade Open API. The existing UI did not consume that endpoint. The branch now adds an authenticated same-origin proxy at `/api/luna/market-bars` and a candlestick panel inside the existing `/luna` page.
+
+- The browser never receives the gateway key. The proxy reads server-only `LUNA_GATEWAY_URL` and `LUNA_GATEWAY_KEY`; do not prefix either variable with `NEXT_PUBLIC_`.
+- The proxy requires an authenticated LUNA user, validates symbol syntax, allowed interval, requested row limit, gateway response source/symbol/timeframe, candle timestamps and OHLC invariants, applies a per-user request limit, and returns `private, no-store` responses.
+- The chart uses only normalized rows returned by the proxy. If environment configuration, authentication, source validation or candle normalization fails, it shows an explicit unavailable state and does not draw substitute prices/candles.
+- The chart currently offers the short liquid SET symbol list and 1m / 5m / 15m / 1h timeframes. These are selectors, not claims that all symbols or intervals are available for every SETTRADE account.
+- Deployment remains gated: the proxy's server-only gateway variables must be configured in the Vercel environment, and the actual `/historical-candles` payload format must pass the running CI/browser checks before any production publish.
+
+### Historical data limitations
+
+This panel is historical OHLC, not a guaranteed streaming last-trade chart. The existing websocket quote stream remains auxiliary and should not be used to invent historical candle open/high/low/close values. Daily performance and since-start summary still require a reconciled paper ledger and will remain unavailable rather than inferred.
