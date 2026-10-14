@@ -1,7 +1,7 @@
 # LUNA Paper Trading Control Room — Implementation Contract
 
 ## Goal
-Build a Jex-inspired operational control room for Thai equities (SET/mai), while keeping the existing LUNA production app unchanged. This is not a clone and not a live-broker trading system.
+Extend the existing LUNA `/luna` control room for Thai equities (SET/mai). Reuse its current UI, API client, market stream and research endpoints; do not create a parallel dashboard. This is not a clone and not a live-broker trading system.
 
 ## Screen areas
 1. Market — SET/mai and watchlist, 15-minute candles, source, timestamp, staleness and feed health.
@@ -38,4 +38,4 @@ The migration at supabase/migrations/202610150001_luna_erp_core.sql creates work
 - A failed gate creates a blocker and audit event rather than silently proceeding.
 
 ## Status
-This branch is an implementation foundation only. The Lovable project is currently blocked by exhausted workspace credits; this document and migration do not imply a completed UI or connected market feed. Do not merge or apply to production until reviewed and tested.
+This branch extends the existing `/luna` page and adds an ERP control-plane schema contract. It does not imply that the new ERP tables have been applied or wired to server routes. Do not merge or apply to production until reviewed, built and tested.
