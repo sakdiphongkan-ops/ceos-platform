@@ -216,3 +216,15 @@ test("LUNA portfolio never invents equity or cash when the verified snapshot is 
   assert.match(page, /value=\{sessionSnapshot\?\.cash!=null \? `฿\$\{money\(cash\)\}` : "—"\}/);
   assert.doesNotMatch(page, /initial_capital\?\?1000000/);
 });
+
+
+test("LUNA JEX-inspired decision trace uses only backend shadow evidence and never implies a fill", () => {
+  const page = read("app/luna/page.tsx");
+  assert.match(page, /<AgentDecisionPanel shadow=\{shadow\} generatedAt=\{shadowStatus\?\.generated_at\}\/>/);
+  assert.match(page, /const decisions=shadow\?\.decisions\?\?\[\]/);
+  assert.match(page, /No verified decision trace returned by the shadow API/);
+  assert.match(page, /A candidate is not an order or a fill/);
+  assert.match(page, /RESEARCH CANDIDATE ONLY/);
+  assert.match(page, /decision\.feed_verified===true/);
+  assert.match(page, /decision\.verified_book===true/);
+});
