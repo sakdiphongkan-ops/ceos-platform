@@ -39,3 +39,24 @@ The migration at supabase/migrations/202610150001_luna_erp_core.sql creates work
 
 ## Status
 This branch extends the existing `/luna` page and adds an ERP control-plane schema contract. It does not imply that the new ERP tables have been applied or wired to server routes. Do not merge or apply to production until reviewed, built and tested.
+
+## Public reference review: JEX
+
+Reviewed the public root page at https://jex.probably-anything.com/ on 2026-10-14 using read-only browser inspection. No authentication, form submission, private API access, or state-changing interaction was used. The public page presents a single dashboard with XAU/USD and BTC/USD selectors, a market card and full candlestick chart, account balance/P&L with Today / 7 days / Since start filters, an expandable Jev reasoning view, recent open/closed trades, lifetime win/loss and drawdown summary, and a responsive mobile layout. Live figures observed on that site are volatile and must never be copied into LUNA.
+
+### LUNA adaptation (same existing /luna route)
+
+- Keep LUNA's Thai-equity universe (SET/mai), current API clients, session/ledger tables, and existing /luna route. Do not create a parallel dashboard or copy JEX assets/source.
+- Adapt the expandable bot-reasoning interaction to LUNA's existing shadow_status response. The new AgentDecisionPanel renders only returned decisions, source/book verification flags, factor values, evaluation time, blockers and candidate action. It labels each item as a research candidate, never as an executed order or fill.
+- Keep portfolio values sourced from the verified LUNA snapshot and recorded fills; missing values remain an em dash. JEX balances, prices, P/L, trades and performance values are not LUNA data.
+- Keep the existing order/trade tables, runtime health, paper/live gate and audit controls. The agent trace is inserted into the existing control room rather than creating a second workspace.
+- Match the reference's compact, expandable, mobile-responsive interaction pattern with local LUNA styles. Do not copy its branding or claim that LUNA has JEX's runtime behavior.
+
+### Remaining integration gate
+
+LUNA's current client contract does not expose a verified historical OHLC/candlestick endpoint in this page. Do not draw synthetic candles or derive a fake 1m/5m/15m/1h history from isolated quote updates. Before adding the JEX-like full chart and performance-period selector, identify or implement a server-side endpoint that returns real SET/mai OHLC bars with source, event timestamp, timeframe, stale-data handling and universe/symbol validation. The lifetime summary also needs a reconciled ledger query for closed trades, win rate, net P&L and maximum drawdown; do not infer these from a partial current-session order list.
+
+### Validation
+
+- Static regression coverage asserts the decision trace reads from the existing shadow API, shows an empty state if no decision evidence is returned, and does not imply a fill.
+- The existing branch's full browser compatibility CI must still be green before merge. Build/typecheck passing alone is not release approval.
