@@ -315,11 +315,12 @@ export default function LunaPortfolioPage() {
 
   const filterCount=(signalFilter!=="ALL"?1:0)+(profitOnly?1:0);
   const updatedAt=feed?.generated_at ? new Date(feed.generated_at).toLocaleTimeString("en-GB",{hour12:false}) : "—";
-  const initial=Number(session?.initial_capital??1000000);
+  const initial=Number(session?.initial_capital??30000);
   const liveMarketValue=positions.reduce((s,p)=>s+p.qty*p.last,0);
   const marketValue=positions.length ? liveMarketValue : Number(sessionSnapshot?.market_value??0);
-  const cash=Number(sessionSnapshot?.cash??Math.max(0,initial-marketValue));
-  const equity=cash+marketValue;
+  const hasVerifiedPortfolioSnapshot=sessionSnapshot?.cash!=null && sessionSnapshot?.market_value!=null;
+  const cash=Number(sessionSnapshot?.cash??0);
+  const equity=hasVerifiedPortfolioSnapshot ? cash+marketValue : 0;
   const liveUnrealized=positions.reduce((s,p)=>s+p.qty*(p.last-p.avgCost),0);
   const unrealized=positions.length ? liveUnrealized : Number(sessionSnapshot?.unrealized_pnl??0);
   const realized=Number(sessionSnapshot?.realized_pnl??positions.reduce((s,p)=>s+p.realized,0));
@@ -453,9 +454,9 @@ export default function LunaPortfolioPage() {
       </section>
       {error&&<div className="error-banner"><span>{error}</span><button onClick={load}>Retry</button></div>}
       <section className="summary-grid"><Metric label="Market ticks" value={String(sessionTicks.length)} sub="Latest session feed"/><Metric label="Shadow BUY" value={String(shadow?.buy_candidates??0)} sub="v1.4 candidates"/><Metric label="Shadow SELL" value={String(shadow?.sell_candidates??0)} sub="v1.4 candidates"/><Metric label="Signals" value={String(sessionSignals.length)} sub="Execution signals"/><Metric label="Orders" value={String(sessionOrders.length)} sub="Recorded this session"/>
-        <Metric label="Total Equity" value={`฿${money(equity)}`} sub={`Initial ฿${money(initial)}`} positive={equity>=initial}/>
+        <Metric label="Total Equity" value={hasVerifiedPortfolioSnapshot ? `฿${money(equity)}` : "—"} sub={hasVerifiedPortfolioSnapshot ? `Initial ฿${money(initial)}` : "Awaiting verified portfolio snapshot"} positive={hasVerifiedPortfolioSnapshot ? equity>=initial : undefined}/>
         <Metric label="Market Value" value={`฿${money(marketValue)}`} sub={`${exposure.toFixed(1)}% exposure`}/>
-        <Metric label="Cash" value={`฿${money(cash)}`} sub="Available cash"/>
+        <Metric label="Cash" value={sessionSnapshot?.cash!=null ? `฿${money(cash)}` : "—"} sub={sessionSnapshot?.cash!=null ? "Verified snapshot cash" : "Awaiting verified portfolio snapshot"}/>
         <Metric label="Unrealized P&L" value={signed(unrealized)} sub="Current open positions" positive={unrealized>=0}/>
         <Metric label="Realized P&L" value={signed(realized)} sub="Closed / executed" positive={realized>=0}/>
         <Metric label="Fees" value={`-฿${money(fees)}`} sub="Recorded execution cost"/>
