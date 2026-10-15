@@ -730,30 +730,17 @@ function SystemControlRoom({strategy,asOf}:{strategy:string;asOf:string}) {
   const [error,setError]=useState("");
 
   const refresh=useCallback(async()=>{
-    const marketPhaseNow=uiMarketPhase(new Date());
-    if(marketPhaseNow==="CLOSED"){
-      setError("");
-      setState({
-        ok:true,
-        generated_at:new Date().toISOString(),
-        as_of_date:asOf,
-        system_test:{overall_status:"DEFERRED",checks:[{name:"MARKET_CLOSED",pass:true}],summary:{integrity:true}},
-        readiness:{month_closed:false,execution_mode:"paper",paper_execution_permitted:false,live_execution_permitted:false,kill_switch:false,armed:false,ceos_feed_rows:0,ceos_allowed_rows:0},
-        fast:{forecast_rank:[]},
-        final:{summary:{rows:0,paper_sim_ready:0,live_allowed:0,top20:[]},rows:[]},
-        paper_audit:{preview_rows:0,incomplete_month_blocked_rows:0,orders_total:0,live_orders_created:false,month_closed:false}
-      });
-      setLoading(false);
-      return;
-    }
-    setLoading(true); setError("");
+    setLoading(true);
+    setError("");
     try{
       const data=await fetchControlRoom(strategy);
       if(!data.ok) throw new Error("LUNA control API returned partial data");
       setState(data);
-    }catch(e){setError(e instanceof Error?e.message:"Unable to load LUNA control state");}
-    finally{setLoading(false);}
-  },[strategy,asOf]);
+    }catch(e){
+      setState(null);
+      setError(e instanceof Error?e.message:"Unable to load LUNA control state");
+    }finally{setLoading(false);}
+  },[strategy]);;
 
   useEffect(()=>{refresh(); const id=setInterval(refresh,15000); return()=>clearInterval(id);},[refresh]);
 
@@ -784,12 +771,12 @@ function SystemControlRoom({strategy,asOf}:{strategy:string;asOf:string}) {
     {error && <div className="error-banner compact"><span>{error}</span><button onClick={refresh}>Retry</button></div>}
 
     <div className="control-grid">
-      <div className="control-stat"><span>SELF-TEST</span><strong>{loading?"—":`${passed}/${total}`}</strong><small>{test?.summary?.integrity?"Integrity PASS":"ตรวจพบ gate ที่ยังไม่พร้อม"}</small></div>
-      <div className="control-stat"><span>MONTH CLOSE</span><strong>{readiness.month_closed?"CLOSED":"OPEN"}</strong><small>{verifiedAsOf}</small></div>
-      <div className="control-stat"><span>CEOS FEED</span><strong>{readiness.ceos_feed_rows??0}</strong><small>{readiness.ceos_allowed_rows??0} allowed</small></div>
+      <div className="control-stat"><span>FEED READINESS</span><strong>{loading?"—":total?`${passed}/${total}`:"—"}</strong><small>{test?.summary?.integrity?"Feed-backed gates PASS":"หนึ่งรายการขึ้นไปยัง blocked หรือไม่มีข้อมูล"}</small></div>
+      <div className="control-stat"><span>MONTH CLOSE</span><strong>{readiness.month_closed==null?"—":readiness.month_closed?"CLOSED":"OPEN"}</strong><small>{readiness.month_closed==null?"Not provided by feed":verifiedAsOf}</small></div>
+      <div className="control-stat"><span>CEOS FEED</span><strong>{readiness.ceos_feed_rows==null?"—":readiness.ceos_feed_rows}</strong><small>{readiness.ceos_allowed_rows==null?"Allowed count unavailable":`${readiness.ceos_allowed_rows} allowed`}</small></div>
       <div className="control-stat"><span>PAPER</span><strong>{readiness.paper_execution_permitted?"READY":"LOCKED"}</strong><small>{readiness.execution_mode??"—"}</small></div>
       <div className="control-stat"><span>LIVE</span><strong>{readiness.live_execution_permitted?"READY":"LOCKED"}</strong><small>live execution gate</small></div>
-      <div className="control-stat"><span>KILL SWITCH</span><strong>{readiness.kill_switch?"ON":"OFF"}</strong><small>{readiness.armed?"ARMED":"DISARMED"}</small></div>
+      <div className="control-stat"><span>KILL SWITCH</span><strong>{readiness.kill_switch==null?"—":readiness.kill_switch?"ON":"OFF"}</strong><small>{readiness.armed==null?"Armed state unavailable":readiness.armed?"ARMED":"DISARMED"}</small></div>
     </div>
 
     <div className="control-columns">
@@ -803,9 +790,9 @@ function SystemControlRoom({strategy,asOf}:{strategy:string;asOf:string}) {
       <div className="control-panel">
         <div className="mini-title"><Layers3 size={15}/> Forecast / Final Authority</div>
         <div className="forecast-meta">
-          <span>Top 20 fast rank</span><strong>{fastRows.length}</strong>
-          <span>Final rows</span><strong>{finalSummary.rows??0}</strong>
-          <span>Paper-ready rows</span><strong>{finalSummary.paper_sim_ready??0}</strong>
+          <span>Top 20 fast rank</span><strong>{fastRows.length||!state?.fast?"—":fastRows.length}</strong>
+          <span>Final rows</span><strong>{finalSummary.rows==null?"—":finalSummary.rows}</strong>
+          <span>Paper-ready rows</span><strong>{finalSummary.paper_sim_ready==null?"—":finalSummary.paper_sim_ready}</strong>
         </div>
         <div className="ladder-row">
           {[10,5,3,1,0].map((n:number)=><span key={n} className="stage-chip ready">T-{n}</span>)}
@@ -818,12 +805,12 @@ function SystemControlRoom({strategy,asOf}:{strategy:string;asOf:string}) {
       <div className="control-panel">
         <div className="mini-title"><History size={15}/> Paper audit</div>
         <div className="audit-kpis">
-          <div><span>Preview</span><strong>{audit.preview_rows??0}</strong></div>
-          <div><span>Incomplete month blocked</span><strong>{audit.incomplete_month_blocked_rows??0}</strong></div>
-          <div><span>Orders created</span><strong>{audit.orders_total??0}</strong></div>
-          <div><span>Live orders</span><strong>{audit.live_orders_created?"YES":"NO"}</strong></div>
+          <div><span>Preview</span><strong>{audit.preview_rows==null?"—":audit.preview_rows}</strong></div>
+          <div><span>Incomplete month blocked</span><strong>{audit.incomplete_month_blocked_rows==null?"—":audit.incomplete_month_blocked_rows}</strong></div>
+          <div><span>Orders created</span><strong>{audit.orders_total==null?"—":audit.orders_total}</strong></div>
+          <div><span>Live orders</span><strong>{audit.live_orders_created==null?"—":audit.live_orders_created?"YES":"NO"}</strong></div>
         </div>
-        <div className="audit-note">Snapshot-backed · {audit.month_closed?"closed month":"current month locked"}</div>
+        <div className="audit-note">Snapshot-backed · {audit.month_closed==null?"Month-close status not provided":audit.month_closed?"closed month":"current month not closed"}</div>
       </div>
     </div>
   </section>;
