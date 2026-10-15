@@ -442,9 +442,51 @@ export async function fetchShadowStatus(asOf: string): Promise<ShadowStatus> {
 }
 
 export async function fetchControlRoom(strategy = LUNA_STRATEGY): Promise<ControlRoomState> {
-  return fetchJson<ControlRoomState>(
-    buildLunaApiUrl("latest_control", { strategy }),
+  // The deployed Edge Function exposes "feed", not a separate "latest_control" view.
+  // Derive control-room status only from fields the authoritative feed actually returns.
+  const feed = await fetchJson<LunaFeed>(
+    buildLunaApiUrl("feed", { strategy }),
   );
+  const readiness = feed.system_readiness;
+  const paper = feed.paper_live;
+  const checks: Array<{ name: string; pass: boolean }> = [
+    { name: "PAPER_ONLY", pass: readiness?.paper_only === true && readiness?.real_money_execution_enabled === false },
+    { name: "RUNTIME_HEARTBEAT_FRESH", pass: paper?.runtime_fresh === true },
+    { name: "VERIFIED_EXECUTION_FEED", pass: readiness?.market_feed_verified_for_execution === true },
+    { name: "LIVE_ORDER_GATE_LOCKED", pass: readiness?.real_money_execution_enabled === false },
+  ];
+  const integrity = checks.every((check) => check.pass);
+  const ordersTotal = paper?.orders_total ?? null;
+
+  return {
+    ok: feed.ok,
+    generated_at: feed.generated_at,
+    as_of_date: feed.as_of_date,
+    system_test: {
+      overall_status: integrity ? "READY_FOR_PAPER_ONLY" : "BLOCKED",
+      checks,
+      summary: { integrity },
+    },
+    readiness: {
+      month_closed: null,
+      execution_mode: "PAPER ONLY",
+      paper_execution_permitted: readiness?.status === "READY_FOR_PAPER_ONLY",
+      live_execution_permitted: false,
+      kill_switch: feed.execution_control?.kill_switch,
+      armed: feed.execution_control?.armed,
+      ceos_feed_rows: null,
+      ceos_allowed_rows: null,
+    },
+    fast: { forecast_rank: [] },
+    final: { summary: { rows: null, paper_sim_ready: null, live_allowed: null }, rows: [] },
+    paper_audit: {
+      preview_rows: null,
+      incomplete_month_blocked_rows: null,
+      orders_total: ordersTotal,
+      live_orders_created: false,
+      month_closed: null,
+    },
+  };
 }
 
 export async function fetchTournament100(
