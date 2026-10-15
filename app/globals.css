@@ -947,3 +947,12 @@ body [tabindex]:focus-visible {
   .luna-shell .market-history-empty>div{flex-basis:calc(100% - 35px)}
   .luna-shell .market-history-empty button{margin-left:30px}
 }
+
+
+/* Final contrast findings from the automated WCAG scan. */
+.luna-shell .top-symbols>span{color:#566156!important}
+.luna-login-page a,
+.luna-login-page p{color:#55574f!important}
+.luna-login-page [class*="text-[#777970]"],
+.luna-login-page [class*="text-[#999a93]"],
+.luna-login-page [class*="text-[#85877f]"]{color:#565b52!important}
