@@ -62,7 +62,7 @@ async function authorized(req: Request) {
   const token = req.headers.get("x-luna-agent") ?? "";
   if (!token) return false;
   const hash = await sha256(token);
-  const { data, error } = await db.from("private.luna_agent_credentials")
+  const { data, error } = await db.from("luna_agent_credentials")
     .select("credential_id")
     .eq("sha256_hash", hash)
     .eq("enabled", true)
