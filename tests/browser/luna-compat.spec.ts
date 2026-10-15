@@ -97,3 +97,95 @@ test("12. Performance smoke: collect LCP and CLS for the control room", async ({
   expect(vitals.lcp == null || vitals.lcp < 4000).toBeTruthy();
   expect(vitals.cls == null || vitals.cls < 0.25).toBeTruthy();
 });
+
+
+test("historical chart fails closed and never lets a slow old-symbol response overwrite the current selection", async ({ page }) => {
+  const requests: string[] = [];
+  await page.route("**/api/luna/market-bars?*", async (route) => {
+    const url = new URL(route.request().url());
+    const symbol = url.searchParams.get("symbol") ?? "UNKNOWN";
+    const interval = url.searchParams.get("interval") ?? "15m";
+    requests.push(symbol + "/" + interval);
+    if (symbol === "PTT") {
+      // Deliberately slow response reproduces the user-switch race.
+      await new Promise((resolve) => setTimeout(resolve, 900));
+    }
+    const close = symbol === "PTT" ? 10 : 123;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        source: "settrade-open-api-historical",
+        symbol,
+        interval,
+        fetched_at: "2026-10-15T02:00:00.000Z",
+        bars: [{
+          timestamp: "2026-10-15T02:00:00.000Z",
+          open: close - 1,
+          high: close + 2,
+          low: close - 2,
+          close,
+          volume: 100,
+        }],
+      }),
+    });
+  });
+
+  await page.goto("/luna", { waitUntil: "domcontentloaded" });
+  const selector = page.getByLabel("Select Thai equity symbol");
+  await expect(selector).toBeVisible();
+  await expect.poll(() => requests.some((value) => value.startsWith("PTT/"))).toBeTruthy();
+  await selector.selectOption("AOT");
+
+  const card = page.locator(".market-history-card");
+  await expect(card.locator(".market-history-stats")).toContainText("123.00");
+  await page.waitForTimeout(1_000);
+  await expect(card.locator(".market-history-stats")).toContainText("123.00");
+  await expect(card.locator(".market-history-stats")).not.toContainText("10.00");
+});
+
+test("historical chart displays an explicit unavailable state for HTTP 504 without retaining old bars", async ({ page }) => {
+  await page.route("**/api/luna/market-bars?*", async (route) => {
+    await route.fulfill({
+      status: 504,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: false, error: "MARKET_HISTORY_UPSTREAM_UNAVAILABLE" }),
+    });
+  });
+
+  await page.goto("/luna", { waitUntil: "domcontentloaded" });
+  const card = page.locator(".market-history-card");
+  await expect(card.getByText("Verified candles not available")).toBeVisible();
+  await expect(card.getByText(/historical data is temporarily unavailable/i)).toBeVisible();
+  await expect(card.locator(".market-history-chart")).toHaveCount(0);
+});
+
+test("client telemetry API enforces origin, content type, and payload-size boundaries", async ({ page, request }) => {
+  await page.goto("/luna/login", { waitUntil: "domcontentloaded" });
+  const url = "/api/luna2/client-errors";
+
+  const crossOrigin = await request.post(url, {
+    headers: {
+      Origin: "https://attacker.example",
+      "Content-Type": "application/json",
+    },
+    data: { source: "error", message: "test" },
+  });
+  expect(crossOrigin.status()).toBe(403);
+  expect((await crossOrigin.json()).error).toBe("ORIGIN_NOT_ALLOWED");
+
+  const origin = new URL(page.url()).origin;
+  const wrongContentType = await request.post(url, {
+    headers: { Origin: origin, "Content-Type": "text/plain" },
+    data: "not-json",
+  });
+  expect(wrongContentType.status()).toBe(415);
+  expect((await wrongContentType.json()).error).toBe("CONTENT_TYPE_REQUIRED");
+
+  const oversized = await request.post(url, {
+    headers: { Origin: origin, "Content-Type": "application/json" },
+    data: JSON.stringify({ source: "error", message: "x".repeat(10_000) }),
+  });
+  expect(oversized.status()).toBe(413);
+});
