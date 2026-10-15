@@ -287,6 +287,8 @@ export async function fetchJson<T>(
           : new URL(typeof input === "string" ? input : input.url, window.location.origin);
         const apiUrl = new URL(LUNA_API);
         if (requestUrl.origin === apiUrl.origin && requestUrl.pathname === apiUrl.pathname) {
+          const publicKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+          if (publicKey) headers.set("apikey", publicKey);
           const { data } = await createSupabaseBrowserClient().auth.getSession();
           if (data.session?.access_token) {
             headers.set("Authorization", `Bearer ${data.session.access_token}`);
