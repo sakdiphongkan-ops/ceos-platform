@@ -304,3 +304,36 @@ test("LUNA client-error endpoint refuses cross-origin writes and enforces JSON p
   assert.match(route, /CONTENT_TYPE_REQUIRED/);
   assert.match(route, /application\/json/);
 });
+
+
+test("LUNA service-role feed is guarded by a verified Supabase user token", () => {
+  const edge = read("supabase/functions/luna-api/index.ts");
+  const client = read("lib/luna-client.ts");
+  assert.match(edge, /async function authenticatedUser/);
+  assert.match(edge, /supabase\.auth\.getUser\(match\[1\]\)/);
+  assert.match(edge, /AUTHENTICATION_REQUIRED/);
+  assert.match(edge, /req\.method !== "GET"/);
+  assert.match(edge, /allowRequest\(user\.id\)/);
+  assert.doesNotMatch(edge, /allowRequest\(req\)/);
+  assert.match(client, /auth\.getSession\(\)/);
+  assert.match(client, /headers\.set\("Authorization"/);
+});
+
+test("LUNA runtime and agent trace use the existing feed contract rather than unsupported API views", () => {
+  const client = read("lib/luna-client.ts");
+  const page = read("app/luna/page.tsx");
+  assert.doesNotMatch(client, /buildLunaApiUrl\("(runtime_status|shadow_status|latest_control)"/);
+  assert.match(client, /feed\.system_readiness/);
+  assert.match(client, /feed\.decision_audit/);
+  assert.match(page, /PAPER_RUNTIME_FRESH/);
+  assert.match(page, /month_closed==null\?"—"/);
+  assert.match(page, /ceos_feed_rows==null\?"—"/);
+});
+
+test("LUNA gateway authenticates keys with constant-time comparison and withholds raw upstream exception details", () => {
+  const gateway = read("luna-execution-gateway/app.py");
+  assert.match(gateway, /hmac\.compare_digest\(supplied, GATEWAY_KEY\)/);
+  assert.match(gateway, /hmac\.compare_digest\(supplied, ORDER_AUTH_KEY\)/);
+  assert.match(gateway, /detail=\{\"code\": \"settrade_historical_failed\"\}/);
+  assert.doesNotMatch(gateway, /detail=\{\"code\": \"settrade_historical_failed\", \"error\": str\(exc\)\}/);
+});
