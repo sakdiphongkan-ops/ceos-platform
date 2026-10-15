@@ -39,6 +39,19 @@ jobs:
           print("LUNA_GATEWAY_IMPORT_OK", app.SETTRADE_SDK_VERSION)
           PY
 
+      - name: Smoke-test liveness when readiness diagnostics fail
+        run: |
+          python - <<'PY'
+          import app
+          app._system_status = lambda: (_ for _ in ()).throw(RuntimeError("readiness diagnostic failed"))
+          response = app.health()
+          assert response["ok"] is True
+          assert response["status"] == "LOCKED"
+          assert response["readiness_check"] == "UNAVAILABLE"
+          assert response["live_armed"] is False
+          print("LUNA_GATEWAY_LIVENESS_FAIL_CLOSED_OK")
+          PY
+
       - name: Smoke-test provider proof policy
         env:
           LUNA_DEPLOY_SOURCE_SHA: ci
