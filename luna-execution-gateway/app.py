@@ -28,7 +28,7 @@ except Exception:  # pragma: no cover
     Investor = None
     settrade_config = {}
 
-APP_VERSION = "0.7.2"
+APP_VERSION = "0.7.3"
 RELEASE_SOURCE_REVISION = (
     os.getenv("LUNA_DEPLOY_SOURCE_SHA")
     or os.getenv("GITHUB_SHA")
@@ -49,7 +49,10 @@ print(
     flush=True,
 )
 
-LIVE_ARMED = os.getenv("LIVE_TRADING_ARMED", "false").lower() == "true"
+# This service is paper-only by default. Live broker execution requires an explicit
+# operator override of LUNA_PAPER_ONLY_MODE=false in addition to the existing gates.
+PAPER_ONLY_MODE = os.getenv("LUNA_PAPER_ONLY_MODE", "true").lower() == "true"
+LIVE_ARMED = os.getenv("LIVE_TRADING_ARMED", "false").lower() == "true" and not PAPER_ONLY_MODE
 GATEWAY_KEY = os.getenv("LUNA_GATEWAY_KEY", "")
 MARKETDATA_INGEST_KEY = os.getenv("LUNA_MARKETDATA_INGEST_KEY", "")
 

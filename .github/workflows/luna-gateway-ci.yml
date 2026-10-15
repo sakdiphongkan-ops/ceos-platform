@@ -52,6 +52,32 @@ jobs:
           print("LUNA_GATEWAY_LIVENESS_FAIL_CLOSED_OK")
           PY
 
+      - name: Smoke-test the paper-only hard default
+        env:
+          LIVE_TRADING_ARMED: "true"
+          LUNA_PAPER_ONLY_MODE: "true"
+          LUNA_GATEWAY_ORDER_GATE_ENABLED: "true"
+          LUNA_GATEWAY_KILL_SWITCH: "false"
+        run: |
+          python - <<'PY'
+          import app
+          assert app.PAPER_ONLY_MODE is True
+          assert app.LIVE_ARMED is False
+          class Payload:
+              client_order_id = "paper-only-check"
+              symbol = "AOT"
+              side = "BUY"
+              price = 100.0
+              volume = 1
+          try:
+              app._hard_order_gate(Payload())
+          except Exception as exc:
+              assert getattr(exc, "status_code", None) == 423
+          else:
+              raise AssertionError("paper-only mode must block broker execution even if LIVE_TRADING_ARMED=true")
+          print("LUNA_PAPER_ONLY_HARD_DEFAULT_OK")
+          PY
+
       - name: Smoke-test provider proof policy
         env:
           LUNA_DEPLOY_SOURCE_SHA: ci
