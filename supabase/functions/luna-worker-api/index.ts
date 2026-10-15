@@ -132,7 +132,8 @@ async function writeAudit(body: Record<string, any>, defaultType = "LUNA_WORKER_
 function normalizeQuote(item: any, sessionId: string, date: string) {
   const q = item?.quote && typeof item.quote === "object" ? item.quote : {};
   const symbol = validSymbol(q.symbol);
-  const sourceDate = dateValue(q.sourceTs ?? q.source_ts ?? q.ts);
+  const providerTimestamp = dateValue(q.sourceTs ?? q.source_ts);
+  const sourceDate = providerTimestamp ?? dateValue(q.ts);
   if (!symbol || !sourceDate) return { row: null, reason: "INVALID_SYMBOL_OR_TIMESTAMP" };
   const nowMs = Date.now();
   if (sourceDate.getTime() > nowMs + 30_000) return { row: null, reason: "FUTURE_TIMESTAMP" };
@@ -148,6 +149,9 @@ function normalizeQuote(item: any, sessionId: string, date: string) {
   const explicitQuality = safeString(q.dataQuality ?? q.data_quality, 100);
   const ageMs = Math.max(0, nowMs - sourceDate.getTime());
   const freshnessLabel = ageMs <= 2_000 ? "FRESH_AT_RECEIVE" : ageMs <= 15_000 ? "DELAYED_AT_RECEIVE" : "STALE_AT_RECEIVE";
+  const qualityLabel = providerTimestamp
+    ? (bookShape ? freshnessLabel + "_BOOK_SHAPE_UNVERIFIED" : freshnessLabel + "_PRICE_ONLY")
+    : "SOURCE_TIMESTAMP_MISSING_" + (bookShape ? "BOOK_SHAPE_UNVERIFIED" : "PRICE_ONLY");
   return {
     row: {
       symbol, as_of_date: date, session_id: sessionId,
@@ -156,8 +160,8 @@ function normalizeQuote(item: any, sessionId: string, date: string) {
       bid_size: bidSizeN === null ? null : Math.floor(bidSizeN),
       ask_size: askSizeN === null ? null : Math.floor(askSizeN),
       provider_source: providerSource,
-      data_quality: explicitQuality || (bookShape ? freshnessLabel + "_BOOK_SHAPE_UNVERIFIED" : freshnessLabel + "_PRICE_ONLY"),
-      raw: { quote: q, observation_only: true, source_timestamp: sourceDate.toISOString(), received_age_ms: ageMs, book_shape_valid: !!bookShape },
+      data_quality: explicitQuality || qualityLabel,
+      raw: { quote: q, observation_only: true, source_timestamp: sourceDate.toISOString(), provider_timestamp_present: !!providerTimestamp, received_age_ms: ageMs, book_shape_valid: !!bookShape },
       execution_eligible: false,
     },
     reason: "",
@@ -240,10 +244,11 @@ async function health() {
   ]);
   if (quotes.error || signals.error || recent.error) throw new Error("WORKER_HEALTH_QUERY_FAILED");
   const now = Date.now();
-  const fresh = (recent.data ?? []).filter((r: any) => {
+  const freshProviderTimestamp = (recent.data ?? []).filter((r: any) => {
     const t = Date.parse(String(r.quote_ts ?? ""));
-    return Number.isFinite(t) && now - t >= 0 && now - t <= 2_000;
+    return r.raw?.provider_timestamp_present === true && Number.isFinite(t) && now - t >= 0 && now - t <= 2_000;
   }).length;
+  const missingProviderTimestamp = (recent.data ?? []).filter((r: any) => r.raw?.provider_timestamp_present !== true).length;
   const bookShape = (recent.data ?? []).filter((r: any) =>
     Number(r.bid) > 0 && Number(r.ask) >= Number(r.bid) && Number(r.bid_size) > 0 && Number(r.ask_size) > 0
   ).length;
@@ -253,7 +258,8 @@ async function health() {
     quote_cache_symbols: quotes.count ?? 0,
     signal_cache_symbols: signals.count ?? 0,
     sampled_latest_rows: (recent.data ?? []).length,
-    fresh_source_timestamps_in_sample: fresh,
+    fresh_provider_timestamps_in_sample: freshProviderTimestamp,
+    missing_provider_timestamp_in_sample: missingProviderTimestamp,
     book_shape_valid_in_sample: bookShape,
     execution_eligible: false,
     note: "Worker cache is observational only; it is never an execution authority.",
