@@ -44,10 +44,12 @@ function timestampMs(value: unknown): number | null {
 function quotePrice(value: unknown): number | null {
   if (!value || typeof value !== "object") return null;
   const quote = value as Record<string, unknown>;
-  const candidate = quote.last ?? quote.close ?? quote.bid ?? quote.ask;
-  if (candidate === null || candidate === undefined || candidate === "") return null;
-  const price = Number(candidate);
-  return Number.isFinite(price) && price > 0 ? price : null;
+  for (const candidate of [quote.last, quote.close, quote.bid, quote.ask]) {
+    if (candidate === null || candidate === undefined || candidate === "") continue;
+    const price = Number(candidate);
+    if (Number.isFinite(price) && price > 0) return price;
+  }
+  return null;
 }
 
 function quoteTimestamp(value: unknown): string | null {
@@ -454,10 +456,13 @@ export default function LunaPortfolioPage() {
   const exposure=equity ? Number(sessionSnapshot?.gross_exposure??(liveMarketValue??0))/equity*100 : 0;
   const selectedPos=selected&&positions.some(p=>p.symbol===selected.symbol)?positions.find(p=>p.symbol===selected.symbol)??null:null;
   const selectedHasFreshMark=Boolean(selectedPos && selectedPos.last!==null && selectedPos.lastPriceFresh);
-  const executionMode=String(feed?.execution_control?.execution_mode??session?.mode??"paper").toUpperCase();
+  const backendExecutionMode=String(feed?.execution_control?.execution_mode??session?.mode??"paper").toUpperCase();
+  // This release is paper-only. UI must never advertise LIVE execution even if stale backend state says LIVE.
+  const executionMode="PAPER ONLY";
+  const liveExecution=false;
+  const liveModeMismatch=backendExecutionMode==="LIVE";
   const killSwitch=Boolean(feed?.execution_control?.kill_switch??false);
   const armed=Boolean(feed?.execution_control?.armed??false);
-  const liveExecution=executionMode==="LIVE" && !killSwitch && armed;
   const marketFeed=feed?.market_feed??{
     status:"NO_TICKS",verified_realtime:false,public_fallback:false,latest_source:null,latest_age_ms:null,sources:[]
   };
@@ -540,13 +545,17 @@ export default function LunaPortfolioPage() {
     : runtimeDetail;
   const safetyBadge=!feed
     ? "SAFETY LOCKED"
-    : liveExecution
-      ? "LIVE EXECUTION"
-      : killSwitch
-        ? "PAPER EXECUTION / KILL SWITCH OFF"
-        : "PAPER EXECUTION / LIVE ORDER LOCKED";
+    : liveModeMismatch
+      ? "PAPER ONLY / BACKEND MODE MISMATCH"
+      : "PAPER EXECUTION / LIVE ORDER LOCKED";
   const killSwitchDisplay=feed ? (killSwitch ? "ON" : "OFF") : "LOCKED";
-  const killSwitchDetail=feed ? (armed ? "armed" : "disarmed") : "awaiting backend";
+  const killSwitchDetail=!feed
+    ? "awaiting backend"
+    : killSwitch
+      ? "active · orders blocked"
+      : liveModeMismatch
+        ? "backend reports LIVE; this release enforces PAPER ONLY"
+        : "off · live order gate remains locked";
 
   return <main className="luna-shell">
     <header className="topbar">
@@ -573,10 +582,10 @@ export default function LunaPortfolioPage() {
       <SystemControlRoom strategy={session?.strategy_version ?? LUNA_STRATEGY} asOf={todaySessionDate} />
       <section className="live-operating-strip">
         <div className={`market-phase-cell phase-${marketPhase.toLowerCase()}`}><span>MARKET / SET</span><strong>{marketPhaseLabel(marketPhase)}</strong><small>{bangkokClock(clock)} · {marketPhaseHint(marketPhase)}</small></div>
-        <div><span>EXECUTION MODE</span><strong>{executionMode}</strong><small>{liveExecution ? "live gate open" : "paper only"}</small></div>
+        <div><span>EXECUTION MODE</span><strong>{executionMode}</strong><small>{liveModeMismatch?"backend reported LIVE · orders remain locked":"all orders remain paper-only"}</small></div>
         <div><span>KILL SWITCH</span><strong>{killSwitchDisplay}</strong><small>{killSwitchDetail}</small></div>
         <div><span>RUNTIME</span><strong>{runtimeShort}</strong><small>{sessionIsToday ? "today's session detected" : "no open session today"}</small></div>
-        <div><span>LIVE ORDER GATE</span><strong>{liveExecution ? "READY" : "LOCKED"}</strong><small>broker bridge status</small></div>
+        <div><span>LIVE ORDER GATE</span><strong>LOCKED</strong><small>{liveModeMismatch?"backend mode mismatch · paper-only enforced":"paper-only release"}</small></div>
         <div><span>MARKET FEED</span><strong>{realtimeFresh ? "REALTIME STREAM" : realtimeAgeMs!=null ? "STREAM STALE" : marketFeedLabel}</strong><small>{realtimeFresh ? "public WS · " + marketFeedAge : realtimeAgeMs!=null ? "last UI tick · " + marketFeedAge : marketFeedSource + " · " + marketFeedAge}</small></div><div><span>SHADOW ENGINE</span><strong>{shadow ? `${shadow.buy_candidates??0} BUY · ${shadow.sell_candidates??0} SELL` : "SYNCING"}</strong><small>{shadow?.blockers?.length ? shadow.blockers.join(" · ") : "v1.4 observe · no order"}</small></div><div className="live-operating-note"><ShieldCheck size={15}/><span>{marketPhase==="ACTIVE" ? "Market session active — backend re-checks phase immediately before every execution." : "Market execution is locked at this phase; stale signals are shown as HOLD until a fresh in-session signal arrives."}</span></div>
       </section>
       <AgentDecisionPanel shadow={shadow} generatedAt={shadowStatus?.generated_at}/>
