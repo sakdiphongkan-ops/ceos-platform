@@ -453,7 +453,7 @@ export async function fetchControlRoom(strategy = LUNA_STRATEGY): Promise<Contro
     { name: "PAPER_ONLY", pass: readiness?.paper_only === true && readiness?.real_money_execution_enabled === false },
     { name: "RUNTIME_HEARTBEAT_FRESH", pass: paper?.runtime_fresh === true },
     { name: "VERIFIED_EXECUTION_FEED", pass: readiness?.market_feed_verified_for_execution === true },
-    { name: "LIVE_ORDER_GATE_LOCKED", pass: readiness?.real_money_execution_enabled === false },
+    { name: "LIVE_ORDER_GATE_LOCKED", pass: readiness?.real_money_execution_enabled === false && feed.execution_control !== null && feed.execution_control !== undefined && feed.execution_control.armed === false && String(feed.execution_control.execution_mode ?? "").toUpperCase() !== "LIVE" },
   ];
   const integrity = checks.every((check) => check.pass);
   const ordersTotal = paper?.orders_total ?? null;
