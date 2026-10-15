@@ -31,7 +31,7 @@ type Trade = {
 };
 
 function timestampMs(value: unknown): number | null {
-  if (typeof value === "number" || (typeof value === "string" && /^\\d{10,13}$/.test(value))) {
+  if (typeof value === "number" || (typeof value === "string" && /^\d{10,13}$/.test(value))) {
     const numeric = Number(value);
     const millis = numeric < 100_000_000_000 ? numeric * 1000 : numeric;
     return Number.isFinite(millis) && Number.isFinite(new Date(millis).getTime()) ? millis : null;
