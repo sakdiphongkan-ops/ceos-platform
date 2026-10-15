@@ -2,6 +2,7 @@ import os
 import time
 
 os.environ["LIVE_TRADING_ARMED"] = "true"
+os.environ["LUNA_PAPER_ONLY_MODE"] = "false"  # explicitly test the live-gate internals in isolation
 os.environ["LUNA_GATEWAY_KEY"] = "test"
 os.environ["LUNA_GATEWAY_ORDER_GATE_ENABLED"] = "true"
 os.environ["LUNA_GATEWAY_KILL_SWITCH"] = "false"
