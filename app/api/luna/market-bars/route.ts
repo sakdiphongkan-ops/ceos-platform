@@ -5,6 +5,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const ALLOWED_INTERVALS = new Set(["1m", "3m", "5m", "10m", "15m", "30m", "60m", "120m", "240m", "1d", "1w", "1M"]);
+// Keep this set synchronized with the selectable symbols in MarketHistoryPanel. Expand only after confirming the subscribed/licensed universe.
+const ALLOWED_SYMBOLS = new Set(["PTT", "ADVANC", "AOT", "CPALL", "BDMS", "KBANK", "SCB", "DELTA", "GULF", "KTB"]);
 const DEFAULT_LIMIT = 96;
 const MAX_LIMIT = 500;
 const WINDOW_MS = 60_000;
@@ -21,10 +23,10 @@ type Candle = {
   volume: number | null;
 };
 
-function responseError(error: string, status: number) {
+function responseError(error: string, status: number, extraHeaders: Record<string, string> = {}) {
   return NextResponse.json(
     { ok: false, error },
-    { status, headers: { "Cache-Control": "private, no-store" } },
+    { status, headers: { "Cache-Control": "private, no-store", ...extraHeaders } },
   );
 }
 
@@ -108,7 +110,7 @@ export async function GET(request: Request) {
     return responseError("AUTH_BACKEND_NOT_CONFIGURED", 503);
   }
   if (!user) return responseError("AUTHENTICATION_REQUIRED", 401);
-  if (!checkRate(user.id)) return responseError("RATE_LIMITED", 429);
+  if (!checkRate(user.id)) return responseError("RATE_LIMITED", 429, { "Retry-After": "60" });
 
   const requestUrl = new URL(request.url);
   const symbol = (requestUrl.searchParams.get("symbol") ?? "").trim().toUpperCase();
@@ -116,6 +118,7 @@ export async function GET(request: Request) {
   const rawLimit = Number(requestUrl.searchParams.get("limit") ?? DEFAULT_LIMIT);
 
   if (!/^[A-Z0-9]{2,12}$/.test(symbol)) return responseError("INVALID_SYMBOL", 400);
+  if (!ALLOWED_SYMBOLS.has(symbol)) return responseError("SYMBOL_NOT_ALLOWED", 403);
   if (!ALLOWED_INTERVALS.has(interval)) return responseError("INVALID_INTERVAL", 400);
   if (!Number.isInteger(rawLimit) || rawLimit < 1 || rawLimit > MAX_LIMIT) {
     return responseError("INVALID_LIMIT", 400);
@@ -176,7 +179,9 @@ export async function GET(request: Request) {
       source: "settrade-open-api-historical",
       symbol,
       interval,
-      fetched_at: typeof payload.fetched_at === "string" ? payload.fetched_at : new Date().toISOString(),
+      ...(typeof payload.fetched_at === "string" && timestamp(payload.fetched_at) !== null
+        ? { fetched_at: new Date(timestamp(payload.fetched_at)!).toISOString() }
+        : {}),
       bars: candles,
     },
     { headers: { "Cache-Control": "private, no-store" } },
