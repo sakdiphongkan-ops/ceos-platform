@@ -237,6 +237,13 @@ Deno.serve(async (req: Request) => {
       ok: true, status: "OUTSIDE_MARKET_WINDOW", no_orders_created: true,
       no_ticks_ingested: true, generated_at: new Date().toISOString(),
     });
+    const priorityOnly = body?.priority_only === true;
+    // The full-universe job is staggered at minute 1, 6, 11, ...; skip targeted
+    // polling during that minute so the two REST workloads never intentionally overlap.
+    if (priorityOnly && localParts().minute % 5 === 1) return json({
+      ok: true, status: "PRIORITY_INGEST_SKIPPED_FOR_FULL_SWEEP",
+      no_database_writes: true, paper_only: true, generated_at: new Date().toISOString(),
+    });
     const maintenance = await supabase.rpc("luna_ensure_intraday_session_open", { p_trade_date: tradeDate() });
     if (maintenance.error) return json({ ok: false, error: "SESSION_MAINTENANCE_FAILED" }, 500);
     if (!maintenance.data?.session_id) return json({
@@ -297,7 +304,7 @@ Deno.serve(async (req: Request) => {
     const chunks: string[][] = [];
     for (let i = 0; i < prioritySymbols.length; i += 5) chunks.push(prioritySymbols.slice(i, i + 5));
     const priorityChunkCount = chunks.length;
-    const remainingSymbols = symbols.filter((symbol) => !prioritySet.has(symbol));
+    const remainingSymbols = priorityOnly ? [] : symbols.filter((symbol) => !prioritySet.has(symbol));
     for (let i = 0; i < remainingSymbols.length; i += 50) chunks.push(remainingSymbols.slice(i, i + 50));
     const validRows: any[] = [];
     const errors: string[] = [];
@@ -390,6 +397,8 @@ Deno.serve(async (req: Request) => {
       priority_symbols_requested: prioritySymbols.length,
       priority_query_errors: priorityQueryErrors,
       priority_chunk_size: 5,
+      priority_only_mode: priorityOnly,
+      universe_sweep_skipped: priorityOnly,
       generated_at: new Date().toISOString(), paper_only: true, live_orders_created: false,
     });
   } catch (e) {
