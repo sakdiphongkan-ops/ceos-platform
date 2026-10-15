@@ -1,4 +1,5 @@
 import asyncio
+import hmac
 import json
 import os
 import threading
@@ -207,13 +208,15 @@ _channel_status: Dict[str, Dict[str, Any]] = {
 
 
 def auth(x_luna_gateway: Optional[str]):
-    if not GATEWAY_KEY or x_luna_gateway != GATEWAY_KEY:
+    supplied = x_luna_gateway if isinstance(x_luna_gateway, str) else ""
+    if not GATEWAY_KEY or not hmac.compare_digest(supplied, GATEWAY_KEY):
         raise HTTPException(status_code=401, detail="unauthorized")
 
 
 def order_auth(x_luna_gateway: Optional[str], x_luna_order: Optional[str]):
     auth(x_luna_gateway)
-    if not ORDER_AUTH_KEY or x_luna_order != ORDER_AUTH_KEY:
+    supplied = x_luna_order if isinstance(x_luna_order, str) else ""
+    if not ORDER_AUTH_KEY or not hmac.compare_digest(supplied, ORDER_AUTH_KEY):
         raise HTTPException(status_code=401, detail="order_authorization_required")
 
 
@@ -1722,12 +1725,12 @@ def historical_candles(
             normalized=normalized or None,
         )
     except ProviderUnavailable as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        # Provider details may contain account identifiers, request URLs or vendor response snippets.
+        raise HTTPException(status_code=503, detail={"code": "historical_provider_unavailable"}) from exc
     except Exception as exc:
-        raise HTTPException(
-            status_code=503,
-            detail={"code": "settrade_historical_failed", "error": str(exc)},
-        ) from exc
+        # Keep raw upstream exceptions in protected server diagnostics only; do not return them to clients.
+        print("LUNA_HISTORICAL_CANDLES_ERROR", type(exc).__name__, flush=True)
+        raise HTTPException(status_code=503, detail={"code": "settrade_historical_failed"}) from exc
 
     return {
         "ok": True,
@@ -1759,9 +1762,10 @@ def connectivity_proof(
         marketdata = historical_marketdata_client(inv)
         payload = marketdata.get_candlestick(symbol=symbol, interval=interval, limit=1, start=None, end=None, normalized=True)
     except ProviderUnavailable as exc:
-        raise HTTPException(status_code=503, detail={"code": str(exc), "proof": _connectivity_proof()}) from exc
+        raise HTTPException(status_code=503, detail={"code": "historical_provider_unavailable", "proof": _connectivity_proof()}) from exc
     except Exception as exc:
-        raise HTTPException(status_code=503, detail={"code": "settrade_historical_probe_failed", "error": str(exc), "proof": _connectivity_proof()}) from exc
+        print("LUNA_HISTORICAL_PROBE_ERROR", type(exc).__name__, flush=True)
+        raise HTTPException(status_code=503, detail={"code": "settrade_historical_probe_failed", "proof": _connectivity_proof()}) from exc
     data_nonempty = payload is not None and payload != [] and payload != {}
     proof = _connectivity_proof()
     proof["checks"]["historical_probe_nonempty"] = data_nonempty
@@ -1797,7 +1801,9 @@ async def quotes_stream(websocket: WebSocket):
         if (
             auth_payload.get("type") != "auth"
             or not GATEWAY_KEY
-            or auth_payload.get("key") != GATEWAY_KEY
+            or not isinstance(auth_payload.get("key"), str)
+            or not GATEWAY_KEY
+            or not hmac.compare_digest(auth_payload["key"], GATEWAY_KEY)
         ):
             await websocket.close(code=4401)
             return
