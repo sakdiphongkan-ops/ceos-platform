@@ -12,6 +12,21 @@ const MAX_BODY_BYTES = 8_000;
 const MAX_RATE_STATE_ENTRIES = 10_000;
 const rateState = new Map<string, { startedAt: number; count: number }>();
 
+function isSameOriginPost(request: Request): boolean {
+  const origin = request.headers.get("origin");
+  if (!origin) return request.headers.get("sec-fetch-site") === "same-origin";
+  try {
+    return new URL(origin).origin === new URL(request.url).origin;
+  } catch {
+    return false;
+  }
+}
+
+function isJsonRequest(request: Request): boolean {
+  const contentType = request.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
+  return contentType === "application/json";
+}
+
 function getClientKey(request: Request): string {
   return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "anonymous";
 }
@@ -35,6 +50,14 @@ function sanitize(value: unknown, max = 500): string {
 }
 
 export async function POST(request: Request) {
+  // This endpoint only accepts same-origin browser telemetry; it is not a general event-ingest API.
+  if (!isSameOriginPost(request)) {
+    return NextResponse.json({ ok: false, error: "ORIGIN_NOT_ALLOWED" }, { status: 403, headers: { "Cache-Control": "no-store" } });
+  }
+  if (!isJsonRequest(request)) {
+    return NextResponse.json({ ok: false, error: "CONTENT_TYPE_REQUIRED" }, { status: 415, headers: { "Cache-Control": "no-store" } });
+  }
+
   let body: ClientErrorBody;
 
   try {
