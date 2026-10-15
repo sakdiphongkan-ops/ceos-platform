@@ -256,3 +256,50 @@ test("LUNA JEX-inspired candles render only validated Settrade OHLC and never ex
   assert.doesNotMatch(panel, /LUNA_GATEWAY_KEY/);
   assert.doesNotMatch(panel, /mockQuotes|synthetic candle|Math\.random/);
 });
+
+
+test("LUNA order history never calls an order FILLED without a persisted fill ledger row", () => {
+  const page = read("app/luna/page.tsx");
+  assert.match(page, /type Trade[\s\S]*filledQty/);
+  assert.match(page, /UNRECONCILED/);
+  assert.match(page, /filledByOrderId/);
+  assert.doesNotMatch(page, /order\.status===\"REJECTED\"\s*\?\s*\"REJECTED\"\s*:\s*\"FILLED\"/);
+});
+
+test("LUNA mark-to-market never substitutes average cost for a missing current quote", () => {
+  const page = read("app/luna/page.tsx");
+  assert.match(page, /function quotePrice/);
+  assert.match(page, /last: number \| null/);
+  assert.match(page, /lastPriceFresh/);
+  assert.doesNotMatch(page, /tick\?\.last\?\?tick\?\.bid\?\?tick\?\.ask\?\?position\.avg_price/);
+  assert.match(page, /Awaiting verified portfolio data/);
+});
+
+test("LUNA real-time badge requires a fresh source timestamp, not only local receipt time", () => {
+  const page = read("app/luna/page.tsx");
+  assert.match(page, /function isFreshQuote/);
+  assert.match(page, /source_ts/);
+  assert.match(page, /isFreshQuote\(quote\)/);
+});
+
+test("LUNA market-history fetches do not retain the previous symbol's bars across a new request", () => {
+  const panel = read("app/luna/market-history-panel.tsx");
+  assert.match(panel, /requestSequence/);
+  assert.match(panel, /setBars\(\[\]\)/);
+  assert.match(panel, /if \(requestId !== requestSequence\.current\) return/);
+});
+
+test("LUNA market-history API only allows symbols shown in the verified SET chart selector", () => {
+  const route = read("app/api/luna/market-bars/route.ts");
+  assert.match(route, /ALLOWED_SYMBOLS/);
+  assert.match(route, /SYMBOL_NOT_ALLOWED/);
+  assert.match(route, /Retry-After/);
+  assert.doesNotMatch(route, /payload\.fetched_at === \"string\" \? payload\.fetched_at : new Date\(\)\.toISOString\(\)/);
+});
+
+test("LUNA client-error endpoint refuses cross-origin writes and enforces JSON payloads", () => {
+  const route = read("app/api/luna2/client-errors/route.ts");
+  assert.match(route, /ORIGIN_NOT_ALLOWED/);
+  assert.match(route, /CONTENT_TYPE_REQUIRED/);
+  assert.match(route, /application\/json/);
+});
