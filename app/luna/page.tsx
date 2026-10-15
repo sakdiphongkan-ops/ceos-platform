@@ -18,14 +18,79 @@ import {
 } from "../../lib/luna-client";
 
 type Position = {
-  symbol: string; name: string; qty: number; avgCost: number; last: number; dayChange: number;
+  symbol: string; name: string; qty: number; avgCost: number; last: number | null;
+  lastPriceTs: string | null; lastPriceFresh: boolean; dayChange: number;
   realized: number; signal: "BUY" | "SELL" | "HOLD"; signalReason: string;
 };
 
 type Trade = {
-  time: string; symbol: string; side: "BUY" | "SELL"; qty: number; price: number; value: number;
-  status: "FILLED" | "PARTIAL" | "REJECTED"; strategy: string; reason: string;
+  time: string; symbol: string; side: "BUY" | "SELL"; qty: number; filledQty: number;
+  price: number | null; value: number | null;
+  status: "FILLED" | "PARTIAL" | "REJECTED" | "PENDING" | "CANCELLED" | "UNKNOWN" | "UNRECONCILED";
+  strategy: string; reason: string;
 };
+
+function timestampMs(value: unknown): number | null {
+  if (typeof value === "number" || (typeof value === "string" && /^\\d{10,13}$/.test(value))) {
+    const numeric = Number(value);
+    const millis = numeric < 100_000_000_000 ? numeric * 1000 : numeric;
+    return Number.isFinite(millis) && Number.isFinite(new Date(millis).getTime()) ? millis : null;
+  }
+  if (typeof value !== "string" || !value.trim()) return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function quotePrice(value: unknown): number | null {
+  if (!value || typeof value !== "object") return null;
+  const quote = value as Record<string, unknown>;
+  const candidate = quote.last ?? quote.close ?? quote.bid ?? quote.ask;
+  if (candidate === null || candidate === undefined || candidate === "") return null;
+  const price = Number(candidate);
+  return Number.isFinite(price) && price > 0 ? price : null;
+}
+
+function quoteTimestamp(value: unknown): string | null {
+  if (!value || typeof value !== "object") return null;
+  const quote = value as Record<string, unknown>;
+  const raw = quote.source_ts ?? quote.ts ?? quote.timestamp ?? quote.created_at;
+  const millis = timestampMs(raw);
+  return millis === null ? null : new Date(millis).toISOString();
+}
+
+function isFreshTimestamp(value: unknown, maxAgeMs = 15_000, nowMs = Date.now()): boolean {
+  const millis = timestampMs(value);
+  if (millis === null) return false;
+  const age = nowMs - millis;
+  return age >= -2_000 && age <= maxAgeMs;
+}
+
+function isFreshQuote(quote: RealtimeQuote, nowMs = Date.now()): boolean {
+  return /^[A-Z0-9]{1,12}$/.test(String(quote.symbol ?? ""))
+    && quotePrice(quote) !== null
+    && isFreshTimestamp(quote.source_ts ?? quote.ts, 5_000, nowMs);
+}
+
+type FillAggregate = { qty: number; notional: number; latestTs: string | null };
+
+function aggregateFills(rows: Array<Record<string, any>>): Map<string, FillAggregate> {
+  const aggregated = new Map<string, FillAggregate>();
+  for (const fill of rows) {
+    const orderId = String(fill.order_id ?? "");
+    const qty = Number(fill.qty ?? fill.filled_qty ?? fill.volume);
+    const price = Number(fill.price ?? fill.fill_price);
+    if (!orderId || !Number.isFinite(qty) || qty <= 0 || !Number.isFinite(price) || price <= 0) continue;
+    const current = aggregated.get(orderId) ?? { qty: 0, notional: 0, latestTs: null };
+    current.qty += qty;
+    current.notional += qty * price;
+    const ts = fill.ts ?? fill.created_at ?? fill.timestamp;
+    if (timestampMs(ts) !== null && (current.latestTs === null || timestampMs(ts)! > timestampMs(current.latestTs)!)) {
+      current.latestTs = new Date(timestampMs(ts)!).toISOString();
+    }
+    aggregated.set(orderId, current);
+  }
+  return aggregated;
+}
 
 const money = (n: number) =>
   new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n) || 0);
@@ -116,9 +181,24 @@ export default function LunaPortfolioPage() {
     return connectRealtimeMarketStream({
       url:LUNA_PUBLIC_MARKET_STREAM,
       onQuotes:(quotes)=>{
-        setRealtimeQuotes((prev)=>({ ...prev, ...quotes }));
+        const now = Date.now();
+        const accepted = Object.fromEntries(
+          Object.entries(quotes).filter(([symbol, quote]) =>
+            symbol === quote.symbol
+            && /^[A-Z0-9]{1,12}$/.test(symbol)
+            && quotePrice(quote) !== null
+            && quoteTimestamp(quote) !== null
+          ),
+        );
+        if (Object.values(accepted).some((quote) => isFreshQuote(quote, now))) {
+          setLastRealtimeTickAt(now);
+        }
+        if (Object.keys(accepted).length > 0) {
+          setRealtimeQuotes((prev)=>({ ...prev, ...accepted }));
+        }
       },
-      onTick:()=>setLastRealtimeTickAt(Date.now()),
+      // Receipt alone is not proof of freshness; onQuotes validates source timestamps.
+      onTick:()=>{},
       onConnectionChange:setRealtimeConnected,
     });
   },[]);
@@ -203,7 +283,7 @@ export default function LunaPortfolioPage() {
       .map((position)=>{
         const symbol=String(position.symbol);
         const realtimeTick=realtimeQuotes[symbol];
-        const tick=realtimeTick ?? tickBySymbol.get(symbol);
+        const tick=realtimeTick && isFreshQuote(realtimeTick) ? realtimeTick : tickBySymbol.get(symbol);
         const signal=signalBySymbol.get(symbol);
         const signalTs=signal?.ts??signal?.created_at;
         const signalAgeMs=signalTs
@@ -215,7 +295,10 @@ export default function LunaPortfolioPage() {
           && Number.isFinite(signalAgeMs)
           && signalAgeMs<=15_000;
 
-        const last=Number(tick?.last??tick?.bid??tick?.ask??position.avg_price);
+        // Never substitute average cost for a missing market quote.
+        const last=quotePrice(tick);
+        const lastPriceTs=quoteTimestamp(tick);
+        const lastPriceFresh=last!==null && isFreshTimestamp(lastPriceTs,15_000);
         const action=
           signalIsCurrent
           && (signal?.action==="BUY"||signal?.action==="SELL"||signal?.action==="HOLD")
@@ -228,6 +311,8 @@ export default function LunaPortfolioPage() {
           qty:Number(position.qty),
           avgCost:Number(position.avg_price),
           last,
+          lastPriceTs,
+          lastPriceFresh,
           dayChange:0,
           realized:Number(position.realized_pnl??0),
           signal:action,
@@ -246,64 +331,99 @@ export default function LunaPortfolioPage() {
   ]);
 
   const trades=useMemo<Trade[]>(()=>{
-    const fillByOrderId=new Map((feed?.fills??[]).map((fill)=>[String(fill.order_id),fill]));
+    const filledByOrderId=aggregateFills(feed?.fills??[]);
 
     return sessionOrders.map((order)=>{
-      const fill=fillByOrderId.get(String(order.id));
-      const status=order.status==="PARTIAL"
-        ? "PARTIAL"
-        : order.status==="REJECTED"
-          ? "REJECTED"
-          : "FILLED";
-      const price=Number(order.avg_fill_price??fill?.price??order.limit_price??0);
-      const qty=Number(order.filled_qty||order.qty);
+      const orderId=String(order.id??order.order_id??"");
+      const aggregate=filledByOrderId.get(orderId);
+      const filledQty=aggregate?.qty??0;
+      const filledPrice=aggregate && aggregate.qty>0 ? aggregate.notional/aggregate.qty : null;
+      const orderQtyValue=Number(order.qty??order.volume??0);
+      const qty=Number.isFinite(orderQtyValue)&&orderQtyValue>0?orderQtyValue:0;
+      const rawStatus=String(order.status??"UNKNOWN").trim().toUpperCase();
+      let status:Trade["status"]="UNKNOWN";
 
+      if (filledQty>0 && (rawStatus==="REJECTED" || rawStatus==="CANCELLED" || rawStatus==="CANCELED")) {
+        status="UNRECONCILED";
+      } else if (rawStatus==="REJECTED") {
+        status="REJECTED";
+      } else if (rawStatus==="CANCELLED" || rawStatus==="CANCELED") {
+        status=filledQty>0?"PARTIAL":"CANCELLED";
+      } else if (filledQty>0) {
+        status=(rawStatus.includes("PARTIAL") || (qty>0 && filledQty+1e-9<qty))?"PARTIAL":"FILLED";
+      } else if (rawStatus==="FILLED" || rawStatus==="EXECUTED" || rawStatus.includes("PARTIAL")) {
+        // The order claims execution but no corresponding fill-ledger rows were returned.
+        status="UNRECONCILED";
+      } else if (["NEW","PENDING","SUBMITTED","ACCEPTED","OPEN","CREATED","QUEUED"].includes(rawStatus)) {
+        status="PENDING";
+      }
+
+      const orderTime=timestampMs(aggregate?.latestTs??order.created_at);
       return {
-        time:new Date(order.created_at).toLocaleTimeString("en-GB",{hour12:false}),
-        symbol:order.symbol,
+        time:orderTime===null?"—":new Date(orderTime).toLocaleTimeString("en-GB",{hour12:false}),
+        symbol:String(order.symbol??"UNKNOWN"),
         side:order.side==="SELL" ? "SELL" : "BUY",
         qty,
-        price,
-        value:price*qty,
+        filledQty,
+        price:filledPrice,
+        value:aggregate?aggregate.notional:null,
         status,
         strategy:session?.strategy_version??"—",
-        reason:order.reason??"—",
+        reason:String(order.reason??"—"),
       };
     });
   },[feed?.fills,session?.strategy_version,sessionOrders]);
 
   const closedPositions=useMemo(()=>{
-    const fillByOrderId=new Map((feed?.fills??[]).map((fill)=>[String(fill.order_id),fill]));
-    const bySymbol=new Map<string,{symbol:string;entry:number;exit:number;qty:number;pnl:number;duration:string}>();
-    const orders=[...sessionOrders].sort(
-      (a,b)=>new Date(a.created_at).getTime()-new Date(b.created_at).getTime()
-    );
+    const ordersById=new Map(sessionOrders.map((order)=>[String(order.id??order.order_id??""),order]));
+    const events=(feed?.fills??[]).flatMap((fill)=>{
+      const order=ordersById.get(String(fill.order_id??""));
+      if(!order) return [];
+      const qty=Number(fill.qty??fill.filled_qty??fill.volume);
+      const price=Number(fill.price??fill.fill_price);
+      const ts=timestampMs(fill.ts??fill.created_at??fill.timestamp??order.created_at);
+      if(!Number.isFinite(qty)||qty<=0||!Number.isFinite(price)||price<=0||ts===null) return [];
+      if(order.side!=="BUY"&&order.side!=="SELL") return [];
+      return [{symbol:String(order.symbol??""),side:order.side as "BUY"|"SELL",qty,price,ts}];
+    }).filter((event)=>Boolean(event.symbol)).sort((a,b)=>a.ts-b.ts);
 
-    for(const order of orders){
-      const fill=fillByOrderId.get(String(order.id));
-      const qty=Number(order.filled_qty||fill?.qty||0);
-      if(!qty) continue;
-
-      const price=Number(order.avg_fill_price??fill?.price??order.limit_price??0);
-      const current=bySymbol.get(order.symbol);
-
-      if(order.side==="BUY"){
-        bySymbol.set(order.symbol,{
-          symbol:order.symbol,
-          entry:price,
-          exit:0,
-          qty,
-          pnl:0,
-          duration:"—",
-        });
-      }else if(current){
-        current.exit=price;
-        current.pnl=(price-current.entry)*Math.min(current.qty,qty);
-        bySymbol.set(order.symbol,current);
+    const lotsBySymbol=new Map<string,Array<{qty:number;price:number}>>();
+    const closedBySymbol=new Map<string,{symbol:string;entryNotional:number;exitNotional:number;qty:number;pnl:number;duration:string}>();
+    for(const event of events){
+      const lots=lotsBySymbol.get(event.symbol)??[];
+      if(event.side==="BUY"){
+        lots.push({qty:event.qty,price:event.price});
+        lotsBySymbol.set(event.symbol,lots);
+        continue;
       }
+      let remaining=event.qty;
+      while(remaining>1e-9&&lots.length>0){
+        const lot=lots[0];
+        const matched=Math.min(remaining,lot.qty);
+        let summary=closedBySymbol.get(event.symbol);
+        if(!summary){
+          summary={symbol:event.symbol,entryNotional:0,exitNotional:0,qty:0,pnl:0,duration:"—"};
+        }
+        summary.entryNotional+=lot.price*matched;
+        summary.exitNotional+=event.price*matched;
+        summary.qty+=matched;
+        summary.pnl+=(event.price-lot.price)*matched;
+        remaining-=matched;
+        lot.qty-=matched;
+        if(lot.qty<=1e-9) lots.shift();
+        closedBySymbol.set(event.symbol,summary);
+      }
+      lotsBySymbol.set(event.symbol,lots);
     }
 
-    return Array.from(bySymbol.values()).filter((item)=>item.exit>0);
+    return Array.from(closedBySymbol.values()).filter((item)=>item.qty>0).map((item)=>({
+      symbol:item.symbol,
+      entry:item.entryNotional/item.qty,
+      exit:item.exitNotional/item.qty,
+      qty:item.qty,
+      pnl:item.pnl,
+      duration:item.duration,
+    }));
   },[feed?.fills,sessionOrders]);
 
   const filteredPositions=useMemo(()=>positions.filter((position)=>{
@@ -317,17 +437,21 @@ export default function LunaPortfolioPage() {
   const filterCount=(signalFilter!=="ALL"?1:0)+(profitOnly?1:0);
   const updatedAt=feed?.generated_at ? new Date(feed.generated_at).toLocaleTimeString("en-GB",{hour12:false}) : "—";
   const initial=Number(session?.initial_capital??30000);
-  const liveMarketValue=positions.reduce((s,p)=>s+p.qty*p.last,0);
-  const hasMarketValue=positions.length>0 || sessionSnapshot?.market_value!=null;
-  const marketValue=positions.length ? liveMarketValue : Number(sessionSnapshot?.market_value??0);
+  const hasFreshPositionMarks=positions.length>0 && positions.every((p)=>p.last!==null && p.lastPriceFresh);
+  const liveMarketValue=hasFreshPositionMarks ? positions.reduce((s,p)=>s+p.qty*(p.last??0),0) : null;
+  const snapshotMarketValue=sessionSnapshot?.market_value!=null ? Number(sessionSnapshot.market_value) : null;
+  const hasMarketValue=liveMarketValue!==null || snapshotMarketValue!==null;
+  const marketValue=liveMarketValue ?? snapshotMarketValue ?? 0;
   const hasVerifiedPortfolioSnapshot=sessionSnapshot?.cash!=null && sessionSnapshot?.market_value!=null;
-  const cash=Number(sessionSnapshot?.cash??0);
-  const equity=hasVerifiedPortfolioSnapshot ? cash+marketValue : 0;
-  const liveUnrealized=positions.reduce((s,p)=>s+p.qty*(p.last-p.avgCost),0);
-  const unrealized=positions.length ? liveUnrealized : Number(sessionSnapshot?.unrealized_pnl??0);
-  const realized=Number(sessionSnapshot?.realized_pnl??positions.reduce((s,p)=>s+p.realized,0));
-  const fees=Number(sessionSnapshot?.fees??0);
-  const exposure=equity?Number(sessionSnapshot?.gross_exposure??marketValue)/equity*100:0;
+  const cash=sessionSnapshot?.cash!=null ? Number(sessionSnapshot.cash) : null;
+  // Use a single snapshot for equity; do not mix snapshot cash with newer/different marks.
+  const equity=hasVerifiedPortfolioSnapshot ? Number(sessionSnapshot.cash)+Number(sessionSnapshot.market_value) : 0;
+  const liveUnrealized=hasFreshPositionMarks ? positions.reduce((s,p)=>s+p.qty*((p.last??0)-p.avgCost),0) : null;
+  const hasUnrealized=liveUnrealized!==null || sessionSnapshot?.unrealized_pnl!=null;
+  const unrealized=liveUnrealized ?? (sessionSnapshot?.unrealized_pnl!=null?Number(sessionSnapshot.unrealized_pnl):null);
+  const realized=sessionSnapshot?.realized_pnl!=null ? Number(sessionSnapshot.realized_pnl) : null;
+  const fees=sessionSnapshot?.fees!=null ? Number(sessionSnapshot.fees) : null;
+  const exposure=equity ? Number(sessionSnapshot?.gross_exposure??(liveMarketValue??0))/equity*100 : 0;
   const selectedPos=selected&&positions.some(p=>p.symbol===selected.symbol)?positions.find(p=>p.symbol===selected.symbol)??null:null;
   const executionMode=String(feed?.execution_control?.execution_mode??session?.mode??"paper").toUpperCase();
   const killSwitch=Boolean(feed?.execution_control?.kill_switch??false);
