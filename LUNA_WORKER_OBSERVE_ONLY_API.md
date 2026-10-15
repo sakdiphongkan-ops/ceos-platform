@@ -6,7 +6,7 @@
 
 ## Data contract and safety properties
 
-- Requests require `x-luna-agent` and a credential enabled with `credential_scope = 'general'`. The endpoint does not accept an anon key as agent authorization.
+- Requests require `x-luna-agent` and a credential enabled with `credential_scope = 'general'`. The endpoint does not accept an anon key as agent authorization. Credential lookup follows the same unqualified `luna_agent_credentials` resolution pattern used by the existing `luna-research` Edge Function.
 - `telemetry_batch` is capped at 100 items per call.
 - Quote data is written to `public.luna_worker_quote_cache` keyed by symbol, so it stores only the latest observation per symbol instead of an unbounded tick history.
 - Signal data is written to `public.luna_worker_signal_cache` keyed by strategy and symbol, so it stores only the latest signal per symbol.
@@ -19,7 +19,7 @@
 
 ## Deployment state
 
-The Edge Function `luna-worker-api` is deployed in Supabase project `wigzicwgcsrhdummrbjx` at version 3. Railway's `luna-worker-v4` is configured to paper + observe-only, with public fallback and order authorization disabled; those variables were set with deploys skipped. The worker and gateway services remain without a successful latest deployment because the pinned Railway deployment workflow cannot proceed until GitHub Actions has a non-empty `RAILWAY_TOKEN` repository secret. A direct HTTP smoke test of the new Edge Function could not be completed from the connected browser because the request ended at `ERR_TUNNEL_CONNECTION_FAILED`; so runtime HTTP status has not been independently verified yet. Do not bypass that exact-revision workflow.
+The Edge Function `luna-worker-api` is deployed in Supabase project `wigzicwgcsrhdummrbjx` at version 4. Railway's `luna-worker-v4` is configured to paper + observe-only, with public fallback and order authorization disabled; those variables were set with deploys skipped. The worker and gateway services remain without a successful latest deployment because the pinned Railway deployment workflow cannot proceed until GitHub Actions has a non-empty `RAILWAY_TOKEN` repository secret. A direct HTTP smoke test of the new Edge Function could not be completed from the connected browser because the request ended at `ERR_TUNNEL_CONNECTION_FAILED`; so runtime HTTP status has not been independently verified yet. Do not bypass that exact-revision workflow.
 
 The AppDeploy front end remains unchanged because the account is below its 16-credit deployment threshold. See [Mission Control](https://luna-set-intraday-pilot-lw8ffz.v2.appdeploy.ai/) and [LUNA Lab](https://luna-lab-fj5of4.v2.appdeploy.ai/); UI changes require restoring AppDeploy credits first.
 
