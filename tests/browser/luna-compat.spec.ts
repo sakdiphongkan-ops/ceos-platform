@@ -40,6 +40,7 @@ test.describe("LUNA cross-browser compatibility", () => {
     });
 
     await page.goto("/luna", { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => (window as Window & { __lunaObservabilityReady?: boolean }).__lunaObservabilityReady === true);
     await page.evaluate(() => {
       window.dispatchEvent(new ErrorEvent("error", { message: "password=super-secret access_token=should-not-leak" }));
       const rejection = new Event("unhandledrejection");

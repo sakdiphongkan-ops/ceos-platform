@@ -10,6 +10,7 @@ import {
   bangkokClock, bangkokDate, isRealtimeFresh, LUNA_PUBLIC_MARKET_STREAM, LUNA_STRATEGY,
   marketPhaseHint, marketPhaseLabel, TIMEFRAME, uiMarketPhase, type RuntimeState,
 } from "../../lib/luna-runtime";
+import MarketHistoryPanel from "./market-history-panel";
 import {
   connectRealtimeMarketStream, fetchControlRoom, fetchPortfolioState, fetchShadowStatus,
   fetchTournament100, CLIENT_DEFAULTS, type ControlRoomState, type LunaFeed, type RealtimeQuote,
@@ -315,11 +316,13 @@ export default function LunaPortfolioPage() {
 
   const filterCount=(signalFilter!=="ALL"?1:0)+(profitOnly?1:0);
   const updatedAt=feed?.generated_at ? new Date(feed.generated_at).toLocaleTimeString("en-GB",{hour12:false}) : "—";
-  const initial=Number(session?.initial_capital??1000000);
+  const initial=Number(session?.initial_capital??30000);
   const liveMarketValue=positions.reduce((s,p)=>s+p.qty*p.last,0);
+  const hasMarketValue=positions.length>0 || sessionSnapshot?.market_value!=null;
   const marketValue=positions.length ? liveMarketValue : Number(sessionSnapshot?.market_value??0);
-  const cash=Number(sessionSnapshot?.cash??Math.max(0,initial-marketValue));
-  const equity=cash+marketValue;
+  const hasVerifiedPortfolioSnapshot=sessionSnapshot?.cash!=null && sessionSnapshot?.market_value!=null;
+  const cash=Number(sessionSnapshot?.cash??0);
+  const equity=hasVerifiedPortfolioSnapshot ? cash+marketValue : 0;
   const liveUnrealized=positions.reduce((s,p)=>s+p.qty*(p.last-p.avgCost),0);
   const unrealized=positions.length ? liveUnrealized : Number(sessionSnapshot?.unrealized_pnl??0);
   const realized=Number(sessionSnapshot?.realized_pnl??positions.reduce((s,p)=>s+p.realized,0));
@@ -437,7 +440,7 @@ export default function LunaPortfolioPage() {
     </header>
     <div className="page">
       <section className="hero-row"><div><div className="eyebrow">INTRADAY CONTROL · OPERATIONAL OVERVIEW</div><h2>LUNA command center</h2><p>See capital, risk, execution and research state at a glance.</p></div><div className="hero-meta"><div className={`data-chip runtime-chip runtime-${runtimeTone.toLowerCase()}`}><span className="data-dot"/>{runtimeDisplayLabel}</div><div className="safe-badge"><ShieldCheck size={15}/> {safetyBadge}</div></div></section>
-      <section className={`runtime-banner runtime-${runtimeTone.toLowerCase()}`} aria-live="polite">
+      <MarketHistoryPanel />\n      <section className={`runtime-banner runtime-${runtimeTone.toLowerCase()}`} aria-live="polite">
         <div className="runtime-banner-icon"><CircleDot size={15}/></div>
         <div className="runtime-banner-copy"><strong>{runtimeDisplayLabel}</strong><span>{runtimeDisplayDetail}</span></div>
         <div className="runtime-banner-meta"><span>API {live ? "CONNECTED" : "UNREACHABLE"}</span><span>BACKEND {backendRuntime?.state??"UNKNOWN"}</span><span>LAST TICK {runtimeAgeMs!=null ? Math.round(runtimeAgeMs)+" ms" : "—"}</span></div>
@@ -451,14 +454,15 @@ export default function LunaPortfolioPage() {
         <div><span>LIVE ORDER GATE</span><strong>{liveExecution ? "READY" : "LOCKED"}</strong><small>broker bridge status</small></div>
         <div><span>MARKET FEED</span><strong>{realtimeFresh ? "REALTIME STREAM" : realtimeAgeMs!=null ? "STREAM STALE" : marketFeedLabel}</strong><small>{realtimeFresh ? "public WS · " + marketFeedAge : realtimeAgeMs!=null ? "last UI tick · " + marketFeedAge : marketFeedSource + " · " + marketFeedAge}</small></div><div><span>SHADOW ENGINE</span><strong>{shadow ? `${shadow.buy_candidates??0} BUY · ${shadow.sell_candidates??0} SELL` : "SYNCING"}</strong><small>{shadow?.blockers?.length ? shadow.blockers.join(" · ") : "v1.4 observe · no order"}</small></div><div className="live-operating-note"><ShieldCheck size={15}/><span>{marketPhase==="ACTIVE" ? "Market session active — backend re-checks phase immediately before every execution." : "Market execution is locked at this phase; stale signals are shown as HOLD until a fresh in-session signal arrives."}</span></div>
       </section>
+      <AgentDecisionPanel shadow={shadow} generatedAt={shadowStatus?.generated_at}/>
       {error&&<div className="error-banner"><span>{error}</span><button onClick={load}>Retry</button></div>}
       <section className="summary-grid"><Metric label="Market ticks" value={String(sessionTicks.length)} sub="Latest session feed"/><Metric label="Shadow BUY" value={String(shadow?.buy_candidates??0)} sub="v1.4 candidates"/><Metric label="Shadow SELL" value={String(shadow?.sell_candidates??0)} sub="v1.4 candidates"/><Metric label="Signals" value={String(sessionSignals.length)} sub="Execution signals"/><Metric label="Orders" value={String(sessionOrders.length)} sub="Recorded this session"/>
-        <Metric label="Total Equity" value={`฿${money(equity)}`} sub={`Initial ฿${money(initial)}`} positive={equity>=initial}/>
-        <Metric label="Market Value" value={`฿${money(marketValue)}`} sub={`${exposure.toFixed(1)}% exposure`}/>
-        <Metric label="Cash" value={`฿${money(cash)}`} sub="Available cash"/>
-        <Metric label="Unrealized P&L" value={signed(unrealized)} sub="Current open positions" positive={unrealized>=0}/>
-        <Metric label="Realized P&L" value={signed(realized)} sub="Closed / executed" positive={realized>=0}/>
-        <Metric label="Fees" value={`-฿${money(fees)}`} sub="Recorded execution cost"/>
+        <Metric label="Total Equity" value={hasVerifiedPortfolioSnapshot ? `฿${money(equity)}` : "—"} sub={hasVerifiedPortfolioSnapshot ? `Initial ฿${money(initial)}` : "Awaiting verified portfolio snapshot"} positive={hasVerifiedPortfolioSnapshot ? equity>=initial : undefined}/>
+        <Metric label="Market Value" value={hasMarketValue ? `฿${money(marketValue)}` : "—"} sub={hasMarketValue ? `${exposure.toFixed(1)}% exposure` : "Awaiting verified positions / snapshot"}/>
+        <Metric label="Cash" value={sessionSnapshot?.cash!=null ? `฿${money(cash)}` : "—"} sub={sessionSnapshot?.cash!=null ? "Verified snapshot cash" : "Awaiting verified portfolio snapshot"}/>
+        <Metric label="Unrealized P&L" value={positions.length>0 || sessionSnapshot?.unrealized_pnl!=null ? signed(unrealized) : "—"} sub={positions.length>0 || sessionSnapshot?.unrealized_pnl!=null ? "Current open positions" : "Awaiting verified portfolio data"} positive={positions.length>0 || sessionSnapshot?.unrealized_pnl!=null ? unrealized>=0 : undefined}/>
+        <Metric label="Realized P&L" value={sessionSnapshot?.realized_pnl!=null ? signed(realized) : "—"} sub={sessionSnapshot?.realized_pnl!=null ? "Verified snapshot" : "Awaiting verified portfolio snapshot"} positive={sessionSnapshot?.realized_pnl!=null ? realized>=0 : undefined}/>
+        <Metric label="Fees" value={sessionSnapshot?.fees!=null ? `-฿${money(fees)}` : "—"} sub={sessionSnapshot?.fees!=null ? "Recorded execution cost" : "Awaiting verified portfolio snapshot"}/>
         <LatencyMetric label="Latency p95" metric={feed?.latency?.summary?.end_to_end_ms?.p95} sampleCount={feed?.latency?.summary?.sample_count??0} sub="real executions"/>
         <LatencyMetric label="Latency p99" metric={feed?.latency?.summary?.end_to_end_ms?.p99} sampleCount={feed?.latency?.summary?.sample_count??0} sub={feed?.latency?.summary?.queue_wait_ms?.p95 != null ? "queue p95 " + feed.latency.summary.queue_wait_ms.p95.toFixed(1) + " ms" : "queue p95 not measured"}/>
       </section>
@@ -503,6 +507,64 @@ export default function LunaPortfolioPage() {
   </main>
 }
 
+
+
+function AgentDecisionPanel({shadow,generatedAt}:{shadow:NonNullable<ShadowStatus["shadow"]>|undefined;generatedAt?:string}) {
+  const decisions=shadow?.decisions??[];
+  const blockers=shadow?.blockers??[];
+  const lastEvaluated=generatedAt && Number.isFinite(Date.parse(generatedAt))
+    ? new Date(generatedAt).toLocaleTimeString("en-GB",{hour12:false})
+    : "—";
+  const verified=shadow?.orders_allowed===true && blockers.length===0;
+  return <section className="agent-reasoning-card" aria-labelledby="agent-reasoning-title">
+    <div className="agent-reasoning-head">
+      <div>
+        <div className="section-label">LUNA AGENT · DECISION TRACE</div>
+        <h3 id="agent-reasoning-title">What the engine evaluated</h3>
+        <p>Candidate reasoning from the existing shadow-status API. A candidate is not an order or a fill.</p>
+      </div>
+      <div className={"agent-cycle-status "+(verified?"verified":"blocked")}>
+        <CircleDot size={12}/>{verified?"GATES CLEAR":"OBSERVE / BLOCKED"}
+      </div>
+    </div>
+    <div className="agent-reasoning-meta">
+      <span><small>Last evaluation</small><strong>{lastEvaluated}</strong></span>
+      <span><small>BUY candidates</small><strong>{shadow?.buy_candidates??"—"}</strong></span>
+      <span><small>SELL candidates</small><strong>{shadow?.sell_candidates??"—"}</strong></span>
+      <span><small>Orders permitted</small><strong>{shadow?.orders_allowed===true?"YES":"NO / UNKNOWN"}</strong></span>
+    </div>
+    {blockers.length>0&&<div className="agent-blockers"><strong>Blocking reasons</strong><span>{blockers.join(" · ")}</span></div>}
+    <div className="agent-decision-list">
+      {decisions.slice(0,5).map((decision,index)=>{
+        const action=String(decision.candidate_action??"UNKNOWN").toUpperCase();
+        const actionClass=action==="BUY"?"buy":action==="SELL"?"sell":"hold";
+        return <details className="agent-decision" key={decision.symbol+"-"+decision.bar_end+"-"+index}>
+          <summary>
+            <span className="agent-decision-symbol">{decision.symbol}</span>
+            <span className={"agent-action "+actionClass}>{action}</span>
+            <span className="agent-decision-time">{decision.bar_end&&Number.isFinite(Date.parse(decision.bar_end))?new Date(decision.bar_end).toLocaleTimeString("en-GB",{hour12:false}):"time unavailable"}</span>
+            <span className="agent-expand">View reasoning</span>
+          </summary>
+          <div className="agent-decision-body">
+            <p>{decision.reason||"No decision explanation was recorded by the backend."}</p>
+            <div className="agent-factor-grid">
+              <span><small>Close</small><strong>{Number.isFinite(Number(decision.close))?Number(decision.close).toFixed(2):"—"}</strong></span>
+              <span><small>EMA 5</small><strong>{Number.isFinite(Number(decision.ema5))?Number(decision.ema5).toFixed(3):"—"}</strong></span>
+              <span><small>EMA 20</small><strong>{Number.isFinite(Number(decision.ema20))?Number(decision.ema20).toFixed(3):"—"}</strong></span>
+              <span><small>Momentum</small><strong>{Number.isFinite(Number(decision.momentum_1))?Number(decision.momentum_1).toFixed(4):"—"}</strong></span>
+              <span><small>Bars evaluated</small><strong>{decision.bar_count??"—"}</strong></span>
+              <span><small>Feed verified</small><strong>{decision.feed_verified===true?"YES":decision.feed_verified===false?"NO":"UNKNOWN"}</strong></span>
+              <span><small>Execution book</small><strong>{decision.verified_book===true?"VERIFIED":decision.verified_book===false?"UNVERIFIED":"UNKNOWN"}</strong></span>
+              <span><small>Execution state</small><strong>{decision.execution_blocked===true?"BLOCKED":decision.execution_blocked===false?"NOT BLOCKED":"UNKNOWN"}</strong></span>
+            </div>
+            <div className="agent-candidate-warning">RESEARCH CANDIDATE ONLY · This panel does not place orders. Execution must pass backend risk and source-verification gates.</div>
+          </div>
+        </details>;
+      })}
+      {!decisions.length&&<div className="agent-empty-state">No verified decision trace returned by the shadow API. LUNA will not invent a reasoning record.</div>}
+    </div>
+  </section>;
+}
 
 function SystemControlRoom({strategy,asOf}:{strategy:string;asOf:string}) {
   const [state,setState]=useState<ControlRoomState|null>(null);

@@ -65,6 +65,25 @@ export type ShadowStatus = {
   error?: { message?: string };
 };
 
+export type LunaHistoricalBar = {
+  timestamp: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number | null;
+};
+
+export type LunaMarketBarsResult = {
+  ok: boolean;
+  source?: string;
+  symbol?: string;
+  interval?: string;
+  fetched_at?: string;
+  bars?: LunaHistoricalBar[];
+  error?: string;
+};
+
 export type RealtimeQuote = {
   symbol: string;
   ts?: string;
@@ -248,6 +267,30 @@ export async function fetchPortfolioState(asOf: string) {
   ]);
 
   return { feed, runtime };
+}
+
+export async function fetchMarketBars(
+  symbol: string,
+  interval: "1m" | "5m" | "15m" | "60m" = "15m",
+  limit = 96,
+): Promise<LunaMarketBarsResult> {
+  const params = new URLSearchParams({
+    symbol: symbol.trim().toUpperCase(),
+    interval,
+    limit: String(limit),
+  });
+  const response = await fetch(`/api/luna/market-bars?${params.toString()}`, {
+    method: "GET",
+    cache: "no-store",
+    signal: AbortSignal.timeout(10_000),
+    credentials: "same-origin",
+    headers: { accept: "application/json" },
+  });
+  const payload = await response.json().catch(() => null);
+  if (!payload || typeof payload !== "object") {
+    throw new LunaApiError("Market history returned an invalid response", response.status);
+  }
+  return payload as LunaMarketBarsResult;
 }
 
 export async function fetchShadowStatus(asOf: string): Promise<ShadowStatus> {

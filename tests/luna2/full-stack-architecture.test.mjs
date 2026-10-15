@@ -206,3 +206,53 @@ test("4. Accessibility source contract: interactive portfolio rows have keyboard
   assert.match(page, /aria-selected=/);
   assert.match(page, /onKeyDown=\{\(event\)=>\{if\(event\.key==="Enter"\|\|event\.key===" "/);
 });
+
+
+test("LUNA portfolio never invents equity or cash when the verified snapshot is missing", () => {
+  const page = read("app/luna/page.tsx");
+  assert.match(page, /session\?\.initial_capital\?\?30000/);
+  assert.match(page, /hasVerifiedPortfolioSnapshot=sessionSnapshot\?\.cash!=null && sessionSnapshot\?\.market_value!=null/);
+  assert.match(page, /value=\{hasVerifiedPortfolioSnapshot \? `฿\$\{money\(equity\)\}` : "—"\}/);
+  assert.match(page, /value=\{sessionSnapshot\?\.cash!=null \? `฿\$\{money\(cash\)\}` : "—"\}/);
+  assert.doesNotMatch(page, /initial_capital\?\?1000000/);
+});
+
+
+test("LUNA JEX-inspired decision trace uses only backend shadow evidence and never implies a fill", () => {
+  const page = read("app/luna/page.tsx");
+  assert.match(page, /<AgentDecisionPanel shadow=\{shadow\} generatedAt=\{shadowStatus\?\.generated_at\}\/>/);
+  assert.match(page, /const decisions=shadow\?\.decisions\?\?\[\]/);
+  assert.match(page, /No verified decision trace returned by the shadow API/);
+  assert.match(page, /A candidate is not an order or a fill/);
+  assert.match(page, /RESEARCH CANDIDATE ONLY/);
+  assert.match(page, /decision\.feed_verified===true/);
+  assert.match(page, /decision\.verified_book===true/);
+});
+
+
+test("LUNA historical market bars are authenticated, source-verified, bounded, and fail closed", () => {
+  const route = read("app/api/luna/market-bars/route.ts");
+  assert.match(route, /getLunaUser/);
+  assert.match(route, /AUTHENTICATION_REQUIRED/);
+  assert.match(route, /LUNA_GATEWAY_URL/);
+  assert.match(route, /LUNA_GATEWAY_KEY/);
+  assert.match(route, /MAX_REQUESTS_PER_WINDOW/);
+  assert.match(route, /ALLOWED_INTERVALS/);
+  assert.match(route, /MARKET_HISTORY_SOURCE_UNVERIFIED/);
+  assert.match(route, /MARKET_HISTORY_EMPTY_OR_INVALID/);
+  assert.match(route, /normalizeCandle/);
+  assert.match(route, /Cache-Control.*private, no-store/);
+});
+
+test("LUNA JEX-inspired candles render only validated Settrade OHLC and never expose gateway secrets", () => {
+  const page = read("app/luna/page.tsx");
+  const panel = read("app/luna/market-history-panel.tsx");
+  const client = read("lib/luna-client.ts");
+  assert.match(page, /<MarketHistoryPanel \/>/);
+  assert.match(panel, /settrade-open-api-historical/);
+  assert.match(panel, /No chart has been fabricated/);
+  assert.match(panel, /MARKET_HISTORY_OHLC_FORMAT_UNSUPPORTED/);
+  assert.match(client, /\/api\/luna\/market-bars/);
+  assert.doesNotMatch(panel, /LUNA_GATEWAY_KEY/);
+  assert.doesNotMatch(panel, /mockQuotes|synthetic candle|Math\.random/);
+});

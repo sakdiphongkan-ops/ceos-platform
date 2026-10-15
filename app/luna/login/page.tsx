@@ -73,7 +73,7 @@ export default function LunaLoginPage() {
   }
 
   return (
-    <main className="min-h-[calc(100vh-4rem)] min-h-[calc(100dvh-4rem)] bg-[#f7f7f4] px-5 py-12 sm:px-8">
+    <main className="luna-login-page min-h-[calc(100vh-4rem)] min-h-[calc(100dvh-4rem)] bg-[#f7f7f4] px-5 py-12 sm:px-8">
       <div className="mx-auto max-w-md">
         <Link href="/luna" className="inline-flex items-center gap-2 text-xs text-[#777970]">
           <ArrowLeft size={14} /> Back to LUNA
@@ -97,21 +97,21 @@ export default function LunaLoginPage() {
               <span className="flex items-center gap-2 rounded-2xl border border-[#dcdcd4] bg-[#fafaf7] px-4">
                 <Mail size={16} className="text-[#85877f]" />
                 <input required type="email" value={email} onChange={(e)=>setEmail(e.target.value)}
-                  className="h-12 w-full bg-transparent text-[16px] outline-none sm:text-sm" autoComplete="email" />
+                  className="h-12 w-full bg-transparent text-[16px] outline-none" style={{ fontSize: "16px" }} autoComplete="email" />
               </span>
             </label>
 
             <label className="block">
               <span className="mb-2 block text-xs font-medium text-[#55574f]">Password</span>
               <input required minLength={6} type="password" value={password} onChange={(e)=>setPassword(e.target.value)}
-                className="h-12 w-full rounded-2xl border border-[#dcdcd4] bg-[#fafaf7] px-4 text-[16px] outline-none focus:border-[#9b9d93] sm:text-sm"
-                autoComplete={mode === "signin" ? "current-password" : "new-password"} />
+                className="h-12 w-full rounded-2xl border border-[#dcdcd4] bg-[#fafaf7] px-4 text-[16px] outline-none focus:border-[#9b9d93]"
+                style={{ fontSize: "16px" }} autoComplete={mode === "signin" ? "current-password" : "new-password"} />
             </label>
 
             {error && <div role="alert" className="rounded-2xl border border-[#efd4d0] bg-[#fff7f5] px-4 py-3 text-sm text-[#8a3f35]">{error}</div>}
             {message && <div role="status" className="rounded-2xl border border-[#dfe5cf] bg-[#f8faef] px-4 py-3 text-sm text-[#56633a]">{message}</div>}
 
-            <button disabled={busy} className="h-12 w-full rounded-2xl bg-[#171817] text-sm font-medium text-white disabled:opacity-50">
+            <button disabled={busy} style={{ minHeight: 48 }} className="h-12 w-full rounded-2xl bg-[#171817] text-sm font-medium text-white disabled:opacity-50">
               {busy ? "กำลังดำเนินการ…" : mode === "signin" ? "Sign in" : "Create account"}
             </button>
           </form>
@@ -120,13 +120,13 @@ export default function LunaLoginPage() {
             <span className="h-px flex-1 bg-[#e8e8e1]" /> OR <span className="h-px flex-1 bg-[#e8e8e1]" />
           </div>
 
-          <button onClick={signInWithGoogle} disabled={busy}
+          <button onClick={signInWithGoogle} disabled={busy} style={{ minHeight: 48 }}
             className="h-12 w-full rounded-2xl border border-[#d8d8d0] bg-white text-sm font-medium disabled:opacity-50">
             Continue with Google
           </button>
 
-          <button onClick={()=>{setMode(mode === "signin" ? "signup" : "signin");setError("");setMessage("");}}
-            className="mt-5 w-full text-xs text-[#66685f] underline underline-offset-4">
+          <button onClick={()=>{setMode(mode === "signin" ? "signup" : "signin");setError("");setMessage("");}} style={{ minHeight: 44 }}
+            className="mt-5 min-h-11 w-full rounded-xl px-3 py-2 text-sm text-[#55574f] underline underline-offset-4">
             {mode === "signin" ? "Create a new LUNA account" : "I already have an account"}
           </button>
 
