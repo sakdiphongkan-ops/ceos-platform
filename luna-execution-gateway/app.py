@@ -1769,9 +1769,19 @@ def connectivity_proof(
 
 @app.get("/health")
 def health():
+    # Liveness must remain available when market-data/readiness diagnostics fail.
+    # Actual feed, source, order-book and execution readiness is exposed separately
+    # by /connectivity/proof and may correctly remain blocked.
+    readiness_check = "OK"
+    try:
+        status = _system_status()
+    except Exception:
+        status = "LOCKED"
+        readiness_check = "UNAVAILABLE"
     return {
         "ok": True,
-        "status": _system_status(),
+        "status": status,
+        "readiness_check": readiness_check,
         "live_armed": LIVE_ARMED,
         "timestamp": int(time.time()),
     }
