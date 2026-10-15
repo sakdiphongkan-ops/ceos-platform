@@ -735,8 +735,13 @@ async function buildFeed() {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return json({ ok: true });
+  if (req.method !== "GET") {
+    return json({ ok: false, error: { message: "METHOD_NOT_ALLOWED" } }, 405, { "Allow": "GET, OPTIONS", "Cache-Control": "no-store" });
+  }
   // This Edge Function reads service-role data, so every data request must carry
   // a valid Supabase user access token. CORS is not an authentication mechanism.
+  // The returned paper lab is currently system-scoped, not customer-scoped.
+  // Do not add tenant/user-specific data without user-scoped queries and cache keys.
   const user = await authenticatedUser(req);
   if (!user) {
     return json(
@@ -771,7 +776,8 @@ Deno.serve(async (req) => {
 
     return json({ ok: false, error: { message: "VIEW_NOT_AVAILABLE" } }, 404);
   } catch (e) {
-    const reason = e instanceof Error ? e.message : String(e);
+    // Keep detailed exceptions out of public JSON. Log only the error class, never tokens or request headers.
+    console.error("[LUNA_API_ERROR]", e instanceof Error ? e.name : "UNKNOWN_ERROR");
     if (cache && Date.now() - cache.at < STALE_MAX_MS) {
       return json({
         ...cache.body,
@@ -782,6 +788,6 @@ Deno.serve(async (req) => {
         served_at: new Date().toISOString()
       }, 200, { "X-LUNA-Cache": "stale-fallback" });
     }
-    return json({ ok: false, error: { message: reason || "MARKET_API_UNAVAILABLE" } }, 504);
+    return json({ ok: false, error: { message: "MARKET_API_UNAVAILABLE" } }, 504);
   }
 });
