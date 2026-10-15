@@ -73,7 +73,7 @@ export default function LunaLoginPage() {
   }
 
   return (
-    <main className="min-h-[calc(100vh-4rem)] min-h-[calc(100dvh-4rem)] bg-[#f7f7f4] px-5 py-12 sm:px-8">
+    <main className="luna-login-page min-h-[calc(100vh-4rem)] min-h-[calc(100dvh-4rem)] bg-[#f7f7f4] px-5 py-12 sm:px-8">
       <div className="mx-auto max-w-md">
         <Link href="/luna" className="inline-flex items-center gap-2 text-xs text-[#777970]">
           <ArrowLeft size={14} /> Back to LUNA
