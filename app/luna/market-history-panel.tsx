@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, BarChart3, RefreshCw } from "lucide-react";
 import { fetchMarketBars, type LunaHistoricalBar } from "../../lib/luna-client";
 
@@ -62,16 +62,20 @@ export default function MarketHistoryPanel() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryToken, setRetryToken] = useState(0);
+  const requestSequence = useRef(0);
 
   const load = useCallback(async () => {
+    const requestId = ++requestSequence.current;
     setLoading(true);
     setError(null);
+    // Clear data immediately so a previous symbol/timeframe can never be shown under the new selection.
+    setBars([]);
+    setSource(null);
+    setFetchedAt(null);
     try {
       const result = await fetchMarketBars(symbol, interval, 96);
+      if (requestId !== requestSequence.current) return;
       if (!result.ok || result.source !== "settrade-open-api-historical" || result.symbol !== symbol || result.interval !== interval || !Array.isArray(result.bars) || result.bars.length === 0) {
-        setBars([]);
-        setSource(null);
-        setFetchedAt(null);
         setError(errorText(result.error ?? (result.source !== "settrade-open-api-historical" ? "MARKET_HISTORY_SOURCE_UNVERIFIED" : "MARKET_HISTORY_EMPTY_OR_INVALID")));
         return;
       }
@@ -81,11 +85,9 @@ export default function MarketHistoryPanel() {
         && [bar.open, bar.high, bar.low, bar.close].every((price) => Number.isFinite(price) && price > 0)
         && bar.high >= Math.max(bar.open, bar.close, bar.low)
         && bar.low <= Math.min(bar.open, bar.close, bar.high)
+        && (bar.volume === null || (Number.isFinite(bar.volume) && bar.volume >= 0))
       );
       if (normalized.length === 0) {
-        setBars([]);
-        setSource(null);
-        setFetchedAt(null);
         setError(errorText("MARKET_HISTORY_EMPTY_OR_INVALID"));
         return;
       }
@@ -93,17 +95,19 @@ export default function MarketHistoryPanel() {
       setSource(result.source);
       setFetchedAt(result.fetched_at ?? null);
     } catch {
-      setBars([]);
-      setSource(null);
-      setFetchedAt(null);
+      if (requestId !== requestSequence.current) return;
       setError(errorText(undefined));
     } finally {
-      setLoading(false);
+      if (requestId === requestSequence.current) setLoading(false);
     }
   }, [interval, symbol]);
 
   useEffect(() => {
     void load();
+    return () => {
+      // Invalidate any request still in flight when symbol/timeframe changes or component unmounts.
+      requestSequence.current += 1;
+    };
   }, [load, retryToken]);
 
   useEffect(() => {
