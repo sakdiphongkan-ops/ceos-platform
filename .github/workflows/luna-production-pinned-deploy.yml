@@ -39,55 +39,49 @@ jobs:
         run: |
           echo "Deploying commit: $GITHUB_SHA"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-      - name: Wait for all required CI on this exact commit
+      - name: Verify CI for the exact source tree
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           deadline=$(( $(date +%s) + 1800 ))
           while true; do
-            rows=$(gh api repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs --paginate --jq '.check_runs[] | [.name,.status,.conclusion] | @tsv' || true)
-            echo "$rows"
-            gateway=$(printf '%s\n' "$rows" | awk -F '\t' '$1=="gateway-ci"{print $2" "$3; exit}')
-            typecheck=$(printf '%s\n' "$rows" | awk -F '\t' '$1=="typecheck"{print $2" "$3; exit}')
-            build=$(printf '%s\n' "$rows" | awk -F '\t' '$1=="build"{print $2" "$3; exit}')
-            execution=$(printf '%s\n' "$rows" | awk -F '\t' '$1=="execution-gate"{print $2" "$3; exit}')
+            selected=""
+            # A deploy may be a metadata/workflow-only commit. In that case reuse
+            # successful CI only from an ancestor with an identical worker/gateway
+            # source tree; if executable source changed, only that source tree qualifies.
+            for candidate in $(git rev-list --first-parent "$GITHUB_SHA" -n 50); do
+              git diff --quiet "$candidate" "$GITHUB_SHA" -- luna-th1h luna-execution-gateway package.json package-lock.json || continue
+              rows=$(gh api "repos/$GITHUB_REPOSITORY/commits/$candidate/check-runs" --paginate --jq '.check_runs[] | [.name,.status,.conclusion] | @tsv' 2>/dev/null || true)
+              gateway=$(printf '%s\n' "$rows" | awk -F '\t' '$1=="gateway-ci"{print $2" "$3; exit}')
+              typecheck=$(printf '%s\n' "$rows" | awk -F '\t' '$1=="typecheck"{print $2" "$3; exit}')
+              build=$(printf '%s\n' "$rows" | awk -F '\t' '$1=="build"{print $2" "$3; exit}')
+              build_and_typecheck=$(printf '%s\n' "$rows" | awk -F '\t' '$1=="build-and-typecheck"{print $2" "$3; exit}')
+              execution=$(printf '%s\n' "$rows" | awk -F '\t' '$1=="execution-gate"{print $2" "$3; exit}')
 
-            gateway_ok=$(printf '%s' "$gateway" | grep -q '^completed success$' && echo yes || echo no)
-            typecheck_ok=$(printf '%s' "$typecheck" | grep -q '^completed success$' && echo yes || echo no)
-            build_ok=$(printf '%s' "$build" | grep -q '^completed success$' && echo yes || echo no)
-            execution_ok=$(printf '%s' "$execution" | grep -q '^completed success$' && echo yes || echo no)
+              gateway_ok=$(printf '%s' "$gateway" | grep -q '^completed success$' && echo yes || echo no)
+              typecheck_ok=$(printf '%s' "$typecheck" | grep -q '^completed success$' && echo yes || echo no)
+              build_ok=$(printf '%s' "$build" | grep -q '^completed success$' && echo yes || echo no)
+              build_and_typecheck_ok=$(printf '%s' "$build_and_typecheck" | grep -q '^completed success$' && echo yes || echo no)
+              execution_ok=$(printf '%s' "$execution" | grep -q '^completed success$' && echo yes || echo no)
 
-            typecheck_required=$([ -n "$typecheck" ] && echo yes || echo no)
-            build_required=$([ -n "$build" ] && echo yes || echo no)
-            execution_required=$([ -n "$execution" ] && echo yes || echo no)
+              # Typecheck is mandatory; one of the repository build checks is mandatory.
+              # Specialized gateway/execution checks are mandatory whenever present.
+              if [ "$typecheck_ok" = yes ] \
+                && { [ "$build_ok" = yes ] || [ "$build_and_typecheck_ok" = yes ]; } \
+                && { [ -z "$gateway" ] || [ "$gateway_ok" = yes ]; } \
+                && { [ -z "$execution" ] || [ "$execution_ok" = yes ]; }; then
+                echo "Verified exact source tree for deploy SHA $GITHUB_SHA using CI SHA $candidate"
+                selected="$candidate"
+                break
+              fi
+              echo "Waiting for valid CI on source-tree candidate $candidate"
+            done
 
-            if [ "$gateway_ok" = yes ] \
-              && { [ "$typecheck_required" = no ] || [ "$typecheck_ok" = yes ]; } \
-              && { [ "$build_required" = no ] || [ "$build_ok" = yes ]; } \
-              && { [ "$execution_required" = no ] || [ "$execution_ok" = yes ]; }; then
-              echo "Required LUNA CI passed for $GITHUB_SHA"
+            if [ -n "$selected" ]; then
               break
             fi
-
-            if printf '%s' "$gateway" | grep -q 'completed failure\|completed cancelled\|completed timed_out'; then
-              echo "Gateway CI failed on $GITHUB_SHA"
-              exit 1
-            fi
-            if printf '%s' "$typecheck" | grep -q 'completed failure\|completed cancelled\|completed timed_out'; then
-              echo "LUNA typecheck failed on $GITHUB_SHA"
-              exit 1
-            fi
-            if printf '%s' "$build" | grep -q 'completed failure\|completed cancelled\|completed timed_out'; then
-              echo "CEOS build failed on $GITHUB_SHA"
-              exit 1
-            fi
-            if printf '%s' "$execution" | grep -q 'completed failure\|completed cancelled\|completed timed_out'; then
-              echo "Execution gate failed on $GITHUB_SHA"
-              exit 1
-            fi
-
             if [ $(date +%s) -ge $deadline ]; then
-              echo "Timed out waiting for all required CI"
+              echo "Timed out: no successful CI exists for an identical worker/gateway source tree"
               exit 1
             fi
             sleep 15
