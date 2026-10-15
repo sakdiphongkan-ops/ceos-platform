@@ -248,13 +248,63 @@ Deno.serve(async (req: Request) => {
     const symbols = [...new Set((uni.data ?? []).map((x: any) => String(x.symbol ?? "").trim().toUpperCase()).filter(Boolean))];
     if (!symbols.length) return json({ ok: false, error: "EMPTY_ACTIVE_UNIVERSE" }, 503);
 
+    const priorityQueryErrors: string[] = [];
+    const queuedResult = await supabase.from("luna_paper_live_orders")
+      .select("symbol,fill_bar_end")
+      .eq("experiment_code", "LUNA-PAPER-LIVE-15M-VERIFIED")
+      .eq("session_id", maintenance.data.session_id)
+      .eq("status", "QUEUED")
+      .gt("fill_bar_end", new Date().toISOString())
+      .order("fill_bar_end", { ascending: true })
+      .limit(15);
+    if (queuedResult.error) priorityQueryErrors.push("queued_orders:" + queuedResult.error.message);
+
+    const candidateResult = await supabase.from("luna_shadow_15m_decisions")
+      .select("symbol,bar_end,candidate_action,momentum_1,feed_verified,verified_book,execution_blocked")
+      .eq("session_id", maintenance.data.session_id)
+      .eq("strategy_version", "luna-th1h-v1.4.0-15m-riskgated")
+      .in("candidate_action", ["BUY_CANDIDATE", "SELL_CANDIDATE"])
+      .eq("feed_verified", true)
+      .eq("verified_book", true)
+      .eq("execution_blocked", false)
+      .order("bar_end", { ascending: false })
+      .limit(100);
+    if (candidateResult.error) priorityQueryErrors.push("verified_candidates:" + candidateResult.error.message);
+
+    const decisionRows = candidateResult.data ?? [];
+    const latestCandidateBar = decisionRows[0]?.bar_end ?? null;
+    const latestCandidates = latestCandidateBar
+      ? decisionRows.filter((r: any) => r.bar_end === latestCandidateBar)
+      : [];
+    const ranked = (rows: any[]) => rows.sort((a: any, b: any) =>
+      Math.abs(num(b.momentum_1) ?? 0) - Math.abs(num(a.momentum_1) ?? 0) ||
+      String(a.symbol).localeCompare(String(b.symbol))
+    );
+    const signalSymbols = [
+      ...ranked(latestCandidates.filter((r: any) => r.candidate_action === "BUY_CANDIDATE")).slice(0, 10),
+      ...ranked(latestCandidates.filter((r: any) => r.candidate_action === "SELL_CANDIDATE")).slice(0, 10),
+    ].map((r: any) => String(r.symbol ?? "").trim().toUpperCase()).filter(Boolean);
+    const activeSet = new Set(symbols);
+    const prioritySymbols = [...new Set([
+      ...(queuedResult.data ?? []).map((r: any) => String(r.symbol ?? "").trim().toUpperCase()),
+      ...signalSymbols,
+    ])].filter((symbol) => activeSet.has(symbol)).slice(0, 30);
+    const prioritySet = new Set(prioritySymbols);
+
+    // Prioritise active paper orders and verified candidates using smaller, sequential
+    // batches so one oversized bulk response cannot starve symbols that need an exact
+    // next-bar quote. Remaining symbols still use the existing 50-symbol bulk pass.
     const chunks: string[][] = [];
-    for (let i = 0; i < symbols.length; i += 50) chunks.push(symbols.slice(i, i + 50));
+    for (let i = 0; i < prioritySymbols.length; i += 5) chunks.push(prioritySymbols.slice(i, i + 5));
+    const priorityChunkCount = chunks.length;
+    const remainingSymbols = symbols.filter((symbol) => !prioritySet.has(symbol));
+    for (let i = 0; i < remainingSymbols.length; i += 50) chunks.push(remainingSymbols.slice(i, i + 50));
     const validRows: any[] = [];
     const errors: string[] = [];
     let quoteRows = 0, bookRows = 0, mismatchRows = 0, staleRows = 0;
-    for (let i = 0; i < chunks.length; i += 4) {
-      const group = chunks.slice(i, i + 4);
+    for (let i = 0; i < chunks.length;) {
+      const groupSize = i < priorityChunkCount ? 1 : 4;
+      const group = chunks.slice(i, i + groupSize);
       const resultGroup = await Promise.all(group.map(async (chunk) => {
         const quotes = new Map<string, any>();
         const books = new Map<string, any>();
@@ -305,6 +355,7 @@ Deno.serve(async (req: Request) => {
         return rows;
       }));
       for (const rows of resultGroup) validRows.push(...rows);
+      i += groupSize;
     }
 
     const unique = new Map<string, any>();
@@ -336,6 +387,9 @@ Deno.serve(async (req: Request) => {
       symbols_with_quote: quoteRows, symbols_with_book: bookRows, valid_two_sided_matches: allRows.length,
       accepted_batches: accepted, rejected_batches: rejected, mismatch_rows: mismatchRows, stale_rows: staleRows,
       upstream_error_count: errors.length, upstream_errors: errors.slice(0, 8),
+      priority_symbols_requested: prioritySymbols.length,
+      priority_query_errors: priorityQueryErrors,
+      priority_chunk_size: 5,
       generated_at: new Date().toISOString(), paper_only: true, live_orders_created: false,
     });
   } catch (e) {
