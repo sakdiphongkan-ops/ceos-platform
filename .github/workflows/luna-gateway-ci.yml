@@ -47,7 +47,7 @@ jobs:
           response = app.health()
           assert response["ok"] is True
           assert response["status"] == "LOCKED"
-          assert response["readiness_check"] == "UNAVAILABLE"
+          assert set(response) <= {"ok", "status", "live_armed", "timestamp"}
           assert response["live_armed"] is False
           print("LUNA_GATEWAY_LIVENESS_FAIL_CLOSED_OK")
           PY
