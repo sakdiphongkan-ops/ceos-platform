@@ -18,6 +18,8 @@ function errorText(code: string | undefined): string {
   switch (code) {
     case "AUTHENTICATION_REQUIRED":
       return "Sign in to access authorized SETTRADE historical data.";
+    case "SYMBOL_NOT_ALLOWED":
+      return "This symbol is outside the verified SET chart allowlist.";
     case "MARKET_HISTORY_NOT_CONFIGURED":
       return "The historical SETTRADE gateway is not configured in this environment.";
     case "MARKET_HISTORY_UPSTREAM_UNAVAILABLE":
