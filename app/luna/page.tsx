@@ -197,8 +197,13 @@ export default function LunaPortfolioPage() {
             && quoteTimestamp(quote) !== null
           ),
         );
-        if (Object.values(accepted).some((quote) => isFreshQuote(quote, now))) {
-          setLastRealtimeTickAt(now);
+        const freshSourceTimes=Object.values(accepted)
+          .filter((quote)=>isFreshQuote(quote,now))
+          .map((quote)=>timestampMs(quote.source_ts??quote.ts))
+          .filter((value):value is number=>value!==null);
+        if (freshSourceTimes.length>0) {
+          // Store the vendor event time, not local receipt time, so delayed frames age out correctly.
+          setLastRealtimeTickAt(Math.max(...freshSourceTimes));
         }
         if (Object.keys(accepted).length > 0) {
           setRealtimeQuotes((prev)=>({ ...prev, ...accepted }));
@@ -458,7 +463,7 @@ export default function LunaPortfolioPage() {
   const hasVerifiedPortfolioSnapshot=snapshotCash!==null && snapshotMarketValue!==null;
   const cash=snapshotCash;
   // Use one numerically validated snapshot; do not mix snapshot cash with newer marks.
-  const equity=hasVerifiedPortfolioSnapshot ? snapshotCash+snapshotMarketValue : 0;
+  const equity=hasVerifiedPortfolioSnapshot ? (snapshotCash??0)+(snapshotMarketValue??0) : 0;
   const hasFreshCostBasis=hasFreshPositionMarks && positions.every((p)=>p.avgCost!==null);
   const liveUnrealized=hasFreshCostBasis ? positions.reduce((s,p)=>s+p.qty*((p.last??0)-(p.avgCost??0)),0) : null;
   const snapshotUnrealized=finiteNumber(sessionSnapshot?.unrealized_pnl);
@@ -467,7 +472,10 @@ export default function LunaPortfolioPage() {
   const realized=finiteNumber(sessionSnapshot?.realized_pnl);
   const feesRaw=finiteNumber(sessionSnapshot?.fees);
   const fees=feesRaw!==null&&feesRaw>=0?feesRaw:null;
-  const exposure=equity ? Number(sessionSnapshot?.gross_exposure??(liveMarketValue??0))/equity*100 : 0;
+  const snapshotGrossExposureRaw=finiteNumber(sessionSnapshot?.gross_exposure);
+  const snapshotGrossExposure=snapshotGrossExposureRaw!==null&&snapshotGrossExposureRaw>=0?snapshotGrossExposureRaw:null;
+  const exposureBase=snapshotGrossExposure??liveMarketValue??snapshotMarketValue;
+  const exposure=equity>0&&exposureBase!==null?exposureBase/equity*100:null;
   const selectedPos=selected&&positions.some(p=>p.symbol===selected.symbol)?positions.find(p=>p.symbol===selected.symbol)??null:null;
   const selectedHasFreshMark=Boolean(selectedPos && selectedPos.last!==null && selectedPos.lastPriceFresh);
   const selectedHasCostBasis=Boolean(selectedPos && selectedPos.avgCost!==null);
@@ -495,7 +503,7 @@ export default function LunaPortfolioPage() {
   const realtimeAgeMs=lastRealtimeTickAt==null ? null : Math.max(0,Date.now()-lastRealtimeTickAt);
   const realtimeFresh=realtimeAgeMs!=null && realtimeAgeMs<=5000;
   const marketFeedAge=realtimeFresh && realtimeAgeMs!=null
-    ? Math.round(realtimeAgeMs) + " ms since UI tick"
+    ? Math.round(realtimeAgeMs) + " ms since source timestamp"
     : Number.isFinite(Number(marketFeed.latest_age_ms))
       ? Math.max(0,Math.round(Number(marketFeed.latest_age_ms))) + " ms old"
       : "age unavailable";
@@ -608,7 +616,7 @@ export default function LunaPortfolioPage() {
       {error&&<div className="error-banner"><span>{error}</span><button onClick={load}>Retry</button></div>}
       <section className="summary-grid"><Metric label="Market ticks" value={String(sessionTicks.length)} sub="Latest session feed"/><Metric label="Shadow BUY" value={String(shadow?.buy_candidates??0)} sub="v1.4 candidates"/><Metric label="Shadow SELL" value={String(shadow?.sell_candidates??0)} sub="v1.4 candidates"/><Metric label="Signals" value={String(sessionSignals.length)} sub="Execution signals"/><Metric label="Orders" value={String(sessionOrders.length)} sub="Recorded this session"/>
         <Metric label="Total Equity" value={hasVerifiedPortfolioSnapshot ? `฿${money(equity)}` : "—"} sub={hasVerifiedPortfolioSnapshot ? `Initial ฿${money(initial)}` : "Awaiting verified portfolio snapshot"} positive={hasVerifiedPortfolioSnapshot ? equity>=initial : undefined}/>
-        <Metric label="Market Value" value={hasMarketValue ? `฿${money(marketValue)}` : "—"} sub={hasMarketValue ? `${exposure.toFixed(1)}% exposure` : "Awaiting verified positions / snapshot"}/>
+        <Metric label="Market Value" value={hasMarketValue ? `฿${money(marketValue)}` : "—"} sub={hasMarketValue ? `${exposure===null?"—":exposure.toFixed(1)}% exposure` : "Awaiting verified positions / snapshot"}/>
         <Metric label="Cash" value={sessionSnapshot?.cash!=null ? `฿${money(cash??0)}` : "—"} sub={sessionSnapshot?.cash!=null ? "Verified snapshot cash" : "Awaiting verified portfolio snapshot"}/>
         <Metric label="Unrealized P&L" value={hasUnrealized && unrealized!==null ? signed(unrealized) : "—"} sub={hasFreshPositionMarks ? "Fresh source-timestamped marks" : sessionSnapshot?.unrealized_pnl!=null ? "Verified portfolio snapshot" : "Awaiting verified marks / snapshot"} positive={unrealized!==null ? unrealized>=0 : undefined}/>
         <Metric label="Realized P&L" value={realized!==null ? signed(realized) : "—"} sub={realized!==null ? "Verified snapshot" : "Awaiting verified portfolio snapshot"} positive={realized!==null ? realized>=0 : undefined}/>
@@ -652,7 +660,7 @@ export default function LunaPortfolioPage() {
         </div>
         <aside className="side-card">{selectedPos?<><div className="detail-head"><div><div className="detail-symbol">{selectedPos.symbol}</div><div className="muted">{selectedPos.name}</div></div><button className="close-button" onClick={()=>setSelected(null)}><X size={15}/></button></div><div className="price-block"><div>{selectedPos.last!==null?"฿"+selectedPos.last.toFixed(2):"—"}</div><span className={selectedCanComputeUnrealized?(selectedPos.last!>=selectedPos.avgCost!?"positive":"negative"):"muted"}>{selectedCanComputeUnrealized?((selectedPos.last!/selectedPos.avgCost!-1)*100).toFixed(2)+"%":selectedHasFreshMark?"COST BASIS UNAVAILABLE":"MARK STALE / UNAVAILABLE"}</span></div><div className="detail-grid"><Detail label="Position" value={`${money(selectedPos.qty).replace(".00","")} shares`}/><Detail label="Avg Cost" value={selectedPos.avgCost!==null?`฿${selectedPos.avgCost.toFixed(2)}`:"—"}/><Detail label="Market Value" value={selectedHasFreshMark?"฿"+money(selectedPos.qty*(selectedPos.last??0)):"—"}/><Detail label="Unrealized P&L" value={selectedCanComputeUnrealized?signed(selectedPos.qty*((selectedPos.last??0)-(selectedPos.avgCost??0))):"—"} positive={selectedCanComputeUnrealized?(selectedPos.last??0)>=(selectedPos.avgCost??0):undefined}/><Detail label="Portfolio Weight" value={equity&&selectedHasFreshMark?(selectedPos.qty*(selectedPos.last??0)/equity*100).toFixed(1)+"%":"—"}/><Detail label="Sizing" value="Dynamic · signal strength"/></div><div className="section-label">CURRENT SIGNAL</div><div className="signal-panel"><SignalBadge signal={selectedPos.signal} large/><p>{selectedPos.signalReason}</p></div><div className="section-label">EXECUTION TIMELINE</div><div className="timeline">{trades.filter(t=>t.symbol===selectedPos.symbol&&t.filledQty>0&&t.price!==null).map(t=><div className="timeline-item" key={t.time+"-"+t.symbol+"-"+t.side}><div className={`timeline-dot ${t.side.toLowerCase()}`}/><div><strong>{t.side} {money(t.filledQty).replace(".00","")} @ ฿{t.price!.toFixed(2)}</strong><span>{t.time} · {t.reason}</span></div></div>)}<div className="timeline-item future"><div className="timeline-dot"/><div><strong>Position currently open</strong><span>Latest feed mark</span></div></div></div><div className="audit-strip"><Layers3 size={15}/><span>Execution → Position → Snapshot → Audit event</span></div></>:<div className="empty-detail"><strong>Select a position</strong><span>Click any holding to inspect its live execution history.</span></div>}</aside>
       </section>
-      <section className="bottom-grid"><div className="mini-card"><div className="mini-title"><BarChart3 size={16}/> Exposure by position</div><div className="bars">{positions.map(p=>{const weight=equity&&p.last!==null&&p.lastPriceFresh?p.qty*p.last/equity*100:null;return <div className="bar-row" key={p.symbol}><span>{p.symbol}</span><i><b style={{width:`${Math.min((weight??0)*5,100)}%`}}/></i><strong>{weight===null?"—":weight.toFixed(1)+"%"}</strong></div>})</div></div><div className="mini-card"><div className="mini-title"><History size={16}/> Session controls</div><div className="control-list"><div><span>Strategy</span><strong>{session?.strategy_version??"—"}</strong></div><div><span>Initial capital</span><strong>฿{money(initial)}</strong></div><div><span>Gross exposure</span><strong>{exposure.toFixed(1)}% / 100%</strong></div><div><span>End of day</span><strong>FORCE CLOSE</strong></div></div><div className={`live-toggle ${live ? "on" : "off"}`}><CircleDot size={13}/>{live ? `API connected · feed: ${marketFeedLabel}` : "Feed unavailable"}</div></div><div className="mini-card"><div className="mini-title"><WalletCards size={16}/> Audit integrity</div><div className="audit-score"><strong>{feed?.counts?.audits?"READY":"WAITING"}</strong><span>{feed?.counts?.audits??0} audit events · {feed?.counts?.fills??0} fills · {feed?.counts?.snapshots??0} snapshots</span></div><div className="hash-line">universe loaded · quote coverage tracked · real latency ledger · API-backed</div></div></section>
+      <section className="bottom-grid"><div className="mini-card"><div className="mini-title"><BarChart3 size={16}/> Exposure by position</div><div className="bars">{positions.map(p=>{const weight=equity&&p.last!==null&&p.lastPriceFresh?p.qty*p.last/equity*100:null;return <div className="bar-row" key={p.symbol}><span>{p.symbol}</span><i><b style={{width:`${Math.min((weight??0)*5,100)}%`}}/></i><strong>{weight===null?"—":weight.toFixed(1)+"%"}</strong></div>})</div></div><div className="mini-card"><div className="mini-title"><History size={16}/> Session controls</div><div className="control-list"><div><span>Strategy</span><strong>{session?.strategy_version??"—"}</strong></div><div><span>Initial capital</span><strong>฿{money(initial)}</strong></div><div><span>Gross exposure</span><strong>{exposure===null?"—":exposure.toFixed(1)}% / 100%</strong></div><div><span>End of day</span><strong>FORCE CLOSE</strong></div></div><div className={`live-toggle ${live ? "on" : "off"}`}><CircleDot size={13}/>{live ? `API connected · feed: ${marketFeedLabel}` : "Feed unavailable"}</div></div><div className="mini-card"><div className="mini-title"><WalletCards size={16}/> Audit integrity</div><div className="audit-score"><strong>{feed?.counts?.audits?"READY":"WAITING"}</strong><span>{feed?.counts?.audits??0} audit events · {feed?.counts?.fills??0} fills · {feed?.counts?.snapshots??0} snapshots</span></div><div className="hash-line">universe loaded · quote coverage tracked · real latency ledger · API-backed</div></div></section>
     </div>
   </main>
 }
