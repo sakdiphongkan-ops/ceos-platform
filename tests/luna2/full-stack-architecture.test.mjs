@@ -272,14 +272,15 @@ test("LUNA mark-to-market never substitutes average cost for a missing current q
   assert.match(page, /last: number \| null/);
   assert.match(page, /lastPriceFresh/);
   assert.doesNotMatch(page, /tick\?\.last\?\?tick\?\.bid\?\?tick\?\.ask\?\?position\.avg_price/);
-  assert.match(page, /Awaiting verified portfolio data/);
+  assert.match(page, /Awaiting verified marks \/ snapshot/);
 });
 
 test("LUNA real-time badge requires a fresh source timestamp, not only local receipt time", () => {
   const page = read("app/luna/page.tsx");
   assert.match(page, /function isFreshQuote/);
   assert.match(page, /source_ts/);
-  assert.match(page, /isFreshQuote\(quote\)/);
+  assert.match(page, /isFreshQuote\(/);
+  assert.match(page, /Math\.max\(\.\.\.freshSourceTimes\)/);
 });
 
 test("LUNA market-history fetches do not retain the previous symbol's bars across a new request", () => {
