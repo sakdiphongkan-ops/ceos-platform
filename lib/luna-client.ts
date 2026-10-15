@@ -4,6 +4,7 @@ import {
   LUNA_PUBLIC_MARKET_STREAM,
   LUNA_STRATEGY,
 } from "./luna-runtime";
+import { createClient as createSupabaseBrowserClient } from "./supabase/client";
 
 export type RuntimeStatus = {
   ok?: boolean;
@@ -34,11 +35,11 @@ export type RuntimeStatus = {
 export type ShadowDecision = {
   symbol: string;
   bar_end: string;
-  close: number;
-  ema5: number;
-  ema20: number;
-  momentum_1: number;
-  bar_count: number;
+  close?: number;
+  ema5?: number;
+  ema20?: number;
+  momentum_1?: number;
+  bar_count?: number;
   candidate_action: string;
   verified_book: boolean;
   feed_verified: boolean;
@@ -108,7 +109,78 @@ export type FeedSession = {
 };
 
 export type LunaFeed = {
+  ok?: boolean;
+  public_safe?: boolean;
+  partial_data?: boolean;
   generated_at: string;
+  as_of_date?: string;
+  strategy_version?: string;
+  system_readiness?: {
+    status?: string;
+    paper_only?: boolean;
+    real_money_execution_enabled?: boolean;
+    current_session_open?: boolean;
+    runtime_heartbeat_fresh?: boolean;
+    market_feed_verified_for_execution?: boolean;
+    stale_queued_orders?: number;
+    blockers?: string[];
+  };
+  universe_coverage?: {
+    active_universe?: number;
+    active_set?: number;
+    active_mai?: number;
+    verified_book_symbols?: number;
+  };
+  paper_live?: {
+    status?: string;
+    runtime_fresh?: boolean;
+    heartbeat_age_ms?: number | null;
+    last_heartbeat?: string | null;
+    last_signal_bar_end?: string | null;
+    session_id?: string | null;
+    initial_capital?: number | null;
+    cash?: number | null;
+    reserved_cash?: number | null;
+    available_cash?: number | null;
+    realized_pnl?: number | null;
+    fees?: number | null;
+    paper_only?: boolean;
+    fill_model?: string;
+    orders_total?: number | null;
+    orders_returned?: number;
+    positions_returned?: number;
+  } | null;
+  signal_state?: {
+    status?: string;
+    candidate_decisions_today?: number;
+    buy_candidates_today?: number;
+    sell_candidates_today?: number;
+    blocked_candidates_today?: number;
+    verified_book_candidates_today?: number;
+    latest_bar_end?: string | null;
+  };
+  decision_audit?: Array<{
+    symbol: string;
+    bar_end: string;
+    candidate_action: string;
+    execution_blocked: boolean;
+    feed_verified: boolean;
+    verified_book: boolean;
+    reason?: string | null;
+  }>;
+  portfolio?: {
+    cash?: number | null;
+    reserved_cash?: number | null;
+    available_cash?: number | null;
+    market_value?: number | null;
+    gross_exposure?: number | null;
+    realized_pnl?: number | null;
+    unrealized_pnl?: number | null;
+    fees?: number | null;
+    as_of?: string | null;
+    data_status?: string;
+    valuation_status?: string;
+  } | null;
   sessions: FeedSession[];
   ticks: Array<Record<string, any>>;
   signals: Array<Record<string, any>>;
@@ -205,8 +277,29 @@ export async function fetchJson<T>(
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
+    const headers = new Headers(init.headers);
+    // The LUNA edge function uses the service role for aggregation. Attach the
+    // signed-in user's Supabase JWT only to this exact endpoint, never other URLs.
+    if (typeof window !== "undefined") {
+      try {
+        const requestUrl = input instanceof URL
+          ? input
+          : new URL(typeof input === "string" ? input : input.url, window.location.origin);
+        const apiUrl = new URL(LUNA_API);
+        if (requestUrl.origin === apiUrl.origin && requestUrl.pathname === apiUrl.pathname) {
+          const { data } = await createSupabaseBrowserClient().auth.getSession();
+          if (data.session?.access_token) {
+            headers.set("Authorization", `Bearer ${data.session.access_token}`);
+          }
+        }
+      } catch {
+        // Never fabricate credentials. The API will fail closed with HTTP 401.
+      }
+    }
+
     const response = await fetch(input, {
       ...init,
+      headers,
       signal: controller.signal,
       cache: init.cache ?? "no-store",
     });
@@ -247,24 +340,33 @@ export function buildLunaApiUrl(
 }
 
 export async function fetchPortfolioState(asOf: string) {
-  const [feed, runtime] = await Promise.all([
-    fetchJson<LunaFeed>(
-      buildLunaApiUrl("feed", {
-        limit: 100,
-        strategy: LUNA_STRATEGY,
-        as_of: asOf,
-      }),
-    ),
-    fetchJson<RuntimeStatus>(
-      buildLunaApiUrl("runtime_status", {
-        strategy: LUNA_STRATEGY,
-        as_of: asOf,
-      }),
-    ).catch((error) => ({
-      ok: false,
-      error: { message: error instanceof Error ? error.message : "Runtime API unavailable" },
-    })),
-  ]);
+  const feed = await fetchJson<LunaFeed>(
+    buildLunaApiUrl("feed", {
+      limit: 100,
+      strategy: LUNA_STRATEGY,
+      as_of: asOf,
+    }),
+  );
+
+  const heartbeatAge = feed.paper_live?.heartbeat_age_ms;
+  const runtimeFresh = feed.paper_live?.runtime_fresh === true
+    && typeof heartbeatAge === "number"
+    && Number.isFinite(heartbeatAge)
+    && heartbeatAge >= 0;
+  const runtime: RuntimeStatus = {
+    ok: feed.ok !== false,
+    generated_at: feed.generated_at,
+    runtime: {
+      // LIVE here means a fresh paper-engine heartbeat, never live-money execution.
+      state: runtimeFresh ? "LIVE" : feed.system_readiness?.current_session_open ? "DEGRADED" : "NO_OPEN_SESSION",
+      system_state: runtimeFresh ? "PAPER_RUNTIME_FRESH" : feed.system_readiness?.status ?? "UNKNOWN",
+      session: feed.sessions?.[0] ?? undefined,
+      strategy_version: feed.strategy_version,
+      latest_source: feed.market_feed?.latest_source ?? null,
+      latest_age_ms: heartbeatAge ?? feed.market_feed?.latest_age_ms ?? null,
+      latest_tick_ts: feed.paper_live?.last_heartbeat ?? feed.market_feed?.latest_quote_ts ?? null,
+    },
+  };
 
   return { feed, runtime };
 }
@@ -294,12 +396,49 @@ export async function fetchMarketBars(
 }
 
 export async function fetchShadowStatus(asOf: string): Promise<ShadowStatus> {
-  return fetchJson<ShadowStatus>(
-    buildLunaApiUrl("shadow_status", {
+  const feed = await fetchJson<LunaFeed>(
+    buildLunaApiUrl("feed", {
       strategy: LUNA_STRATEGY,
       as_of: asOf,
     }),
   );
+  const blockers = [...(feed.system_readiness?.blockers ?? [])];
+  if (feed.partial_data && blockers.length === 0) blockers.push("PARTIAL_DATA");
+  const decisions: ShadowDecision[] = (feed.decision_audit ?? []).map((decision) => {
+    const rawAction = String(decision.candidate_action ?? "UNKNOWN").toUpperCase();
+    const action = rawAction.startsWith("BUY") ? "BUY"
+      : rawAction.startsWith("SELL") ? "SELL"
+      : rawAction === "HOLD" ? "HOLD"
+      : "UNKNOWN";
+    return {
+      symbol: String(decision.symbol ?? ""),
+      bar_end: String(decision.bar_end ?? ""),
+      candidate_action: action,
+      verified_book: decision.verified_book === true,
+      feed_verified: decision.feed_verified === true,
+      execution_blocked: decision.execution_blocked !== false,
+      reason: String(decision.reason ?? "No decision explanation was recorded by the backend."),
+    };
+  }).filter((decision) => decision.symbol && decision.bar_end);
+
+  return {
+    ok: feed.ok,
+    generated_at: feed.generated_at,
+    shadow: {
+      state: feed.signal_state?.status ?? "UNKNOWN",
+      strategy_version: feed.strategy_version ?? LUNA_STRATEGY,
+      latest_bar_end: feed.signal_state?.latest_bar_end ?? null,
+      eligible_symbols: feed.universe_coverage?.active_universe ?? 0,
+      buy_candidates: feed.signal_state?.buy_candidates_today ?? 0,
+      sell_candidates: feed.signal_state?.sell_candidates_today ?? 0,
+      orders_allowed: feed.system_readiness?.status === "READY_FOR_PAPER_ONLY"
+        && feed.paper_live?.runtime_fresh === true,
+      blockers,
+      latest_source: feed.market_feed?.latest_source ?? null,
+      verified_latest_bar_symbols: feed.signal_state?.verified_book_candidates_today ?? 0,
+      decisions,
+    },
+  };
 }
 
 export async function fetchControlRoom(strategy = LUNA_STRATEGY): Promise<ControlRoomState> {
