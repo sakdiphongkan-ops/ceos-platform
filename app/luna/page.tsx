@@ -147,7 +147,10 @@ export default function LunaPortfolioPage() {
     }catch(e){
       setLive(false);
       setRuntimeStatus(null);
-      setError(e instanceof Error ? e.message : "Unable to load LUNA feed");
+      const status = e && typeof e === "object" && "status" in e ? Number((e as {status?: unknown}).status) : null;
+      setError(status === 401
+        ? "SIGN_IN_REQUIRED: Sign in to view LUNA's private paper portfolio and decision trace."
+        : e instanceof Error ? e.message : "Unable to load LUNA feed");
     }finally{
       refreshInFlight.current=false;
       setLoading(false);
@@ -512,7 +515,8 @@ export default function LunaPortfolioPage() {
   const backendStrategy=String(backendRuntime?.strategy_version??backendRuntime?.session?.strategy_version??"");
   const strategyMismatch=Boolean(backendStrategy && backendStrategy!==LUNA_STRATEGY);
   const runtimeAgeMs=Number.isFinite(Number(backendRuntime?.latest_age_ms)) ? Math.max(0,Number(backendRuntime?.latest_age_ms)) : null;
-  const backendRuntimeLive=backendRuntime?.state==="LIVE" && Number(backendRuntime?.ticks_30s??0)>0;
+  const backendRuntimeLive=backendRuntime?.state==="LIVE"
+    && (Number(backendRuntime?.ticks_30s??0)>0 || backendRuntime?.system_state==="PAPER_RUNTIME_FRESH");
   const backendRuntimeFresh=backendRuntimeLive && runtimeAgeMs!=null && runtimeAgeMs<=10000;
   const runtimeState:RuntimeState = !live
     ? "OFFLINE"
@@ -613,7 +617,7 @@ export default function LunaPortfolioPage() {
         <div><span>MARKET FEED</span><strong>{realtimeFresh ? "REALTIME STREAM" : realtimeAgeMs!=null ? "STREAM STALE" : marketFeedLabel}</strong><small>{realtimeFresh ? "public WS · " + marketFeedAge : realtimeAgeMs!=null ? "last UI tick · " + marketFeedAge : marketFeedSource + " · " + marketFeedAge}</small></div><div><span>SHADOW ENGINE</span><strong>{shadow ? `${shadow.buy_candidates??0} BUY · ${shadow.sell_candidates??0} SELL` : "SYNCING"}</strong><small>{shadow?.blockers?.length ? shadow.blockers.join(" · ") : "v1.4 observe · no order"}</small></div><div className="live-operating-note"><ShieldCheck size={15}/><span>{marketPhase==="ACTIVE" ? "Market session active — backend re-checks phase immediately before every execution." : "Market execution is locked at this phase; stale signals are shown as HOLD until a fresh in-session signal arrives."}</span></div>
       </section>
       <AgentDecisionPanel shadow={shadow} generatedAt={shadowStatus?.generated_at}/>
-      {error&&<div className="error-banner"><span>{error}</span><button onClick={load}>Retry</button></div>}
+      {error&&<div className="error-banner"><span>{error}</span>{error.startsWith("SIGN_IN_REQUIRED:")?<a href="/luna/login?next=%2Fluna" className="filter-button">Sign in</a>:<button onClick={load}>Retry</button>}</div>}
       <section className="summary-grid"><Metric label="Market ticks" value={String(sessionTicks.length)} sub="Latest session feed"/><Metric label="Shadow BUY" value={String(shadow?.buy_candidates??0)} sub="v1.4 candidates"/><Metric label="Shadow SELL" value={String(shadow?.sell_candidates??0)} sub="v1.4 candidates"/><Metric label="Signals" value={String(sessionSignals.length)} sub="Execution signals"/><Metric label="Orders" value={String(sessionOrders.length)} sub="Recorded this session"/>
         <Metric label="Total Equity" value={hasVerifiedPortfolioSnapshot ? `฿${money(equity)}` : "—"} sub={hasVerifiedPortfolioSnapshot ? `Initial ฿${money(initial)}` : "Awaiting verified portfolio snapshot"} positive={hasVerifiedPortfolioSnapshot ? equity>=initial : undefined}/>
         <Metric label="Market Value" value={hasMarketValue ? `฿${money(marketValue)}` : "—"} sub={hasMarketValue ? `${exposure===null?"—":exposure.toFixed(1)}% exposure` : "Awaiting verified positions / snapshot"}/>
@@ -738,7 +742,8 @@ function SystemControlRoom({strategy,asOf}:{strategy:string;asOf:string}) {
       setState(data);
     }catch(e){
       setState(null);
-      setError(e instanceof Error?e.message:"Unable to load LUNA control state");
+      const status=e&&typeof e==="object"&&"status" in e?Number((e as {status?:unknown}).status):null;
+      setError(status===401?"SIGN_IN_REQUIRED: Sign in to view private paper trading status.":e instanceof Error?e.message:"Unable to load LUNA control state");
     }finally{setLoading(false);}
   },[strategy]);;
 
@@ -768,7 +773,7 @@ function SystemControlRoom({strategy,asOf}:{strategy:string;asOf:string}) {
       </div>
     </div>
 
-    {error && <div className="error-banner compact"><span>{error}</span><button onClick={refresh}>Retry</button></div>}
+    {error && <div className="error-banner compact"><span>{error}</span>{error.startsWith("SIGN_IN_REQUIRED:")?<a href="/luna/login?next=%2Fluna" className="filter-button">Sign in</a>:<button onClick={refresh}>Retry</button>}</div>
 
     <div className="control-grid">
       <div className="control-stat"><span>FEED READINESS</span><strong>{loading?"—":total?`${passed}/${total}`:"—"}</strong><small>{test?.summary?.integrity?"Feed-backed gates PASS":"หนึ่งรายการขึ้นไปยัง blocked หรือไม่มีข้อมูล"}</small></div>
