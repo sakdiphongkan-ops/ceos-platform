@@ -211,12 +211,27 @@ jobs:
           LUNA_EXPECTED_SOURCE_SHA: ci
           LUNA_EXECUTION_LEDGER_ENABLED: "true"
           LUNA_AGENT_KEY: "test-ledger-key"
+          LUNA_GATEWAY_KEY: "test-gateway-key"
           LUNA_ORDER_AUTH_KEY: "test-order-key"
         run: |
           python - <<'PY'
           import app
           assert app.execution_ledger_configured() is True
           assert app.ORDER_AUTH_KEY == "test-order-key"
+          assert app.auth("test-gateway-key") is None
+          try:
+              app.auth("incorrect-gateway-key")
+          except Exception as exc:
+              assert getattr(exc, "status_code", None) == 401
+          else:
+              raise AssertionError("bad gateway key was accepted")
+          assert app.order_auth("test-gateway-key", "test-order-key") is None
+          try:
+              app.order_auth("test-gateway-key", "incorrect-order-key")
+          except Exception as exc:
+              assert getattr(exc, "status_code", None) == 401
+          else:
+              raise AssertionError("bad order key was accepted")
           body = app.health()
           assert set(body) <= {"ok", "status", "live_armed", "timestamp"}
           assert "provider_candidates" not in body
