@@ -70,32 +70,63 @@ test("4. WCAG 2.1 AA automated scan: core pages", async ({ page }) => {
   }
 });
 
-test("12. Performance smoke: collect LCP and CLS for the control room", async ({ page }) => {
+test("12. Performance smoke: collect LCP, CLS and lab INP proxy for the control room", async ({ page }) => {
   await page.addInitScript(() => {
-    (window as any).__lunaVitals = { lcp: null, cls: 0 };
-    const lcpObserver = new PerformanceObserver((list) => {
-      const entries = list.getEntries();
-      const last = entries[entries.length - 1] as PerformanceEntry | undefined;
-      if (last) (window as any).__lunaVitals.lcp = last.startTime;
-    });
-    lcpObserver.observe({ type: "largest-contentful-paint", buffered: true });
+    const interactions = new Map<number, number>();
+    const vitals: { lcp: number | null; cls: number; inp: number | null; inpSupported: boolean } = {
+      lcp: null, cls: 0, inp: null, inpSupported: false,
+    };
+    (window as any).__lunaVitals = vitals;
 
-    let cls = 0;
-    const clsObserver = new PerformanceObserver((list) => {
-      for (const entry of list.getEntries() as any[]) {
-        if (!entry.hadRecentInput) cls += entry.value;
-      }
-      (window as any).__lunaVitals.cls = cls;
-    });
-    clsObserver.observe({ type: "layout-shift", buffered: true });
+    try {
+      const lcpObserver = new PerformanceObserver((list) => {
+        const entries = list.getEntries();
+        const last = entries[entries.length - 1] as PerformanceEntry | undefined;
+        if (last) vitals.lcp = last.startTime;
+      });
+      lcpObserver.observe({ type: "largest-contentful-paint", buffered: true } as any);
+    } catch {}
+
+    try {
+      const clsObserver = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries() as any[]) {
+          if (!entry.hadRecentInput) vitals.cls += entry.value;
+        }
+      });
+      clsObserver.observe({ type: "layout-shift", buffered: true } as any);
+    } catch {}
+
+    try {
+      const eventObserver = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries() as any[]) {
+          if (entry.interactionId && entry.duration >= 0) {
+            const key = Number(entry.interactionId);
+            interactions.set(key, Math.max(interactions.get(key) ?? 0, entry.duration));
+          }
+        }
+        // Lab proxy: longest observed interaction in this page session, not field p75 INP.
+        vitals.inp = interactions.size ? Math.max(...interactions.values()) : null;
+      });
+      eventObserver.observe({ type: "event", buffered: true, durationThreshold: 16 } as any);
+      vitals.inpSupported = true;
+    } catch {
+      vitals.inpSupported = false;
+    }
   });
 
   await page.goto("/luna", { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(1000);
+  await page.waitForTimeout(500);
+  const tradesTab = page.getByRole("button", { name: "Trades", exact: true }).first();
+  if (await tradesTab.isVisible().catch(() => false)) {
+    await tradesTab.click();
+    await expect(page.getByText(/Today's Trades/).first()).toBeVisible().catch(() => {});
+  }
+  await page.waitForTimeout(500);
 
   const vitals = await page.evaluate(() => (window as any).__lunaVitals);
   expect(vitals.lcp == null || vitals.lcp < 4000).toBeTruthy();
   expect(vitals.cls == null || vitals.cls < 0.25).toBeTruthy();
+  expect(!vitals.inpSupported || vitals.inp == null || vitals.inp < 500).toBeTruthy();
 });
 
 
@@ -188,4 +219,22 @@ test("client telemetry API enforces origin, content type, and payload-size bound
     data: JSON.stringify({ source: "error", message: "x".repeat(10_000) }),
   });
   expect(oversized.status()).toBe(413);
+});
+
+
+test("responsive layout smoke covers 375px mobile, 768px tablet, and 1440px desktop", async ({ page }) => {
+  for (const width of [375, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const route of ["/luna", "/luna/login"]) {
+      await page.goto(route, { waitUntil: "domcontentloaded" });
+      await expect(page.locator("body")).toBeVisible();
+      const metrics = await page.evaluate(() => ({
+        clientWidth: document.documentElement.clientWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+        mainWidth: document.querySelector("main")?.getBoundingClientRect().width ?? 0,
+      }));
+      expect(metrics.scrollWidth - metrics.clientWidth, `horizontal overflow at ${width}px on ${route}`).toBeLessThanOrEqual(1);
+      expect(metrics.mainWidth, `main content missing at ${width}px on ${route}`).toBeGreaterThan(0);
+    }
+  }
 });
