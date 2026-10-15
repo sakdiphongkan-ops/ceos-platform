@@ -222,18 +222,37 @@ const fetchSetIndex = async () => {
   return indexInFlight;
 };
 
-const publicRate = new Map<string, { at: number; count: number }>();
-const allowRequest = (req: Request) => {
-  const ip = req.headers.get("cf-connecting-ip") ?? req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+const userRate = new Map<string, { at: number; count: number }>();
+const allowRequest = (userId: string) => {
   const now = Date.now();
-  const current = publicRate.get(ip);
+  const current = userRate.get(userId);
   if (!current || now - current.at >= 60000) {
-    publicRate.set(ip, { at: now, count: 1 });
+    if (userRate.size >= 10000) {
+      for (const [key, value] of userRate) {
+        if (now - value.at >= 60000) userRate.delete(key);
+        if (userRate.size < 10000) break;
+      }
+    }
+    if (userRate.size >= 10000) return false;
+    userRate.set(userId, { at: now, count: 1 });
     return true;
   }
   current.count += 1;
   return current.count <= 60;
 };
+
+async function authenticatedUser(req: Request) {
+  const value = req.headers.get("authorization") ?? "";
+  const match = /^Bearer\s+([^\s]+)$/i.exec(value);
+  if (!match) return null;
+  try {
+    const { data, error } = await supabase.auth.getUser(match[1]);
+    if (error) return null;
+    return data.user ?? null;
+  } catch {
+    return null;
+  }
+}
 
 async function buildFeed() {
   const targetDate = bkkDate();
@@ -716,11 +735,22 @@ async function buildFeed() {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return json({ ok: true });
+  // This Edge Function reads service-role data, so every data request must carry
+  // a valid Supabase user access token. CORS is not an authentication mechanism.
+  const user = await authenticatedUser(req);
+  if (!user) {
+    return json(
+      { ok: false, error: { message: "AUTHENTICATION_REQUIRED" } },
+      401,
+      { "WWW-Authenticate": "Bearer", "Cache-Control": "private, no-store" },
+    );
+  }
+
   try {
     const u = new URL(req.url);
     let view = u.searchParams.get("view");
     if (view === "dashboard" || view === "feed" || !view) {
-      if (!allowRequest(req)) return json({ ok: false, error: { message: "PUBLIC_RATE_LIMITED" } }, 429);
+      if (!allowRequest(user.id)) return json({ ok: false, error: { message: "RATE_LIMITED" } }, 429, { "Retry-After": "60", "Cache-Control": "private, no-store" });
 
       const now = Date.now();
       if (cache && now - cache.at < CACHE_TTL_MS) {
