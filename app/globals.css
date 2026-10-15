@@ -956,3 +956,11 @@ body [tabindex]:focus-visible {
 .luna-login-page [class*="text-[#777970]"],
 .luna-login-page [class*="text-[#999a93]"],
 .luna-login-page [class*="text-[#85877f]"]{color:#565b52!important}
+
+
+/* Data-integrity states: stale prices and unreconciled orders must not resemble confirmed executions. */
+.luna-shell .market-stale-label{display:inline-block;margin-left:6px;padding:2px 5px;border-radius:5px;background:#f6f0e4;color:#765328;font-size:9px;font-weight:800;letter-spacing:.04em;vertical-align:middle}
+.luna-shell .status-badge.pending,
+.luna-shell .status-badge.unknown{background:#efeee9;color:#53584e}
+.luna-shell .status-badge.cancelled{background:#f0efec;color:#565a52}
+.luna-shell .status-badge.unreconciled{background:#faebd9;color:#794b1c;font-weight:850}
