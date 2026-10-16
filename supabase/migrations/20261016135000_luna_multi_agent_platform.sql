@@ -406,9 +406,28 @@ BEGIN
         END LOOP;
       ELSE
         v_child_gate := coalesce(v_order.task_payload->>'approval_gate', v_approval.gate_type);
-        IF EXISTS (
-          SELECT 1 FROM public.luna_erp_approvals a
-          WHERE a.work_order_id = v_order.id AND a.status = 'PENDING'
+        SELECT count(*)::integer INTO v_pending
+        FROM public.luna_erp_approvals a
+        WHERE a.work_order_id = v_order.id AND a.status = 'PENDING';
+
+        -- A child-specific approval must never bypass an unapproved parent-level gate.
+        IF v_pending > 0 OR EXISTS (
+          SELECT 1
+          FROM public.luna_erp_work_orders p
+          WHERE p.id = v_order.parent_work_order_id
+            AND (
+              p.requires_human_gate = true
+              OR EXISTS (
+                SELECT 1 FROM public.luna_erp_approvals pa
+                WHERE pa.work_order_id = p.id AND pa.status = 'PENDING'
+              )
+              OR EXISTS (
+                SELECT 1 FROM public.luna_erp_approvals pa
+                WHERE pa.work_order_id = p.id
+                  AND pa.status = 'REJECTED'
+                  AND pa.gate_type <> 'LIVE_TRADING'
+              )
+            )
         ) THEN
           NULL;
         ELSIF v_child_gate <> 'NONE' AND NOT EXISTS (
