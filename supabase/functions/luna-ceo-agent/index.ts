@@ -2,9 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   buildPlanJsonSchema,
   normalizeTaskPlan,
-  type ApprovalGate,
   type PlannedWorkItem,
-  type TaskPlan,
 } from "./plan_helpers.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
@@ -39,6 +37,7 @@ type AgentRow = {
   health_status: string;
   model_provider: string;
   model_name: string | null;
+  last_heartbeat_at: string | null;
   prompt_version: string;
   requires_human_gate: boolean;
 };
@@ -152,7 +151,7 @@ function parseModelJson<T>(reply: ModelReply): T {
 
 async function getAgents(): Promise<AgentRow[]> {
   const result = await db.from("luna_erp_agents")
-    .select("agent_key,display_name,department,role_description,system_prompt,capabilities,allowed_actions,enabled,health_status,model_provider,model_name,prompt_version,requires_human_gate")
+    .select("agent_key,display_name,department,role_description,system_prompt,capabilities,allowed_actions,enabled,health_status,model_provider,model_name,last_heartbeat_at,prompt_version,requires_human_gate")
     .order("department", { ascending: true })
     .order("agent_key", { ascending: true });
   if (result.error) throw appError("AGENT_REGISTRY_QUERY_FAILED", 500);
@@ -185,8 +184,7 @@ function healthSummary(agents: AgentRow[]) {
   const healthy = enabled.filter((a) => a.health_status === "HEALTHY");
   const CEO = agents.find((a) => a.agent_key === "ceo_orchestrator");
   const specialists = healthy.filter((a) => a.agent_key !== "ceo_orchestrator");
-  const latestHeartbeat = healthy.map((a) => a as AgentRow & { last_heartbeat_at?: string })
-    .map((a) => (a as any).last_heartbeat_at).filter(Boolean).sort().at(-1) ?? null;
+  const latestHeartbeat = healthy.map((a) => a.last_heartbeat_at).filter(Boolean).sort().at(-1) ?? null;
   const blockers: string[] = [];
   if (!providerReady()) blockers.push("MODEL_PROVIDER_NOT_CONFIGURED");
   if (!CEO || !CEO.enabled || CEO.health_status !== "HEALTHY") blockers.push("CEO_AGENT_NOT_HEALTHY");
@@ -209,6 +207,7 @@ function healthSummary(agents: AgentRow[]) {
       health_status: a.health_status,
       model_provider: a.model_provider,
       model_name: a.model_name,
+      last_heartbeat_at: a.last_heartbeat_at,
       prompt_version: a.prompt_version,
     })),
   };
@@ -388,7 +387,7 @@ async function runBatch(parentId: string, requestedMax: number): Promise<Array<R
 
 async function updateParentStatus(parentId: string) {
   const parentResult = await db.from("luna_erp_work_orders")
-    .select("id,status,requires_human_gate,approval_gate:task_payload->>approval_gate")
+    .select("id,status,requires_human_gate,trace_id,output,task_payload")
     .eq("id", parentId)
     .maybeSingle();
   if (parentResult.error || !parentResult.data) throw appError("PARENT_WORK_ORDER_NOT_FOUND", 404);
@@ -630,8 +629,7 @@ async function dispatchTask(body: Record<string, any>) {
     for (const child of children as any[]) {
       idByIndex.set(Number(child.task_payload?.plan_index), String(child.id));
     }
-    for (const item of plan.work_items) {
-      const idx = plan.work_items.indexOf(item);
+    for (const [idx, item] of plan.work_items.entries()) {
       const dependencyIds = item.dependency_indexes.map((depIndex) => idByIndex.get(depIndex)).filter(Boolean);
       const id = idByIndex.get(idx);
       if (id) {
