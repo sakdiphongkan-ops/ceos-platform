@@ -34,6 +34,10 @@ export type TaskPlan = {
   work_items: PlannedWorkItem[];
 };
 
+function assertOnlyKeys(value: Record<string, unknown>, allowed: readonly string[], errorCode: string): void {
+  if (Object.keys(value).some((key) => !allowed.includes(key))) throw new Error(errorCode);
+}
+
 function boundedText(value: unknown, field: string, max: number): string {
   if (typeof value !== "string") throw new Error(`INVALID_PLAN_${field.toUpperCase()}`);
   const output = value.trim();
@@ -78,6 +82,7 @@ function gateImpliesHumanApproval(gate: ApprovalGate): boolean {
 export function normalizeTaskPlan(raw: unknown, availableAgentKeys: readonly string[]): TaskPlan {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("INVALID_PLAN_OBJECT");
   const input = raw as Record<string, unknown>;
+  assertOnlyKeys(input, ["title","objective","summary","risk_level","requires_human_gate","approval_gate","work_items"], "INVALID_PLAN_OBJECT");
   if (!Array.isArray(input.work_items) || input.work_items.length < 1 || input.work_items.length > MAX_PLAN_ITEMS) {
     throw new Error("INVALID_PLAN_WORK_ITEM_COUNT");
   }
@@ -86,6 +91,7 @@ export function normalizeTaskPlan(raw: unknown, availableAgentKeys: readonly str
   const workItems: PlannedWorkItem[] = input.work_items.map((value, index) => {
     if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("INVALID_PLAN_WORK_ITEM");
     const row = value as Record<string, unknown>;
+    assertOnlyKeys(row, ["agent_key","title","description","priority","risk_level","requires_human_gate","approval_gate","acceptance_criteria","dependency_indexes"], "INVALID_PLAN_WORK_ITEM");
     const agentKey = boundedText(row.agent_key, "agent_key", 80);
     if (!allowedAgents.has(agentKey)) throw new Error("PLAN_REFERENCES_UNAVAILABLE_AGENT");
     const riskLevel = enumValue(row.risk_level, RISK_LEVELS, "risk_level");
@@ -93,10 +99,11 @@ export function normalizeTaskPlan(raw: unknown, availableAgentKeys: readonly str
     const requestedGate = row.requires_human_gate === true;
     const requiresHumanGate = requestedGate || gateImpliesHumanApproval(approvalGate) ||
       riskLevel === "CRITICAL" || (riskLevel === "HIGH" && approvalGate !== "NONE");
-    if ((riskLevel === "HIGH" || riskLevel === "CRITICAL") &&
-      approvalGate === "NONE" && row.requires_human_gate !== true) {
+    if ((riskLevel === "HIGH" || riskLevel === "CRITICAL") && approvalGate === "NONE" &&
+      row.requires_human_gate !== true) {
       throw new Error("HIGH_RISK_PLAN_MUST_REQUIRE_HUMAN_GATE");
     }
+    if (requiresHumanGate && approvalGate === "NONE") throw new Error("HUMAN_GATE_TYPE_REQUIRED");
 
     return {
       agent_key: agentKey,
@@ -121,6 +128,7 @@ export function normalizeTaskPlan(raw: unknown, availableAgentKeys: readonly str
     planGate === "NONE" && input.requires_human_gate !== true) {
     throw new Error("HIGH_RISK_PLAN_MUST_REQUIRE_HUMAN_GATE");
   }
+  if (planRequiresGate && planGate === "NONE") throw new Error("HUMAN_GATE_TYPE_REQUIRED");
 
   return {
     title: boundedText(input.title, "title", 180),
