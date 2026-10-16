@@ -28,3 +28,22 @@ export function researchCandidateStatus(runId: string | null, totalCandidates: n
 export function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
+
+export type CandidateQuerySpec = {
+  runId: string;
+  from: number;
+  to: number;
+  orderBy: "candidate_no";
+  ascending: true;
+};
+
+export function candidateQuerySpec(runId: string, pagination: ResearchPagination): CandidateQuerySpec {
+  if (!isUuid(runId)) throw new Error("INVALID_RESEARCH_RUN_ID");
+  return {
+    runId,
+    from: pagination.from,
+    to: pagination.to,
+    orderBy: "candidate_no",
+    ascending: true,
+  };
+}
