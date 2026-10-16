@@ -72,7 +72,10 @@ async function authorize(req: Request): Promise<{ ok: true; credentialHash: stri
   if (!token) return { ok: false, code: "UNAUTHORIZED", status: 401 };
 
   const hash = await sha256(token);
-  const verified = await db.rpc("luna_verify_agent", { p_sha256_hash: hash });
+  const verified = await db.rpc("luna_verify_agent_scope", {
+    p_sha256_hash: hash,
+    p_credential_scope: "general",
+  });
   if (verified.error) return { ok: false, code: "AGENT_AUTH_CHECK_UNAVAILABLE", status: 503 };
   if (verified.data !== true) return { ok: false, code: "UNAUTHORIZED", status: 401 };
 
@@ -84,6 +87,53 @@ async function authorize(req: Request): Promise<{ ok: true; credentialHash: stri
   if (rate.error) return { ok: false, code: "SECURITY_RATE_LIMIT_UNAVAILABLE", status: 503 };
   if (rate.data?.allowed === false) return { ok: false, code: "SECURITY_RATE_LIMITED", status: 429 };
   return { ok: true, credentialHash: hash };
+}
+
+async function authorizeHuman(req: Request): Promise<{ ok: true; actorKey: string } | { ok: false; code: string; status: number }> {
+  const header = req.headers.get("authorization") ?? "";
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  if (!match?.[1]) return { ok: false, code: "HUMAN_AUTH_REQUIRED", status: 401 };
+
+  const { data, error } = await db.auth.getUser(match[1]);
+  if (error || !data.user) return { ok: false, code: "HUMAN_AUTH_INVALID", status: 401 };
+
+  // Use server-controlled app_metadata only. User-editable user_metadata is not an authorization source.
+  const meta = data.user.app_metadata ?? {};
+  const roles = Array.isArray(meta.roles) ? meta.roles.filter((value: unknown) => typeof value === "string") : [];
+  if (meta.ceos_role !== "admin" && !roles.includes("ceos_admin")) {
+    return { ok: false, code: "HUMAN_ADMIN_ROLE_REQUIRED", status: 403 };
+  }
+  return { ok: true, actorKey: data.user.id };
+}
+
+async function decideApproval(body: Record<string, any>, actorKey: string) {
+  const approvalId = safeString(body.approval_id, 64);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(approvalId)) {
+    throw appError("INVALID_APPROVAL_ID", 400);
+  }
+  const decision = safeString(body.decision, 20).toUpperCase();
+  if (decision !== "APPROVED" && decision !== "REJECTED") throw appError("INVALID_APPROVAL_DECISION", 400);
+  const rationale = safeString(body.rationale, 1200);
+  const { data, error } = await db.rpc("luna_erp_apply_human_approval", {
+    p_approval_id: approvalId,
+    p_decision: decision,
+    p_actor_key: actorKey,
+    p_rationale: rationale,
+  });
+  if (error) {
+    const message = String(error.message ?? "");
+    if (message.includes("LIVE_TRADING_APPROVAL_DISABLED")) throw appError("LIVE_TRADING_APPROVAL_DISABLED", 409);
+    if (message.includes("APPROVAL_NOT_FOUND")) throw appError("APPROVAL_NOT_FOUND", 404);
+    if (message.includes("APPROVAL_ALREADY_DECIDED")) throw appError("APPROVAL_ALREADY_DECIDED", 409);
+    if (message.includes("INVALID_APPROVAL_DECISION")) throw appError("INVALID_APPROVAL_DECISION", 400);
+    throw appError("HUMAN_APPROVAL_PERSIST_FAILED", 500);
+  }
+  return {
+    ok: true,
+    approval: data,
+    external_side_effects_performed: false,
+    note: "The decision only records the human gate and queues draft-only paper work. No production publish, destructive change, secret access, policy change, broker order or real-money trade is executed by this endpoint.",
+  };
 }
 
 function providerReady() {
@@ -1034,37 +1084,47 @@ async function respondHealth() {
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return json({ ok: true });
   try {
-    const auth = await authorize(req);
-    if (!auth.ok) return json({ ok: false, error: auth.code }, auth.status);
-
-    if (req.method === "GET") return await respondHealth();
+    if (req.method === "GET") {
+      const auth = await authorize(req);
+      if (!auth.ok) return json({ ok: false, error: auth.code }, auth.status);
+      return await respondHealth();
+    }
     if (req.method !== "POST") return json({ ok: false, error: "METHOD_NOT_ALLOWED" }, 405);
     if (!req.headers.get("content-type")?.toLowerCase().includes("application/json")) {
       return json({ ok: false, error: "CONTENT_TYPE_JSON_REQUIRED" }, 415);
     }
-
-    const body = await req.json();
+    const contentLength = Number(req.headers.get("content-length") ?? 0);
+    if (Number.isFinite(contentLength) && contentLength > 32768) {
+      return json({ ok: false, error: "REQUEST_BODY_TOO_LARGE" }, 413);
+    }
+    const rawBody = await req.text();
+    if (new TextEncoder().encode(rawBody).byteLength > 32768) {
+      return json({ ok: false, error: "REQUEST_BODY_TOO_LARGE" }, 413);
+    }
+    let body: unknown;
+    try { body = JSON.parse(rawBody); } catch { return json({ ok: false, error: "INVALID_REQUEST_JSON" }, 400); }
     if (!isObject(body)) return json({ ok: false, error: "INVALID_REQUEST_BODY" }, 400);
     const action = safeString(body.action, 80);
 
-    if (action === "verify_runtime") {
-      const result = await verifyProvider();
-      return json(result);
+    // Human approvals use a verified Supabase Auth JWT and server-controlled app_metadata role.
+    // They do not need an agent API key and cannot approve LIVE_TRADING.
+    if (action === "decide_approval") {
+      const human = await authorizeHuman(req);
+      if (!human.ok) return json({ ok: false, error: human.code }, human.status);
+      return json(await decideApproval(body, human.actorKey));
     }
-    if (action === "dispatch_task") {
-      const result = await dispatchTask(body);
-      return json(result);
-    }
-    if (action === "run_batch") {
-      const result = await runBatchAction(body);
-      return json(result);
-    }
+
+    const auth = await authorize(req);
+    if (!auth.ok) return json({ ok: false, error: auth.code }, auth.status);
+    if (action === "verify_runtime") return json(await verifyProvider());
+    if (action === "dispatch_task") return json(await dispatchTask(body));
+    if (action === "run_batch") return json(await runBatchAction(body));
     if (action === "health") return await respondHealth();
 
     return json({
       ok: false,
       error: "UNKNOWN_ACTION",
-      supported_actions: ["health", "verify_runtime", "dispatch_task", "run_batch"],
+      supported_actions: ["health", "verify_runtime", "dispatch_task", "run_batch", "decide_approval"],
     }, 400);
   } catch (error) {
     const code = (error as any)?.code && typeof (error as any).code === "string"
