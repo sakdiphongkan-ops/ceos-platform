@@ -24,6 +24,8 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
+      - name: Install Edge Function npm dependencies
+        run: deno install --node-modules-dir=auto --entrypoint supabase/functions/luna-research/index.ts
       - name: Type-check research edge function and helpers
         run: deno check supabase/functions/luna-research/index.ts supabase/functions/luna-research/research_get_helpers_test.ts
       - name: Run bounded pagination and run-state tests
