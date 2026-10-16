@@ -6,6 +6,7 @@ on:
     paths:
       - "supabase/functions/luna-ceo-agent/**"
       - "supabase/migrations/*luna_multi_agent_platform.sql"
+      - "supabase/tests/luna_multi_agent_smoke.sql"
       - ".github/workflows/luna-agent-platform-ci.yml"
   push:
     branches: [master]
@@ -32,3 +33,55 @@ jobs:
         run: deno check supabase/functions/luna-ceo-agent/index.ts supabase/functions/luna-ceo-agent/plan_helpers_test.ts
       - name: Test task-plan validation and human gates
         run: deno test supabase/functions/luna-ceo-agent/plan_helpers_test.ts
+
+  migration-smoke-test:
+    name: PostgreSQL migration and safety-gate smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGDATABASE: postgres
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Prepare roles and existing credential schema
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE anon NOLOGIN;
+          CREATE ROLE authenticated NOLOGIN;
+          CREATE ROLE service_role NOLOGIN BYPASSRLS;
+          CREATE SCHEMA private;
+          CREATE TABLE private.luna_agent_credentials (
+            credential_id bigint generated always as identity primary key,
+            agent_name text not null,
+            sha256_hash text not null unique,
+            enabled boolean not null default true,
+            created_at timestamptz not null default now(),
+            updated_at timestamptz not null default now(),
+            credential_scope text not null default 'general'
+          );
+          SQL
+      - name: Apply existing ERP core schema
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/202610150001_luna_erp_core.sql
+      - name: Apply multi-agent migration
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261016135000_luna_multi_agent_platform.sql
+      - name: Test role seed, RLS, approval gates and queue dependencies
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/luna_multi_agent_smoke.sql
