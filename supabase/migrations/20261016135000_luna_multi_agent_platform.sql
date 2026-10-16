@@ -254,11 +254,11 @@ BEGIN
       AND (p_parent_work_order_id IS NULL OR w.parent_work_order_id = p_parent_work_order_id)
       AND NOT EXISTS (
         SELECT 1
-        FROM unnest(w.dependency_ids) AS dependency_id
+        FROM unnest(w.dependency_ids) AS deps(dependency_id)
         WHERE NOT EXISTS (
           SELECT 1
           FROM public.luna_erp_work_orders dependency
-          WHERE dependency.id = dependency_id
+          WHERE dependency.id = deps.dependency_id
             AND dependency.status IN ('VALIDATION', 'COMPLETED')
         )
       )
