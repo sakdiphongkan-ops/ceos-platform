@@ -1,6 +1,7 @@
 import {
   buildPlanJsonSchema,
   normalizeTaskPlan,
+  qaReviewPassesAcceptanceCriteria,
   type TaskPlan,
 } from "./plan_helpers.ts";
 
@@ -118,4 +119,38 @@ Deno.test("unknown keys are rejected instead of silently accepted", () => {
     () => normalizeTaskPlan({ ...plan(), confidence: 0.99 }, ["ceo_orchestrator", "product_manager"]),
     "INVALID_PLAN_OBJECT",
   );
+});
+
+
+Deno.test("QA acceptance requires every criterion to pass with evidence", () => {
+  const criteria = ["Includes implementation notes", "Lists risks"];
+  assertEquals(qaReviewPassesAcceptanceCriteria(criteria, {
+    decision: "APPROVE",
+    criteria_results: [
+      { criterion_index: 0, passed: true, evidence: "Implementation notes are present" },
+      { criterion_index: 1, passed: true, evidence: "Risks are explicitly listed" },
+    ],
+  }), true);
+});
+
+Deno.test("QA cannot approve when criteria are omitted, duplicated or unsupported", () => {
+  const criteria = ["Criterion A", "Criterion B"];
+  assertEquals(qaReviewPassesAcceptanceCriteria(criteria, {
+    decision: "APPROVE",
+    criteria_results: [{ criterion_index: 0, passed: true, evidence: "Present" }],
+  }), false);
+  assertEquals(qaReviewPassesAcceptanceCriteria(criteria, {
+    decision: "APPROVE",
+    criteria_results: [
+      { criterion_index: 0, passed: true, evidence: "Present" },
+      { criterion_index: 0, passed: true, evidence: "Duplicated criterion" },
+    ],
+  }), false);
+  assertEquals(qaReviewPassesAcceptanceCriteria(criteria, {
+    decision: "APPROVE",
+    criteria_results: [
+      { criterion_index: 0, passed: true, evidence: "Present" },
+      { criterion_index: 1, passed: false, evidence: "Missing" },
+    ],
+  }), false);
 });
