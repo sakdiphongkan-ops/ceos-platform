@@ -463,3 +463,28 @@ REVOKE ALL ON FUNCTION public.luna_erp_apply_human_approval(uuid, text, text, te
 GRANT EXECUTE ON FUNCTION public.luna_erp_apply_human_approval(uuid, text, text, text) TO service_role;
 COMMENT ON FUNCTION public.luna_erp_apply_human_approval(uuid, text, text, text) IS
   'Records an authenticated human approval decision and audit event atomically. Approving LIVE_TRADING is forbidden; approvals only queue draft-only paper work.';
+
+
+CREATE OR REPLACE FUNCTION public.luna_verify_agent_scope(
+  p_sha256_hash text,
+  p_credential_scope text DEFAULT 'general'
+)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+  SELECT EXISTS (
+    SELECT 1
+    FROM private.luna_agent_credentials c
+    WHERE c.sha256_hash = p_sha256_hash
+      AND c.enabled = true
+      AND c.credential_scope = p_credential_scope
+  );
+$function$;
+
+REVOKE ALL ON FUNCTION public.luna_verify_agent_scope(text, text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.luna_verify_agent_scope(text, text) TO service_role;
+COMMENT ON FUNCTION public.luna_verify_agent_scope(text, text) IS
+  'Verifies a hashed service credential against a specific scope. CEO orchestration uses the general scope and cannot reuse execution-only credentials.';
