@@ -1,9 +1,14 @@
-import { assertEquals } from "jsr:@std/assert@1";
 import {
   isUuid,
   parseResearchPagination,
   researchCandidateStatus,
 } from "./research_get_helpers.ts";
+
+function assertEquals(actual: unknown, expected: unknown): void {
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw new Error(`Expected ${JSON.stringify(expected)}, received ${JSON.stringify(actual)}`);
+  }
+}
 
 Deno.test("research pagination defaults to bounded first page", () => {
   assertEquals(
@@ -32,8 +37,14 @@ Deno.test("invalid pagination parameters safely fall back to defaults", () => {
 
 Deno.test("candidate state does not imply candidates from another run", () => {
   assertEquals(researchCandidateStatus(null, 0), "NO_RESEARCH_RUNS");
-  assertEquals(researchCandidateStatus("82f12d8e-5ef3-4f6a-9c15-17b93bc3f9fb", 0), "NO_CANDIDATES_FOR_RUN");
-  assertEquals(researchCandidateStatus("82f12d8e-5ef3-4f6a-9c15-17b93bc3f9fb", 12), "OK");
+  assertEquals(
+    researchCandidateStatus("82f12d8e-5ef3-4f6a-9c15-17b93bc3f9fb", 0),
+    "NO_CANDIDATES_FOR_RUN",
+  );
+  assertEquals(
+    researchCandidateStatus("82f12d8e-5ef3-4f6a-9c15-17b93bc3f9fb", 12),
+    "OK",
+  );
 });
 
 Deno.test("run_id validation only accepts UUID-shaped identifiers", () => {
