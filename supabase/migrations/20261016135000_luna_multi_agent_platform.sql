@@ -220,3 +220,67 @@ COMMENT ON COLUMN public.luna_erp_agents.health_status IS
   'HEALTHY is permitted only after model provider configuration, secret checks and a successful heartbeat.';
 COMMENT ON COLUMN public.luna_erp_work_orders.paper_only IS
   'Constraint requires true; agent work must not enable real-money trading.';
+
+
+-- Atomic queue claim with a lease; worker execution is limited to paper-only, non-gated tasks.
+CREATE OR REPLACE FUNCTION public.luna_erp_claim_next_work_order(
+  p_agent_key text,
+  p_parent_work_order_id uuid DEFAULT NULL,
+  p_lease_seconds integer DEFAULT 120
+)
+RETURNS SETOF public.luna_erp_work_orders
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO public, pg_temp
+AS $function$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM public.luna_erp_agents a
+    WHERE a.agent_key = p_agent_key
+      AND a.enabled = true
+      AND a.health_status = 'HEALTHY'
+  ) THEN
+    RETURN;
+  END IF;
+
+  RETURN QUERY
+  WITH candidate AS (
+    SELECT w.id
+    FROM public.luna_erp_work_orders w
+    WHERE w.owner_agent_key = p_agent_key
+      AND w.status = 'QUEUED'
+      AND w.paper_only = true
+      AND w.requires_human_gate = false
+      AND (p_parent_work_order_id IS NULL OR w.parent_work_order_id = p_parent_work_order_id)
+      AND NOT EXISTS (
+        SELECT 1
+        FROM unnest(w.dependency_ids) AS dependency_id
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM public.luna_erp_work_orders dependency
+          WHERE dependency.id = dependency_id
+            AND dependency.status IN ('VALIDATION', 'COMPLETED')
+        )
+      )
+    ORDER BY w.priority DESC, w.created_at ASC, w.id ASC
+    FOR UPDATE SKIP LOCKED
+    LIMIT 1
+  )
+  UPDATE public.luna_erp_work_orders w
+  SET status = 'RUNNING',
+      started_at = COALESCE(w.started_at, now()),
+      attempt_count = w.attempt_count + 1,
+      lease_expires_at = now() + make_interval(secs => LEAST(GREATEST(COALESCE(p_lease_seconds, 120), 30), 600)),
+      updated_at = now(),
+      blocker_code = NULL,
+      blocker_detail = NULL
+  FROM candidate
+  WHERE w.id = candidate.id
+  RETURNING w.*;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.luna_erp_claim_next_work_order(text, uuid, integer) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.luna_erp_claim_next_work_order(text, uuid, integer) TO service_role;
+COMMENT ON FUNCTION public.luna_erp_claim_next_work_order(text, uuid, integer) IS
+  'Atomically claims one eligible non-gated paper-only work order for a healthy registered agent. Requires service-role execution.';
