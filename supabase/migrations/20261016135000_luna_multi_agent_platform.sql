@@ -259,7 +259,7 @@ BEGIN
           SELECT 1
           FROM public.luna_erp_work_orders dependency
           WHERE dependency.id = deps.dependency_id
-            AND dependency.status IN ('VALIDATION', 'COMPLETED')
+            AND dependency.status = 'COMPLETED'
         )
       )
     ORDER BY w.priority DESC, w.created_at ASC, w.id ASC
