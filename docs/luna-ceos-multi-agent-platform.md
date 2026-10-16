@@ -27,13 +27,13 @@ Every role contains a specific system prompt, capabilities, an intended action s
 
 ## Runtime requirements
 
-The Edge Function is `supabase/functions/luna-ceo-agent`. Before deploying it, configure these Supabase Edge Function secrets:
+The Edge Function is `supabase/functions/luna-ceo-agent`. These are on-demand specialist roles invoked through one orchestration endpoint, not 16 always-running processes. Before deploying it, configure these Supabase Edge Function secrets:
 
 - `OPENAI_API_KEY`: server-side API credential. Never place it in browser code or source control.
 - `LUNA_AGENT_MODEL`: a model name enabled for the API account.
 - `LUNA_AGENT_RESPONSES_URL` (optional): use only for a provider implementing the OpenAI Responses API contract; default is `https://api.openai.com/v1/responses`.
 
-Machine callers must use an enabled server-side `x-luna-agent` credential with scope `general`, validated by `luna_verify_agent_scope`. Do not expose that credential or the Supabase service-role key to a browser. The deployment must keep the Edge Function's built-in credential/JWT checks aligned with your gateway policy; if platform-level JWT verification is disabled, the in-function checks are mandatory on every route.
+Machine callers must use an enabled server-side `x-luna-agent` credential with scope `general`, validated by `luna_verify_agent_scope`. Do not expose that credential or the Supabase service-role key to a browser. The handler performs its own auth on every non-OPTIONS route: general-scope credential validation for machine actions, and a verified Supabase Auth access token plus server-controlled `app_metadata` for human approval. If deploying this exact handler with platform JWT verification disabled, keep those in-function checks mandatory on every route; never remove them or rely on CORS as access control.
 
 Run `POST /functions/v1/luna-ceo-agent` with `{"action":"verify_runtime"}` after configuration. This performs a live, low-token model connectivity check; only after it succeeds are enabled roles marked `HEALTHY`. `GET /functions/v1/luna-ceo-agent` returns current role readiness and blockers.
 
