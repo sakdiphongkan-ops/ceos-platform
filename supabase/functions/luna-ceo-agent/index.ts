@@ -626,7 +626,7 @@ async function reviewDraftWorkOrders(parentId: string, requestedMax = 5): Promis
 
 async function updateParentStatus(parentId: string) {
   const parentResult = await db.from("luna_erp_work_orders")
-    .select("id,status,requires_human_gate,trace_id,output,task_payload,blocker_code,acceptance_criteria")
+    .select("id,status,requires_human_gate,trace_id,output,task_payload,blocker_code,acceptance_criteria,result_summary")
     .eq("id", parentId)
     .maybeSingle();
   if (parentResult.error || !parentResult.data) throw appError("PARENT_WORK_ORDER_NOT_FOUND", 404);
@@ -961,7 +961,12 @@ async function dispatchTask(body: Record<string, any>) {
 
     const runnable = !plan.requires_human_gate;
     const taskRuns = runnable ? await runBatch(parentId, Math.min(plan.work_items.length, 5)) : [];
-    const parentState = await updateParentStatus(parentId);
+    const qaReviews = runnable ? await reviewDraftWorkOrders(parentId, 5) : [];
+    let parentState = await updateParentStatus(parentId);
+    const parentQaReviews = parentState.status === "VALIDATION"
+      ? await reviewDraftWorkOrders(parentId, 1)
+      : [];
+    parentState = await updateParentStatus(parentId);
     return {
       ok: true,
       parent_work_order_id: parentId,
@@ -971,6 +976,7 @@ async function dispatchTask(body: Record<string, any>) {
       idempotency_key: idempotencyKey,
       planned_tasks: plan.work_items.length,
       specialist_runs: taskRuns,
+      qa_reviews: [...qaReviews, ...parentQaReviews],
       plan,
       parent_state: parentState,
       next_action: parentState.status === "VALIDATION"
@@ -997,18 +1003,25 @@ async function runBatchAction(body: Record<string, any>) {
     throw appError("INVALID_PARENT_WORK_ORDER_ID", 400);
   }
   const batchMax = Number.isSafeInteger(body.max_tasks) ? Number(body.max_tasks) : 3;
+  const preReviews = await reviewDraftWorkOrders(parentId, Math.min(batchMax, 5));
   const results = await runBatch(parentId, batchMax);
-  const state = await updateParentStatus(parentId);
+  const qaReviews = await reviewDraftWorkOrders(parentId, Math.min(batchMax, 5));
+  let state = await updateParentStatus(parentId);
+  const parentQaReviews = state.status === "VALIDATION" ? await reviewDraftWorkOrders(parentId, 1) : [];
+  state = await updateParentStatus(parentId);
   const tree = await loadTaskTree(parentId);
   return {
     ok: true,
     parent_work_order_id: parentId,
     specialist_runs: results,
+    qa_reviews: [...preReviews, ...qaReviews, ...parentQaReviews],
     parent_state: state,
     tree,
     next_action: state.status === "VALIDATION"
-      ? "Independent QA/human review is required before marking complete."
-      : "Inspect blocked dependencies or call run_batch again if eligible work remains.",
+      ? "Independent QA or a human approval is still required before marking complete."
+      : state.status === "COMPLETED"
+        ? "All child drafts and the CEO summary passed the configured acceptance review."
+        : "Inspect blockers or call run_batch again if eligible work remains.",
   };
 }
 
