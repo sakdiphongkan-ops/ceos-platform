@@ -1,4 +1,5 @@
 import {
+  candidateQuerySpec,
   isUuid,
   parseResearchPagination,
   researchCandidateStatus,
@@ -50,4 +51,31 @@ Deno.test("candidate state does not imply candidates from another run", () => {
 Deno.test("run_id validation only accepts UUID-shaped identifiers", () => {
   assertEquals(isUuid("82f12d8e-5ef3-4f6a-9c15-17b93bc3f9fb"), true);
   assertEquals(isUuid("not-a-run"), false);
+});
+
+Deno.test("candidate query spec binds exact run ID and bounded page", () => {
+  const pagination = parseResearchPagination(
+    new URL("https://example.test/research?page=2&page_size=25"),
+  );
+  const runA = candidateQuerySpec("82f12d8e-5ef3-4f6a-9c15-17b93bc3f9fb", pagination);
+  const runB = candidateQuerySpec("93f12d8e-5ef3-4f6a-9c15-17b93bc3f9fb", pagination);
+  assertEquals(runA, {
+    runId: "82f12d8e-5ef3-4f6a-9c15-17b93bc3f9fb",
+    from: 25,
+    to: 49,
+    orderBy: "candidate_no",
+    ascending: true,
+  });
+  assertEquals(runB.runId, "93f12d8e-5ef3-4f6a-9c15-17b93bc3f9fb");
+  assertEquals(runA.runId === runB.runId, false);
+});
+
+Deno.test("candidate query spec rejects malformed run IDs", () => {
+  let message = "";
+  try {
+    candidateQuerySpec("not-a-run", { page: 1, pageSize: 50, from: 0, to: 49 });
+  } catch (error) {
+    message = error instanceof Error ? error.message : String(error);
+  }
+  assertEquals(message, "INVALID_RESEARCH_RUN_ID");
 });
