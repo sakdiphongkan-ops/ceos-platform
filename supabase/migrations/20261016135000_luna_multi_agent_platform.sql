@@ -284,3 +284,182 @@ REVOKE ALL ON FUNCTION public.luna_erp_claim_next_work_order(text, uuid, integer
 GRANT EXECUTE ON FUNCTION public.luna_erp_claim_next_work_order(text, uuid, integer) TO service_role;
 COMMENT ON FUNCTION public.luna_erp_claim_next_work_order(text, uuid, integer) IS
   'Atomically claims one eligible non-gated paper-only work order for a healthy registered agent. Requires service-role execution.';
+
+
+-- Atomically record a human gate decision, preserve the audit trail, and queue eligible
+-- draft-only work after approval. LIVE_TRADING approvals are always rejected by policy.
+CREATE OR REPLACE FUNCTION public.luna_erp_apply_human_approval(
+  p_approval_id uuid,
+  p_decision text,
+  p_actor_key text,
+  p_rationale text DEFAULT ''
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO public, pg_temp
+AS $function$
+DECLARE
+  v_approval public.luna_erp_approvals%ROWTYPE;
+  v_order public.luna_erp_work_orders%ROWTYPE;
+  v_child public.luna_erp_work_orders%ROWTYPE;
+  v_child_gate text;
+  v_pending integer;
+  v_queued_children integer := 0;
+  v_order_status text;
+BEGIN
+  IF p_decision NOT IN ('APPROVED', 'REJECTED') THEN
+    RAISE EXCEPTION 'INVALID_APPROVAL_DECISION' USING ERRCODE = '22023';
+  END IF;
+  IF p_actor_key IS NULL OR length(btrim(p_actor_key)) = 0 OR length(p_actor_key) > 200 THEN
+    RAISE EXCEPTION 'INVALID_APPROVAL_ACTOR' USING ERRCODE = '22023';
+  END IF;
+  IF p_decision = 'APPROVED' AND EXISTS (
+    SELECT 1 FROM public.luna_erp_approvals a
+    WHERE a.id = p_approval_id AND a.gate_type = 'LIVE_TRADING'
+  ) THEN
+    RAISE EXCEPTION 'LIVE_TRADING_APPROVAL_DISABLED' USING ERRCODE = '42501';
+  END IF;
+
+  SELECT a.* INTO v_approval
+  FROM public.luna_erp_approvals a
+  WHERE a.id = p_approval_id
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'APPROVAL_NOT_FOUND' USING ERRCODE = 'P0002';
+  END IF;
+  IF v_approval.status <> 'PENDING' THEN
+    RAISE EXCEPTION 'APPROVAL_ALREADY_DECIDED' USING ERRCODE = '55000';
+  END IF;
+
+  SELECT w.* INTO v_order
+  FROM public.luna_erp_work_orders w
+  WHERE w.id = v_approval.work_order_id
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'APPROVAL_WORK_ORDER_NOT_FOUND' USING ERRCODE = 'P0002';
+  END IF;
+
+  UPDATE public.luna_erp_approvals
+  SET status = p_decision,
+      decided_by = p_actor_key,
+      rationale = left(coalesce(nullif(btrim(p_rationale), ''), 'Human decision recorded.'), 1200),
+      decided_at = now()
+  WHERE id = v_approval.id AND status = 'PENDING';
+
+  IF p_decision = 'REJECTED' THEN
+    UPDATE public.luna_erp_work_orders
+    SET status = 'BLOCKED',
+        requires_human_gate = true,
+        blocker_code = 'HUMAN_APPROVAL_REJECTED',
+        blocker_detail = 'The human reviewer rejected this approval request. No gated work was queued.',
+        updated_at = now()
+    WHERE id = v_order.id;
+  ELSE
+    SELECT count(*)::integer INTO v_pending
+    FROM public.luna_erp_approvals a
+    WHERE a.work_order_id = v_order.id AND a.status = 'PENDING';
+
+    IF v_pending = 0 THEN
+      IF v_order.parent_work_order_id IS NULL THEN
+        UPDATE public.luna_erp_work_orders
+        SET status = 'QUEUED',
+            requires_human_gate = false,
+            blocker_code = NULL,
+            blocker_detail = NULL,
+            last_error_code = NULL,
+            updated_at = now()
+        WHERE id = v_order.id;
+
+        FOR v_child IN
+          SELECT c.* FROM public.luna_erp_work_orders c
+          WHERE c.parent_work_order_id = v_order.id
+            AND c.status = 'BLOCKED'
+            AND c.blocker_code = 'HUMAN_APPROVAL_REQUIRED'
+          FOR UPDATE
+        LOOP
+          v_child_gate := coalesce(v_child.task_payload->>'approval_gate', 'NONE');
+          SELECT count(*)::integer INTO v_pending
+          FROM public.luna_erp_approvals a
+          WHERE a.work_order_id = v_child.id AND a.status = 'PENDING';
+
+          IF v_pending = 0 AND (
+            v_child_gate = 'NONE'
+            OR EXISTS (
+              SELECT 1 FROM public.luna_erp_approvals a
+              WHERE a.work_order_id = v_child.id
+                AND a.gate_type = v_child_gate
+                AND a.status = 'APPROVED'
+                AND a.gate_type <> 'LIVE_TRADING'
+            )
+          ) THEN
+            UPDATE public.luna_erp_work_orders
+            SET status = 'QUEUED',
+                requires_human_gate = false,
+                blocker_code = NULL,
+                blocker_detail = NULL,
+                last_error_code = NULL,
+                updated_at = now()
+            WHERE id = v_child.id;
+            v_queued_children := v_queued_children + 1;
+          END IF;
+        END LOOP;
+      ELSE
+        v_child_gate := coalesce(v_order.task_payload->>'approval_gate', v_approval.gate_type);
+        IF EXISTS (
+          SELECT 1 FROM public.luna_erp_approvals a
+          WHERE a.work_order_id = v_order.id AND a.status = 'PENDING'
+        ) THEN
+          NULL;
+        ELSIF v_child_gate <> 'NONE' AND NOT EXISTS (
+          SELECT 1 FROM public.luna_erp_approvals a
+          WHERE a.work_order_id = v_order.id
+            AND a.gate_type = v_child_gate
+            AND a.status = 'APPROVED'
+            AND a.gate_type <> 'LIVE_TRADING'
+        ) THEN
+          NULL;
+        ELSE
+          UPDATE public.luna_erp_work_orders
+          SET status = 'QUEUED',
+              requires_human_gate = false,
+              blocker_code = NULL,
+              blocker_detail = NULL,
+              last_error_code = NULL,
+              updated_at = now()
+          WHERE id = v_order.id;
+        END IF;
+      END IF;
+    END IF;
+  END IF;
+
+  SELECT status INTO v_order_status
+  FROM public.luna_erp_work_orders WHERE id = v_order.id;
+
+  INSERT INTO public.luna_erp_audit_events
+    (event_id, work_order_id, actor_type, actor_key, event_type, previous_status, next_status,
+     details, correlation_id, idempotency_key)
+  VALUES
+    (gen_random_uuid(), v_order.id, 'HUMAN', p_actor_key, 'HUMAN_APPROVAL_DECIDED',
+     'PENDING', p_decision,
+     jsonb_build_object('gate_type', v_approval.gate_type, 'decision', p_decision),
+     coalesce(v_order.trace_id, gen_random_uuid()),
+     'human-approval:' || v_approval.id::text || ':' || p_decision);
+
+  RETURN jsonb_build_object(
+    'ok', true,
+    'approval_id', v_approval.id,
+    'work_order_id', v_order.id,
+    'gate_type', v_approval.gate_type,
+    'decision', p_decision,
+    'work_order_status', v_order_status,
+    'children_queued', v_queued_children,
+    'live_trading_still_disabled', true
+  );
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.luna_erp_apply_human_approval(uuid, text, text, text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.luna_erp_apply_human_approval(uuid, text, text, text) TO service_role;
+COMMENT ON FUNCTION public.luna_erp_apply_human_approval(uuid, text, text, text) IS
+  'Records an authenticated human approval decision and audit event atomically. Approving LIVE_TRADING is forbidden; approvals only queue draft-only paper work.';
