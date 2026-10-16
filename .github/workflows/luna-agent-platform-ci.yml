@@ -1,0 +1,34 @@
+name: LUNA multi-agent platform CI
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - "supabase/functions/luna-ceo-agent/**"
+      - "supabase/migrations/*luna_multi_agent_platform.sql"
+      - ".github/workflows/luna-agent-platform-ci.yml"
+  push:
+    branches: [master]
+    paths:
+      - "supabase/functions/luna-ceo-agent/**"
+      - "supabase/migrations/*luna_multi_agent_platform.sql"
+      - ".github/workflows/luna-agent-platform-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  typecheck-and-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Install Edge Function npm dependencies
+        run: deno install --node-modules-dir=auto --entrypoint supabase/functions/luna-ceo-agent/index.ts
+      - name: Type-check CEO orchestrator and unit tests
+        run: deno check supabase/functions/luna-ceo-agent/index.ts supabase/functions/luna-ceo-agent/plan_helpers_test.ts
+      - name: Test task-plan validation and human gates
+        run: deno test supabase/functions/luna-ceo-agent/plan_helpers_test.ts
