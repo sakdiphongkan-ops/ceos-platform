@@ -197,3 +197,26 @@ export function buildPlanJsonSchema(availableAgentKeys: readonly string[]) {
     },
   };
 }
+
+
+export function qaReviewPassesAcceptanceCriteria(
+  acceptanceCriteria: readonly string[],
+  rawReview: unknown,
+): boolean {
+  if (!Array.isArray(acceptanceCriteria) || acceptanceCriteria.length < 1 || acceptanceCriteria.length > 8) return false;
+  if (!rawReview || typeof rawReview !== "object" || Array.isArray(rawReview)) return false;
+  const review = rawReview as Record<string, unknown>;
+  if (review.decision !== "APPROVE" || !Array.isArray(review.criteria_results)) return false;
+  if (review.criteria_results.length !== acceptanceCriteria.length) return false;
+  const seen = new Set<number>();
+  for (const result of review.criteria_results) {
+    if (!result || typeof result !== "object" || Array.isArray(result)) return false;
+    const item = result as Record<string, unknown>;
+    const index = item.criterion_index;
+    if (!Number.isSafeInteger(index) || Number(index) < 0 || Number(index) >= acceptanceCriteria.length) return false;
+    if (seen.has(Number(index)) || item.passed !== true) return false;
+    if (typeof item.evidence !== "string" || !item.evidence.trim()) return false;
+    seen.add(Number(index));
+  }
+  return seen.size === acceptanceCriteria.length;
+}
