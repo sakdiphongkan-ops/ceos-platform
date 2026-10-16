@@ -1,4 +1,4 @@
-import { isUuid, parseResearchPagination, researchCandidateStatus } from "./research_get_helpers.ts";
+import { candidateQuerySpec, isUuid, parseResearchPagination, researchCandidateStatus } from "./research_get_helpers.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -87,11 +87,12 @@ Deno.serve(async (req: Request) => {
       let candidateCount = 0;
       let candidateQueryError: { message?: string; code?: string } | null = null;
       if (selectedRun) {
+        const querySpec = candidateQuerySpec(selectedRun.id, pagination);
         const candidateResult = await db.from("luna_research_candidates")
           .select("run_id,candidate_no,strategy_id,status,train_return,validation_return,test_return,train_max_dd,validation_max_dd,test_max_dd,train_sharpe,validation_sharpe,test_sharpe,trade_count,win_rate,robustness_score,passed_oos,passed_costs,passed_robustness", { count: "exact" })
-          .eq("run_id", selectedRun.id)
-          .order("candidate_no", { ascending: true })
-          .range(pagination.from, pagination.to);
+          .eq("run_id", querySpec.runId)
+          .order(querySpec.orderBy, { ascending: querySpec.ascending })
+          .range(querySpec.from, querySpec.to);
         candidateRows = candidateResult.data ?? [];
         candidateCount = candidateResult.count ?? 0;
         candidateQueryError = candidateResult.error;
