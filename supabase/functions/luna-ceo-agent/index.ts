@@ -626,11 +626,14 @@ async function reviewDraftWorkOrders(parentId: string, requestedMax = 5): Promis
 
 async function updateParentStatus(parentId: string) {
   const parentResult = await db.from("luna_erp_work_orders")
-    .select("id,status,requires_human_gate,trace_id,output,task_payload")
+    .select("id,status,requires_human_gate,trace_id,output,task_payload,blocker_code,acceptance_criteria")
     .eq("id", parentId)
     .maybeSingle();
   if (parentResult.error || !parentResult.data) throw appError("PARENT_WORK_ORDER_NOT_FOUND", 404);
   const parent = parentResult.data as any;
+  if (parent.status === "COMPLETED") {
+    return { parent_work_order_id: parentId, status: "COMPLETED", summary: parent.result_summary ?? null, blockers: [] };
+  }
   const childResult = await db.from("luna_erp_work_orders")
     .select("id,title,owner_agent_key,status,requires_human_gate,blocker_code,last_error_code,result_summary,output")
     .eq("parent_work_order_id", parentId)
@@ -655,9 +658,31 @@ async function updateParentStatus(parentId: string) {
     return { parent_work_order_id: parentId, status: "BLOCKED", children, blockers: ["HUMAN_APPROVAL_REQUIRED"] };
   }
 
-  const unfinished = children.filter((c: any) => !["VALIDATION", "COMPLETED"].includes(c.status));
+  if (parent.status === "VALIDATION" && parent.blocker_code) {
+    const blocked = await db.from("luna_erp_work_orders").update({
+      status: "BLOCKED",
+      blocker_detail: "The CEO summary did not pass automated QA within its attempt limit. Human review is required.",
+      updated_at: new Date().toISOString(),
+    }).eq("id", parentId).eq("status", "VALIDATION");
+    if (blocked.error) throw appError("PARENT_QA_BLOCK_SAVE_FAILED", 500);
+    return { parent_work_order_id: parentId, status: "BLOCKED", children, blockers: [parent.blocker_code] };
+  }
+
+  if (children.length === 0) {
+    await db.from("luna_erp_work_orders").update({
+      status: "BLOCKED",
+      blocker_code: "NO_CHILD_WORK_ORDERS",
+      blocker_detail: "No specialist tasks were persisted; CEO synthesis cannot proceed.",
+      updated_at: new Date().toISOString(),
+    }).eq("id", parentId);
+    return { parent_work_order_id: parentId, status: "BLOCKED", children: [], blockers: ["NO_CHILD_WORK_ORDERS"] };
+  }
+
+  const unfinished = children.filter((c: any) => c.status !== "COMPLETED");
   if (unfinished.length) {
-    const hasGate = unfinished.some((c: any) => c.status === "BLOCKED" || c.requires_human_gate);
+    const hasGate = unfinished.some((c: any) =>
+      c.status === "BLOCKED" || c.status === "FAILED" || c.requires_human_gate || Boolean(c.blocker_code)
+    );
     const status = hasGate ? "BLOCKED" : "RUNNING";
     await db.from("luna_erp_work_orders").update({
       status,
@@ -671,6 +696,14 @@ async function updateParentStatus(parentId: string) {
       children: children.map((c: any) => ({ id: c.id, title: c.title, agent_key: c.owner_agent_key, status: c.status })),
       blockers: unfinished.map((c: any) => ({ id: c.id, status: c.status, blocker_code: c.blocker_code ?? c.last_error_code })),
     };
+  }
+
+  if (
+    parent.status === "VALIDATION" &&
+    isObject(parent.output) &&
+    parent.output.synthesized_by === "ceo_orchestrator"
+  ) {
+    return { parent_work_order_id: parentId, status: "VALIDATION", summary: parent.output, children, blockers: [] };
   }
 
   const CEO = (await getAgents()).find((a) => a.agent_key === "ceo_orchestrator" && a.enabled && a.health_status === "HEALTHY");
