@@ -1,7 +1,7 @@
 -- LUNA paper valuation defense-in-depth guard.
 -- Draft migration only: validate in an isolated staging database before rollout.
 -- Deliberately fail closed unless each open position has a fresh, valid, explicitly
--- verified TOPTRADER_REALTIME book. This does NOT replace the cycle function fix.
+-- verified TOPTRADER_REALTIME book in the exact snapshot session, including positive sizes. This does NOT replace the cycle function fix.
 
 DO $preflight$
 BEGIN
@@ -48,12 +48,15 @@ BEGIN
     AND NOT EXISTS (
       SELECT 1
       FROM public.luna_market_ticks AS t
-      WHERE upper(t.symbol) = upper(p.symbol)
+      WHERE t.session_id = NEW.session_id
+        AND upper(t.symbol) = upper(p.symbol)
         AND t.source = 'TOPTRADER_REALTIME'
         AND t.ts <= now() + interval '1 second'
         AND t.ts >= now() - interval '60 seconds'
         AND t.bid IS NOT NULL AND t.bid > 0
         AND t.ask IS NOT NULL AND t.ask >= t.bid
+        AND t.bid_size IS NOT NULL AND t.bid_size > 0
+        AND t.ask_size IS NOT NULL AND t.ask_size > 0
         AND (
           lower(coalesce(t.raw->>'data_quality','')) = 'verified'
           OR lower(coalesce(t.raw->>'verified','')) = 'true'
