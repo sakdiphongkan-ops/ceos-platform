@@ -1,32 +1,35 @@
 # LUNA paper valuation guard — staging validation plan
 
-Status: draft only. Do not apply to production until this checklist passes.
+Status: draft only. Neither migration has been applied to Supabase or Production.
+
+## Included draft migrations
+- `202610170001_luna_paper_snapshot_valuation_guard.sql`: defense-in-depth trigger for snapshot inserts/updates.
+- `202610170003_luna_cycle_fail_closed_valuation.sql`: replacement for the current cycle function, captured from the live database read-only on 2026-10-17 and modified to remove average-cost fallback, enforce a 60-second quote freshness window, return `VALUATION_INCOMPLETE` with missing symbols, avoid writing incomplete snapshots or updating peak equity, and timestamp complete snapshots at valuation time.
 
 ## Safety contract
-- This migration only blocks writing a paper equity snapshot if any open position lacks a recent explicitly verified TOPTRADER_REALTIME bid/ask book.
-- Maximum quote age is currently hard-coded at 60 seconds; align this with the approved execution quote-age policy before rollout.
-- It does not replace the primary fix in `luna_run_live_paper_cycle`: that function must stop using `coalesce(t.last, p.avg_price)`, stop writing snapshots from stale bars, and return explicit valuation completeness / missing symbols.
-- Explicit verification is read from `raw.data_quality = "verified"` or `raw.verified = true`. Confirm the ingestion contract actually writes one of these keys. If not, the guard intentionally rejects all quotes until the contract is corrected.
+- A held position is markable only with a recent `TOPTRADER_REALTIME` quote, valid positive bid/ask and sizes, ask >= bid, timestamp no more than one second in the future and no older than 60 seconds, plus explicit verification marker `raw.data_quality = "verified"` or `raw.verified = true`.
+- Mark-to-market uses bid as the liquidation-side mark; it never substitutes `avg_price`.
+- If any open position is unpriced, the cycle returns `status = VALUATION_INCOMPLETE`, `valuation_ready = false`, lists `unpriced_symbols`, writes no equity snapshot and does not update peak equity. Runtime cash/reservations/realized P&L/fees and heartbeat are updated so the paper ledger remains observable.
+- With zero open positions, cash-only valuation is permitted.
+- The quote freshness limit and JSON verification marker must be confirmed against the actual ingestion contract before rollout. Current database evidence reports zero TOPTRADER_REALTIME ticks in the last 24 hours, so the correct current behavior is to block valuation rather than invent a mark.
 
-## Staging regression cases
-Run each case against an isolated Supabase branch, never production:
-
-1. Fresh verified quote for every open position: snapshot insert succeeds.
-2. Quote older than 60 seconds: insert rejected with `LUNA_VALUATION_INCOMPLETE` and symbol listed in DETAIL.
-3. Missing quote for one position: insert rejected and the missing symbol is reported.
-4. Partial coverage: all but one symbol fresh; insert rejected.
-5. Future timestamp more than one second ahead: insert rejected.
-6. Null/zero bid, null ask, or ask < bid: insert rejected.
-7. Wrong source or no explicit verified marker: insert rejected.
-8. Zero open positions: insert allowed, subject to the primary cycle function's separate cash/equity accounting tests.
-9. Update of an existing snapshot is subject to the same guard.
-10. Verify a rejected insert leaves no snapshot row and does not update peak equity or drawdown.
-11. Compare TypeScript and SQL valuation outputs on identical fixtures; verify cash + marked market value, realized/unrealized P&L, fees and slippage reconcile to the cent.
+## Regression cases required before rollout
+Run on an isolated, no-cost local PostgreSQL/Supabase-compatible test instance, not the production database:
+1. Fresh verified quote for every open position: valuation succeeds and snapshot timestamp is current.
+2. Quote older than 60 seconds: valuation incomplete; no snapshot or peak-equity update.
+3. Missing quote for one position and partial coverage: missing symbol is listed; no snapshot.
+4. Future timestamp more than one second ahead: valuation incomplete.
+5. Null/zero bid, null ask, ask < bid, or nonpositive sizes: valuation incomplete.
+6. Wrong source or missing verification marker: valuation incomplete.
+7. Zero open positions: cash-only valuation is allowed.
+8. Repeat calls and snapshot uniqueness: no duplicate/overwrite surprises.
+9. Verify incomplete valuation leaves prior verified snapshot and peak drawdown state unchanged.
+10. Compare SQL and TypeScript results on identical fixtures, including cash, market value, realized/unrealized P&L, fees, slippage and drawdown.
 
 ## Rollout gate
-- Confirm schema and source-quality JSON contract.
-- Replace the primary cycle function in a separate reviewed migration after capturing its exact current definition and writing a rollback script.
-- Run all regression cases in staging.
-- Confirm no historical/stale snapshot is displayed as current in API/UI.
+- Confirm the actual ingestion JSON contract for verification markers.
+- Run the complete regression matrix on an isolated no-cost environment. Do not create a paid branch or project.
+- Review the full function replacement and prepare rollback from the captured prior definition.
+- Confirm the UI/API never labels a stale snapshot as current.
 - Keep paper-only mode, live-trading disarmed, and gateway kill switch enabled.
-- Production rollout requires a reviewed diff, backup/rollback plan, and an observed healthy feed; current evidence says feed freshness is absent.
+- Do not apply to production while the feed is stale or missing; current evidence says no TOPTRADER_REALTIME ticks in the last 24 hours.
