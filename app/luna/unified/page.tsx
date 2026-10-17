@@ -12,15 +12,19 @@ import styles from "./unified.module.css";
 
 type Payload = LunaFeed & Record<string, any>;
 
+const hasNumericValue = (value: unknown) =>
+  value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value));
+
 const money = (value: unknown) => {
-  const n = Number(value);
-  return Number.isFinite(n)
-    ? n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    : "—";
+  if (!hasNumericValue(value)) return "—";
+  return Number(value).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 };
 const count = (value: unknown) => {
-  const n = Number(value);
-  return Number.isFinite(n) ? n.toLocaleString("en-US") : "—";
+  if (!hasNumericValue(value)) return "—";
+  return Number(value).toLocaleString("en-US");
 };
 const localTime = (value: unknown) => {
   if (!value || !Number.isFinite(Date.parse(String(value)))) return "—";
@@ -30,8 +34,9 @@ const localTime = (value: unknown) => {
   }).format(new Date(String(value)));
 };
 const ageLabel = (value: unknown) => {
+  if (!hasNumericValue(value)) return "Unknown age";
   const n = Number(value);
-  if (!Number.isFinite(n) || n < 0) return "Unknown age";
+  if (n < 0) return "Unknown age";
   if (n < 1000) return `${Math.round(n)} ms`;
   if (n < 60_000) return `${(n / 1000).toFixed(1)} sec`;
   if (n < 3_600_000) return `${(n / 60_000).toFixed(1)} min`;
@@ -136,10 +141,15 @@ export default function LunaUnifiedPrototypePage() {
         <div className={styles.marketRows}>
           {marketField.slice(0, 8).map((row: any, i: number) => (
             <div className={styles.marketRow} key={String(row.symbol ?? i)}>
-              <div><b>{row.symbol ?? "—"}</b><span>{row.source ?? "Source not reported"}</span></div>
-              <strong>{row.last == null ? "—" : "฿" + money(row.last)}</strong>
-              <span>{localTime(row.ts ?? row.source_ts)}</span>
-              <span className={row.bid != null && row.ask != null ? styles.goodText : styles.muted}>{row.bid != null && row.ask != null ? `Bid ${money(row.bid)} / Ask ${money(row.ask)}` : "Bid/ask unavailable"}</span>
+              <div>
+                <b>{row.symbol ?? "—"}</b>
+                <span>{row.source ?? "Source not reported"} · {row.verified === true ? "verified book" : "display only / unverified"}</span>
+              </div>
+              <strong>{!hasNumericValue(row.last ?? row.current_price) ? "—" : "฿" + money(row.last ?? row.current_price)}</strong>
+              <span>{localTime(row.last_quote_ts ?? row.ts ?? row.source_ts)}</span>
+              <span className={row.verified === true && hasNumericValue(row.bid) && hasNumericValue(row.ask) ? styles.goodText : styles.muted}>
+                {hasNumericValue(row.bid) && hasNumericValue(row.ask) ? `Bid ${money(row.bid)} / Ask ${money(row.ask)}` : "Bid/ask unavailable"}
+              </span>
             </div>
           ))}
           {!marketField.length && <div className={styles.empty}><Waves size={18}/><div><b>No current market snapshot in this response</b><span>The UI will not substitute old or sample prices. Verify the source feed before using signals.</span></div></div>}
