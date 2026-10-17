@@ -639,8 +639,7 @@ begin
     'slippage_bps',p_slippage_bps
   );
 end;
-$function$
-
+$function$;
 
 COMMENT ON FUNCTION public.luna_run_live_paper_cycle(text,text,numeric,numeric,numeric) IS
   'Paper-only cycle. Fail-closed mark-to-market: every open position requires a <=60s TOPTRADER_REALTIME quote with valid bid/ask/sizes and explicit verified marker in raw JSON. Returns VALUATION_INCOMPLETE without snapshot/peak-equity updates if any held symbol is unpriced.';
