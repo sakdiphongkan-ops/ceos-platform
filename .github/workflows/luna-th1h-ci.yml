@@ -25,6 +25,33 @@ on:
         type: string
 
 jobs:
+  repair_cycle_migration:
+    if: github.event_name == 'pull_request' && github.head_ref == 'luna/db-snapshot-valuation-guard-20261017'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+      - name: Repair only the proven SQL statement delimiter defect
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("supabase/migrations/202610170003_luna_cycle_fail_closed_valuation.sql")
+          s = p.read_text(encoding="utf-8")
+          old = "$function$\n\n\nCOMMENT ON FUNCTION"
+          new = "$function$;\n\nCOMMENT ON FUNCTION"
+          if old not in s:
+              raise SystemExit("cycle migration delimiter already repaired or unexpected shape")
+          p.write_text(s.replace(old, new, 1), encoding="utf-8")
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add supabase/migrations/202610170003_luna_cycle_fail_closed_valuation.sql
+          git commit -m "fix(luna): terminate cycle function before COMMENT"
+          git push origin HEAD:${{ github.head_ref }}
+
   typecheck:
     runs-on: ubuntu-latest
     defaults:
@@ -82,6 +109,7 @@ jobs:
           python test_safety.py
 
   db_verified_ingest_regression:
+    needs: repair_cycle_migration
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -98,6 +126,8 @@ jobs:
           --health-retries 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
       - name: Install PostgreSQL test driver
         run: python -m pip install "psycopg2-binary==2.9.10"
       - name: RED — prove the pre-fix behavior fails the verification contract
@@ -123,6 +153,7 @@ jobs:
         run: python scripts/db/test_luna_verified_ingest_marker.py --mode migration
 
   db_paper_valuation_regression:
+    needs: repair_cycle_migration
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -139,6 +170,8 @@ jobs:
           --health-retries 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
       - name: Install PostgreSQL test driver
         run: python -m pip install "psycopg2-binary==2.9.10"
       - name: Run cycle fail-closed valuation matrix
@@ -150,6 +183,7 @@ jobs:
           PGPASSWORD: postgres
         run: python scripts/db/test_luna_cycle_valuation_guard.py
       - name: Run snapshot defense-in-depth matrix
+        if: always()
         env:
           PGHOST: 127.0.0.1
           PGPORT: 5432
@@ -210,7 +244,7 @@ jobs:
       - name: Verify PIT membership provenance
         if: steps.changed.outputs.run == 'true'
         run: |
-          python scripts/research/verify_pit_membership_manifest.py             --membership data/raw/pit_membership.csv             --manifest data/raw/pit_membership.manifest.json
+          python scripts/research/verify_pit_membership_manifest.py --membership data/raw/pit_membership.csv --manifest data/raw/pit_membership.manifest.json
 
       - name: Normalize SET history
         if: steps.changed.outputs.run == 'true'
@@ -228,21 +262,13 @@ jobs:
       - name: Build monthly panel
         if: steps.changed.outputs.run == 'true'
         run: |
-          python scripts/research/build_monthly_factor_dataset.py \
-            --input data/set_2000_2025/factors_5y.csv \
-            --output data/set_2000_2025/monthly_factors_5y.csv \
-            --membership data/raw/pit_membership.csv
+          python scripts/research/build_monthly_factor_dataset.py --input data/set_2000_2025/monthly_factors_5y.csv --output data/set_2000_2025/monthly_factors_5y.csv --membership data/raw/pit_membership.csv
           test -s data/set_2000_2025/monthly_factors_5y.csv
       - name: Run repaired 1000-formula tournament
         if: steps.changed.outputs.run == 'true'
         run: |
           rm -rf research/luna_adaptive_tournament_v3
-          python scripts/research/luna_adaptive_tournament_v3.py \
-            --input data/set_2000_2025/monthly_factors_5y.csv \
-            --output research/luna_adaptive_tournament_v3 \
-            --membership data/raw/pit_membership.csv \
-            --formula-count 1000 --seed 20260920 --lookback-months 24 \
-            --min-history-months 12 --cost-bps 20 --k 20
+          python scripts/research/luna_adaptive_tournament_v3.py --input data/set_2000_2025/monthly_factors_5y.csv --output research/luna_adaptive_tournament_v3 --membership data/raw/pit_membership.csv --formula-count 1000 --seed 20260920 --lookback-months 24 --min-history-months 12 --cost-bps 20 --k 20
       - name: Validate research result
         if: steps.changed.outputs.run == 'true'
         run: |
