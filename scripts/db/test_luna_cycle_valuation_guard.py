@@ -85,12 +85,12 @@ def cycle(conn):
         raise
 
 
-def insert_tick(conn, *, age_seconds=5, verified=True, bid=34.5, ask=34.75, bid_size=1000, ask_size=1200, ts_offset_seconds=0):
+def insert_tick(conn, *, age_seconds=5, verified=True, bid=34.5, ask=34.75, bid_size=1000, ask_size=1200, ts_offset_seconds=0, source="TOPTRADER_REALTIME"):
     marker = {"vendor": "fixture"}
     if verified:
         marker.update({"data_quality": "verified", "verified": True, "verification_source": "TOPTRADER_REALTIME"})
     with conn.cursor() as cur:
-        cur.execute("INSERT INTO public.luna_market_ticks VALUES (%s,'PTT',now()-(%s || ' seconds')::interval+(%s || ' seconds')::interval,%s,%s,34.6,%s,%s,'TOPTRADER_REALTIME',%s,now());", (SESSION, age_seconds, ts_offset_seconds, bid, ask, bid_size, ask_size, json.dumps(marker)))
+        cur.execute("INSERT INTO public.luna_market_ticks VALUES (%s,'PTT',now()-(%s || ' seconds')::interval+(%s || ' seconds')::interval,%s,%s,34.6,%s,%s,%s,%s,now());", (SESSION, age_seconds, ts_offset_seconds, bid, ask, bid_size, ask_size, source, json.dumps(marker)))
     conn.commit()
 
 
@@ -116,8 +116,56 @@ def assert_complete(conn):
     assert snapshots == 1, snapshots
     assert float(peak) == 30000.0, peak
     assert float(result["current_equity"]) == 13450.0, result
-    print("PASS fresh verified quote: snapshot written with liquidation-side bid")
+    with conn.cursor() as cur:\n        cur.execute("SELECT max(ts) FROM public.luna_paper_equity_snapshots;")\n        snapshot_ts = cur.fetchone()[0]\n        cur.execute("SELECT max(bar_end) FROM public.luna_shadow_15m_bars WHERE session_id=%s;", (SESSION,))\n        latest_bar = cur.fetchone()[0]\n        cur.execute("SELECT market_value FROM public.luna_paper_equity_snapshots LIMIT 1;")\n        market_value = cur.fetchone()[0]\n    assert snapshot_ts is not None and snapshot_ts > latest_bar, (snapshot_ts, latest_bar)\n    assert float(market_value) == 3450.0, market_value\n    print("PASS fresh verified quote: snapshot is current and uses liquidation-side bid")
 
+
+
+def assert_partial_coverage(conn):
+    reset_state(conn)
+    with conn.cursor() as cur:
+        cur.execute("INSERT INTO public.luna_paper_live_positions VALUES (%s,'CPALL',100,50,5000,0,now());", (EXPERIMENT,))
+    conn.commit()
+    insert_tick(conn)
+    result, snapshots, peak = cycle(conn)
+    assert result["status"] == "VALUATION_INCOMPLETE", result
+    assert result["unpriced_symbols"] == ["CPALL"], result
+    assert result["snapshot_written"] is False and snapshots == 0, (result, snapshots)
+    assert result["peak_equity_updated"] is False and float(peak) == 30000.0, (result, peak)
+    print("PASS partial quote coverage: one missing held symbol blocks whole snapshot")
+
+
+def assert_cash_only(conn):
+    reset_state(conn)
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM public.luna_paper_live_positions WHERE experiment_code=%s;", (EXPERIMENT,))
+    conn.commit()
+    result, snapshots, peak = cycle(conn)
+    assert result["status"] == "RUNNING", result
+    assert result["valuation_ready"] is True, result
+    assert snapshots == 1, snapshots
+    assert float(result["current_equity"]) == 10000.0, result
+    print("PASS cash-only account: no held positions requires no quote")
+
+
+def assert_preserve_prior_snapshot(conn):
+    reset_state(conn)
+    insert_tick(conn)
+    first, snapshots_before, peak_before = cycle(conn)
+    assert first["status"] == "RUNNING" and snapshots_before == 1, first
+    with conn.cursor() as cur:
+        cur.execute("SELECT ts, equity FROM public.luna_paper_equity_snapshots LIMIT 1;")
+        prior_ts, prior_equity = cur.fetchone()
+        cur.execute("DELETE FROM public.luna_market_ticks;")
+    conn.commit()
+    second, snapshots_after, peak_after = cycle(conn)
+    assert second["status"] == "VALUATION_INCOMPLETE", second
+    assert second["snapshot_written"] is False and second["peak_equity_updated"] is False, second
+    assert snapshots_after == 1 and float(peak_after) == float(peak_before), (snapshots_after, peak_after, peak_before)
+    with conn.cursor() as cur:
+        cur.execute("SELECT ts, equity FROM public.luna_paper_equity_snapshots LIMIT 1;")
+        kept_ts, kept_equity = cur.fetchone()
+    assert kept_ts == prior_ts and float(kept_equity) == float(prior_equity), (prior_ts, kept_ts, prior_equity, kept_equity)
+    print("PASS incomplete valuation preserves previous verified snapshot and peak equity")
 
 def main():
     conn = connect()
@@ -133,7 +181,14 @@ def main():
         assert_incomplete(conn, "zero ask size", ask_size=0)
         assert_incomplete(conn, "ask below bid", bid=35, ask=34.5)
         assert_incomplete(conn, "negative bid", bid=-1, ask=1)
-        print("PASS cycle valuation regression matrix: 9 cases")
+        assert_incomplete(conn, "null bid", bid=None)
+        assert_incomplete(conn, "null ask", ask=None)
+        assert_incomplete(conn, "negative ask size", ask_size=-1)
+        assert_incomplete(conn, "wrong source", source="UNVERIFIED_VENDOR")
+        assert_partial_coverage(conn)
+        assert_cash_only(conn)
+        assert_preserve_prior_snapshot(conn)
+        print("PASS cycle valuation regression matrix: expanded behavioral cases")
         return 0
     finally:
         conn.close()
