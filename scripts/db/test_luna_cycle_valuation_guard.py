@@ -116,7 +116,16 @@ def assert_complete(conn):
     assert snapshots == 1, snapshots
     assert float(peak) == 30000.0, peak
     assert float(result["current_equity"]) == 13450.0, result
-    with conn.cursor() as cur:\n        cur.execute("SELECT max(ts) FROM public.luna_paper_equity_snapshots;")\n        snapshot_ts = cur.fetchone()[0]\n        cur.execute("SELECT max(bar_end) FROM public.luna_shadow_15m_bars WHERE session_id=%s;", (SESSION,))\n        latest_bar = cur.fetchone()[0]\n        cur.execute("SELECT market_value FROM public.luna_paper_equity_snapshots LIMIT 1;")\n        market_value = cur.fetchone()[0]\n    assert snapshot_ts is not None and snapshot_ts > latest_bar, (snapshot_ts, latest_bar)\n    assert float(market_value) == 3450.0, market_value\n    print("PASS fresh verified quote: snapshot is current and uses liquidation-side bid")
+    with conn.cursor() as cur:
+        cur.execute("SELECT max(ts) FROM public.luna_paper_equity_snapshots;")
+        snapshot_ts = cur.fetchone()[0]
+        cur.execute("SELECT max(bar_end) FROM public.luna_shadow_15m_bars WHERE session_id=%s;", (SESSION,))
+        latest_bar = cur.fetchone()[0]
+        cur.execute("SELECT market_value FROM public.luna_paper_equity_snapshots LIMIT 1;")
+        market_value = cur.fetchone()[0]
+    assert snapshot_ts is not None and snapshot_ts > latest_bar, (snapshot_ts, latest_bar)
+    assert float(market_value) == 3450.0, market_value
+    print("PASS fresh verified quote: snapshot is current and uses liquidation-side bid")
 
 
 
