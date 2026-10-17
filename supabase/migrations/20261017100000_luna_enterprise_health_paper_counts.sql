@@ -118,6 +118,7 @@ BEGIN
     FROM public.luna_paper_live_runtime r
     WHERE r.strategy_version = p_strategy_version
       AND r.paper_only = true
+      AND (r.started_at AT TIME ZONE 'Asia/Bangkok')::date <= p_as_of_date
   ) INTO v_has_paper_runtime;
 
   SELECT count(*) INTO v_paper_orders
