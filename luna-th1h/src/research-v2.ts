@@ -92,7 +92,10 @@ function runCrossSectional(quotes:Quote[],initialCapital:number,params:Partial<S
     appendCurve(state,sessionQuotes.at(-1)!.ts,curve);
   }
 
-  const fp=snapshot(state), finalEquity=fp.cash+fp.market_value;
+  const finalTs=sessionQuotes.at(-1)?.ts;
+  const fp=snapshot(state,finalTs?Date.parse(finalTs):Date.now());
+  if(!fp.valuation_ready || fp.market_value===null) throw new Error(`RESEARCH_FINAL_VALUATION_INCOMPLETE:${fp.unpriced_symbols.join(",")}`);
+  const finalEquity=fp.cash+fp.market_value;
   return {
     strategyVersion:strategy.version,initialCapital,finalEquity,netPnl:finalEquity-initialCapital,
     returnPct:(finalEquity/initialCapital-1)*100,maxDrawdown:drawdown(curve),
@@ -109,7 +112,9 @@ function recordFill(state:PortfolioState,order:Extract<ReturnType<typeof planOrd
   trades.push({ts,symbol:fill.symbol,side:fill.side,qty:fill.qty,referencePrice:fill.referencePrice,fillPrice:fill.fillPrice,notional:fill.notional,fee:fill.fee,slippage:fill.slippage,realizedPnl:after-before,reason,strategyVersion:version});
 }
 function appendCurve(state:PortfolioState,ts:string,curve:BacktestEquityPoint[]){
-  const s=snapshot(state);curve.push({ts,equity:s.cash+s.market_value,cash:s.cash,marketValue:s.market_value,grossExposure:s.gross_exposure,realizedPnl:s.realized_pnl,unrealizedPnl:s.unrealized_pnl,fees:s.fees});
+  const s=snapshot(state,Date.parse(ts));
+  if(!s.valuation_ready || s.market_value===null || s.gross_exposure===null || s.unrealized_pnl===null) throw new Error(`RESEARCH_VALUATION_INCOMPLETE:${s.unpriced_symbols.join(",")}`);
+  curve.push({ts,equity:s.cash+s.market_value,cash:s.cash,marketValue:s.market_value,grossExposure:s.gross_exposure,realizedPnl:s.realized_pnl,unrealizedPnl:s.unrealized_pnl,fees:s.fees});
 }
 function forceCloseSession(state:PortfolioState,trades:BacktestTrade[],fallback:Quote,version:string){
   for(const [symbol,pos] of Object.entries(state.positions)){
