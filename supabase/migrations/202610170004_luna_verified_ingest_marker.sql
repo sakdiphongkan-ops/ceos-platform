@@ -63,7 +63,9 @@ begin
     v_reject:=coalesce(v_reject,'MISSING_PAYLOAD_HASH');
   elsif not coalesce(p_book_complete,false) then
     v_reject:=coalesce(v_reject,'INCOMPLETE_ORDER_BOOK');
-  elsif jsonb_typeof(p_rows)<>'array' or jsonb_array_length(p_rows)=0 then
+  elsif coalesce(jsonb_typeof(p_rows),'') <> 'array' then
+    v_reject:=coalesce(v_reject,'EMPTY_OR_INVALID_BATCH');
+  elsif jsonb_array_length(p_rows)=0 then
     v_reject:=coalesce(v_reject,'EMPTY_OR_INVALID_BATCH');
   end if;
 
@@ -101,7 +103,9 @@ begin
       bid_size bigint, ask_size bigint, raw jsonb
     )
     where nullif(trim(x.symbol),'') is not null
-      and x.ts is not null and x.ts <= now() + interval '30 seconds'
+      and x.ts is not null
+      and x.ts >= now() - make_interval(secs=>greatest(v_max_staleness,1))
+      and x.ts <= now() + interval '30 seconds'
       and x.bid is not null and x.ask is not null and x.last is not null
       and x.bid > 0 and x.ask >= x.bid and x.last > 0
       and x.bid_size is not null and x.bid_size > 0
