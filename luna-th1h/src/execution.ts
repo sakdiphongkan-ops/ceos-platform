@@ -104,6 +104,18 @@ function usablePrice(...values:Array<number|null|undefined>){
   return 0;
 }
 
+// A portfolio mark is valid only when the source timestamp is present, recent,
+// not materially in the future, and the source has explicitly marked the quote verified.
+function freshVerifiedMark(q:Quote|undefined,nowMs:number){
+  if(!q || String(q.dataQuality??"").toLowerCase()!=="verified") return null;
+  const sourceTs=Date.parse(String(q.sourceTs??""));
+  if(!Number.isFinite(sourceTs)) return null;
+  const ageMs=nowMs-sourceTs;
+  if(ageMs < -1500 || ageMs > config.maxQuoteAgeMs) return null;
+  const price=usablePrice(q.bid,q.last,q.ask);
+  return price>0 ? price : null;
+}
+
 function recentBuys(state:PortfolioState){
   if(!state.recentBuyTimestamps) state.recentBuyTimestamps=[];
   return state.recentBuyTimestamps;
@@ -373,33 +385,47 @@ export function applyFill(state:PortfolioState,fill:SimulatedFill){
   state.slippageCost+=fill.slippage;
 }
 
-export function currentGrossExposure(state:PortfolioState){
-  return Object.entries(state.positions).reduce((sum,[symbol,pos])=>{
-    const q=state.marks[symbol];
-    const price=usablePrice(q?.last,q?.bid,q?.ask,pos.avgPrice);
-    return sum+Math.max(0,pos.qty*price);
-  },0);
+export function currentGrossExposure(state:PortfolioState,nowMs=Date.now()){
+  let total=0;
+  for(const [symbol,pos] of Object.entries(state.positions)){
+    if(pos.qty<=0) continue;
+    const price=freshVerifiedMark(state.marks[symbol],nowMs);
+    if(price===null) return null;
+    total+=Math.max(0,pos.qty*price);
+  }
+  return total;
 }
 
-export function snapshot(state:PortfolioState){
-  const marketValue=Object.entries(state.positions).reduce((sum,[symbol,pos])=>{
-    const q=state.marks[symbol];
-    const liquidationPrice=usablePrice(q?.bid,q?.last,q?.ask,pos.avgPrice);
-    return sum+Math.max(0,pos.qty*liquidationPrice);
-  },0);
-  const grossExposure=currentGrossExposure(state);
+export function snapshot(state:PortfolioState,nowMs=Date.now()){
+  const heldSymbols=Object.entries(state.positions).filter(([,pos])=>pos.qty>0).map(([symbol])=>symbol);
+  const unpricedSymbols=heldSymbols.filter(symbol=>freshVerifiedMark(state.marks[symbol],nowMs)===null);
+  const valuationReady=unpricedSymbols.length===0;
+  let marketValue:number|null=null;
+  let unrealizedPnl:number|null=null;
+  let grossExposure:number|null=null;
+  if(valuationReady){
+    marketValue=0;
+    unrealizedPnl=0;
+    grossExposure=0;
+    for(const symbol of heldSymbols){
+      const pos=state.positions[symbol];
+      const q=state.marks[symbol];
+      const markPrice=freshVerifiedMark(q,nowMs)!;
+      const liquidationPrice=usablePrice(q.bid,q.last,q.ask);
+      marketValue+=Math.max(0,pos.qty*liquidationPrice);
+      grossExposure+=Math.max(0,pos.qty*markPrice);
+      unrealizedPnl+=markPrice*pos.qty-pos.costBasis;
+    }
+  }
   const realizedPnl=Object.values(state.positions).reduce((sum,p)=>sum+p.realizedPnl,0);
-  const unrealizedPnl=Object.entries(state.positions).reduce((sum,[symbol,pos])=>{
-    const q=state.marks[symbol];
-    const markPrice=usablePrice(q?.bid,q?.last,q?.ask,pos.avgPrice);
-    return sum+(markPrice*pos.qty-pos.costBasis);
-  },0);
   return {
     cash:state.cash,
     market_value:marketValue,
     gross_exposure:grossExposure,
     realized_pnl:realizedPnl,
     unrealized_pnl:unrealizedPnl,
+    valuation_ready:valuationReady,
+    unpriced_symbols:unpricedSymbols,
     fees:state.fees
   };
 }
