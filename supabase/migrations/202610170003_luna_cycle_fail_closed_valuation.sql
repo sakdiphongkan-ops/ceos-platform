@@ -599,7 +599,11 @@ begin
     p_experiment_code,p_strategy_version,v_session_id,now(),v_cash,v_mv,v_equity,
     v_realized,v_mv-coalesce((select sum(cost_basis) from public.luna_paper_live_positions where experiment_code=p_experiment_code),0),
     v_fees,v_dd,v_dd_pct
-  );
+  )
+  on conflict(experiment_code,strategy_version,ts) do update set
+    session_id=excluded.session_id,cash=excluded.cash,market_value=excluded.market_value,equity=excluded.equity,
+    realized_pnl=excluded.realized_pnl,unrealized_pnl=excluded.unrealized_pnl,fees=excluded.fees,
+    drawdown_thb=excluded.drawdown_thb,drawdown_pct=excluded.drawdown_pct;
 
   update public.luna_paper_live_runtime
   set session_id=v_session_id,cash=v_cash,reserved_cash=v_reserved,realized_pnl=v_realized,fees=v_fees,
