@@ -87,6 +87,19 @@ export default function LunaUnifiedPrototypePage() {
   const decisions = Array.isArray(feed?.decision_audit) ? feed.decision_audit : [];
   const blockers = Array.isArray(readiness?.blockers) ? readiness.blockers : [];
   const marketField = Array.isArray(feed?.market_field) ? feed.market_field : [];
+  const verifiedMarkBySymbol = new Map<string, any>(
+    marketField
+      .filter((row: any) => {
+        const quoteTs = Date.parse(String(row.last_quote_ts ?? ""));
+        const ageMs = Date.now() - quoteTs;
+        return row.verified === true
+          && hasNumericValue(row.bid)
+          && Number.isFinite(quoteTs)
+          && ageMs >= -30_000
+          && ageMs <= 60_000;
+      })
+      .map((row: any) => [String(row.symbol ?? "").toUpperCase(), row]),
+  );
   const runtimeStatus = String(paper?.status ?? "STATUS UNKNOWN").replaceAll("_", " ");
   const readinessStatus = String(readiness?.status ?? "UNKNOWN").replaceAll("_", " ");
   const headlineStatus = readiness?.status === "BLOCKED" || readiness?.status === "FAIL"
@@ -166,8 +179,17 @@ export default function LunaUnifiedPrototypePage() {
         </div>
         <div className={styles.tableWrap}>
           <div className={styles.tableTitle}><b>Open positions</b><span>{positions.length} returned by API</span></div>
-          {positions.length ? <table><thead><tr><th>Symbol</th><th>Qty</th><th>Avg cost</th><th>Last / mark</th><th>Realized P/L</th></tr></thead><tbody>
-            {positions.slice(0, 10).map((p: any, i: number) => <tr key={String(p.symbol ?? i)}><td><b>{p.symbol ?? "—"}</b></td><td>{count(p.qty)}</td><td>{p.avg_price == null && p.avgCost == null ? "—" : "฿" + money(p.avg_price ?? p.avgCost)}</td><td>{p.last == null && p.mark_price == null ? "—" : "฿" + money(p.last ?? p.mark_price)}</td><td className={Number(p.realized_pnl ?? p.realized ?? 0) >= 0 ? styles.goodText : styles.badText}>฿{money(p.realized_pnl ?? p.realized)}</td></tr>)}
+          {positions.length ? <table><thead><tr><th>Symbol</th><th>Qty</th><th>Avg cost</th><th>Verified bid mark</th><th>Realized P/L</th></tr></thead><tbody>
+            {positions.slice(0, 10).map((p: any, i: number) => {
+              const mark = verifiedMarkBySymbol.get(String(p.symbol ?? "").toUpperCase());
+              return <tr key={String(p.symbol ?? i)}>
+                <td><b>{p.symbol ?? "—"}</b></td>
+                <td>{count(p.qty)}</td>
+                <td>{p.avg_price == null && p.avgCost == null ? "—" : "฿" + money(p.avg_price ?? p.avgCost)}</td>
+                <td>{mark ? "฿" + money(mark.bid) : "—"}</td>
+                <td className={Number(p.realized_pnl ?? p.realized ?? 0) >= 0 ? styles.goodText : styles.badText}>฿{money(p.realized_pnl ?? p.realized)}</td>
+              </tr>;
+            })}
           </tbody></table> : <div className={styles.empty}>No open positions were returned by the current API response.</div>}
         </div>
         <div className={styles.tableWrap}>
