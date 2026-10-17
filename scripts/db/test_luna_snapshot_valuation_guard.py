@@ -1,0 +1,157 @@
+#!/usr/bin/env python3
+"""Isolated PostgreSQL regression matrix for the paper equity snapshot guard."""
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+
+import psycopg2
+from psycopg2 import errors
+
+ROOT = Path(__file__).resolve().parents[2]
+MIGRATION = ROOT / "supabase/migrations/202610170001_luna_paper_snapshot_valuation_guard.sql"
+SESSION = "00000000-0000-0000-0000-000000000001"
+EXPERIMENT = "LUNA-PAPER-LIVE-15M-VERIFIED"
+
+
+def connect():
+    return psycopg2.connect(
+        host=os.environ.get("PGHOST", "127.0.0.1"),
+        port=int(os.environ.get("PGPORT", "5432")),
+        dbname=os.environ.get("PGDATABASE", "postgres"),
+        user=os.environ.get("PGUSER", "postgres"),
+        password=os.environ.get("PGPASSWORD", "postgres"),
+    )
+
+
+def setup(conn):
+    with conn.cursor() as cur:
+        cur.execute("DROP FUNCTION IF EXISTS public.luna_guard_paper_equity_snapshot_valuation() CASCADE;")
+        for table in ("luna_paper_equity_snapshots", "luna_market_ticks", "luna_paper_live_positions"):
+            cur.execute(f"DROP TABLE IF EXISTS public.{table} CASCADE;")
+        cur.execute("""
+        CREATE TABLE public.luna_paper_live_positions (
+          experiment_code text NOT NULL, symbol text NOT NULL, qty bigint NOT NULL,
+          PRIMARY KEY (experiment_code, symbol)
+        );
+        CREATE TABLE public.luna_market_ticks (
+          session_id uuid NOT NULL, symbol text NOT NULL, ts timestamptz NOT NULL,
+          bid numeric, ask numeric, bid_size bigint, ask_size bigint,
+          source text NOT NULL, raw jsonb NOT NULL
+        );
+        CREATE TABLE public.luna_paper_equity_snapshots (
+          experiment_code text NOT NULL, strategy_version text NOT NULL, session_id uuid NOT NULL,
+          ts timestamptz NOT NULL, equity numeric,
+          UNIQUE (experiment_code, strategy_version, ts)
+        );
+        INSERT INTO public.luna_paper_live_positions VALUES (%s,'PTT',100),(%s,'CPALL',100);
+        """, (EXPERIMENT, EXPERIMENT))
+    conn.commit()
+
+
+def install(conn):
+    with conn.cursor() as cur:
+        cur.execute(MIGRATION.read_text(encoding="utf-8"))
+    conn.commit()
+
+
+def reset_ticks(conn):
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM public.luna_market_ticks;")
+        cur.execute("DELETE FROM public.luna_paper_equity_snapshots;")
+    conn.commit()
+
+
+def add_tick(conn, symbol="PTT", age=5, verified=True, session=SESSION, bid=34.5, ask=34.75, bid_size=1000, ask_size=1200):
+    raw = {"vendor": "fixture"}
+    if verified:
+        raw.update({"data_quality": "verified", "verified": True})
+    with conn.cursor() as cur:
+        cur.execute("""
+          INSERT INTO public.luna_market_ticks
+          VALUES (%s,%s,now()-(%s || ' seconds')::interval,%s,%s,%s,%s,'TOPTRADER_REALTIME',%s);
+        """, (session, symbol, age, bid, ask, bid_size, ask_size, json.dumps(raw)))
+    conn.commit()
+
+
+def snapshot(conn):
+    with conn.cursor() as cur:
+        cur.execute("""
+          INSERT INTO public.luna_paper_equity_snapshots
+          VALUES (%s,'test',%s,now(),10000);
+        """, (EXPERIMENT, SESSION))
+    conn.commit()
+
+
+def expect_block(conn, name):
+    try:
+        snapshot(conn)
+    except psycopg2.Error as exc:
+        conn.rollback()
+        assert exc.pgcode == errors.CheckViolation.sqlstate, (name, exc.pgcode, exc)
+        assert "LUNA_VALUATION_INCOMPLETE" in str(exc), (name, exc)
+        print(f"PASS {name}: blocked fail-closed")
+        return
+    raise AssertionError(f"{name}: snapshot unexpectedly accepted")
+
+
+def expect_allow(conn, name):
+    snapshot(conn)
+    print(f"PASS {name}: snapshot accepted")
+
+
+def main():
+    conn = connect()
+    try:
+        setup(conn)
+        install(conn)
+
+        # Both held symbols must be covered by the exact snapshot session.
+        reset_ticks(conn)
+        add_tick(conn, "PTT")
+        add_tick(conn, "CPALL")
+        expect_allow(conn, "fresh verified books for every held symbol")
+
+        reset_ticks(conn)
+        add_tick(conn, "PTT")
+        expect_block(conn, "held symbol missing quote")
+
+        reset_ticks(conn)
+        add_tick(conn, "PTT", age=61)
+        add_tick(conn, "CPALL")
+        expect_block(conn, "stale quote")
+
+        reset_ticks(conn)
+        add_tick(conn, "PTT", verified=False)
+        add_tick(conn, "CPALL")
+        expect_block(conn, "unverified raw marker")
+
+        reset_ticks(conn)
+        add_tick(conn, "PTT", bid_size=0)
+        add_tick(conn, "CPALL")
+        expect_block(conn, "zero bid size")
+
+        reset_ticks(conn)
+        add_tick(conn, "PTT", ask_size=0)
+        add_tick(conn, "CPALL")
+        expect_block(conn, "zero ask size")
+
+        reset_ticks(conn)
+        add_tick(conn, "PTT", bid=35, ask=34.5)
+        add_tick(conn, "CPALL")
+        expect_block(conn, "ask below bid")
+
+        reset_ticks(conn)
+        add_tick(conn, "PTT", session="00000000-0000-0000-0000-000000000002")
+        add_tick(conn, "CPALL")
+        expect_block(conn, "session mismatch")
+
+        print("PASS snapshot guard regression matrix: 8 cases")
+        return 0
+    finally:
+        conn.close()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
