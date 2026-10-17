@@ -92,7 +92,7 @@ function runCrossSectional(quotes:Quote[],initialCapital:number,params:Partial<S
     appendCurve(state,sessionQuotes.at(-1)!.ts,curve);
   }
 
-  const finalTs=sessionQuotes.at(-1)?.ts;
+  const finalTs=sorted.at(-1)?.ts;
   const fp=snapshot(state,finalTs?Date.parse(finalTs):Date.now());
   if(!fp.valuation_ready || fp.market_value===null) throw new Error(`RESEARCH_FINAL_VALUATION_INCOMPLETE:${fp.unpriced_symbols.join(",")}`);
   const finalEquity=fp.cash+fp.market_value;
