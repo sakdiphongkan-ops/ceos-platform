@@ -51,7 +51,7 @@ assert(Number.isFinite(buyFill.fillPrice) && buyFill.fillPrice >= buy.referenceP
   "BUY fill must be finite and include non-negative execution costs");
 assert(buyFill.fee > 0, "paper BUY must include configured transaction fees");
 applyFill(state, buyFill);
-mark(state, { ...verifiedQuote, ts: "2026-10-19T03:15:00.000Z" });
+mark(state, { ...verifiedQuote, ts: "2026-10-19T03:15:00.000Z", sourceTs: "2026-10-19T03:15:00.000Z" });
 
 const afterBuy = snapshot(state, Date.parse("2026-10-19T03:15:00.000Z"));
 assert(state.positions.PTT?.qty === buy.qty, "position quantity must equal filled BUY quantity");
@@ -61,7 +61,7 @@ assert(afterBuy.market_value !== null && Number.isFinite(afterBuy.cash + afterBu
 assert(afterBuy.fees > 0, "snapshot must report accumulated fees");
 
 const sellTs = "2026-10-19T03:15:00.000Z";
-const sellQuote = { ...verifiedQuote, ts: sellTs };
+const sellQuote = { ...verifiedQuote, ts: sellTs, sourceTs: sellTs };
 mark(state, sellQuote);
 const sell = planOrder({
   symbol: "PTT",
