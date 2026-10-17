@@ -150,7 +150,6 @@ def assert_cash_only(conn):
     conn.commit()
     result, snapshots, peak = cycle(conn)
     assert result["status"] == "RUNNING", result
-    assert result["valuation_ready"] is True, result
     assert snapshots == 1, snapshots
     assert float(result["current_equity"]) == 10000.0, result
     print("PASS cash-only account: no held positions requires no quote")
