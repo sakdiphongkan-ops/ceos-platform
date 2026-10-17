@@ -7,7 +7,6 @@ import os
 from pathlib import Path
 
 import psycopg2
-from psycopg2 import errors
 
 ROOT = Path(__file__).resolve().parents[2]
 MIGRATION = ROOT / "supabase/migrations/202610170001_luna_paper_snapshot_valuation_guard.sql"
@@ -16,13 +15,7 @@ EXPERIMENT = "LUNA-PAPER-LIVE-15M-VERIFIED"
 
 
 def connect():
-    return psycopg2.connect(
-        host=os.environ.get("PGHOST", "127.0.0.1"),
-        port=int(os.environ.get("PGPORT", "5432")),
-        dbname=os.environ.get("PGDATABASE", "postgres"),
-        user=os.environ.get("PGUSER", "postgres"),
-        password=os.environ.get("PGPASSWORD", "postgres"),
-    )
+    return psycopg2.connect(host=os.environ.get("PGHOST", "127.0.0.1"), port=int(os.environ.get("PGPORT", "5432")), dbname=os.environ.get("PGDATABASE", "postgres"), user=os.environ.get("PGUSER", "postgres"), password=os.environ.get("PGPASSWORD", "postgres"))
 
 
 def setup(conn):
@@ -31,20 +24,9 @@ def setup(conn):
         for table in ("luna_paper_equity_snapshots", "luna_market_ticks", "luna_paper_live_positions"):
             cur.execute(f"DROP TABLE IF EXISTS public.{table} CASCADE;")
         cur.execute("""
-        CREATE TABLE public.luna_paper_live_positions (
-          experiment_code text NOT NULL, symbol text NOT NULL, qty bigint NOT NULL,
-          PRIMARY KEY (experiment_code, symbol)
-        );
-        CREATE TABLE public.luna_market_ticks (
-          session_id uuid NOT NULL, symbol text NOT NULL, ts timestamptz NOT NULL,
-          bid numeric, ask numeric, bid_size bigint, ask_size bigint,
-          source text NOT NULL, raw jsonb NOT NULL
-        );
-        CREATE TABLE public.luna_paper_equity_snapshots (
-          experiment_code text NOT NULL, strategy_version text NOT NULL, session_id uuid NOT NULL,
-          ts timestamptz NOT NULL, equity numeric,
-          UNIQUE (experiment_code, strategy_version, ts)
-        );
+        CREATE TABLE public.luna_paper_live_positions (experiment_code text NOT NULL, symbol text NOT NULL, qty bigint NOT NULL, PRIMARY KEY (experiment_code, symbol));
+        CREATE TABLE public.luna_market_ticks (session_id uuid NOT NULL, symbol text NOT NULL, ts timestamptz NOT NULL, bid numeric, ask numeric, bid_size bigint, ask_size bigint, source text NOT NULL, raw jsonb NOT NULL);
+        CREATE TABLE public.luna_paper_equity_snapshots (experiment_code text NOT NULL, strategy_version text NOT NULL, session_id uuid NOT NULL, ts timestamptz NOT NULL, equity numeric, UNIQUE (experiment_code, strategy_version, ts));
         INSERT INTO public.luna_paper_live_positions VALUES (%s,'PTT',100),(%s,'CPALL',100);
         """, (EXPERIMENT, EXPERIMENT))
     conn.commit()
@@ -68,19 +50,13 @@ def add_tick(conn, symbol="PTT", age=5, verified=True, session=SESSION, bid=34.5
     if verified:
         raw.update({"data_quality": "verified", "verified": True})
     with conn.cursor() as cur:
-        cur.execute("""
-          INSERT INTO public.luna_market_ticks
-          VALUES (%s,%s,now()-(%s || ' seconds')::interval,%s,%s,%s,%s,'TOPTRADER_REALTIME',%s);
-        """, (session, symbol, age, bid, ask, bid_size, ask_size, json.dumps(raw)))
+        cur.execute("INSERT INTO public.luna_market_ticks VALUES (%s,%s,now()-(%s || ' seconds')::interval,%s,%s,%s,%s,'TOPTRADER_REALTIME',%s);", (session, symbol, age, bid, ask, bid_size, ask_size, json.dumps(raw)))
     conn.commit()
 
 
 def snapshot(conn):
     with conn.cursor() as cur:
-        cur.execute("""
-          INSERT INTO public.luna_paper_equity_snapshots
-          VALUES (%s,'test',%s,now(),10000);
-        """, (EXPERIMENT, SESSION))
+        cur.execute("INSERT INTO public.luna_paper_equity_snapshots VALUES (%s,'test',%s,now(),10000);", (EXPERIMENT, SESSION))
     conn.commit()
 
 
@@ -89,7 +65,7 @@ def expect_block(conn, name):
         snapshot(conn)
     except psycopg2.Error as exc:
         conn.rollback()
-        assert exc.pgcode == errors.CheckViolation.sqlstate, (name, exc.pgcode, exc)
+        assert exc.pgcode == "23514", (name, exc.pgcode, exc)
         assert "LUNA_VALUATION_INCOMPLETE" in str(exc), (name, exc)
         print(f"PASS {name}: blocked fail-closed")
         return
@@ -106,8 +82,6 @@ def main():
     try:
         setup(conn)
         install(conn)
-
-        # Both held symbols must be covered by the exact snapshot session.
         reset_ticks(conn)
         add_tick(conn, "PTT")
         add_tick(conn, "CPALL")
