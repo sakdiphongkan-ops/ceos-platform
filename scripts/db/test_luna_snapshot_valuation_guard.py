@@ -81,7 +81,18 @@ def expect_allow(conn, name):
 def expect_update_block(conn, name):
     try:
         with conn.cursor() as cur:
-            cur.execute("UPDATE public.luna_paper_equity_snapshots SET equity=equity+1 WHERE experiment_code=%s;", (EXPERIMENT,))
+            cur.execute("SELECT count(*) FROM public.luna_paper_equity_snapshots WHERE experiment_code=%s;", (EXPERIMENT,))
+            snapshot_count = cur.fetchone()[0]
+            cur.execute("SELECT count(*) FROM public.luna_paper_live_positions WHERE experiment_code=%s AND qty>0;", (EXPERIMENT,))
+            open_positions = cur.fetchone()[0]
+            cur.execute("SELECT count(*) FROM public.luna_market_ticks WHERE symbol='CPALL';")
+            cpall_ticks = cur.fetchone()[0]
+            assert snapshot_count == 1, (name, "snapshot row count", snapshot_count)
+            assert open_positions == 2, (name, "open position count", open_positions)
+            assert cpall_ticks == 0, (name, "CPALL tick rows after deletion", cpall_ticks)
+            cur.execute("UPDATE public.luna_paper_equity_snapshots SET equity=equity+1 WHERE experiment_code=%s RETURNING experiment_code;", (EXPERIMENT,))
+            updated_rows = cur.fetchall()
+            assert len(updated_rows) == 1, (name, "updated row count", len(updated_rows))
         conn.commit()
     except psycopg2.Error as exc:
         conn.rollback()
