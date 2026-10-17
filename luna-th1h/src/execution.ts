@@ -134,8 +134,8 @@ function ensureDailyRiskState(state:PortfolioState,ts:string){
   if(!day) return;
   if(state.riskDayKey!==day){
     state.riskDayKey=day;
-    const s=snapshot(state);
-    state.dayStartEquity=s.cash+s.market_value;
+    const s=snapshot(state,Date.parse(ts));
+    if(s.valuation_ready && s.market_value!==null) state.dayStartEquity=s.cash+s.market_value;
     state.dailyTurnover=0;
   }
 }
@@ -301,7 +301,7 @@ export function planOrder(
   const notional=qty*referencePrice;
   const risk=validateOrder({
     symbol:q.symbol,side,notional,
-    grossExposure:currentGrossExposure(state)+Math.max(0,reservations.reservedGrossExposure),
+    grossExposure:(currentGrossExposure(state,Date.parse(signal.ts))??Number.POSITIVE_INFINITY)+Math.max(0,reservations.reservedGrossExposure),
     currentPositionNotional:currentNotional,
     cash:Math.max(0,state.cash-Math.max(0,reservations.reservedBuyCash))
   });
