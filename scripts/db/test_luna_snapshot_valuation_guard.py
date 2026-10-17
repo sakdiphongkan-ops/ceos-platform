@@ -161,9 +161,9 @@ def main():
         expect_block(conn, "wrong source")
 
         reset_ticks(conn)
-        add_tick(conn, "PTT", future_seconds=2)
+        add_tick(conn, "PTT", future_seconds=30)
         add_tick(conn, "CPALL")
-        expect_block(conn, "future quote more than one second")
+        expect_block(conn, "future quote beyond allowed skew")
 
         reset_ticks(conn)
         add_tick(conn, "PTT", bid=None)
