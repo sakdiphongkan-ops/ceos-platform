@@ -1,17 +1,24 @@
 -- Manual, read-only regression check for migration
 -- 20261017100000_luna_enterprise_health_paper_counts.sql.
 -- Run only after applying that migration in a disposable/staging database.
--- Expected: all *_matches columns true; this script performs SELECTs only.
+-- This selects the latest day with a real paper order/ledger event, avoiding a
+-- false-positive test caused by a quiet current date. This script performs SELECTs only.
 
-WITH selected_runtime AS (
+WITH paper_activity AS (
+  SELECT strategy_version, created_at
+  FROM public.luna_paper_live_orders
+  UNION ALL
+  SELECT strategy_version, created_at
+  FROM public.luna_paper_trade_ledger
+),
+latest_paper_day AS (
   SELECT
-    r.strategy_version,
-    (now() AT TIME ZONE 'Asia/Bangkok')::date AS as_of_date
-  FROM public.luna_paper_live_runtime r
-  WHERE r.paper_only = true
-    AND (r.started_at AT TIME ZONE 'Asia/Bangkok')::date
-        <= (now() AT TIME ZONE 'Asia/Bangkok')::date
-  ORDER BY r.last_heartbeat DESC
+    strategy_version,
+    created_at::date AS as_of_date,
+    max(created_at) AS latest_event_at
+  FROM paper_activity
+  GROUP BY strategy_version, created_at::date
+  ORDER BY max(created_at) DESC
   LIMIT 1
 ),
 expected AS (
@@ -32,7 +39,7 @@ expected AS (
     (SELECT count(*)
        FROM public.luna_fills f
       WHERE f.ts::date = s.as_of_date) AS legacy_fills
-  FROM selected_runtime s
+  FROM latest_paper_day s
 ),
 observed AS (
   SELECT
@@ -48,6 +55,8 @@ SELECT
   legacy_orders AS expected_legacy_orders,
   legacy_fills AS expected_legacy_fills,
   health #>> '{execution_plane,counts_source}' AS counts_source,
+  health #>> '{execution_plane,counts_source}' = 'PAPER_RUNTIME_AND_LEDGER'
+    AS paper_count_source_selected,
   (health #>> '{execution_plane,orders}')::bigint = paper_orders
     AS paper_order_count_matches,
   (health #>> '{execution_plane,fills}')::bigint = paper_fills
