@@ -45,12 +45,12 @@ def reset_ticks(conn):
     conn.commit()
 
 
-def add_tick(conn, symbol="PTT", age=5, verified=True, session=SESSION, bid=34.5, ask=34.75, bid_size=1000, ask_size=1200):
+def add_tick(conn, symbol="PTT", age=5, verified=True, session=SESSION, bid=34.5, ask=34.75, bid_size=1000, ask_size=1200, future_seconds=0, source="TOPTRADER_REALTIME"):
     raw = {"vendor": "fixture"}
     if verified:
         raw.update({"data_quality": "verified", "verified": True})
     with conn.cursor() as cur:
-        cur.execute("INSERT INTO public.luna_market_ticks VALUES (%s,%s,now()-(%s || ' seconds')::interval,%s,%s,%s,%s,'TOPTRADER_REALTIME',%s);", (session, symbol, age, bid, ask, bid_size, ask_size, json.dumps(raw)))
+        cur.execute("INSERT INTO public.luna_market_ticks VALUES (%s,%s,now()-(%s || ' seconds')::interval+(%s || ' seconds')::interval,%s,%s,%s,%s,%s,%s);", (session, symbol, age, future_seconds, bid, ask, bid_size, ask_size, source, json.dumps(raw)))
     conn.commit()
 
 
@@ -75,6 +75,40 @@ def expect_block(conn, name):
 def expect_allow(conn, name):
     snapshot(conn)
     print(f"PASS {name}: snapshot accepted")
+
+
+
+def expect_update_block(conn, name):
+    try:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE public.luna_paper_equity_snapshots SET equity=equity+1 WHERE experiment_code=%s;", (EXPERIMENT,))
+        conn.commit()
+    except psycopg2.Error as exc:
+        conn.rollback()
+        assert exc.pgcode == "23514", (name, exc.pgcode, exc)
+        assert "LUNA_VALUATION_INCOMPLETE" in str(exc), (name, exc)
+        print(f"PASS {name}: update rejected fail-closed")
+        return
+    raise AssertionError(f"{name}: invalid snapshot update unexpectedly accepted")
+
+
+def assert_cash_only_allowed(conn):
+    reset_ticks(conn)
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM public.luna_paper_live_positions WHERE experiment_code=%s;", (EXPERIMENT,))
+    conn.commit()
+    expect_allow(conn, "cash-only account with no open positions")
+
+
+def assert_update_guard(conn):
+    reset_ticks(conn)
+    add_tick(conn, "PTT")
+    add_tick(conn, "CPALL")
+    expect_allow(conn, "prepare snapshot before invalid update")
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM public.luna_market_ticks WHERE symbol='CPALL';")
+    conn.commit()
+    expect_update_block(conn, "update after one held symbol loses quote")
 
 
 def main():
@@ -121,7 +155,39 @@ def main():
         add_tick(conn, "CPALL")
         expect_block(conn, "session mismatch")
 
-        print("PASS snapshot guard regression matrix: 8 cases")
+        reset_ticks(conn)
+        add_tick(conn, "PTT", source="UNVERIFIED_VENDOR")
+        add_tick(conn, "CPALL")
+        expect_block(conn, "wrong source")
+
+        reset_ticks(conn)
+        add_tick(conn, "PTT", future_seconds=2)
+        add_tick(conn, "CPALL")
+        expect_block(conn, "future quote more than one second")
+
+        reset_ticks(conn)
+        add_tick(conn, "PTT", bid=None)
+        add_tick(conn, "CPALL")
+        expect_block(conn, "null bid")
+
+        reset_ticks(conn)
+        add_tick(conn, "PTT", ask=None)
+        add_tick(conn, "CPALL")
+        expect_block(conn, "null ask")
+
+        reset_ticks(conn)
+        add_tick(conn, "PTT", bid_size=-1)
+        add_tick(conn, "CPALL")
+        expect_block(conn, "negative bid size")
+
+        reset_ticks(conn)
+        add_tick(conn, "PTT", ask_size=-1)
+        add_tick(conn, "CPALL")
+        expect_block(conn, "negative ask size")
+
+        assert_cash_only_allowed(conn)
+        assert_update_guard(conn)
+        print("PASS snapshot guard regression matrix: expanded insert/update cases")
         return 0
     finally:
         conn.close()
