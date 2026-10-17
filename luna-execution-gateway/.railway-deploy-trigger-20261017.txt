@@ -1,0 +1,6 @@
+LUNA pinned production deploy trigger
+Date: 2026-10-17
+Purpose: start the repository's guarded LUNA production deploy workflow for the verified master source tree.
+This is a control-plane marker only; the gateway Dockerfile does not copy this file into the runtime image.
+The workflow must run CI checks, pin source SHA guards, deploy worker first, verify worker, then deploy gateway and verify gateway health/log revision.
+Safety invariant: paper mode only; LIVE_TRADING_ARMED=false; live broker execution remains disabled.
