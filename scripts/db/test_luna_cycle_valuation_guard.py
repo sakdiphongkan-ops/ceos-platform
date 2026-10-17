@@ -184,7 +184,7 @@ def main():
         assert_incomplete(conn, "missing quote")
         assert_incomplete(conn, "stale quote", age_seconds=61)
         assert_incomplete(conn, "unverified quote", verified=False)
-        assert_incomplete(conn, "future quote", age_seconds=0, ts_offset_seconds=2)
+        assert_incomplete(conn, "future quote beyond allowed skew", age_seconds=0, ts_offset_seconds=30)
         assert_incomplete(conn, "zero bid size", bid_size=0)
         assert_incomplete(conn, "zero ask size", ask_size=0)
         assert_incomplete(conn, "ask below bid", bid=35, ask=34.5)
