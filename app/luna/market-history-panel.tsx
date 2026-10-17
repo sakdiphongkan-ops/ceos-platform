@@ -53,6 +53,14 @@ function money(value: number): string {
   return value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function ageLabel(ageMs: number | null): string {
+  if (ageMs === null || !Number.isFinite(ageMs) || ageMs < 0) return "Unknown";
+  if (ageMs < 60_000) return `${Math.round(ageMs / 1000)} sec`;
+  if (ageMs < 3_600_000) return `${(ageMs / 60_000).toFixed(1)} min`;
+  if (ageMs < 86_400_000) return `${(ageMs / 3_600_000).toFixed(1)} hr`;
+  return `${(ageMs / 86_400_000).toFixed(1)} days`;
+}
+
 export default function MarketHistoryPanel() {
   const [symbol, setSymbol] = useState<string>("PTT");
   const [interval, setInterval] = useState<Interval>("15m");
@@ -113,6 +121,10 @@ export default function MarketHistoryPanel() {
   }, [error, load, source]);
 
   const latest = bars[bars.length - 1];
+  const latestTimestampMs = latest ? Date.parse(latest.timestamp) : NaN;
+  const latestBarAgeMs = latest && Number.isFinite(latestTimestampMs)
+    ? Math.max(0, Date.now() - latestTimestampMs)
+    : null;
   const previous = bars.length > 1 ? bars[bars.length - 2] : undefined;
   const change = latest && previous ? latest.close - previous.close : null;
   const changePct = latest && previous && previous.close > 0 ? (latest.close / previous.close - 1) * 100 : null;
@@ -127,7 +139,7 @@ export default function MarketHistoryPanel() {
           <p>Source-verified historical candles from the authorized SETTRADE gateway. This panel never synthesizes missing candles.</p>
         </div>
         <div className={"market-history-connection " + (source ? "connected" : "unavailable")}>
-          <span className="market-history-dot" />{source ? "SOURCE VERIFIED" : loading ? "LOADING SOURCE" : "DATA UNAVAILABLE"}
+          <span className="market-history-dot" />{source ? "SOURCE VERIFIED · HISTORICAL" : loading ? "LOADING SOURCE" : "DATA UNAVAILABLE"}
         </div>
       </div>
 
@@ -159,7 +171,7 @@ export default function MarketHistoryPanel() {
       ) : (
         <>
           <div className="market-history-stats">
-            <div><span>Latest close</span><strong>{latest ? "฿" + money(latest.close) : loading ? "Loading…" : "—"}</strong></div>
+            <div><span>Latest historical close</span><strong>{latest ? "฿" + money(latest.close) : loading ? "Loading…" : "—"}</strong></div>
             <div><span>{interval} bar change</span><strong className={change === null ? "" : change >= 0 ? "positive" : "negative"}>{change === null ? "—" : `${change >= 0 ? "+" : "−"}฿${money(Math.abs(change))}`}</strong></div>
             <div><span>Change</span><strong className={changePct === null ? "" : changePct >= 0 ? "positive" : "negative"}>{changePct === null ? "—" : `${changePct >= 0 ? "+" : ""}${changePct.toFixed(2)}%`}</strong></div>
             <div><span>Latest bar</span><strong>{latest ? formatTime(latest.timestamp, true) : "—"}</strong></div>
@@ -174,6 +186,7 @@ export default function MarketHistoryPanel() {
         <span>Timeframe <strong>{interval === "60m" ? "1h" : interval}</strong> · Asia/Bangkok</span>
         <span>Source <strong>{source ?? "—"}</strong></span>
         <span>Fetched <strong>{fetchedAt ? formatTime(fetchedAt, true) : "—"}</strong></span>
+        <span>Last bar age <strong>{ageLabel(latestBarAgeMs)}</strong></span>
         <span>{bars.length ? `${bars.length} validated bars` : "No validated bars"}</span>
       </div>
     </section>
