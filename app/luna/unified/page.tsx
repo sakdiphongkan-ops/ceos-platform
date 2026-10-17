@@ -34,7 +34,9 @@ const ageLabel = (value: unknown) => {
   if (!Number.isFinite(n) || n < 0) return "Unknown age";
   if (n < 1000) return `${Math.round(n)} ms`;
   if (n < 60_000) return `${(n / 1000).toFixed(1)} sec`;
-  return `${(n / 60_000).toFixed(1)} min`;
+  if (n < 3_600_000) return `${(n / 60_000).toFixed(1)} min`;
+  if (n < 86_400_000) return `${(n / 3_600_000).toFixed(1)} hr`;
+  return `${(n / 86_400_000).toFixed(1)} days`;
 };
 
 export default function LunaUnifiedPrototypePage() {
@@ -80,8 +82,13 @@ export default function LunaUnifiedPrototypePage() {
   const decisions = Array.isArray(feed?.decision_audit) ? feed.decision_audit : [];
   const blockers = Array.isArray(readiness?.blockers) ? readiness.blockers : [];
   const marketField = Array.isArray(feed?.market_field) ? feed.market_field : [];
-  const runtimeStatus = String(paper?.status ?? readiness?.status ?? "STATUS UNKNOWN").replaceAll("_", " ");
-  const isVerified = market?.verified_realtime === true;
+  const runtimeStatus = String(paper?.status ?? "STATUS UNKNOWN").replaceAll("_", " ");
+  const readinessStatus = String(readiness?.status ?? "UNKNOWN").replaceAll("_", " ");
+  const headlineStatus = readiness?.status === "BLOCKED" || readiness?.status === "FAIL"
+    ? readinessStatus
+    : runtimeStatus;
+  const isVerified = readiness?.status === "READY_FOR_PAPER_ONLY" && market?.verified_realtime === true;
+  const isBlocked = readiness?.status === "BLOCKED" || readiness?.status === "FAIL";
   const feedStatus = String(market?.status ?? "NO CURRENT SNAPSHOT").replaceAll("_", " ");
 
   return (
@@ -111,9 +118,9 @@ export default function LunaUnifiedPrototypePage() {
           </div>
         </div>
         <div className={styles.statusPanel}>
-          <div className={styles.statusTop}><span className={styles.eyebrow}>RUNTIME STATUS</span><span className={`${styles.dot} ${isVerified ? styles.green : styles.amber}`}/></div>
-          <strong>{runtimeStatus}</strong>
-          <span className={styles.muted}>{readiness?.status ? String(readiness.status).replaceAll("_", " ") : "Readiness not reported"}</span>
+          <div className={styles.statusTop}><span className={styles.eyebrow}>SYSTEM STATUS</span><span className={`${styles.dot} ${isVerified ? styles.green : isBlocked ? styles.red : styles.amber}`}/></div>
+          <strong>{headlineStatus}</strong>
+          <span className={styles.muted}>Paper runtime: {runtimeStatus} · readiness is evaluated separately</span>
           <div className={styles.statusDivider}/>
           <div className={styles.statusRow}><span>Market feed</span><b>{feedStatus}</b></div>
           <div className={styles.statusRow}><span>Latest quote age</span><b>{ageLabel(market?.latest_age_ms)}</b></div>
