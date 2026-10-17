@@ -108,7 +108,7 @@ function usablePrice(...values:Array<number|null|undefined>){
 // not materially in the future, and the source has explicitly marked the quote verified.
 function freshVerifiedMark(q:Quote|undefined,nowMs:number){
   if(!q || String(q.dataQuality??"").toLowerCase()!=="verified") return null;
-  const sourceTs=Date.parse(String(q.sourceTs??""));
+  const sourceTs=Date.parse(String(q.sourceTs??q.ts??""));
   if(!Number.isFinite(sourceTs)) return null;
   const ageMs=nowMs-sourceTs;
   if(ageMs < -1500 || ageMs > config.maxQuoteAgeMs) return null;
@@ -200,7 +200,10 @@ export function planOrder(
       return {accepted:false,reason:"MAX_ORDERS_PER_MINUTE_LOCAL"};
     }
 
-    const current=snapshot(state);
+    const current=snapshot(state,orderNowMs);
+    if(!current.valuation_ready || current.market_value===null){
+      return {accepted:false,reason:"PAPER_VALUATION_INCOMPLETE"};
+    }
     const currentEquity=Math.max(0,current.cash+current.market_value);
     const dayStart=Number(state.dayStartEquity??state.initialCapital);
     const dailyPnl=(current.cash+current.market_value)-dayStart;
@@ -235,7 +238,7 @@ export function planOrder(
     const grossHeadroom=Math.max(
       0,
       currentEquity*config.maxGrossExposurePct
-        -currentGrossExposure(state)
+        -(currentGrossExposure(state,orderNowMs)??Number.POSITIVE_INFINITY)
         -Math.max(0,reservations.reservedGrossExposure)
     );
     const feeRate=costs.feeBps/10000;
@@ -266,7 +269,7 @@ export function planOrder(
     const notional=qty*referencePrice;
     const risk=validateOrder({
       symbol:q.symbol,side,notional,
-      grossExposure:currentGrossExposure(state)+Math.max(0,reservations.reservedGrossExposure),
+      grossExposure:(currentGrossExposure(state,orderNowMs)??Number.POSITIVE_INFINITY)+Math.max(0,reservations.reservedGrossExposure),
       currentPositionNotional:currentNotional,
       cash:availableCash
     });
