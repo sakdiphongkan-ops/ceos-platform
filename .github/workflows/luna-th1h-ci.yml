@@ -34,23 +34,34 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.head_ref }}
-      - name: Repair only the proven SQL statement delimiter defect
+      - name: Repair only the proven migration/workflow defects
         run: |
           python - <<'PY'
           from pathlib import Path
+          changed = False
           p = Path("supabase/migrations/202610170003_luna_cycle_fail_closed_valuation.sql")
           s = p.read_text(encoding="utf-8")
           old = "$function$\n\n\nCOMMENT ON FUNCTION"
           new = "$function$;\n\nCOMMENT ON FUNCTION"
-          if old not in s:
-              raise SystemExit("cycle migration delimiter already repaired or unexpected shape")
-          p.write_text(s.replace(old, new, 1), encoding="utf-8")
+          if old in s:
+              p.write_text(s.replace(old, new, 1), encoding="utf-8")
+              changed = True
+          workflow = Path(".github/workflows/luna-th1h-ci.yml")
+          ws = workflow.read_text(encoding="utf-8")
+          bad = "python scripts/research/build_monthly_factor_dataset.py --input data/set_2000_2025/monthly_factors_5y.csv --output data/set_2000_2025/monthly_factors_5y.csv --membership data/raw/pit_membership.csv"
+          good = "python scripts/research/build_monthly_factor_dataset.py --input data/set_2000_2025/factors_5y.csv --output data/set_2000_2025/monthly_factors_5y.csv --membership data/raw/pit_membership.csv"
+          if bad in ws:
+              workflow.write_text(ws.replace(bad, good, 1), encoding="utf-8")
+              changed = True
+          if changed:
+              print("Applied one-time repair changes")
+          else:
+              print("No repair needed")
           PY
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add supabase/migrations/202610170003_luna_cycle_fail_closed_valuation.sql
-          git commit -m "fix(luna): terminate cycle function before COMMENT"
-          git push origin HEAD:${{ github.head_ref }}
+          git add supabase/migrations/202610170003_luna_cycle_fail_closed_valuation.sql .github/workflows/luna-th1h-ci.yml
+          git diff --cached --quiet || (git commit -m "fix(luna): finalize migration and CI repair guards" && git push origin HEAD:${{ github.head_ref }})
 
   typecheck:
     runs-on: ubuntu-latest
@@ -245,7 +256,6 @@ jobs:
         if: steps.changed.outputs.run == 'true'
         run: |
           python scripts/research/verify_pit_membership_manifest.py --membership data/raw/pit_membership.csv --manifest data/raw/pit_membership.manifest.json
-
       - name: Normalize SET history
         if: steps.changed.outputs.run == 'true'
         run: |
@@ -262,7 +272,7 @@ jobs:
       - name: Build monthly panel
         if: steps.changed.outputs.run == 'true'
         run: |
-          python scripts/research/build_monthly_factor_dataset.py --input data/set_2000_2025/monthly_factors_5y.csv --output data/set_2000_2025/monthly_factors_5y.csv --membership data/raw/pit_membership.csv
+          python scripts/research/build_monthly_factor_dataset.py --input data/set_2000_2025/factors_5y.csv --output data/set_2000_2025/monthly_factors_5y.csv --membership data/raw/pit_membership.csv
           test -s data/set_2000_2025/monthly_factors_5y.csv
       - name: Run repaired 1000-formula tournament
         if: steps.changed.outputs.run == 'true'
