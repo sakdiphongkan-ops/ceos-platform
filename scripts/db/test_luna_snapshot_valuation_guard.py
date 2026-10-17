@@ -112,6 +112,10 @@ def assert_cash_only_allowed(conn):
 
 
 def assert_update_guard(conn):
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM public.luna_paper_live_positions WHERE experiment_code=%s;", (EXPERIMENT,))
+        cur.execute("INSERT INTO public.luna_paper_live_positions VALUES (%s,'PTT',100),(%s,'CPALL',100);", (EXPERIMENT, EXPERIMENT))
+    conn.commit()
     reset_ticks(conn)
     add_tick(conn, "PTT")
     add_tick(conn, "CPALL")
