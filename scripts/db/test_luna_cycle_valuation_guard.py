@@ -1,14 +1,10 @@
 #!/usr/bin/env python3
-"""Isolated PostgreSQL behavioral regression matrix for LUNA paper valuation.
-
-This intentionally exercises only the paper-cycle function against a disposable
-PostgreSQL schema. It never connects to Supabase production and never creates
-broker orders.
-"""
+"""Isolated PostgreSQL behavioral regression matrix for LUNA paper valuation."""
 from __future__ import annotations
 
 import json
 import os
+import traceback
 from pathlib import Path
 
 import psycopg2
@@ -40,7 +36,6 @@ def setup(conn):
             "luna_paper_live_runtime", "luna_market_ticks", "luna_sessions",
         ):
             cur.execute(f"DROP TABLE IF EXISTS public.{table} CASCADE;")
-
         cur.execute("""
         CREATE TABLE public.luna_sessions (
           id uuid PRIMARY KEY, session_date date NOT NULL, started_at timestamptz NOT NULL,
@@ -109,7 +104,13 @@ def setup(conn):
 def install(conn):
     sql = MIGRATION.read_text(encoding="utf-8")
     with conn.cursor() as cur:
-        cur.execute(sql)
+        try:
+            cur.execute(sql)
+        except Exception:
+            conn.rollback()
+            print("CYCLE MIGRATION INSTALL FAILED")
+            traceback.print_exc()
+            raise
     conn.commit()
 
 
@@ -127,12 +128,18 @@ def reset_state(conn):
 
 def cycle(conn):
     with conn.cursor() as cur:
-        cur.execute("SELECT public.luna_run_live_paper_cycle(%s,%s,30000,10,10);", (EXPERIMENT, STRATEGY))
-        result = cur.fetchone()[0]
-        cur.execute("SELECT count(*) FROM public.luna_paper_equity_snapshots;")
-        snapshots = cur.fetchone()[0]
-        cur.execute("SELECT peak_equity FROM public.luna_paper_live_runtime WHERE experiment_code=%s;", (EXPERIMENT,))
-        peak = cur.fetchone()[0]
+        try:
+            cur.execute("SELECT public.luna_run_live_paper_cycle(%s,%s,30000,10,10);", (EXPERIMENT, STRATEGY))
+            result = cur.fetchone()[0]
+            cur.execute("SELECT count(*) FROM public.luna_paper_equity_snapshots;")
+            snapshots = cur.fetchone()[0]
+            cur.execute("SELECT peak_equity FROM public.luna_paper_live_runtime WHERE experiment_code=%s;", (EXPERIMENT,))
+            peak = cur.fetchone()[0]
+        except Exception:
+            conn.rollback()
+            print("CYCLE EXECUTION FAILED")
+            traceback.print_exc()
+            raise
     conn.commit()
     return result, snapshots, peak
 
