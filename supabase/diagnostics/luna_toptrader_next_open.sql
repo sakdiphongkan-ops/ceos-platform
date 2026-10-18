@@ -106,3 +106,41 @@ where source='TOPTRADER_REALTIME'
   and created_at > now() - interval '3 days'
 order by created_at desc
 limit 100;
+
+
+-- 9) Paper runtime freshness: a recent heartbeat is not proof of a new market bar.
+-- Compare heartbeat/update time to last_signal_bar_end, latest tick time, and latest fill.
+select
+  r.experiment_code,
+  r.status,
+  r.paper_only,
+  r.session_id,
+  r.cash,
+  r.reserved_cash,
+  r.realized_pnl,
+  r.fees,
+  r.last_heartbeat,
+  r.last_signal_bar_end,
+  r.updated_at,
+  (select max(ts) from public.luna_paper_equity_snapshots e
+    where e.experiment_code=r.experiment_code) as latest_equity_snapshot_at,
+  (select max(created_at) from public.luna_paper_trade_ledger l
+    where l.experiment_code=r.experiment_code) as latest_fill_at,
+  (select count(*) from public.luna_paper_live_orders o
+    where o.experiment_code=r.experiment_code and o.status='QUEUED') as queued_orders
+from public.luna_paper_live_runtime r
+order by r.updated_at desc;
+
+-- 10) Session/bar/decision freshness: historical OPEN sessions should not be assumed to be today's active session.
+select
+  session_date, mode, strategy_version, status, started_at, runtime_owner
+from public.luna_sessions
+order by started_at desc
+limit 10;
+
+select
+  count(*) as recent_shadow_decisions,
+  max(bar_end) as latest_shadow_bar_end,
+  max(created_at) as latest_shadow_decision_created_at
+from public.luna_shadow_15m_decisions
+where bar_end > now() - interval '7 days';
