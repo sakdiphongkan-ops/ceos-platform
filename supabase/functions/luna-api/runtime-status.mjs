@@ -40,3 +40,8 @@ export function describeSourceFailure(result) {
     http_status: Number.isFinite(status) && status > 0 ? status : null
   };
 }
+
+// Ensure PostgREST recognizes a hard client timeout as an abort, not a retryable network failure.
+export function createFetchTimeoutAbortReason() {
+  return new DOMException("FETCH_BODY_TIMEOUT", "AbortError");
+}
