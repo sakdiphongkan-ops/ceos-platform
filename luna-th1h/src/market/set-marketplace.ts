@@ -52,7 +52,7 @@ export function normalizeSetStockQuote(row:SetStock,nowMs:number=Date.now(),maxQ
   const effectiveMaxAge=Number.isFinite(maxQuoteAgeMs) && maxQuoteAgeMs>=1_000 && maxQuoteAgeMs<=60_000
     ? maxQuoteAgeMs
     : MAX_QUOTE_AGE_MS;
-  if(!Number.isFinite(sourceTsMs) || sourceTsMs>nowMs+30_000 || nowMs-sourceTsMs>effectiveMaxAge){
+  if(!Number.isFinite(sourceTsMs) || sourceTsMs>nowMs || nowMs-sourceTsMs>effectiveMaxAge){
     return null;
   }
   const bidLevels=(row.bid ?? [])
@@ -74,7 +74,7 @@ export function normalizeSetStockQuote(row:SetStock,nowMs:number=Date.now(),maxQ
     && bidPrice>0 && askPrice>0 && askPrice>=bidPrice
     && Number(bid?.volume??0)>0 && Number(offer?.volume??0)>0;
   return {
-    symbol:row.symbol,
+    symbol:row.symbol.trim().toUpperCase(),
     ts:new Date(nowMs).toISOString(),
     sourceTs,
     bid:bidPrice,
