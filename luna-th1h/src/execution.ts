@@ -159,8 +159,11 @@ export function planOrder(
   const quality=String(q.dataQuality??"").trim().toLowerCase().replace(/[\s-]+/g,"_");
   const verifiedQuality=["verified","verified_book","book_verified","verified_execution_book"].includes(quality);
   const explicitlyUnverified=quality.includes("unverified") || quality==="not_verified" || quality.startsWith("not_");
-  const trustedSettradeRealtime=String(q.source??"").toLowerCase().startsWith("settrade-open-api-realtime");
-  const verifiedBook=hasBook && hasDepth && (verifiedQuality || trustedSettradeRealtime) && !explicitlyUnverified;
+  const sourceName=String(q.source??"").trim().toLowerCase();
+  const trustedRealtimeSource=
+    sourceName==="settrade-open-api-realtime"
+    || sourceName==="set-market-data-api-realtime";
+  const verifiedBook=hasBook && hasDepth && (verifiedQuality || trustedRealtimeSource) && !explicitlyUnverified;
   const allowPriceOnlyPaper=allowPaperPriceOnlyExecution(q);
 
   // BUYs require a verified executable book in live/verified paths.
