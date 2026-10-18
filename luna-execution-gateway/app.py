@@ -397,9 +397,9 @@ def _prune_order_attempts(now: float):
 def _quote_matches_selected_provider(quote: Dict[str, Any]) -> bool:
     source = str(quote.get("source") or "").lower()
     if _selected_provider == "SETTRADE":
-        return source.startswith("settrade")
+        return source == "settrade-open-api-realtime"
     if _selected_provider == "SET_API":
-        return source.startswith("set-market-data-api")
+        return source == "set-market-data-api-realtime"
     return False
 
 
@@ -420,27 +420,55 @@ def _quote_coverage_snapshot() -> Dict[str, Any]:
         if ts is None:
             continue
         age = now - float(ts)
-        if 0.0 <= age <= GATEWAY_MAX_QUOTE_AGE_SEC:
-            fresh_symbols.add(symbol)
-            bid = _num(quote.get("bid")); ask = _num(quote.get("ask"))
-            bs = _num(quote.get("bid_size")); ass = _num(quote.get("ask_size"))
+        if not 0.0 <= age <= GATEWAY_MAX_QUOTE_AGE_SEC:
+            continue
+
+        # A recent local receive time cannot make an explicitly stale source quote fresh.
+        # The authenticated Settrade realtime stream may omit provider timestamps;
+        # for that exact source only, transport receive age is the documented fallback.
+        source_raw = quote.get("source_ts")
+        source = str(quote.get("source") or "").strip().lower()
+        source_fresh = False
+        if isinstance(source_raw, str) and source_raw.strip():
             try:
-                received_raw = quote.get("book_received_ts")
-                source_raw = quote.get("book_source_ts")
-                if not received_raw or not source_raw:
-                    raise ValueError("book_timestamp_missing")
-                received_dt = datetime.fromisoformat(str(received_raw).replace("Z", "+00:00"))
-                source_dt = datetime.fromisoformat(str(source_raw).replace("Z", "+00:00"))
-                if received_dt.tzinfo is None or source_dt.tzinfo is None:
-                    raise ValueError("book_timestamp_timezone_missing")
-                received_age = now - received_dt.timestamp()
-                source_age = now - source_dt.timestamp()
-                book_fresh = (
-                    0.0 <= received_age <= GATEWAY_MAX_QUOTE_AGE_SEC
-                    and 0.0 <= source_age <= GATEWAY_MAX_QUOTE_AGE_SEC
-                )
+                source_dt = datetime.fromisoformat(source_raw.replace("Z", "+00:00"))
+                if source_dt.tzinfo is not None:
+                    source_age = now - source_dt.timestamp()
+                    source_fresh = 0.0 <= source_age <= GATEWAY_MAX_QUOTE_AGE_SEC
             except (ValueError, TypeError, OverflowError):
-                book_fresh = False
+                source_fresh = False
+        elif source == "settrade-open-api-realtime":
+            source_fresh = True
+
+        if not source_fresh:
+            continue
+
+        fresh_symbols.add(symbol)
+        bid = _num(quote.get("bid")); ask = _num(quote.get("ask"))
+        bs = _num(quote.get("bid_size")); ass = _num(quote.get("ask_size"))
+        try:
+            received_raw = quote.get("book_received_ts")
+            source_book_raw = quote.get("book_source_ts")
+            if not received_raw:
+                raise ValueError("book_receive_timestamp_missing")
+            received_dt = datetime.fromisoformat(str(received_raw).replace("Z", "+00:00"))
+            if received_dt.tzinfo is None:
+                raise ValueError("book_receive_timestamp_timezone_missing")
+            received_age = now - received_dt.timestamp()
+            if isinstance(source_book_raw, str) and source_book_raw.strip():
+                source_dt = datetime.fromisoformat(source_book_raw.replace("Z", "+00:00"))
+                if source_dt.tzinfo is None:
+                    raise ValueError("book_source_timestamp_timezone_missing")
+                source_age = now - source_dt.timestamp()
+                source_book_fresh = 0.0 <= source_age <= GATEWAY_MAX_QUOTE_AGE_SEC
+            else:
+                source_book_fresh = source == "settrade-open-api-realtime"
+            book_fresh = (
+                0.0 <= received_age <= GATEWAY_MAX_QUOTE_AGE_SEC
+                and source_book_fresh
+            )
+        except (ValueError, TypeError, OverflowError):
+            book_fresh = False
             if bid and bid > 0 and ask and ask > 0 and ask >= bid and bs and bs > 0 and ass and ass > 0 and book_fresh:
                 verified_book_symbols.add(symbol)
     target_count = len(target_symbols)
@@ -931,7 +959,10 @@ def _quote_payload(
                 quote_bid, quote_ask = bid_value, ask_value
                 quote_bid_size, quote_ask_size = bid_size_value, ask_size_value
                 book_received_ts = now
-                book_source_ts = source_ts if isinstance(source_ts, str) and source_ts.strip() else now
+                # Preserve only an actual provider timestamp. Never label local receive time
+                # as source time; the exact authenticated Settrade source has a controlled
+                # receive-time freshness fallback in the coverage and consumer validators.
+                book_source_ts = source_ts if isinstance(source_ts, str) and source_ts.strip() else None
             else:
                 quote_bid = quote_ask = quote_bid_size = quote_ask_size = None
                 book_received_ts = book_source_ts = None
