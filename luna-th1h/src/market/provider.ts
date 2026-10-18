@@ -61,6 +61,8 @@ export function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVeri
     symbol:raw.symbol.trim(),
     ts:raw.ts,
     sourceTs:typeof raw.source_ts==="string" && raw.source_ts.trim() ? raw.source_ts : undefined,
+    bookReceivedTs:typeof raw.book_received_ts==="string" && raw.book_received_ts.trim() ? raw.book_received_ts : undefined,
+    bookSourceTs:typeof raw.book_source_ts==="string" && raw.book_source_ts.trim() ? raw.book_source_ts : undefined,
     bid:nullableFiniteNumber(raw.bid),
     ask:nullableFiniteNumber(raw.ask),
     last:nullableFiniteNumber(raw.last),
@@ -124,7 +126,17 @@ export function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVeri
     return null;
   }
 
+  const quoteFreshnessLimit=allowPublicPriceOnly ? PUBLIC_FALLBACK_MAX_QUOTE_AGE_MS : effectiveMaxQuoteAgeMs;
   if(requireVerifiedBook){
+    const bookReceivedMs=q.bookReceivedTs ? Date.parse(q.bookReceivedTs) : Number.NaN;
+    const bookSourceMs=q.bookSourceTs ? Date.parse(q.bookSourceTs) : Number.NaN;
+    const bookReceivedAge=nowMs-bookReceivedMs;
+    const bookSourceAge=nowMs-bookSourceMs;
+    const bookFresh=Number.isFinite(bookReceivedMs)
+      && Number.isFinite(bookSourceMs)
+      && bookReceivedAge>=0 && bookSourceAge>=0
+      && bookReceivedAge<=quoteFreshnessLimit
+      && bookSourceAge<=quoteFreshnessLimit;
     const quality=String(q.dataQuality??"").trim().toLowerCase().replace(/[\s-]+/g,"_");
     const verifiedQuality=["verified","verified_book","book_verified","verified_execution_book"].includes(quality);
     const explicitlyUnverified=quality.includes("unverified") || quality==="not_verified" || quality.startsWith("not_");
@@ -142,6 +154,7 @@ export function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVeri
       && q.ask>=q.bid
       && typeof q.bidSize==="number" && Number.isFinite(q.bidSize) && q.bidSize>0
       && typeof q.askSize==="number" && Number.isFinite(q.askSize) && q.askSize>0
+      && bookFresh
       && explicitVerification
       && !explicitlyUnverified;
     if(!verifiedBook && !allowPublicPriceOnly){
@@ -179,7 +192,7 @@ export function shouldEmitQuote(previous:Map<string,string>,q:Quote):boolean{
   const signature=JSON.stringify([
     q.ts,q.sourceTs??null,q.bid,q.ask,q.last,q.bidSize,q.askSize,
     q.bidLevels??null,q.askLevels??null,q.depthComplete??null,
-    q.source,q.dataQuality??null
+    q.bookReceivedTs??null,q.bookSourceTs??null,q.source,q.dataQuality??null
   ]);
   if(previous.get(q.symbol)===signature) return false;
   previous.set(q.symbol,signature);
