@@ -38,6 +38,8 @@ jobs:
           cache: npm
           cache-dependency-path: luna-th1h/package.json
       - run: npm install
+      - name: Test TopTrader REST tick freshness boundaries
+        run: node --test ../supabase/functions/luna-toptrader-market-ingest/quote-freshness.test.mjs
       - run: npm run typecheck
       - run: npm run test:market-session
       - run: npm run test:strategy-state
