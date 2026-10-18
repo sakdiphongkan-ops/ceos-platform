@@ -90,8 +90,18 @@ export function createPortfolio(initialCapital:number):PortfolioState{
   return {cash:initialCapital,initialCapital,fees:0,slippageCost:0,positions:{},marks:{},recentBuyTimestamps:[],riskDayKey:undefined,dayStartEquity:initialCapital,dailyTurnover:0};
 }
 
+function canonicalSymbol(symbol:string):string{
+  return symbol.trim().toUpperCase();
+}
+
+function existingPositionKey(state:PortfolioState,symbol:string):string{
+  if(Object.prototype.hasOwnProperty.call(state.positions,symbol)) return symbol;
+  return Object.keys(state.positions).find(key=>canonicalSymbol(key)===symbol) ?? symbol;
+}
+
 function position(state:PortfolioState,symbol:string):PositionState{
-  return state.positions[symbol] ?? {qty:0,avgPrice:0,costBasis:0,realizedPnl:0};
+  return state.positions[existingPositionKey(state,canonicalSymbol(symbol))]
+    ?? {qty:0,avgPrice:0,costBasis:0,realizedPnl:0};
 }
 
 function roundDown(n:number){
@@ -135,7 +145,8 @@ function pruneRecentBuys(state:PortfolioState,nowMs:number){
 }
 
 export function mark(state:PortfolioState,q:Quote){
-  state.marks[q.symbol]=q;
+  const symbol=canonicalSymbol(q.symbol);
+  state.marks[canonicalSymbol(symbol)] ?? state.marks[symbol]={...q,symbol};
   ensureDailyRiskState(state,q.ts);
 }
 
@@ -157,6 +168,7 @@ export function planOrder(
   }
 
   const side:Side=signal.action;
+  const symbol=canonicalSymbol(signal.symbol);
   ensureDailyRiskState(state,signal.ts);
   const hasBook=typeof q.bid==="number" && Number.isFinite(q.bid)
     && q.bid>0
@@ -192,7 +204,7 @@ export function planOrder(
     return {accepted:false,reason:"NO_EXIT_PRICE"};
   }
 
-  const pos=position(state,q.symbol);
+  const pos=position(state,symbol);
   const currentNotional=pos.qty*referencePrice;
 
   if(side==="BUY"){
@@ -269,7 +281,7 @@ export function planOrder(
 
     const notional=qty*referencePrice;
     const risk=validateOrder({
-      symbol:q.symbol,side,notional,
+      symbol,side,notional,
       grossExposure:currentGrossExposure(state)+Math.max(0,reservations.reservedGrossExposure),
       currentPositionNotional:currentNotional,
       cash:availableCash
@@ -277,7 +289,7 @@ export function planOrder(
     if(!risk.ok) return {accepted:false,reason:risk.reason};
     recent.push(orderNowMs);
     return {
-      accepted:true,symbol:q.symbol,side,qty,referencePrice,
+      accepted:true,symbol,side,qty,referencePrice,
       visibleDepth:verifiedBook?(q.askLevels?.length?q.askLevels.reduce((s,l)=>s+Math.max(0,l.size),0):Number(q.askSize??0)):0,
       depthLevels:verifiedBook && q.depthComplete ? q.askLevels:undefined,
       depthComplete:verifiedBook && q.depthComplete===true,
@@ -287,7 +299,8 @@ export function planOrder(
     };
   }
 
-  const reservedForSymbol=Math.max(0,Number(reservations.reservedSellQty[q.symbol]??0));
+  const reservedKey=Object.keys(reservations.reservedSellQty).find(key=>canonicalSymbol(key)===symbol);
+  const reservedForSymbol=Math.max(0,Number(reservations.reservedSellQty[symbol]??(reservedKey?reservations.reservedSellQty[reservedKey]:0)??0));
   const availablePositionQty=Math.max(0,pos.qty-reservedForSymbol);
   if(availablePositionQty<=0) return {accepted:false,reason:"NO_LONG_POSITION"};
   let qty=availablePositionQty;
@@ -364,11 +377,16 @@ export function simulateFill(
 }
 
 export function applyFill(state:PortfolioState,fill:SimulatedFill){
-  const pos=position(state,fill.symbol);
+  const symbol=canonicalSymbol(fill.symbol);
+  const priorKey=existingPositionKey(state,symbol);
+  const pos=position(state,symbol);
+  if(priorKey!==symbol && Object.prototype.hasOwnProperty.call(state.positions,priorKey)){
+    delete state.positions[priorKey];
+  }
   if(fill.side==="BUY"){
     const newQty=pos.qty+fill.qty;
     const newCost=pos.costBasis+fill.notional+fill.fee;
-    state.positions[fill.symbol]={
+    state.positions[symbol]={
       qty:newQty,avgPrice:newCost/newQty,costBasis:newCost,realizedPnl:pos.realizedPnl
     };
   }else{
@@ -376,7 +394,7 @@ export function applyFill(state:PortfolioState,fill:SimulatedFill){
     const realized=(fill.notional-fill.fee)-(pos.avgPrice*fill.qty);
     const newQty=pos.qty-fill.qty;
     const newCost=Math.max(0,pos.costBasis-(pos.avgPrice*fill.qty));
-    state.positions[fill.symbol]={
+    state.positions[symbol]={
       qty:newQty,
       avgPrice:newQty>0?newCost/newQty:0,
       costBasis:newCost,
@@ -391,7 +409,7 @@ export function applyFill(state:PortfolioState,fill:SimulatedFill){
 
 export function currentGrossExposure(state:PortfolioState){
   return Object.entries(state.positions).reduce((sum,[symbol,pos])=>{
-    const q=state.marks[symbol];
+    const q=state.marks[canonicalSymbol(symbol)] ?? state.marks[symbol];
     const price=usablePrice(q?.last,q?.bid,q?.ask,pos.avgPrice);
     return sum+Math.max(0,pos.qty*price);
   },0);
@@ -399,14 +417,14 @@ export function currentGrossExposure(state:PortfolioState){
 
 export function snapshot(state:PortfolioState){
   const marketValue=Object.entries(state.positions).reduce((sum,[symbol,pos])=>{
-    const q=state.marks[symbol];
+    const q=state.marks[canonicalSymbol(symbol)] ?? state.marks[symbol];
     const liquidationPrice=usablePrice(q?.bid,q?.last,q?.ask,pos.avgPrice);
     return sum+Math.max(0,pos.qty*liquidationPrice);
   },0);
   const grossExposure=currentGrossExposure(state);
   const realizedPnl=Object.values(state.positions).reduce((sum,p)=>sum+p.realizedPnl,0);
   const unrealizedPnl=Object.entries(state.positions).reduce((sum,[symbol,pos])=>{
-    const q=state.marks[symbol];
+    const q=state.marks[canonicalSymbol(symbol)] ?? state.marks[symbol];
     const markPrice=usablePrice(q?.bid,q?.last,q?.ask,pos.avgPrice);
     return sum+(markPrice*pos.qty-pos.costBasis);
   },0);
