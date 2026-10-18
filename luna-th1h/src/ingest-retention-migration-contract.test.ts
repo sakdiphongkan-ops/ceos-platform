@@ -39,6 +39,9 @@ assert.ok(retainedFailure>rowCountCheck,"missing rows must invalidate accepted m
 assert.ok(staleFailure>retainedFailure,"stale retained rows must invalidate accepted metadata");
 assert.ok(sessionGate>=0 && sessionGate<earlyIdempotency,"market session gate must precede idempotent success");
 assert.ok(nonFiniteGuards>=0,"NaN/Infinity quote prices must fail closed");
+assert.ok(sql.includes("SET search_path TO 'pg_catalog', 'public', 'pg_temp'"),"SECURITY DEFINER ingest RPC must pin a safe search_path");
+assert.ok(sql.includes("REVOKE ALL ON FUNCTION public.luna_ingest_verified_market_batch("),"service-only ingest RPC must revoke default PUBLIC EXECUTE");
+assert.ok(sql.includes("TO service_role"),"ingest RPC must remain executable by the trusted service role");
 
 console.log("LUNA ingest-retention migration contract: PASS");
 console.log("PASS missing payload hash fails cleanly");
