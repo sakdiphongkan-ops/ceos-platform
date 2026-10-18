@@ -13,6 +13,7 @@ import psycopg2
 ROOT = Path(__file__).resolve().parents[2]
 MIGRATION = ROOT / "supabase/migrations/202610170004_luna_verified_ingest_marker.sql"
 IDEMPOTENCY_MIGRATION = ROOT / "supabase/migrations/20261018020000_luna_ingest_rejected_batch_idempotency.sql"
+SOURCE_GUARD_MIGRATION = ROOT / "supabase/migrations/20261018021500_luna_ingest_source_lookup_fail_closed.sql"
 
 
 def connect():
@@ -141,6 +142,13 @@ def install_migration(conn):
 
 def install_idempotency_fix(conn):
     sql = IDEMPOTENCY_MIGRATION.read_text(encoding="utf-8")
+    with conn.cursor() as cur:
+        cur.execute(sql)
+    conn.commit()
+
+
+def install_source_guard_fix(conn):
+    sql = SOURCE_GUARD_MIGRATION.read_text(encoding="utf-8")
     with conn.cursor() as cur:
         cur.execute(sql)
     conn.commit()
@@ -353,7 +361,7 @@ def run_rejection_matrix(conn):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", choices=("baseline", "migration", "fixed"), required=True)
+    parser.add_argument("--mode", choices=("baseline", "migration", "source-baseline", "fixed"), required=True)
     args = parser.parse_args()
 
     conn = connect()
@@ -380,6 +388,18 @@ def main():
             raise AssertionError("pre-fix ingestion unexpectedly passed rejected-batch retry contract")
 
         install_idempotency_fix(conn)
+        if args.mode == "source-baseline":
+            try:
+                run_rejection_matrix(conn)
+            except AssertionError as exc:
+                message = str(exc)
+                if "unknown-source" not in message:
+                    raise
+                print(f"EXPECTED SOURCE-GUARD RED: {exc}")
+                return 1
+            raise AssertionError("pre-fix ingestion unexpectedly accepted the source-rejection matrix")
+
+        install_source_guard_fix(conn)
         retry = run_rejected_batch_retry_contract(conn)
         conflict = run_insert_conflict_contract(conn)
         rejections = run_rejection_matrix(conn)
