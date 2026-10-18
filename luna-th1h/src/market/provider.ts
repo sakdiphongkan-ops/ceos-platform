@@ -95,6 +95,21 @@ export function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVeri
     return null;
   }
   if(!allowPublicPriceOnly){
+    // Distinguish a missing optional field from a supplied value that cannot be
+    // parsed as a finite number. Invalid values must not silently become "missing"
+    // when a caller has disabled the verified-book gate.
+    const malformedNumeric=(value:unknown)=>
+      value!==null && value!==undefined
+      && !(typeof value==="string" && value.trim()==="")
+      && nullableFiniteNumber(value)===null;
+    if(malformedNumeric(raw.last) || malformedNumeric(raw.bid) || malformedNumeric(raw.ask)){
+      NORMALIZATION_REJECTIONS.invalid_price++;
+      return null;
+    }
+    if(malformedNumeric(raw.bid_size) || malformedNumeric(raw.ask_size)){
+      NORMALIZATION_REJECTIONS.invalid_book++;
+      return null;
+    }
     if((q.bid!==null && q.bid<=0) || (q.ask!==null && q.ask<=0)){
       NORMALIZATION_REJECTIONS.invalid_price++;
       return null;
