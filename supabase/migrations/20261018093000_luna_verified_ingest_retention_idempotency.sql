@@ -226,6 +226,9 @@ begin
       and x.ts >= now() - make_interval(secs=>greatest(v_max_staleness,1))
       and x.ts <= now() + interval '30 seconds'
       and x.bid is not null and x.ask is not null and x.last is not null
+      and lower(x.bid::text) not in ('nan','infinity','-infinity')
+      and lower(x.ask::text) not in ('nan','infinity','-infinity')
+      and lower(x.last::text) not in ('nan','infinity','-infinity')
       and x.bid > 0 and x.ask >= x.bid and x.last > 0
       and x.bid_size is not null and x.bid_size > 0
       and x.ask_size is not null and x.ask_size > 0;
