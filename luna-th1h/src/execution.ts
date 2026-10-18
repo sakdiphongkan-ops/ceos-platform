@@ -53,7 +53,7 @@ function allowPaperPriceOnlyExecution(q:Quote){
   const source=String(q.source??"").toLowerCase();
   return config.priceOnlyFallback
     && mode==="paper"
-    && executionMode!=="live"
+    && executionMode==="paper"
     && !liveTradingArmed
     && source==="tradingview-public-screener";
 }
@@ -255,7 +255,7 @@ export function planOrder(
         -Math.max(0,reservations.reservedGrossExposure)
     );
     const feeRate=costs.feeBps/10000;
-    const estimatedAllInPerShare=referencePrice*(1+slippageRate)*(1+feeRate);
+    const estimatedAllInPerShare=referencePrice*(1+conservativeExecutionRate)*(1+feeRate);
     const availableCash=Math.max(0,state.cash-Math.max(0,reservations.reservedBuyCash));
     const affordable=availableCash/estimatedAllInPerShare;
     let qty=roundDown(Math.min(
