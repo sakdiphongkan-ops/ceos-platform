@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { describeSourceFailure, resolveRuntimeStatus, resolveServiceKey } from "./runtime-status.mjs";
+import { createFetchTimeoutAbortReason, describeSourceFailure, resolveRuntimeStatus, resolveServiceKey } from "./runtime-status.mjs";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SECRET_KEYS = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}");
@@ -8,7 +8,7 @@ const SERVICE_KEY = resolveServiceKey(Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
 
 const STRATEGY = "luna-th1h-v1.4.0-15m-riskgated";
 const PAPER_EXPERIMENT = "LUNA-PAPER-LIVE-15M-VERIFIED";
-const DB_TIMEOUT_MS = 3500;
+const DB_TIMEOUT_MS = 7000;
 const EXTERNAL_TIMEOUT_MS = 2200;
 const CACHE_TTL_MS = 5000;
 const STALE_MAX_MS = 60000;
@@ -31,7 +31,7 @@ const json = (body: unknown, status = 200, extraHeaders: Record<string,string> =
 
 const fetchWithTimeout = async (input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = DB_TIMEOUT_MS) => {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(new Error("FETCH_BODY_TIMEOUT")), timeoutMs);
+  const timer = setTimeout(() => controller.abort(createFetchTimeoutAbortReason()), timeoutMs);
   try {
     // Keep the abort timer active until the complete response body has been received.
     // Previously the timer was cleared as soon as headers arrived, so a stalled body
@@ -261,7 +261,8 @@ async function buildFeed() {
       .eq("session_date", targetDate)
       .eq("status", "OPEN")
       .order("started_at", { ascending: false })
-      .limit(1),
+      .limit(1)
+      .retry(false),
     supabase
       .from("luna_execution_controls")
       .select("execution_mode,armed,kill_switch,max_daily_loss,max_daily_turnover,max_order_notional,max_orders_per_minute,updated_at,updated_by")
@@ -274,43 +275,50 @@ async function buildFeed() {
       .eq("as_of_date", targetDate)
       .not("current_price", "is", null)
       .order("last_quote_ts", { ascending: false })
-      .limit(1000),
+      .limit(1000)
+      .retry(false),
     supabase
       .from("luna_signals")
       .select("id,session_id,symbol,ts,action,strategy_version,created_at")
       .eq("strategy_version", STRATEGY)
       .order("ts", { ascending: false })
-      .limit(40),
+      .limit(40)
+      .retry(false),
     supabase
       .from("luna_portfolio_snapshots")
       .select("id,session_id,ts,cash,market_value,gross_exposure,realized_pnl,unrealized_pnl,fees")
       .order("ts", { ascending: false })
-      .limit(24),
+      .limit(24)
+      .retry(false),
     supabase
       .from("luna_paper_live_runtime")
       .select("experiment_code,strategy_version,session_id,initial_capital,cash,reserved_cash,realized_pnl,fees,peak_equity,last_signal_bar_end,last_heartbeat,status,paper_only,fill_model,started_at,updated_at")
       .eq("experiment_code", PAPER_EXPERIMENT)
       .eq("strategy_version", STRATEGY)
       .order("updated_at", { ascending: false })
-      .limit(1),
+      .limit(1)
+      .retry(false),
     supabase
       .from("luna_paper_live_orders")
       .select("id,experiment_code,strategy_version,session_id,signal_bar_end,fill_bar_end,symbol,side,order_type,qty_requested,qty_filled,status,reference_price,fill_price,gross_notional,estimated_fee,estimated_slippage,total_cost,reserved_cash,confidence,reason,created_at,filled_at,updated_at,execution_quote_ts", { count: "exact" })
       .eq("experiment_code", PAPER_EXPERIMENT)
       .eq("strategy_version", STRATEGY)
       .order("created_at", { ascending: false })
-      .limit(50),
+      .limit(50)
+      .retry(false),
     supabase
       .from("luna_paper_live_positions")
       .select("experiment_code,symbol,qty,avg_price,cost_basis,realized_pnl,updated_at")
       .eq("experiment_code", PAPER_EXPERIMENT)
       .order("updated_at", { ascending: false })
-      .limit(1000),
+      .limit(1000)
+      .retry(false),
     supabase
       .from("luna_universe")
       .select("symbol,market")
       .eq("is_active", true)
-      .limit(1000),
+      .limit(1000)
+      .retry(false),
     fetchSetIndex(),
     fetchTopTrader(),
     supabase
@@ -318,7 +326,8 @@ async function buildFeed() {
       .select("session_id,symbol,bar_end,candidate_action,feed_verified,verified_book,execution_blocked,reason", { count: "exact" })
       .eq("strategy_version", STRATEGY)
       .order("bar_end", { ascending: false })
-      .limit(1000),
+      .limit(1000)
+      .retry(false),
     supabase
       .from("luna_market_ticks")
       .select("symbol,ts,bid,ask,last,bid_size,ask_size,source,raw")
