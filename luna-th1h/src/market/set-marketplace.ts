@@ -7,6 +7,10 @@ const pollCandidate=Number(process.env.SET_MARKETPLACE_POLL_MS ?? 1000);
 const POLL_MS=Number.isFinite(pollCandidate) && pollCandidate>=500 && pollCandidate<=60_000
   ? pollCandidate
   : 1000;
+const ageCandidate=Number(process.env.SET_MARKETPLACE_MAX_QUOTE_AGE_MS ?? 8_000);
+const MAX_QUOTE_AGE_MS=Number.isFinite(ageCandidate) && ageCandidate>=1_000 && ageCandidate<=60_000
+  ? ageCandidate
+  : 8_000;
 
 type SetLevel={rank:number;price:number|null;volume:number|null};
 type SetStock={
@@ -33,11 +37,24 @@ function normalizeTime(value:unknown){
   return new Date(ms).toISOString();
 }
 
-export function normalizeSetStockQuote(row:SetStock):Quote|null{
-  if(!row.symbol || !row.time) return null;
+export function normalizeSetStockQuote(row:SetStock,nowMs:number=Date.now(),maxQuoteAgeMs:number=MAX_QUOTE_AGE_MS):Quote|null{
+  if(typeof row.symbol!=="string" || !row.symbol.trim()
+    || typeof row.time!=="string" || !row.time.trim()) return null;
   const bid=(row.bid ?? []).find(x=>x?.rank===1) ?? row.bid?.[0];
   const offer=(row.offer ?? []).find(x=>x?.rank===1) ?? row.offer?.[0];
-  const sourceTs=normalizeTime(row.time);
+  let sourceTs:string;
+  try{
+    sourceTs=normalizeTime(row.time);
+  }catch{
+    return null;
+  }
+  const sourceTsMs=Date.parse(sourceTs);
+  const effectiveMaxAge=Number.isFinite(maxQuoteAgeMs) && maxQuoteAgeMs>=1_000 && maxQuoteAgeMs<=60_000
+    ? maxQuoteAgeMs
+    : MAX_QUOTE_AGE_MS;
+  if(!Number.isFinite(sourceTsMs) || sourceTsMs>nowMs+30_000 || nowMs-sourceTsMs>effectiveMaxAge){
+    return null;
+  }
   const bidLevels=(row.bid ?? [])
     .map(x=>({price:numberOrNull(x?.price),size:numberOrNull(x?.volume)}))
     .filter((x):x is {price:number;size:number}=>x.price!==null&&x.price>0&&x.size!==null&&x.size>0);
@@ -58,7 +75,7 @@ export function normalizeSetStockQuote(row:SetStock):Quote|null{
     && Number(bid?.volume??0)>0 && Number(offer?.volume??0)>0;
   return {
     symbol:row.symbol,
-    ts:new Date().toISOString(),
+    ts:new Date(nowMs).toISOString(),
     sourceTs,
     bid:bidPrice,
     ask:askPrice,
