@@ -11,9 +11,9 @@ from pathlib import Path
 import psycopg2
 
 ROOT = Path(__file__).resolve().parents[2]
-MIGRATION = ROOT / "supabase/migrations/202610170004_luna_verified_ingest_marker.sql"
-IDEMPOTENCY_MIGRATION = ROOT / "supabase/migrations/20261018020000_luna_ingest_rejected_batch_idempotency.sql"
-SOURCE_GUARD_MIGRATION = ROOT / "supabase/migrations/20261018021500_luna_ingest_source_lookup_fail_closed.sql"
+MIGRATION = ROOT / "supabase/migrations/20261018014106_202610170004_luna_verified_ingest_marker.sql"
+IDEMPOTENCY_MIGRATION = ROOT / "supabase/migrations/20261018020812_luna_ingest_rejected_batch_idempotency_20261018.sql"
+SOURCE_GUARD_MIGRATION = ROOT / "supabase/migrations/20261018021547_luna_ingest_source_lookup_fail_closed_20261018.sql"
 
 
 def connect():
