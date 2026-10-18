@@ -424,7 +424,24 @@ def _quote_coverage_snapshot() -> Dict[str, Any]:
             fresh_symbols.add(symbol)
             bid = _num(quote.get("bid")); ask = _num(quote.get("ask"))
             bs = _num(quote.get("bid_size")); ass = _num(quote.get("ask_size"))
-            if bid and bid > 0 and ask and ask > 0 and ask >= bid and bs and bs > 0 and ass and ass > 0:
+            try:
+                received_raw = quote.get("book_received_ts")
+                source_raw = quote.get("book_source_ts")
+                if not received_raw or not source_raw:
+                    raise ValueError("book_timestamp_missing")
+                received_dt = datetime.fromisoformat(str(received_raw).replace("Z", "+00:00"))
+                source_dt = datetime.fromisoformat(str(source_raw).replace("Z", "+00:00"))
+                if received_dt.tzinfo is None or source_dt.tzinfo is None:
+                    raise ValueError("book_timestamp_timezone_missing")
+                received_age = now - received_dt.timestamp()
+                source_age = now - source_dt.timestamp()
+                book_fresh = (
+                    0.0 <= received_age <= GATEWAY_MAX_QUOTE_AGE_SEC
+                    and 0.0 <= source_age <= GATEWAY_MAX_QUOTE_AGE_SEC
+                )
+            except (ValueError, TypeError, OverflowError):
+                book_fresh = False
+            if bid and bid > 0 and ask and ask > 0 and ask >= bid and bs and bs > 0 and ass and ass > 0 and book_fresh:
                 verified_book_symbols.add(symbol)
     target_count = len(target_symbols)
     return {
