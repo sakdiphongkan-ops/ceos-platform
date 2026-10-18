@@ -5,7 +5,7 @@ CREATE OR REPLACE FUNCTION public.luna_ingest_verified_market_batch(p_source tex
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'public'
+ SET search_path TO 'pg_catalog', 'public', 'pg_temp'
 AS $function$
 declare
   v_configured boolean:=false; v_enabled boolean:=false; v_source_found boolean:=false;
@@ -19,6 +19,39 @@ declare
   v_existing_tick_rows bigint:=0; v_existing_fresh_tick_rows bigint:=0;
   v_existing_expected integer:=0;
 begin
+  if nullif(trim(coalesce(p_source,'')),'') is null then
+    return jsonb_build_object(
+      'ok',false,'accepted',false,'idempotent',false,
+      'source',p_source,'reject_reason','SOURCE_NOT_CONFIGURED_OR_ENABLED'
+    );
+  end if;
+
+  if p_feed_ts is null then
+    return jsonb_build_object(
+      'ok',false,'accepted',false,'idempotent',false,
+      'source',p_source,'reject_reason','INVALID_OR_FUTURE_FEED_TIMESTAMP'
+    );
+  end if;
+
+  -- Reject malformed JSON shapes/rows before jsonb_to_recordset casts can throw.
+  if coalesce(jsonb_typeof(p_rows),'') <> 'array' or jsonb_array_length(p_rows)=0 then
+    return jsonb_build_object(
+      'ok',false,'accepted',false,'idempotent',false,
+      'source',p_source,'reject_reason','EMPTY_OR_INVALID_BATCH'
+    );
+  end if;
+
+  if exists (
+    select 1
+    from jsonb_array_elements(p_rows) as item(value)
+    where jsonb_typeof(item.value) <> 'object'
+  ) then
+    return jsonb_build_object(
+      'ok',false,'accepted',false,'idempotent',false,
+      'source',p_source,'reject_reason','INVALID_MARKET_TICK_ROW'
+    );
+  end if;
+
   -- An absent/blank hash cannot be stored in the ingest ledger (payload_hash is NOT NULL).
   -- Reject it cleanly rather than raising a database constraint error.
   if nullif(trim(coalesce(p_payload_hash,'')),'') is null then
@@ -119,27 +152,32 @@ begin
       'retry_requires_new_snapshot',true
     );
   elsif v_existing is not null then
-    -- Do not repeatedly retry a snapshot previously rejected specifically
-    -- because its tick rows had expired. Wait for a new observation/hash.
+    -- Never reuse a rejected batch ID while it still owns tick rows: otherwise
+    -- an ON CONFLICT replay could delete the surviving rows during cleanup.
+    select tick_count into v_existing_expected
+    from public.luna_market_ingest_batches where batch_id=v_existing;
+    select count(*) into v_existing_tick_rows
+    from public.luna_market_ticks
+    where raw->>'verification_batch_id'=v_existing::text;
+
     if exists (
       select 1 from public.luna_market_ingest_batches
       where batch_id=v_existing
         and accepted=false
         and reject_reason='IDEMPOTENCY_TICKS_NOT_RETAINED'
-    ) then
-      select tick_count into v_existing_expected
-      from public.luna_market_ingest_batches where batch_id=v_existing;
-      select count(*) into v_existing_tick_rows
-      from public.luna_market_ticks
-      where raw->>'verification_batch_id'=v_existing::text;
+    ) or v_existing_tick_rows > 0 then
       return jsonb_build_object(
         'ok',false,'accepted',false,'idempotent',false,
         'batch_id',v_existing,'source',p_source,
-        'reject_reason','IDEMPOTENCY_TICKS_NOT_RETAINED',
+        'reject_reason',coalesce(
+          (select reject_reason from public.luna_market_ingest_batches where batch_id=v_existing),
+          'PREVIOUS_BATCH_REQUIRES_NEW_SNAPSHOT'
+        ),
         'rows_expected',v_existing_expected,'rows_retained',v_existing_tick_rows,
         'retry_requires_new_snapshot',true
       );
     end if;
+
     v_batch := v_existing;
     v_reuse_existing := true;
   end if;
@@ -290,6 +328,18 @@ begin
     'source',p_source,'session_id',v_session,'rows_ingested',v_rows,
     'feed_ts',p_feed_ts,'source_type',v_source_type,'authority',v_authority
   );
+exception
+  when invalid_text_representation
+    or datetime_field_overflow
+    or numeric_value_out_of_range
+    or invalid_parameter_value then
+    -- Malformed upstream field casts return a structured rejection instead of
+    -- leaking a PostgreSQL exception. The exception subtransaction rolls back
+    -- any partial writes made by this call.
+    return jsonb_build_object(
+      'ok',false,'accepted',false,'idempotent',false,
+      'source',p_source,'reject_reason','INVALID_MARKET_TICK_ROW'
+    );
 end;
 $function$
 
