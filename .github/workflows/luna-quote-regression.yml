@@ -12,6 +12,7 @@ on:
       - "supabase/migrations/20261018093000_luna_verified_ingest_retention_idempotency.sql"
       - "supabase/tests/luna_ingest_retention_idempotency.pg.sql"
       - "luna-th1h/package.json"
+      - "luna-execution-gateway/**"
       - ".github/workflows/luna-quote-regression.yml"
   pull_request:
     branches: [master]
@@ -23,6 +24,7 @@ on:
       - "supabase/migrations/20261018093000_luna_verified_ingest_retention_idempotency.sql"
       - "supabase/tests/luna_ingest_retention_idempotency.pg.sql"
       - "luna-th1h/package.json"
+      - "luna-execution-gateway/**"
       - ".github/workflows/luna-quote-regression.yml"
 
 permissions:
@@ -70,3 +72,22 @@ jobs:
         run: psql -X -v ON_ERROR_STOP=1 -f ../supabase/tests/luna_ingest_retention_idempotency.pg.sql
       - name: Typecheck worker and test sources
         run: npm run typecheck
+
+  gateway-health-liveness:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: luna-execution-gateway
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install gateway dependencies
+        run: python -m pip install --no-cache-dir -r requirements.txt
+      - name: Verify liveness remains available when diagnostics are blocked
+        run: python test_health_liveness.py
+      - name: Run gateway order-guard tests
+        run: python test_safety.py
+      - name: Compile Python source and tests
+        run: python -m compileall -q .
