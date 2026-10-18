@@ -4,11 +4,11 @@
 
 Five database migrations were applied to the production Supabase project on 2026-10-18 after isolated PostgreSQL 16 regression tests passed in GitHub Actions run #1585. The REST market-ingest Edge Function was also updated to version 10; this does not enable trading or change the paper-only contract.
 
-- `202610170004_luna_verified_ingest_marker.sql` — `public.luna_ingest_verified_market_batch(...)` now stamps database-owned verification metadata only after source, freshness, complete-book, row integrity, positive prices/sizes, active-universe and open-session checks pass.
-- `202610170003_luna_cycle_fail_closed_valuation.sql` — `public.luna_run_live_paper_cycle(...)` requires a fresh verified `TOPTRADER_REALTIME` book for every open position, has no average-cost fallback, writes no equity snapshot and does not update peak equity when valuation is incomplete, and uses the current valuation timestamp for complete snapshots.
-- `202610170001_luna_paper_snapshot_valuation_guard.sql` — enabled trigger blocks snapshot INSERT/UPDATE when any held position lacks a fresh, valid verified book in the exact session.
-- `20261018020000_luna_ingest_rejected_batch_idempotency.sql` — only a previously accepted batch is treated as an idempotent success; rejected batches are revalidated, and partial tick insert conflicts are removed and returned as `TICK_INSERT_CONFLICT`.
-- `20261018021500_luna_ingest_source_lookup_fail_closed.sql` — captures `FOUND` after source registry lookup and requires configured/enabled/execution-grade/book-grade flags to be explicitly true; a missing source row or NULL flag cannot bypass validation.
+- `20261018014106_202610170004_luna_verified_ingest_marker.sql` — `public.luna_ingest_verified_market_batch(...)` now stamps database-owned verification metadata only after source, freshness, complete-book, row integrity, positive prices/sizes, active-universe and open-session checks pass.
+- `20261018014120_202610170003_luna_cycle_fail_closed_valuation.sql` — `public.luna_run_live_paper_cycle(...)` requires a fresh verified `TOPTRADER_REALTIME` book for every open position, has no average-cost fallback, writes no equity snapshot and does not update peak equity when valuation is incomplete, and uses the current valuation timestamp for complete snapshots.
+- `20261018014128_202610170001_luna_paper_snapshot_valuation_guard.sql` — enabled trigger blocks snapshot INSERT/UPDATE when any held position lacks a fresh, valid verified book in the exact session.
+- `20261018020812_luna_ingest_rejected_batch_idempotency_20261018.sql` — only a previously accepted batch is treated as an idempotent success; rejected batches are revalidated, and partial tick insert conflicts are removed and returned as `TICK_INSERT_CONFLICT`.
+- `20261018021547_luna_ingest_source_lookup_fail_closed_20261018.sql` — captures `FOUND` after source registry lookup and requires configured/enabled/execution-grade/book-grade flags to be explicitly true; a missing source row or NULL flag cannot bypass validation.
 
 No Supabase branch/project was created and no paid infrastructure was used. No broker calls or real orders were made.
 
