@@ -469,8 +469,8 @@ def _quote_coverage_snapshot() -> Dict[str, Any]:
             )
         except (ValueError, TypeError, OverflowError):
             book_fresh = False
-            if bid and bid > 0 and ask and ask > 0 and ask >= bid and bs and bs > 0 and ass and ass > 0 and book_fresh:
-                verified_book_symbols.add(symbol)
+        if bid and bid > 0 and ask and ask > 0 and ask >= bid and bs and bs > 0 and ass and ass > 0 and book_fresh:
+            verified_book_symbols.add(symbol)
     target_count = len(target_symbols)
     return {
         "target_count": target_count,
