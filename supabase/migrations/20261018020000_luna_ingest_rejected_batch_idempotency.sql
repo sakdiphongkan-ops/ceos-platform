@@ -1,8 +1,7 @@
 -- Repair rejected-batch retry semantics without changing the accepted-batch idempotency key.
 -- This migration prevents a previously rejected batch from being reported as accepted without inserted ticks.
 -- It revalidates the payload and reuses the existing row if a rejected batch is retried.
--- LUNA verified-ingestion marker contract.
--- Follow-up migration source template; see 20261018020000_luna_ingest_rejected_batch_idempotency.sql for the idempotency repair.
+-- LUNA verified-ingestion marker and idempotency contract.
 -- The marker is written by the database only after the source registry, feed freshness,
 -- complete-book flag, row integrity, active-universe membership, and open-session checks pass.
 -- This does not create orders or enable live trading.
@@ -207,4 +206,4 @@ end;
 $function$;
 
 COMMENT ON FUNCTION public.luna_ingest_verified_market_batch(text,timestamp with time zone,text,boolean,jsonb) IS
-  'Accepts only enabled execution-grade/book-grade sources and fresh, complete, valid book rows; database stamps explicit verification metadata after validation. Paper-only valuation consumes this marker plus its own <=60-second quote freshness check.';
+  'Accepts only enabled execution-grade/book-grade sources and fresh, complete, valid book rows; database stamps explicit verification metadata after validation. Previously rejected idempotency keys are revalidated and can never return accepted without writing ticks. Paper-only valuation applies its own <=60-second freshness guard.';
