@@ -129,6 +129,37 @@ def assert_complete(conn):
 
 
 
+
+def assert_no_current_session_idle(conn):
+    reset_state(conn)
+    with conn.cursor() as cur:
+        cur.execute("UPDATE public.luna_sessions SET session_date=(now() AT TIME ZONE 'Asia/Bangkok')::date - 1 WHERE id=%s;", (SESSION,))
+        cur.execute(
+            """INSERT INTO public.luna_paper_live_orders(
+                 experiment_code,strategy_version,session_id,signal_bar_end,fill_bar_end,
+                 symbol,side,qty_requested,qty_filled,status,reference_price,reserved_cash,
+                 confidence,decision_hash,reason,created_at,updated_at
+               ) VALUES (%s,%s,%s,now()-interval '1 day',now()-interval '23 hours',
+                         'PTT','BUY',100,0,'QUEUED',30,3000,1,'stale-session-order',
+                         'TEST_OLD_SESSION_ORDER',now()-interval '1 day',now());""",
+            (EXPERIMENT, STRATEGY, SESSION),
+        )
+    conn.commit()
+    result, snapshots, peak = cycle(conn)
+    assert result["status"] == "IDLE_OUTSIDE_MARKET_SESSION", result
+    assert result["live_orders_created"] is False and result["live_fills_created"] is False, result
+    assert snapshots == 0, snapshots
+    assert float(peak) == 30000.0, peak
+    with conn.cursor() as cur:
+        cur.execute("SELECT status FROM public.luna_paper_live_orders WHERE decision_hash='stale-session-order';")
+        order_status = cur.fetchone()[0]
+        cur.execute("SELECT count(*) FROM public.luna_paper_trade_ledger;")
+        ledger_count = cur.fetchone()[0]
+    assert order_status == "QUEUED", order_status
+    assert ledger_count == 0, ledger_count
+    print("PASS old open session: weekend/holiday cycle idles without fill or snapshot")
+
+
 def assert_partial_coverage(conn):
     reset_state(conn)
     with conn.cursor() as cur:
@@ -181,6 +212,7 @@ def main():
         setup(conn)
         install(conn)
         assert_complete(conn)
+        assert_no_current_session_idle(conn)
         assert_incomplete(conn, "missing quote")
         assert_incomplete(conn, "stale quote", age_seconds=61)
         assert_incomplete(conn, "unverified quote", verified=False)
