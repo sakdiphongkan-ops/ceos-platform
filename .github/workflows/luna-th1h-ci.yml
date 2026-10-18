@@ -115,14 +115,27 @@ jobs:
           rc=$?
           set -e
           test "$rc" -eq 1
-      - name: GREEN — apply the migration and require the verified marker
+      - name: RED — reproduce false acceptance of a previously rejected batch
         env:
           PGHOST: 127.0.0.1
           PGPORT: 5432
           PGDATABASE: postgres
           PGUSER: postgres
           PGPASSWORD: postgres
-        run: python scripts/db/test_luna_verified_ingest_marker.py --mode migration
+        run: |
+          set +e
+          python scripts/db/test_luna_verified_ingest_marker.py --mode migration
+          rc=$?
+          set -e
+          test "$rc" -eq 1
+      - name: GREEN — verify markers and rejected-batch retry repair
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: 5432
+          PGDATABASE: postgres
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: python scripts/db/test_luna_verified_ingest_marker.py --mode fixed
 
   db_paper_valuation_regression:
     runs-on: ubuntu-latest
