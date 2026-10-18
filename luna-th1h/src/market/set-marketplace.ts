@@ -19,7 +19,9 @@ type SetStock={
 };
 
 export function numberOrNull(v:unknown):number|null{
-  if(v===null || v===undefined || (typeof v==="string" && v.trim()==="")) return null;
+  if(v===null || v===undefined) return null;
+  if(typeof v==="string" && v.trim()==="") return null;
+  if(typeof v!=="number" && typeof v!=="string") return null;
   const n=Number(v);
   return Number.isFinite(n)?n:null;
 }
