@@ -8,6 +8,8 @@ on:
       - "luna-th1h/src/market/provider.ts"
       - "luna-th1h/src/execution.ts"
       - "luna-th1h/src/quote-regression.test.ts"
+      - "luna-th1h/src/ingest-retention-migration-contract.test.ts"
+      - "supabase/migrations/20261018093000_luna_verified_ingest_retention_idempotency.sql"
       - "luna-th1h/package.json"
       - ".github/workflows/luna-quote-regression.yml"
   pull_request:
@@ -37,5 +39,7 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Run deterministic regression matrix
         run: npm run test:quote-regression
+      - name: Check staged ingest-retention migration contract
+        run: npm run test:ingest-retention-contract
       - name: Typecheck worker and test sources
         run: npm run typecheck
