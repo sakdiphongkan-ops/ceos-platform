@@ -156,7 +156,7 @@ export function planOrder(
     && Number(q.ask)>0
     && Number(q.ask)>=Number(q.bid);
   const hasDepth=Number(q.bidSize??0)>0 && Number(q.askSize??0)>0;
-  const quality=String(q.dataQuality??"").trim().toLowerCase().replace(/[\\s-]+/g,"_");
+  const quality=String(q.dataQuality??"").trim().toLowerCase().replace(/[\s-]+/g,"_");
   const verifiedQuality=["verified","verified_book","book_verified","verified_execution_book"].includes(quality);
   const explicitlyUnverified=quality.includes("unverified") || quality==="not_verified" || quality.startsWith("not_");
   const trustedSettradeRealtime=String(q.source??"").toLowerCase().startsWith("settrade-open-api-realtime");
