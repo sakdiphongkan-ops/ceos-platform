@@ -193,6 +193,18 @@ check("execution_source_allowlist_is_exact",()=>{
   },malformedBook,createPortfolio(30_000));
   assert.equal(invalidBook.accepted,false);
   if(!invalidBook.accepted) assert.equal(invalidBook.reason,"BUY_BLOCKED_NO_VERIFIED_BOOK");
+
+  // Case-insensitive quote/signal matching must address the existing position
+  // under one canonical symbol key rather than fabricate a second position.
+  const lowerQuote={...normalized,symbol:"ptt"};
+  const lowerPortfolio=createPortfolio(30_000);
+  lowerPortfolio.positions.ptt={qty:100,avgPrice:31.5,costBasis:3150,realizedPnl:0};
+  const lowerSell=planOrder({
+    symbol:"PTT",ts:FRESH_TS,action:"SELL",
+    reason:"REGRESSION_CANONICAL_SYMBOL",strategyVersion:"quote-regression"
+  },lowerQuote,lowerPortfolio);
+  assert.equal(lowerSell.accepted,true);
+  if(lowerSell.accepted) assert.equal(lowerSell.symbol,"PTT");
 });
 
 // 11. Malformed environment values must not disable quote-age checks or spin polling.
