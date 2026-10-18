@@ -38,6 +38,9 @@ jobs:
       - name: Full-stack architecture tests
         run: npm run test:architecture
 
+      - name: LUNA API runtime readiness status regression
+        run: node --test tests/luna-api-runtime-status.test.mjs
+
   browser-compatibility:
     runs-on: ubuntu-latest
     needs: build-and-typecheck
