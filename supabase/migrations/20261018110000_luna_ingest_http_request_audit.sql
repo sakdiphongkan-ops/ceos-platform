@@ -42,7 +42,7 @@ CREATE OR REPLACE FUNCTION private.luna_reconcile_ingest_http_requests(
 RETURNS integer
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path TO 'pg_catalog', 'private', 'net'
+SET search_path TO 'pg_catalog', 'private', 'net', 'pg_temp'
 AS $function$
 DECLARE
   v_updated integer := 0;
@@ -92,7 +92,7 @@ CREATE OR REPLACE FUNCTION public.luna_trigger_toptrader_market_ingest(
 RETURNS bigint
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path TO 'public', 'private', 'net'
+SET search_path TO 'pg_catalog', 'public', 'private', 'net', 'pg_temp'
 AS $function$
 DECLARE
   v_secret text;
@@ -133,7 +133,7 @@ CREATE OR REPLACE FUNCTION public.luna_trigger_toptrader_ws_ingest()
 RETURNS bigint
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path TO 'public', 'private', 'net'
+SET search_path TO 'pg_catalog', 'public', 'private', 'net', 'pg_temp'
 AS $function$
 DECLARE
   v_secret text;
