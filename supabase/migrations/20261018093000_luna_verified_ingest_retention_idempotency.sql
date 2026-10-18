@@ -353,3 +353,22 @@ exception
 end;
 $function$
 
+-- Keep this SECURITY DEFINER RPC service-only even on a fresh database where
+-- CREATE FUNCTION would otherwise grant EXECUTE to PUBLIC by default.
+REVOKE ALL ON FUNCTION public.luna_ingest_verified_market_batch(
+  text, timestamptz, text, boolean, jsonb
+) FROM PUBLIC;
+
+DO $acl$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname='anon') THEN
+    EXECUTE 'REVOKE ALL ON FUNCTION public.luna_ingest_verified_market_batch(text, timestamptz, text, boolean, jsonb) FROM anon';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname='authenticated') THEN
+    EXECUTE 'REVOKE ALL ON FUNCTION public.luna_ingest_verified_market_batch(text, timestamptz, text, boolean, jsonb) FROM authenticated';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname='service_role') THEN
+    EXECUTE 'GRANT EXECUTE ON FUNCTION public.luna_ingest_verified_market_batch(text, timestamptz, text, boolean, jsonb) TO service_role';
+  END IF;
+END;
+$acl$;
