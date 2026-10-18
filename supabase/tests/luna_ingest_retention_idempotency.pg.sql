@@ -1,0 +1,184 @@
+\set ON_ERROR_STOP on
+-- Disposable PostgreSQL integration test. Run only in the GitHub Actions
+-- postgres:16 service container; never point this script at LUNA production.
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE TABLE public.luna_verified_market_sources (
+  source_code text primary key,
+  configured boolean not null,
+  enabled boolean not null,
+  execution_grade boolean not null,
+  book_grade boolean not null,
+  source_type text,
+  authority text,
+  max_staleness_seconds integer not null default 60
+);
+
+CREATE TABLE public.luna_sessions (
+  id uuid primary key,
+  session_date date not null,
+  started_at timestamptz not null,
+  ended_at timestamptz,
+  status text not null
+);
+
+CREATE TABLE public.luna_universe (
+  symbol text primary key,
+  is_active boolean not null default true
+);
+
+CREATE TABLE public.luna_market_ingest_batches (
+  batch_id uuid primary key default gen_random_uuid(),
+  source text not null,
+  received_at timestamptz not null default now(),
+  feed_ts timestamptz not null,
+  symbol_count integer not null,
+  tick_count integer not null,
+  book_complete boolean not null,
+  payload_hash text not null,
+  accepted boolean not null default false,
+  reject_reason text,
+  session_id uuid,
+  created_at timestamptz not null default now(),
+  unique (source,feed_ts,payload_hash)
+);
+
+CREATE TABLE public.luna_market_ticks (
+  id bigint generated always as identity primary key,
+  session_id uuid not null,
+  symbol text not null,
+  ts timestamptz not null,
+  bid numeric,
+  ask numeric,
+  last numeric,
+  bid_size bigint,
+  ask_size bigint,
+  source text not null,
+  raw jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  unique (session_id,symbol,ts,source)
+);
+
+CREATE FUNCTION public.luna_register_verified_feed_heartbeat(
+  text,timestamptz,integer,boolean,text
+) RETURNS void LANGUAGE sql AS $$ SELECT; $$;
+
+INSERT INTO public.luna_verified_market_sources
+(source_code,configured,enabled,execution_grade,book_grade,source_type,authority,max_staleness_seconds)
+VALUES ('TOPTRADER_REALTIME',true,true,true,true,'MARKET_DATA','TOPTRADER',60);
+
+INSERT INTO public.luna_sessions(id,session_date,started_at,status)
+VALUES ('11111111-1111-4111-8111-111111111111',current_date,now()-interval '5 minutes','OPEN');
+
+INSERT INTO public.luna_universe(symbol,is_active)
+VALUES ('PTT',true),('KBANK',true),('AOT',true);
+
+\ir ../migrations/20261018093000_luna_verified_ingest_retention_idempotency.sql
+
+DO $$
+DECLARE
+  v_ts timestamptz;
+  v_rows jsonb;
+  v_result jsonb;
+  v_batch uuid;
+  v_expected integer;
+  v_retained bigint;
+BEGIN
+  -- Case A: a fully persisted accepted batch may report an idempotent retry.
+  v_ts := clock_timestamp();
+  v_rows := jsonb_build_array(jsonb_build_object(
+    'symbol','PTT','ts',v_ts,'bid',31.75,'ask',31.80,'last',31.80,
+    'bid_size',1000,'ask_size',1200,'raw',jsonb_build_object('test','complete')
+  ));
+  v_result := public.luna_ingest_verified_market_batch(
+    'TOPTRADER_REALTIME',v_ts,'hash-complete-1',true,v_rows
+  );
+  IF v_result->>'accepted' <> 'true' OR v_result->>'idempotent' <> 'false' THEN
+    RAISE EXCEPTION 'fresh batch should be accepted on first insert: %',v_result;
+  END IF;
+  v_batch := (v_result->>'batch_id')::uuid;
+
+  v_result := public.luna_ingest_verified_market_batch(
+    'TOPTRADER_REALTIME',v_ts,'hash-complete-1',true,v_rows
+  );
+  IF v_result->>'accepted' <> 'true' OR v_result->>'idempotent' <> 'true' THEN
+    RAISE EXCEPTION 'fully retained batch should be an accepted idempotent retry: %',v_result;
+  END IF;
+  IF (v_result->>'rows_retained')::integer <> 1 THEN
+    RAISE EXCEPTION 'idempotent result must report exact retained rows: %',v_result;
+  END IF;
+
+  -- Simulate the production 35-minute retention job having removed the ticks.
+  DELETE FROM public.luna_market_ticks
+  WHERE raw->>'verification_batch_id'=v_batch::text;
+
+  v_result := public.luna_ingest_verified_market_batch(
+    'TOPTRADER_REALTIME',v_ts,'hash-complete-1',true,v_rows
+  );
+  IF v_result->>'accepted' <> 'false'
+     OR v_result->>'reject_reason' <> 'IDEMPOTENCY_TICKS_NOT_RETAINED' THEN
+    RAISE EXCEPTION 'expired accepted metadata must fail closed: %',v_result;
+  END IF;
+  SELECT accepted,tick_count INTO STRICT v_expected,v_retained
+  FROM public.luna_market_ingest_batches WHERE batch_id=v_batch;
+  IF v_expected::text <> '0' THEN
+    RAISE EXCEPTION 'expired batch metadata must be marked rejected';
+  END IF;
+
+  -- An identical replay must stay rejected until a new observation/hash arrives.
+  v_result := public.luna_ingest_verified_market_batch(
+    'TOPTRADER_REALTIME',v_ts,'hash-complete-1',true,v_rows
+  );
+  IF v_result->>'accepted' <> 'false'
+     OR v_result->>'reject_reason' <> 'IDEMPOTENCY_TICKS_NOT_RETAINED' THEN
+    RAISE EXCEPTION 'expired replay must not regain accepted status: %',v_result;
+  END IF;
+
+  -- A newly observed timestamp/hash can pass the normal freshness/row guards.
+  v_ts := clock_timestamp();
+  v_rows := jsonb_build_array(jsonb_build_object(
+    'symbol','PTT','ts',v_ts,'bid',31.76,'ask',31.81,'last',31.80,
+    'bid_size',1000,'ask_size',1200,'raw',jsonb_build_object('test','fresh')
+  ));
+  v_result := public.luna_ingest_verified_market_batch(
+    'TOPTRADER_REALTIME',v_ts,'hash-complete-2',true,v_rows
+  );
+  IF v_result->>'accepted' <> 'true' OR (v_result->>'rows_ingested')::integer <> 1 THEN
+    RAISE EXCEPTION 'new fresh snapshot should ingest successfully: %',v_result;
+  END IF;
+
+  -- Case B: partial retention is also not allowed to report accepted=true.
+  v_ts := clock_timestamp();
+  v_rows := jsonb_build_array(
+    jsonb_build_object('symbol','KBANK','ts',v_ts,'bid',100.0,'ask',100.1,'last',100.05,
+      'bid_size',500,'ask_size',600,'raw',jsonb_build_object('test','partial')),
+    jsonb_build_object('symbol','AOT','ts',v_ts,'bid',55.0,'ask',55.1,'last',55.05,
+      'bid_size',700,'ask_size',800,'raw',jsonb_build_object('test','partial'))
+  );
+  v_result := public.luna_ingest_verified_market_batch(
+    'TOPTRADER_REALTIME',v_ts,'hash-partial-1',true,v_rows
+  );
+  IF v_result->>'accepted' <> 'true' OR (v_result->>'rows_ingested')::integer <> 2 THEN
+    RAISE EXCEPTION 'two-symbol fixture should ingest successfully: %',v_result;
+  END IF;
+  v_batch := (v_result->>'batch_id')::uuid;
+
+  DELETE FROM public.luna_market_ticks
+  WHERE raw->>'verification_batch_id'=v_batch::text AND symbol='AOT';
+
+  v_result := public.luna_ingest_verified_market_batch(
+    'TOPTRADER_REALTIME',v_ts,'hash-partial-1',true,v_rows
+  );
+  IF v_result->>'accepted' <> 'false'
+     OR v_result->>'reject_reason' <> 'IDEMPOTENCY_TICKS_NOT_RETAINED'
+     OR (v_result->>'rows_expected')::integer <> 2
+     OR (v_result->>'rows_retained')::integer <> 1 THEN
+    RAISE EXCEPTION 'partially retained batch must fail closed with counts: %',v_result;
+  END IF;
+
+  RAISE NOTICE 'PASS: accepted idempotency requires exact tick retention';
+  RAISE NOTICE 'PASS: expired identical snapshot stays rejected';
+  RAISE NOTICE 'PASS: new fresh snapshot is accepted';
+  RAISE NOTICE 'PASS: partial retention fails closed with expected/retained counts';
+END $$;
