@@ -202,7 +202,7 @@ export function shouldEmitQuote(previous:Map<string,string>,q:Quote):boolean{
   // Preserve actual source-time changes, while treating an absent provider source
   // timestamp as absent rather than substituting the local receipt time.
   const sourceTimestamp=q.sourceTs??null;
-  const bookSourceTimestamp=q.sourceTs ? (q.bookSourceTs??null) : null;
+  const bookSourceTimestamp=q.bookSourceTs??null;
   const signature=JSON.stringify([
     sourceTimestamp,bookSourceTimestamp,q.bid,q.ask,q.last,q.bidSize,q.askSize,
     q.bidLevels??null,q.askLevels??null,q.depthComplete??null,
