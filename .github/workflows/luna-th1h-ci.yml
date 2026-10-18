@@ -40,6 +40,8 @@ jobs:
       - run: npm install
       - name: Test TopTrader REST tick freshness boundaries
         run: node --test ../supabase/functions/luna-toptrader-market-ingest/quote-freshness.test.mjs
+      - name: Test per-minute priority coverage for open holdings
+        run: node --test ../supabase/functions/luna-toptrader-market-ingest/priority-symbols.test.mjs
       - run: npm run typecheck
       - run: npm run test:market-session
       - run: npm run test:strategy-state
