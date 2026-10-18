@@ -337,10 +337,43 @@ BEGIN
     RAISE EXCEPTION 'partially retained batch must fail closed with counts: %',v_result;
   END IF;
 
+  -- A recent identical batch must not bypass the active-market-session gate.
+  v_ts := clock_timestamp();
+  v_rows := jsonb_build_array(jsonb_build_object(
+    'symbol','PTT','ts',v_ts,'bid',31.76,'ask',31.81,'last',31.80,
+    'bid_size',1000,'ask_size',1200,'raw',jsonb_build_object('test','closed-session')
+  ));
+  v_result := public.luna_ingest_verified_market_batch(
+    'TOPTRADER_REALTIME',v_ts,'hash-closed-session',true,v_rows
+  );
+  IF v_result->>'accepted' <> 'true' THEN
+    RAISE EXCEPTION 'closed-session fixture should start accepted: %',v_result;
+  END IF;
+  v_batch := (v_result->>'batch_id')::uuid;
+  UPDATE public.luna_sessions
+  SET status='MARKET_CLOSED',ended_at=clock_timestamp()
+  WHERE id='11111111-1111-4111-8111-111111111111';
+
+  v_result := public.luna_ingest_verified_market_batch(
+    'TOPTRADER_REALTIME',v_ts,'hash-closed-session',true,v_rows
+  );
+  IF v_result->>'accepted' <> 'false' OR v_result->>'reject_reason' <> 'NO_OPEN_MARKET_SESSION' THEN
+    RAISE EXCEPTION 'idempotent replay must respect closed session: %',v_result;
+  END IF;
+  SELECT accepted INTO STRICT v_accepted
+  FROM public.luna_market_ingest_batches WHERE batch_id=v_batch;
+  IF v_accepted IS DISTINCT FROM false THEN
+    RAISE EXCEPTION 'closed-session replay must invalidate accepted metadata';
+  END IF;
+  UPDATE public.luna_sessions
+  SET status='OPEN',ended_at=NULL
+  WHERE id='11111111-1111-4111-8111-111111111111';
+
   RAISE NOTICE 'PASS: accepted idempotency requires exact tick retention';
   RAISE NOTICE 'PASS: expired identical snapshot stays rejected';
   RAISE NOTICE 'PASS: new fresh snapshot is accepted';
   RAISE NOTICE 'PASS: partial retention fails closed with expected/retained counts';
+  RAISE NOTICE 'PASS: idempotency cannot bypass active session gate';
 END $$;
 
 
