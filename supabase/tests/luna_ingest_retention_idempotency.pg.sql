@@ -248,7 +248,10 @@ BEGIN
   UPDATE public.luna_market_ingest_batches
   SET feed_ts=clock_timestamp()-interval '5 minutes'
   WHERE batch_id=v_batch;
-  v_ts := clock_timestamp()-interval '5 minutes';
+  -- Use the exact persisted timestamp to exercise the idempotent-replay branch.
+  SELECT feed_ts INTO STRICT v_ts
+  FROM public.luna_market_ingest_batches
+  WHERE batch_id=v_batch;
   v_result := public.luna_ingest_verified_market_batch(
     'TOPTRADER_REALTIME',v_ts,'hash-complete-2',true,v_rows
   );
