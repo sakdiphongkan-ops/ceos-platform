@@ -240,6 +240,14 @@ check("set_marketplace_null_and_invalid_price",()=>{
   assert.equal(numberOrNull(true),null);
   assert.equal(numberOrNull({price:31.8}),null);
   const freshTime=new Date(NOW-250).toISOString();
+  assert.equal(normalizeSetStockQuote(null,NOW,2_000),null);
+  assert.equal(normalizeSetStockQuote([],NOW,2_000),null);
+  assert.equal(normalizeSetStockQuote({
+    symbol:"PTT",time:freshTime,last:31.8,bid:{} as any,offer:[]
+  },NOW,2_000),null);
+  assert.equal(normalizeSetStockQuote({
+    symbol:"PTT",time:freshTime,last:31.8,bid:[],offer:{} as any
+  },NOW,2_000),null);
   const valid=normalizeSetStockQuote({
     symbol:"PTT",time:freshTime,last:31.8,
     bid:[{rank:1,price:31.7,volume:500}],
