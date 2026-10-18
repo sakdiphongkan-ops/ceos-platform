@@ -78,6 +78,14 @@ check("invalid_price_and_book",()=>{
   assert.equal(normalize({bid:31.90,ask:31.80}),null);
   assert.equal(normalize({bid:true}),null);
   assert.equal(normalize({ask:{price:31.8}}),null);
+  // Even callers that disable the verified-book gate cannot turn malformed
+  // supplied numeric fields into silently missing values.
+  assert.equal(normalizeGatewayQuote({
+    ...validRaw,bid:true
+  },2_000,false,false,true,false,NOW),null);
+  assert.equal(normalizeGatewayQuote({
+    ...validRaw,ask:"Infinity"
+  },2_000,false,false,true,false,NOW),null);
   assert.equal(normalize({...validRaw,book_received_ts:undefined}),null);
   assert.equal(normalize({...validRaw,book_received_ts:new Date(NOW-5_000).toISOString()}),null);
   assert.equal(normalize({...validRaw,book_source_ts:new Date(NOW-5_000).toISOString()}),null);
