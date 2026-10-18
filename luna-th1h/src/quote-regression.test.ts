@@ -305,6 +305,11 @@ check("paper_price_only_fallback_is_narrow",()=>{
   assert.equal(allowed.bidSize,null);
   const noLast=normalizeGatewayQuote({...raw,last:null},2_000,true,true,true,false,NOW);
   assert.equal(noLast,null);
+  const spoofedFallback=normalizeGatewayQuote({
+    ...raw,source:"tradingview-public-screener-spoof",data_quality:undefined,
+    bid:null,ask:null,bid_size:null,ask_size:null,last:31.8
+  },2_000,true,true,true,false,NOW);
+  assert.equal(spoofedFallback,null);
   const liveArmed=normalizeGatewayQuote({
     ...raw,data_quality:undefined,verified_book:undefined,verifiedBook:undefined,verified:undefined
   },2_000,true,true,true,true,NOW);
