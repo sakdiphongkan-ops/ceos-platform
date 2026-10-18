@@ -9,7 +9,6 @@ on:
       - "luna-th1h/src/market/set-marketplace.ts"
       - "luna-th1h/src/execution.ts"
       - "luna-th1h/src/types.ts"
-      - "luna-th1h/src/types.ts"
       - "luna-th1h/src/execution-reservation.test.ts"
       - "luna-th1h/src/quote-regression.test.ts"
       - "luna-th1h/src/ingest-retention-migration-contract.test.ts"
