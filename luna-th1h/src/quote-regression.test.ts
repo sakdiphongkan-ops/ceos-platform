@@ -135,6 +135,12 @@ check("bounded_environment_numbers",()=>{
   assert.equal(boundedPositiveNumber("",2_000,1,60_000),2_000);
   assert.equal(boundedPositiveNumber("0",2_000,1,60_000),2_000);
   assert.equal(boundedPositiveNumber("5000",2_000,1,60_000),5_000);
+  assert.equal(normalizeGatewayQuote({
+    ...validRaw,source_ts:new Date(NOW-5_000).toISOString()
+  },Number.NaN,true,false,true,false,NOW),null);
+  assert.equal(normalizeGatewayQuote({
+    ...validRaw,source_ts:new Date(NOW-5_000).toISOString()
+  },Number.POSITIVE_INFINITY,true,false,true,false,NOW),null);
 });
 
 // 11. Set marketplace must preserve null as null and reject malformed prices.
@@ -143,6 +149,8 @@ check("set_marketplace_null_and_invalid_price",()=>{
   assert.equal(numberOrNull(undefined),null);
   assert.equal(numberOrNull(""),null);
   assert.equal(numberOrNull("  "),null);
+  assert.equal(numberOrNull(true),null);
+  assert.equal(numberOrNull({price:31.8}),null);
   const missing=normalizeSetStockQuote({
     symbol:"PTT",time:"2026-10-18T03:00:00.000Z",last:null,
     bid:[{rank:1,price:null,volume:null}],
