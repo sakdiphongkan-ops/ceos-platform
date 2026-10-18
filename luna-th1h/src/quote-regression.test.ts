@@ -5,6 +5,7 @@
  */
 import {strict as assert} from "node:assert";
 import {boundedPositiveNumber,normalizeGatewayQuote,shouldEmitQuote} from "./market/provider.js";
+import {normalizeSetStockQuote,numberOrNull} from "./market/set-marketplace.js";
 import {createPortfolio,planOrder} from "./execution.js";
 
 const NOW=Date.parse("2026-10-18T03:00:00.000Z");
@@ -136,6 +137,26 @@ check("bounded_environment_numbers",()=>{
   assert.equal(boundedPositiveNumber("5000",2_000,1,60_000),5_000);
 });
 
+// 11. Set marketplace must preserve null as null and reject malformed prices.
+check("set_marketplace_null_and_invalid_price",()=>{
+  assert.equal(numberOrNull(null),null);
+  assert.equal(numberOrNull(undefined),null);
+  assert.equal(numberOrNull(""),null);
+  assert.equal(numberOrNull("  "),null);
+  const missing=normalizeSetStockQuote({
+    symbol:"PTT",time:"2026-10-18T03:00:00.000Z",last:null,
+    bid:[{rank:1,price:null,volume:null}],
+    offer:[{rank:1,price:null,volume:null}]
+  });
+  assert.equal(missing,null);
+  const zero=normalizeSetStockQuote({
+    symbol:"PTT",time:"2026-10-18T03:00:00.000Z",last:0,
+    bid:[{rank:1,price:31.7,volume:500}],
+    offer:[{rank:1,price:31.8,volume:600}]
+  });
+  assert.equal(zero,null);
+});
+
 console.log("LUNA quote regression matrix: PASS");
 for(const name of passed) console.log("PASS "+name);
-console.log(`TOTAL ${passed.length}/10; paper-only; no network/database/order side effects`);
+console.log(`TOTAL ${passed.length}/11; paper-only; no network/database/order side effects`);
