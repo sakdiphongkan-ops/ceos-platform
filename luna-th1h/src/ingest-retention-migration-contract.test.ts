@@ -13,20 +13,27 @@ const migrationPath=resolve(
   "../supabase/migrations/20261018093000_luna_verified_ingest_retention_idempotency.sql"
 );
 const sql=readFileSync(migrationPath,"utf8");
-const rowCountCheck=sql.indexOf("select count(*) into v_existing_tick_rows");
-const retainedSuccessGuard=sql.indexOf("if v_existing_expected > 0 and v_existing_tick_rows = v_existing_expected then");
+const hashGuard=sql.indexOf("if nullif(trim(coalesce(p_payload_hash,'')),'') is null then");
+const sourceConfigLookup=sql.indexOf("from public.luna_verified_market_sources");
+const earlyIdempotency=sql.indexOf("if v_existing is not null and v_existing_accepted is true then");
+const freshnessGuard=sql.indexOf("p_feed_ts < now() - make_interval");
+const rowCountCheck=sql.indexOf("into v_existing_tick_rows,v_existing_fresh_tick_rows");
+const retainedSuccessGuard=sql.indexOf("and v_existing_fresh_tick_rows = v_existing_expected then");
 const idempotentSuccess=sql.indexOf("'ok',true,'accepted',true,'idempotent',true");
-const retainedFailure=sql.indexOf("reject_reason='IDEMPOTENCY_TICKS_NOT_RETAINED'");
-const nextSnapshotGate=sql.indexOf("'retry_requires_new_snapshot',true");
+const retainedFailure=sql.indexOf("when v_existing_tick_rows <> v_existing_expected then 'IDEMPOTENCY_TICKS_NOT_RETAINED'");
+const staleFailure=sql.indexOf("when v_existing_fresh_tick_rows <> v_existing_expected then 'STALE_FEED_TIMESTAMP'");
 
-assert.ok(rowCountCheck>=0,"migration must count persisted tick rows");
-assert.ok(retainedSuccessGuard>rowCountCheck,"accepted idempotency requires persisted-row parity");
-assert.ok(idempotentSuccess>retainedSuccessGuard,"early accepted return must occur only after persisted-row parity");
-assert.ok(retainedFailure>rowCountCheck,"missing/partial rows must invalidate accepted metadata");
-assert.ok(nextSnapshotGate>retainedFailure,"expired identical snapshots must fail closed and request a new snapshot");
+assert.ok(hashGuard>=0,"missing payload hash must reject cleanly before a NOT NULL insert");
+assert.ok(sourceConfigLookup>=0 && sourceConfigLookup<earlyIdempotency,"current source config must be checked before idempotent success");
+assert.ok(freshnessGuard>=0 && freshnessGuard<earlyIdempotency,"feed freshness must be checked before idempotent success");
+assert.ok(rowCountCheck>=0,"migration must count retained and fresh persisted tick rows");
+assert.ok(retainedSuccessGuard>rowCountCheck,"idempotent success requires exact retained and fresh tick count");
+assert.ok(idempotentSuccess>retainedSuccessGuard,"accepted idempotency return must follow retained/fresh tick checks");
+assert.ok(retainedFailure>rowCountCheck,"missing rows must invalidate accepted metadata");
+assert.ok(staleFailure>retainedFailure,"stale retained rows must invalidate accepted metadata");
 
 console.log("LUNA ingest-retention migration contract: PASS");
-console.log("PASS accepted idempotency checks exact retained tick count");
-console.log("PASS expired/partial batches cannot return accepted=true");
-console.log("PASS expired snapshots fail closed until a new observation/hash");
-console.log("NOTE static source-contract test only; migration not applied to production");
+console.log("PASS missing payload hash fails cleanly");
+console.log("PASS current source configuration and timestamp gates precede idempotency");
+console.log("PASS idempotent success requires exact retained AND fresh tick count");
+console.log("PASS expired/stale batch metadata cannot return accepted=true");
