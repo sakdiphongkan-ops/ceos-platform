@@ -336,6 +336,7 @@ begin
   );
 exception
   when invalid_text_representation
+    or invalid_datetime_format
     or datetime_field_overflow
     or numeric_value_out_of_range
     or invalid_parameter_value then
