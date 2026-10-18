@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { describeSourceFailure, resolveRuntimeStatus, resolveServiceKey } from "../supabase/functions/luna-api/runtime-status.mjs";
+import { createFetchTimeoutAbortReason, describeSourceFailure, resolveRuntimeStatus, resolveServiceKey } from "../supabase/functions/luna-api/runtime-status.mjs";
 
 test("readiness BLOCKED overrides a fresh RUNNING heartbeat", () => {
   assert.equal(resolveRuntimeStatus({
@@ -55,4 +55,10 @@ test("fetch-body timeout is classified without exposing the raw error message", 
 
 test("missing statuses fail closed to UNKNOWN", () => {
   assert.equal(resolveRuntimeStatus({}), "UNKNOWN");
+});
+
+test("hard database timeout is an AbortError so PostgREST does not retry it", () => {
+  const reason = createFetchTimeoutAbortReason();
+  assert.equal(reason.name, "AbortError");
+  assert.equal(reason.message, "FETCH_BODY_TIMEOUT");
 });
