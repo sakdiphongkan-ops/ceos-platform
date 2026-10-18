@@ -90,6 +90,10 @@ check("strict_verification_provenance",()=>{
   assert.equal(normalize({data_quality:"not verified",verified_book:undefined,verified:undefined}),null);
   assert.equal(normalize({data_quality:"unverified_book",verified_book:undefined,verified:undefined}),null);
   assert.ok(normalize({data_quality:"VERIFIED_BOOK"}));
+  assert.equal(normalize({
+    source:"settrade-open-api-realtime-spoof",
+    data_quality:undefined,verified_book:undefined,verifiedBook:undefined,verified:undefined
+  }),null);
 });
 
 // 7. SELL with zero holdings must never fabricate sellable quantity.
@@ -128,6 +132,13 @@ check("duplicate_snapshot_includes_depth",()=>{
   const previous=new Map<string,string>();
   assert.equal(shouldEmitQuote(previous,q),true);
   assert.equal(shouldEmitQuote(previous,{...q}),false);
+  // Receipt timestamps may advance on each poll without creating a new source quote.
+  assert.equal(shouldEmitQuote(previous,{
+    ...q,
+    ts:new Date(NOW-100).toISOString(),
+    bookReceivedTs:new Date(NOW-100).toISOString()
+  }),false);
+  // A real source timestamp change must still pass through.
   assert.equal(shouldEmitQuote(previous,{
     ...q,sourceTs:new Date(NOW-200).toISOString()
   }),true);
@@ -136,7 +147,20 @@ check("duplicate_snapshot_includes_depth",()=>{
   }),true);
 });
 
-// 10. Malformed environment values must not disable quote-age checks or spin polling.
+// 10. Source identifiers are exact allowlisted values, not prefixes.
+check("execution_source_allowlist_is_exact",()=>{
+  const normalized=normalize();
+  assert.ok(normalized);
+  const spoofed={...normalized,source:"settrade-open-api-realtime-spoof",dataQuality:undefined};
+  const result=planOrder({
+    symbol:"PTT",ts:FRESH_TS,action:"BUY",
+    reason:"REGRESSION_SOURCE_SPOOF",strategyVersion:"quote-regression"
+  },spoofed,createPortfolio(30_000));
+  assert.equal(result.accepted,false);
+  if(!result.accepted) assert.equal(result.reason,"BUY_BLOCKED_NO_VERIFIED_BOOK");
+});
+
+// 11. Malformed environment values must not disable quote-age checks or spin polling.
 check("bounded_environment_numbers",()=>{
   assert.equal(boundedPositiveNumber("NaN",2_000,1,60_000),2_000);
   assert.equal(boundedPositiveNumber("Infinity",2_000,1,60_000),2_000);
@@ -157,7 +181,7 @@ check("bounded_environment_numbers",()=>{
   },2_000,true,false,true,false,NOW),null);
 });
 
-// 11. Set marketplace must preserve null as null and reject malformed prices.
+// 12. Set marketplace must preserve null as null and reject malformed prices.
 check("set_marketplace_null_and_invalid_price",()=>{
   assert.equal(numberOrNull(null),null);
   assert.equal(numberOrNull(undefined),null);
@@ -211,7 +235,7 @@ check("set_marketplace_null_and_invalid_price",()=>{
   },NOW,2_000),null);
 });
 
-// 12. Explicit public paper-only price fallback clears book data but never emits
+// 13. Explicit public paper-only price fallback clears book data but never emits
 // a quote with no usable last price or when live execution is armed.
 check("paper_price_only_fallback_is_narrow",()=>{
   const raw={...validRaw,source:"tradingview-public-screener",last:31.8};
@@ -231,4 +255,4 @@ check("paper_price_only_fallback_is_narrow",()=>{
 
 console.log("LUNA quote regression matrix: PASS");
 for(const name of passed) console.log("PASS "+name);
-console.log(`TOTAL ${passed.length}/11; paper-only; no network/database/order side effects`);
+console.log(`TOTAL ${passed.length}/13; paper-only; no network/database/order side effects`);
