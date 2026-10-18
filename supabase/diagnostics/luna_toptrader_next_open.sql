@@ -87,8 +87,9 @@ select
   (select count(*) from pg_stat_activity) as current_sessions,
   (select count(*) from cron.job where active) as active_cron_jobs;
 
--- 7) Recent pg_net HTTP responses. This table does not store the target URL, so correlate rows by timestamp.
--- The production cron wrapper currently discards the request ID after returning it to pg_cron; this is useful context, not definitive endpoint attribution.
+-- 7) Current deployed-schema fallback: recent pg_net HTTP responses.
+-- Before the audit migration is applied, pg_net responses do not store the target URL;
+-- correlate these by timestamp only. Cron "succeeded" still does not identify the HTTP response.
 select
   id, status_code, timed_out, error_msg, created,
   left(coalesce(content, ''), 600) as response_body_excerpt
@@ -96,6 +97,16 @@ from net._http_response
 where created > now() - interval '2 hours'
 order by created desc
 limit 100;
+
+-- 7b) Better attribution, ONLY AFTER supabase/migrations/20261018110000_luna_ingest_http_request_audit.sql
+-- has been reviewed and applied. Until then this table does not exist in production.
+-- Uncomment and run separately after applying that migration:
+-- select a.request_id, a.endpoint, a.request_mode, a.queued_at,
+--        a.http_status, a.timed_out, a.error_msg, a.response_at,
+--        a.response_excerpt, a.reconciled_at
+-- from private.luna_ingest_http_requests a
+-- order by a.queued_at desc
+-- limit 100;
 
 -- 8) Exact ingest batches for the current/previous session.
 select
