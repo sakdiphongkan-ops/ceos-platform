@@ -23,6 +23,8 @@ const retainedSuccessGuard=sql.indexOf("and v_existing_fresh_tick_rows = v_exist
 const idempotentSuccess=sql.indexOf("'ok',true,'accepted',true,'idempotent',true");
 const retainedFailure=sql.indexOf("when v_existing_tick_rows <> v_existing_expected then 'IDEMPOTENCY_TICKS_NOT_RETAINED'");
 const staleFailure=sql.indexOf("when v_existing_fresh_tick_rows <> v_existing_expected then 'STALE_FEED_TIMESTAMP'");
+const sessionGate=sql.indexOf("if v_session is null then");
+const nonFiniteGuards=sql.indexOf("lower(x.bid::text) not in ('nan','infinity','-infinity')");
 
 assert.ok(hashGuard>=0,"missing payload hash must reject cleanly before a NOT NULL insert");
 assert.ok(requiredArgGuards>=0 && requiredArgGuards<earlyIdempotency,"null feed timestamp must be rejected before idempotent checks");
@@ -35,6 +37,8 @@ assert.ok(retainedSuccessGuard>rowCountCheck,"idempotent success requires exact 
 assert.ok(idempotentSuccess>retainedSuccessGuard,"accepted idempotency return must follow retained/fresh tick checks");
 assert.ok(retainedFailure>rowCountCheck,"missing rows must invalidate accepted metadata");
 assert.ok(staleFailure>retainedFailure,"stale retained rows must invalidate accepted metadata");
+assert.ok(sessionGate>=0 && sessionGate<earlyIdempotency,"market session gate must precede idempotent success");
+assert.ok(nonFiniteGuards>=0,"NaN/Infinity quote prices must fail closed");
 
 console.log("LUNA ingest-retention migration contract: PASS");
 console.log("PASS missing payload hash fails cleanly");
