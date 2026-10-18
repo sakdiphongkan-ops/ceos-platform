@@ -145,6 +145,18 @@ check("duplicate_snapshot_includes_depth",()=>{
   assert.equal(shouldEmitQuote(previous,{
     ...q,bidLevels:[{price:31.7,size:500}]
   }),true);
+
+  // Preserve changes to an actual book timestamp even when quote source_ts is absent.
+  const bookOnlyPrevious=new Map<string,string>();
+  const bookOnly={...q,sourceTs:undefined,bookSourceTs:new Date(NOW-250).toISOString()};
+  assert.equal(shouldEmitQuote(bookOnlyPrevious,bookOnly),true);
+  assert.equal(shouldEmitQuote(bookOnlyPrevious,{
+    ...bookOnly,ts:new Date(NOW-100).toISOString(),
+    bookReceivedTs:new Date(NOW-100).toISOString()
+  }),false);
+  assert.equal(shouldEmitQuote(bookOnlyPrevious,{
+    ...bookOnly,bookSourceTs:new Date(NOW-200).toISOString()
+  }),true);
 });
 
 // 10. Source identifiers are exact allowlisted values, not prefixes.
