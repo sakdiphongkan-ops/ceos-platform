@@ -139,6 +139,14 @@ DECLARE
   v_expected integer;
   v_retained bigint;
 BEGIN
+  -- Malformed input should return a structured rejection, not raise a NOT NULL error.
+  v_result := public.luna_ingest_verified_market_batch(
+    'TOPTRADER_REALTIME',clock_timestamp(),NULL,true,'[]'::jsonb
+  );
+  IF v_result->>'accepted' <> 'false' OR v_result->>'reject_reason' <> 'MISSING_PAYLOAD_HASH' THEN
+    RAISE EXCEPTION 'missing payload hash must return a clean rejection: %',v_result;
+  END IF;
+
   -- Case A: a fully persisted accepted batch may report an idempotent retry.
   v_ts := clock_timestamp();
   v_rows := jsonb_build_array(jsonb_build_object(
@@ -203,6 +211,24 @@ BEGIN
   );
   IF v_result->>'accepted' <> 'true' OR (v_result->>'rows_ingested')::integer <> 1 THEN
     RAISE EXCEPTION 'new fresh snapshot should ingest successfully: %',v_result;
+  END IF;
+
+  -- Staleness must also invalidate an idempotent replay even while its rows remain.
+  v_batch := (v_result->>'batch_id')::uuid;
+  UPDATE public.luna_market_ingest_batches
+  SET feed_ts=clock_timestamp()-interval '5 minutes'
+  WHERE batch_id=v_batch;
+  v_ts := clock_timestamp()-interval '5 minutes';
+  v_result := public.luna_ingest_verified_market_batch(
+    'TOPTRADER_REALTIME',v_ts,'hash-complete-2',true,v_rows
+  );
+  IF v_result->>'accepted' <> 'false' OR v_result->>'reject_reason' <> 'STALE_FEED_TIMESTAMP' THEN
+    RAISE EXCEPTION 'stale identical replay must fail even if rows are retained: %',v_result;
+  END IF;
+  SELECT accepted INTO STRICT v_accepted
+  FROM public.luna_market_ingest_batches WHERE batch_id=v_batch;
+  IF v_accepted IS DISTINCT FROM false THEN
+    RAISE EXCEPTION 'stale replay must invalidate accepted metadata';
   END IF;
 
   -- Case B: partial retention is also not allowed to report accepted=true.
