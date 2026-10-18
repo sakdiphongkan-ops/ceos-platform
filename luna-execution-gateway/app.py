@@ -880,30 +880,67 @@ def _quote_payload(
     last: Any = None,
     bid: Any = None,
     ask: Any = None,
-    bid_size: Any = None,    ask_size: Any = None,
+    bid_size: Any = None,
+    ask_size: Any = None,
     source: str = "",
     source_ts: Any = None,
     raw: Any = None,
     total_volume: Any = None,
+    book_snapshot: bool = False,
 ):
     now = _now_iso()
+    received_at = time.time()
     with _quote_lock:
         prior = dict(_quotes.get(symbol, {}))
         effective_source = source or prior.get("source")
         same_source = bool(prior) and effective_source == prior.get("source")
+
+        # Price-only events must never refresh the age of a previously seen book.
+        # For a book event, require all four executable top-of-book fields to be
+        # finite, positive, and non-crossed in this same event; otherwise clear
+        # the book rather than mixing a new side with a stale side.
+        if book_snapshot:
+            bid_value = _num(bid)
+            ask_value = _num(ask)
+            bid_size_value = _num(bid_size)
+            ask_size_value = _num(ask_size)
+            complete_book = (
+                bid_value is not None and bid_value > 0
+                and ask_value is not None and ask_value > 0 and ask_value >= bid_value
+                and bid_size_value is not None and bid_size_value > 0
+                and ask_size_value is not None and ask_size_value > 0
+            )
+            if complete_book:
+                quote_bid, quote_ask = bid_value, ask_value
+                quote_bid_size, quote_ask_size = bid_size_value, ask_size_value
+                book_received_ts = now
+                book_source_ts = source_ts if isinstance(source_ts, str) and source_ts.strip() else now
+            else:
+                quote_bid = quote_ask = quote_bid_size = quote_ask_size = None
+                book_received_ts = book_source_ts = None
+        else:
+            quote_bid = prior.get("bid") if same_source else None
+            quote_ask = prior.get("ask") if same_source else None
+            quote_bid_size = prior.get("bid_size") if same_source else None
+            quote_ask_size = prior.get("ask_size") if same_source else None
+            book_received_ts = prior.get("book_received_ts") if same_source else None
+            book_source_ts = prior.get("book_source_ts") if same_source else None
+
         quote = {
             "symbol": symbol,
             "ts": now,
             "source_ts": source_ts,
-            "bid": _num(bid) if bid is not None else (prior.get("bid") if same_source else None),
-            "ask": _num(ask) if ask is not None else (prior.get("ask") if same_source else None),
+            "book_received_ts": book_received_ts,
+            "book_source_ts": book_source_ts,
+            "bid": quote_bid,
+            "ask": quote_ask,
             "last": _num(last) if last is not None else (prior.get("last") if same_source else None),
-            "bid_size": _num(bid_size) if bid_size is not None else (prior.get("bid_size") if same_source else None),
-            "ask_size": _num(ask_size) if ask_size is not None else (prior.get("ask_size") if same_source else None),
+            "bid_size": quote_bid_size,
+            "ask_size": quote_ask_size,
             "total_volume": _num(total_volume) if total_volume is not None else (prior.get("total_volume") if same_source else None),
             "source": effective_source,
             "raw": raw,
-            "_ingested_ts": time.time(),
+            "_ingested_ts": received_at,
         }
         prior_public = {k: v for k, v in prior.items() if k not in ("raw", "_ingested_ts")}
         current_public = {k: v for k, v in quote.items() if k not in ("raw", "_ingested_ts")}
@@ -933,6 +970,7 @@ def _update_settrade_quote(symbol: str, data: Dict[str, Any], channel: str):
             ask_size=data.get("ask_volume1"),
             source="settrade-open-api-realtime",
             raw=data,
+            book_snapshot=True,
         )
     _collector_error = None
     if was_new:
@@ -1009,7 +1047,7 @@ def _toptrader_ws_message(message: str):
                 bid, bid_size = level.get("price"), level.get("volume")
             elif side == "sell" and ask is None:
                 ask, ask_size = level.get("price"), level.get("volume")
-        _quote_payload(symbol=symbol, bid=bid, ask=ask, bid_size=bid_size, ask_size=ask_size, source="toptrader-public-ws", source_ts=_epoch_to_iso(data.get("datetime")), raw=data)
+        _quote_payload(symbol=symbol, bid=bid, ask=ask, bid_size=bid_size, ask_size=ask_size, source="toptrader-public-ws", source_ts=_epoch_to_iso(data.get("datetime")), raw=data, book_snapshot=True)
     with _toptrader_ws_lock:
         _toptrader_ws_seen.add(symbol)
 
@@ -1276,6 +1314,7 @@ def _run_set_api():
                     source="set-market-data-api-realtime",
                     source_ts=row.get("time"),
                     total_volume=row.get("totalVolume"),
+                    book_snapshot=REALTIME_BOOK,
                     raw=row,
                 )
                 found += 1
@@ -1980,6 +2019,7 @@ def marketdata_ingest(payload: MarketQuoteBatch, x_luna_gateway: Optional[str] =
             source_ts=quote.source_ts,
             total_volume=quote.total_volume,
             raw=quote.raw,
+            book_snapshot=any(v is not None for v in (quote.bid, quote.ask, quote.bid_size, quote.ask_size)),
         )
         accepted += 1
     global _collector_error, _external_bridge_last_ts, _selected_provider
