@@ -141,6 +141,12 @@ check("bounded_environment_numbers",()=>{
   assert.equal(normalizeGatewayQuote({
     ...validRaw,source_ts:new Date(NOW-5_000).toISOString()
   },Number.POSITIVE_INFINITY,true,false,true,false,NOW),null);
+  assert.equal(normalizeGatewayQuote({
+    ...validRaw,ts:new Date(NOW-5_000).toISOString(),source_ts:FRESH_TS
+  },2_000,true,false,true,false,NOW),null);
+  assert.equal(normalizeGatewayQuote({
+    ...validRaw,source_ts:1712345678 as unknown as string
+  },2_000,true,false,true,false,NOW),null);
 });
 
 // 11. Set marketplace must preserve null as null and reject malformed prices.
@@ -151,18 +157,43 @@ check("set_marketplace_null_and_invalid_price",()=>{
   assert.equal(numberOrNull("  "),null);
   assert.equal(numberOrNull(true),null);
   assert.equal(numberOrNull({price:31.8}),null);
-  const missing=normalizeSetStockQuote({
-    symbol:"PTT",time:"2026-10-18T03:00:00.000Z",last:null,
-    bid:[{rank:1,price:null,volume:null}],
-    offer:[{rank:1,price:null,volume:null}]
-  });
-  assert.equal(missing,null);
-  const zero=normalizeSetStockQuote({
-    symbol:"PTT",time:"2026-10-18T03:00:00.000Z",last:0,
+  const freshTime=new Date(NOW-250).toISOString();
+  const valid=normalizeSetStockQuote({
+    symbol:"PTT",time:freshTime,last:31.8,
     bid:[{rank:1,price:31.7,volume:500}],
     offer:[{rank:1,price:31.8,volume:600}]
-  });
+  },NOW,2_000);
+  assert.ok(valid);
+  assert.equal(valid.sourceTs,freshTime);
+  assert.equal(valid.ts,new Date(NOW).toISOString());
+
+  const missing=normalizeSetStockQuote({
+    symbol:"PTT",time:freshTime,last:null,
+    bid:[{rank:1,price:null,volume:null}],
+    offer:[{rank:1,price:null,volume:null}]
+  },NOW,2_000);
+  assert.equal(missing,null);
+  const zero=normalizeSetStockQuote({
+    symbol:"PTT",time:freshTime,last:0,
+    bid:[{rank:1,price:31.7,volume:500}],
+    offer:[{rank:1,price:31.8,volume:600}]
+  },NOW,2_000);
   assert.equal(zero,null);
+  assert.equal(normalizeSetStockQuote({
+    symbol:"PTT",time:"not-a-timestamp",last:31.8,
+    bid:[{rank:1,price:31.7,volume:500}],
+    offer:[{rank:1,price:31.8,volume:600}]
+  },NOW,2_000),null);
+  assert.equal(normalizeSetStockQuote({
+    symbol:"PTT",time:new Date(NOW-10_000).toISOString(),last:31.8,
+    bid:[{rank:1,price:31.7,volume:500}],
+    offer:[{rank:1,price:31.8,volume:600}]
+  },NOW,2_000),null);
+  assert.equal(normalizeSetStockQuote({
+    symbol:"PTT",time:new Date(NOW+31_000).toISOString(),last:31.8,
+    bid:[{rank:1,price:31.7,volume:500}],
+    offer:[{rank:1,price:31.8,volume:600}]
+  },NOW,2_000),null);
 });
 
 // 12. Explicit public paper-only price fallback clears book data but never emits
