@@ -158,6 +158,21 @@ check("execution_source_allowlist_is_exact",()=>{
   },spoofed,createPortfolio(30_000));
   assert.equal(result.accepted,false);
   if(!result.accepted) assert.equal(result.reason,"BUY_BLOCKED_NO_VERIFIED_BOOK");
+
+  const mismatch=planOrder({
+    symbol:"KBANK",ts:FRESH_TS,action:"BUY",
+    reason:"REGRESSION_SYMBOL_MISMATCH",strategyVersion:"quote-regression"
+  },normalized,createPortfolio(30_000));
+  assert.equal(mismatch.accepted,false);
+  if(!mismatch.accepted) assert.equal(mismatch.reason,"QUOTE_SYMBOL_MISMATCH");
+
+  const malformedBook={...normalized,bid:true as unknown as number};
+  const invalidBook=planOrder({
+    symbol:"PTT",ts:FRESH_TS,action:"BUY",
+    reason:"REGRESSION_NON_NUMERIC_BOOK",strategyVersion:"quote-regression"
+  },malformedBook,createPortfolio(30_000));
+  assert.equal(invalidBook.accepted,false);
+  if(!invalidBook.accepted) assert.equal(invalidBook.reason,"BUY_BLOCKED_NO_VERIFIED_BOOK");
 });
 
 // 11. Malformed environment values must not disable quote-age checks or spin polling.
