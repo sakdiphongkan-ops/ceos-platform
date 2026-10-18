@@ -351,7 +351,7 @@ exception
       'source',p_source,'reject_reason','INVALID_MARKET_TICK_ROW'
     );
 end;
-$function$
+$function$;
 
 -- Keep this SECURITY DEFINER RPC service-only even on a fresh database where
 -- CREATE FUNCTION would otherwise grant EXECUTE to PUBLIC by default.
