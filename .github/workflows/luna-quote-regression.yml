@@ -1,0 +1,41 @@
+name: LUNA quote regression matrix
+
+on:
+  push:
+    branches:
+      - luna/quote-regression-20261018
+    paths:
+      - "luna-th1h/src/market/provider.ts"
+      - "luna-th1h/src/execution.ts"
+      - "luna-th1h/src/quote-regression.test.ts"
+      - "luna-th1h/package.json"
+      - ".github/workflows/luna-quote-regression.yml"
+  pull_request:
+    branches: [master]
+    paths:
+      - "luna-th1h/src/market/provider.ts"
+      - "luna-th1h/src/execution.ts"
+      - "luna-th1h/src/quote-regression.test.ts"
+      - "luna-th1h/package.json"
+      - ".github/workflows/luna-quote-regression.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  quote-regression:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: luna-th1h
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install project dependencies
+        run: npm install --no-audit --no-fund
+      - name: Run deterministic regression matrix
+        run: npm run test:quote-regression
+      - name: Typecheck worker and test sources
+        run: npm run typecheck
