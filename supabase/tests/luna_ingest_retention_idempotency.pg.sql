@@ -75,6 +75,7 @@ INSERT INTO public.luna_universe(symbol,is_active)
 VALUES ('PTT',true),('KBANK',true),('AOT',true);
 
 \ir ../migrations/20261018093000_luna_verified_ingest_retention_idempotency.sql
+\ir ../migrations/20261018110000_luna_ingest_http_request_audit.sql
 
 DO $$
 DECLARE
@@ -186,3 +187,79 @@ BEGIN
   RAISE NOTICE 'PASS: new fresh snapshot is accepted';
   RAISE NOTICE 'PASS: partial retention fails closed with expected/retained counts';
 END $$;
+
+
+DO $audit$
+DECLARE
+  v_rest_request bigint;
+  v_ws_request bigint;
+  v_result bigint;
+  v_row private.luna_ingest_http_requests%ROWTYPE;
+BEGIN
+  -- A wrapper must preserve the existing request-ID return contract and store
+  -- only endpoint/mode/ID metadata, never its secret-bearing headers or payload.
+  v_rest_request := public.luna_trigger_toptrader_market_ingest('{"priority_only":true}'::jsonb);
+  SELECT * INTO STRICT v_row
+  FROM private.luna_ingest_http_requests
+  WHERE request_id = v_rest_request;
+
+  IF v_row.endpoint <> 'luna-toptrader-market-ingest'
+     OR v_row.request_mode <> 'priority'
+     OR v_row.response_at IS NOT NULL THEN
+    RAISE EXCEPTION 'REST request must be queued with safe metadata: %', row_to_json(v_row);
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema='private' AND table_name='luna_ingest_http_requests'
+      AND column_name IN ('headers','body','secret','authorization')
+  ) THEN
+    RAISE EXCEPTION 'Audit table must not have columns for secrets or request payloads';
+  END IF;
+
+  -- Simulate the async pg_net response becoming available between cron runs.
+  INSERT INTO net._http_response(id,status_code,content_type,headers,content,timed_out,error_msg,created)
+  VALUES (v_rest_request,200,'application/json','{}'::jsonb,
+    '{"ok":true,"status":"NO_FRESH_MATCHED_BOOK","accepted_batches":[],"rejected_batches":[{"reason":"NO_FRESH_MATCHED_BOOK"}]}',
+    false,NULL,clock_timestamp());
+
+  -- The next scheduled wrapper reconciles the preceding response before it enqueues its own request.
+  v_ws_request := public.luna_trigger_toptrader_ws_ingest();
+  SELECT * INTO STRICT v_row
+  FROM private.luna_ingest_http_requests
+  WHERE request_id = v_rest_request;
+
+  IF v_row.http_status <> 200
+     OR v_row.timed_out IS DISTINCT FROM false
+     OR v_row.response_at IS NULL
+     OR v_row.response_excerpt NOT LIKE '%NO_FRESH_MATCHED_BOOK%' THEN
+    RAISE EXCEPTION 'REST HTTP response must be reconciled and archived: %', row_to_json(v_row);
+  END IF;
+
+  SELECT * INTO STRICT v_row
+  FROM private.luna_ingest_http_requests
+  WHERE request_id = v_ws_request;
+  IF v_row.endpoint <> 'luna-toptrader-ws-ingest'
+     OR v_row.request_mode <> 'websocket' THEN
+    RAISE EXCEPTION 'WS request must be tagged as websocket: %', row_to_json(v_row);
+  END IF;
+
+  INSERT INTO net._http_response(id,status_code,content_type,headers,content,timed_out,error_msg,created)
+  VALUES (v_ws_request,NULL,NULL,NULL,NULL,true,'fixture upstream timeout',clock_timestamp());
+
+  v_result := public.luna_trigger_toptrader_market_ingest('{}'::jsonb);
+  SELECT * INTO STRICT v_row
+  FROM private.luna_ingest_http_requests
+  WHERE request_id = v_ws_request;
+
+  IF v_row.timed_out IS DISTINCT FROM true
+     OR v_row.error_msg <> 'fixture upstream timeout'
+     OR v_row.response_at IS NULL THEN
+    RAISE EXCEPTION 'HTTP timeout must be captured: %', row_to_json(v_row);
+  END IF;
+
+  RAISE NOTICE 'PASS: scheduled REST/WS requests retain request ID, endpoint and mode';
+  RAISE NOTICE 'PASS: next request reconciles previous HTTP status/body excerpt';
+  RAISE NOTICE 'PASS: timeout/error diagnostics are archived without secret or payload columns';
+END
+$audit$;
