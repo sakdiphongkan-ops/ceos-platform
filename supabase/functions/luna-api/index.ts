@@ -624,7 +624,7 @@ async function buildFeed() {
     paper_live: {
       experiment_code: PAPER_EXPERIMENT,
       strategy_version: STRATEGY,
-      status: paperRuntimeDisplayStatus,
+      status: readinessBlockers.length ? "BLOCKED" : paperRuntimeDisplayStatus,
       reported_status: paperRuntime?.status ?? null,
       runtime_fresh: paperRuntimeFresh,
       heartbeat_age_ms: runtimeHeartbeatAgeMs,
