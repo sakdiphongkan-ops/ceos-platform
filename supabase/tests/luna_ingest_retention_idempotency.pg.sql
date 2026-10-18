@@ -164,8 +164,17 @@ BEGIN
   v_result := public.luna_ingest_verified_market_batch(
     'TOPTRADER_REALTIME',clock_timestamp(),'hash-scalar-row',true,'[null]'::jsonb
   );
-  IF v_result->>'accepted' <> 'false' OR v_result->>'reject_reason' <> 'EMPTY_OR_INVALID_BATCH' THEN
+  IF v_result->>'accepted' <> 'false' OR v_result->>'reject_reason' <> 'INVALID_MARKET_TICK_ROW' THEN
     RAISE EXCEPTION 'scalar JSON row should be rejected without PostgreSQL exception: %',v_result;
+  END IF;
+
+  v_result := public.luna_ingest_verified_market_batch(
+    'TOPTRADER_REALTIME',clock_timestamp(),'hash-invalid-timestamp',true,
+    jsonb_build_array(jsonb_build_object('symbol','PTT','ts','not-a-timestamp',
+      'bid',31.75,'ask',31.80,'last',31.80,'bid_size',1000,'ask_size',1200))
+  );
+  IF v_result->>'accepted' <> 'false' OR v_result->>'reject_reason' <> 'INVALID_MARKET_TICK_ROW' THEN
+    RAISE EXCEPTION 'malformed typed row should return a structured rejection: %',v_result;
   END IF;
 
   -- Case A: a fully persisted accepted batch may report an idempotent retry.
