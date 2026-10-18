@@ -177,6 +177,15 @@ BEGIN
     RAISE EXCEPTION 'malformed typed row should return a structured rejection: %',v_result;
   END IF;
 
+  v_result := public.luna_ingest_verified_market_batch(
+    'TOPTRADER_REALTIME',clock_timestamp(),'hash-nonfinite-prices',true,
+    jsonb_build_array(jsonb_build_object('symbol','PTT','ts',clock_timestamp(),
+      'bid','NaN','ask','Infinity','last','Infinity','bid_size',1000,'ask_size',1200))
+  );
+  IF v_result->>'accepted' <> 'false' OR v_result->>'reject_reason' <> 'INVALID_MARKET_TICK_ROW' THEN
+    RAISE EXCEPTION 'NaN/Infinity prices must fail closed: %',v_result;
+  END IF;
+
   -- Case A: a fully persisted accepted batch may report an idempotent retry.
   v_ts := clock_timestamp();
   v_rows := jsonb_build_array(jsonb_build_object(
