@@ -157,6 +157,22 @@ check("set_marketplace_null_and_invalid_price",()=>{
   assert.equal(zero,null);
 });
 
+// 12. Explicit public paper-only price fallback clears book data but never emits
+// a quote with no usable last price or when live execution is armed.
+check("paper_price_only_fallback_is_narrow",()=>{
+  const raw={...validRaw,source:"tradingview-public-screener",last:31.8};
+  const allowed=normalizeGatewayQuote(raw,2_000,true,true,true,false,NOW);
+  assert.ok(allowed);
+  assert.equal(allowed.last,31.8);
+  assert.equal(allowed.bid,null);
+  assert.equal(allowed.ask,null);
+  assert.equal(allowed.bidSize,null);
+  const noLast=normalizeGatewayQuote({...raw,last:null},2_000,true,true,true,false,NOW);
+  assert.equal(noLast,null);
+  const liveArmed=normalizeGatewayQuote(raw,2_000,true,true,true,true,NOW);
+  assert.equal(liveArmed,null);
+});
+
 console.log("LUNA quote regression matrix: PASS");
 for(const name of passed) console.log("PASS "+name);
 console.log(`TOTAL ${passed.length}/11; paper-only; no network/database/order side effects`);
