@@ -62,7 +62,7 @@ CREATE TABLE public.luna_market_ticks (
 
 CREATE FUNCTION public.luna_register_verified_feed_heartbeat(
   text,timestamptz,integer,boolean,text
-) RETURNS void LANGUAGE plpgsql AS $ BEGIN RETURN; END; $;
+) RETURNS void LANGUAGE plpgsql AS $stub$ BEGIN RETURN; END; $stub$;
 
 INSERT INTO public.luna_verified_market_sources
 (source_code,configured,enabled,execution_grade,book_grade,source_type,authority,max_staleness_seconds)
