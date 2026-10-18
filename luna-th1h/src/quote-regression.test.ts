@@ -200,6 +200,9 @@ check("bounded_environment_numbers",()=>{
   assert.equal(boundedPositiveNumber("NaN",2_000,1,60_000),2_000);
   assert.equal(boundedPositiveNumber("Infinity",2_000,1,60_000),2_000);
   assert.equal(boundedPositiveNumber("",2_000,1,60_000),2_000);
+  assert.equal(boundedPositiveNumber(true,2_000,1,60_000),2_000);
+  assert.equal(boundedPositiveNumber(null,2_000,1,60_000),2_000);
+  assert.equal(boundedPositiveNumber(["5000"],2_000,1,60_000),2_000);
   assert.equal(boundedPositiveNumber("0",2_000,1,60_000),2_000);
   assert.equal(boundedPositiveNumber("5000",2_000,1,60_000),5_000);
   assert.equal(normalizeGatewayQuote({
