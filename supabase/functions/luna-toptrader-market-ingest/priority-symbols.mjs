@@ -14,6 +14,27 @@ const uniqueSymbols = (values) => {
   return result;
 };
 
+/**
+ * @typedef {Object} PrioritySymbolsOptions
+ * @property {string[]} [activeSymbols]
+ * @property {string[]} [heldSymbols]
+ * @property {string[]} [queuedSymbols]
+ * @property {string[]} [signalSymbols]
+ * @property {number} [limit]
+ */
+
+/**
+ * @param {PrioritySymbolsOptions} [options]
+ * @returns {{
+ *   symbols: string[],
+ *   heldSymbols: string[],
+ *   heldSymbolsOutsideActiveUniverse: string[],
+ *   heldCount: number,
+ *   heldSymbolsOutsideActiveUniverseCount: number,
+ *   priorityCount: number,
+ *   limitExceededByHoldings: boolean
+ * }}
+ */
 export function buildPrioritySymbols({
   activeSymbols = [],
   heldSymbols = [],
