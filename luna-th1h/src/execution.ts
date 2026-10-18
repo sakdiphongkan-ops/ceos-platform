@@ -146,7 +146,7 @@ function pruneRecentBuys(state:PortfolioState,nowMs:number){
 
 export function mark(state:PortfolioState,q:Quote){
   const symbol=canonicalSymbol(q.symbol);
-  state.marks[canonicalSymbol(symbol)] ?? state.marks[symbol]={...q,symbol};
+  state.marks[symbol]={...q,symbol};
   ensureDailyRiskState(state,q.ts);
 }
 
