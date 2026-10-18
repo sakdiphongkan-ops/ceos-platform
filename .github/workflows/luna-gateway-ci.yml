@@ -198,6 +198,7 @@ jobs:
               bid_size=100,
               ask_size=100,
               source="settrade-open-api-realtime",
+              book_snapshot=True,
           )
           proof = app._connectivity_proof()
           assert proof["coverage"]["verified_book_count"] == 1
