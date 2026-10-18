@@ -147,15 +147,24 @@ export function planOrder(
   costOverrides:ExecutionCostOverrides={}
 ):PlannedOrder{
   if(signal.action==="HOLD") return {accepted:false,reason:"SIGNAL_HOLD"};
+  if(signal.action!=="BUY" && signal.action!=="SELL"){
+    return {accepted:false,reason:"INVALID_SIGNAL_ACTION"};
+  }
+  if(typeof signal.symbol!=="string" || typeof q.symbol!=="string"
+    || !signal.symbol.trim() || !q.symbol.trim()
+    || signal.symbol.trim().toUpperCase()!==q.symbol.trim().toUpperCase()){
+    return {accepted:false,reason:"QUOTE_SYMBOL_MISMATCH"};
+  }
 
   const side:Side=signal.action;
   ensureDailyRiskState(state,signal.ts);
-  const hasBook=Number.isFinite(Number(q.bid))
-    && Number(q.bid)>0
-    && Number.isFinite(Number(q.ask))
-    && Number(q.ask)>0
-    && Number(q.ask)>=Number(q.bid);
-  const hasDepth=Number(q.bidSize??0)>0 && Number(q.askSize??0)>0;
+  const hasBook=typeof q.bid==="number" && Number.isFinite(q.bid)
+    && q.bid>0
+    && typeof q.ask==="number" && Number.isFinite(q.ask)
+    && q.ask>0
+    && q.ask>=q.bid;
+  const hasDepth=typeof q.bidSize==="number" && Number.isFinite(q.bidSize) && q.bidSize>0
+    && typeof q.askSize==="number" && Number.isFinite(q.askSize) && q.askSize>0;
   const quality=String(q.dataQuality??"").trim().toLowerCase().replace(/[\s-]+/g,"_");
   const verifiedQuality=["verified","verified_book","book_verified","verified_execution_book"].includes(quality);
   const explicitlyUnverified=quality.includes("unverified") || quality==="not_verified" || quality.startsWith("not_");
