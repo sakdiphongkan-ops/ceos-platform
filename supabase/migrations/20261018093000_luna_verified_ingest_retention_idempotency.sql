@@ -96,6 +96,19 @@ begin
     v_reject:=coalesce(v_reject,'EMPTY_OR_INVALID_BATCH');
   end if;
 
+  select id into v_session
+  from public.luna_sessions
+  where session_date=current_date
+    and started_at <= now()
+    and (ended_at is null or ended_at >= now())
+    and status not in ('CLOSED','MARKET_CLOSED')
+  order by started_at desc
+  limit 1;
+
+  if v_session is null then
+    v_reject:=coalesce(v_reject,'NO_OPEN_MARKET_SESSION');
+  end if;
+
   select batch_id,accepted into v_existing,v_existing_accepted
   from public.luna_market_ingest_batches
   where upper(source)=upper(p_source)
@@ -186,19 +199,6 @@ begin
 
     v_batch := v_existing;
     v_reuse_existing := true;
-  end if;
-
-  select id into v_session
-  from public.luna_sessions
-  where session_date=current_date
-    and started_at <= now()
-    and (ended_at is null or ended_at >= now())
-    and status not in ('CLOSED','MARKET_CLOSED')
-  order by started_at desc
-  limit 1;
-
-  if v_session is null then
-    v_reject:=coalesce(v_reject,'NO_OPEN_MARKET_SESSION');
   end if;
 
   if jsonb_typeof(p_rows)='array' then
