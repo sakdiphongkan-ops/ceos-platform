@@ -14,6 +14,7 @@ const migrationPath=resolve(
 );
 const sql=readFileSync(migrationPath,"utf8");
 const hashGuard=sql.indexOf("if nullif(trim(coalesce(p_payload_hash,'')),'') is null then");
+const requiredArgGuards=sql.indexOf("if p_feed_ts is null then");
 const sourceConfigLookup=sql.indexOf("from public.luna_verified_market_sources");
 const earlyIdempotency=sql.indexOf("if v_existing is not null and v_existing_accepted is true then");
 const freshnessGuard=sql.indexOf("p_feed_ts < now() - make_interval");
@@ -24,7 +25,10 @@ const retainedFailure=sql.indexOf("when v_existing_tick_rows <> v_existing_expec
 const staleFailure=sql.indexOf("when v_existing_fresh_tick_rows <> v_existing_expected then 'STALE_FEED_TIMESTAMP'");
 
 assert.ok(hashGuard>=0,"missing payload hash must reject cleanly before a NOT NULL insert");
+assert.ok(requiredArgGuards>=0 && requiredArgGuards<earlyIdempotency,"null feed timestamp must be rejected before idempotent checks");
 assert.ok(sourceConfigLookup>=0 && sourceConfigLookup<earlyIdempotency,"current source config must be checked before idempotent success");
+assert.ok(sql.includes("if exists (\n    select 1\n    from jsonb_array_elements(p_rows) as item(value)"),"non-object JSON rows must be rejected before recordset casting");
+assert.ok(sql.includes("when invalid_text_representation"),"malformed typed fields must return a structured rejection");
 assert.ok(freshnessGuard>=0 && freshnessGuard<earlyIdempotency,"feed freshness must be checked before idempotent success");
 assert.ok(rowCountCheck>=0,"migration must count retained and fresh persisted tick rows");
 assert.ok(retainedSuccessGuard>rowCountCheck,"idempotent success requires exact retained and fresh tick count");
