@@ -57,6 +57,7 @@ def install(conn):
 
 def reset_state(conn):
     with conn.cursor() as cur:
+        cur.execute("UPDATE public.luna_sessions SET session_date=(now() AT TIME ZONE 'Asia/Bangkok')::date WHERE id=%s;", (SESSION,))
         cur.execute("DELETE FROM public.luna_market_ticks;")
         cur.execute("DELETE FROM public.luna_paper_equity_snapshots;")
         cur.execute("DELETE FROM public.luna_paper_live_orders;")
