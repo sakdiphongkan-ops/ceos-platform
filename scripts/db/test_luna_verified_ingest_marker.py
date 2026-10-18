@@ -65,7 +65,7 @@ def setup(conn):
               symbol text PRIMARY KEY,
               is_active boolean NOT NULL
             );
-            INSERT INTO public.luna_universe VALUES ('PTT', true);
+            INSERT INTO public.luna_universe VALUES ('PTT', true), ('CPALL', true);
 
             CREATE TABLE public.luna_market_ingest_batches (
               batch_id uuid PRIMARY KEY,
@@ -95,6 +95,8 @@ def setup(conn):
               raw jsonb NOT NULL,
               created_at timestamptz NOT NULL
             );
+            CREATE UNIQUE INDEX luna_market_ticks_session_symbol_ts_source_uidx
+              ON public.luna_market_ticks(session_id,symbol,ts,source);
 
             CREATE FUNCTION public.luna_register_verified_feed_heartbeat(
               p_source text, p_feed_ts timestamptz, p_rows integer,
@@ -215,6 +217,65 @@ def run_rejected_batch_retry_contract(conn):
             "ticks_for_batch": inserted_ticks}
 
 
+
+def run_insert_conflict_contract(conn):
+    feed_ts = datetime.now(timezone.utc)
+    rows = [
+        {"symbol": "PTT", "ts": feed_ts.isoformat(), "bid": 34.50, "ask": 34.75, "last": 34.60,
+         "bid_size": 1000, "ask_size": 1200, "raw": {"vendor": "fixture"}},
+        {"symbol": "CPALL", "ts": feed_ts.isoformat(), "bid": 60.00, "ask": 60.25, "last": 60.10,
+         "bid_size": 800, "ask_size": 900, "raw": {"vendor": "fixture"}},
+    ]
+    batch_hash = "sha-partial-insert-conflict"
+    session_id = "00000000-0000-0000-0000-000000000001"
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO public.luna_market_ticks(
+              session_id,symbol,ts,bid,ask,last,bid_size,ask_size,source,raw,created_at
+            ) VALUES (%s,'PTT',%s,34.50,34.75,34.60,1000,1200,'TOPTRADER_REALTIME',
+                      '{"preexisting":"collision"}'::jsonb,now());
+            """,
+            (session_id, feed_ts),
+        )
+        cur.execute(
+            """
+            SELECT public.luna_ingest_verified_market_batch(
+              'TOPTRADER_REALTIME', %s, %s, true, %s::jsonb
+            );
+            """,
+            (feed_ts, batch_hash, json.dumps(rows)),
+        )
+        result = cur.fetchone()[0]
+        batch_id = result["batch_id"]
+        cur.execute(
+            "SELECT accepted,reject_reason FROM public.luna_market_ingest_batches WHERE batch_id=%s;",
+            (batch_id,),
+        )
+        batch = cur.fetchone()
+        cur.execute(
+            "SELECT count(*) FROM public.luna_market_ticks WHERE raw->>'verification_batch_id'=%s;",
+            (batch_id,),
+        )
+        persisted_for_batch = cur.fetchone()[0]
+        cur.execute(
+            "SELECT count(*) FROM public.luna_market_ticks WHERE ts=%s AND symbol IN ('PTT','CPALL');",
+            (feed_ts,),
+        )
+        all_tick_rows = cur.fetchone()[0]
+    conn.commit()
+
+    assert result["accepted"] is False, result
+    assert result["reject_reason"] == "TICK_INSERT_CONFLICT", result
+    assert result["rows_expected"] == 2 and result["rows_persisted"] == 0, result
+    assert result["rows_inserted_before_cleanup"] == 1 and result["conflict_rows"] == 1, result
+    assert batch == (False, "TICK_INSERT_CONFLICT"), batch
+    assert persisted_for_batch == 0, persisted_for_batch
+    assert all_tick_rows == 1, all_tick_rows
+    return {"result": result, "batch": batch, "ticks_persisted_for_batch": persisted_for_batch,
+            "remaining_original_rows": all_tick_rows}
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", choices=("baseline", "migration", "fixed"), required=True)
@@ -245,7 +306,9 @@ def main():
 
         install_idempotency_fix(conn)
         retry = run_rejected_batch_retry_contract(conn)
-        print(json.dumps({"status": "PASS", "result": result, "raw": raw, "retry_contract": retry}, default=str))
+        conflict = run_insert_conflict_contract(conn)
+        print(json.dumps({"status": "PASS", "result": result, "raw": raw,
+                          "retry_contract": retry, "insert_conflict_contract": conflict}, default=str))
         return 0
     finally:
         conn.close()
