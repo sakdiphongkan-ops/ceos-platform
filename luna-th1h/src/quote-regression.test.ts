@@ -74,6 +74,9 @@ check("invalid_price_and_book",()=>{
   assert.equal(normalize({last:0}),null);
   assert.equal(normalize({bid:-1}),null);
   assert.equal(normalize({bid:31.90,ask:31.80}),null);
+  assert.equal(normalize({bid:true}),null);
+  assert.equal(normalize({ask:{price:31.8}}),null);
+  assert.doesNotThrow(()=>normalize({bid_levels:[null,{price:true,size:"large"}]}));
 });
 
 // 6. Verification must be an exact approved marker, not a substring match.
@@ -191,6 +194,11 @@ check("set_marketplace_null_and_invalid_price",()=>{
   },NOW,2_000),null);
   assert.equal(normalizeSetStockQuote({
     symbol:"PTT",time:new Date(NOW+31_000).toISOString(),last:31.8,
+    bid:[{rank:1,price:31.7,volume:500}],
+    offer:[{rank:1,price:31.8,volume:600}]
+  },NOW,2_000),null);
+  assert.equal(normalizeSetStockQuote({
+    symbol:"PTT",time:new Date(NOW+1_000).toISOString(),last:31.8,
     bid:[{rank:1,price:31.7,volume:500}],
     offer:[{rank:1,price:31.8,volume:600}]
   },NOW,2_000),null);
