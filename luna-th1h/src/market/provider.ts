@@ -59,6 +59,7 @@ export function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVeri
     askSize:nullableFiniteNumber(raw.ask_size),
     bidLevels:Array.isArray(raw.bid_levels)?raw.bid_levels.map((x:any)=>({price:Number(x.price),size:Number(x.size)})).filter((x:any)=>Number.isFinite(x.price)&&x.price>0&&Number.isFinite(x.size)&&x.size>0):undefined,
     askLevels:Array.isArray(raw.ask_levels)?raw.ask_levels.map((x:any)=>({price:Number(x.price),size:Number(x.size)})).filter((x:any)=>Number.isFinite(x.price)&&x.price>0&&Number.isFinite(x.size)&&x.size>0):undefined,
+    depthComplete:raw.depth_complete===true || raw.depthComplete===true,
     source:String(raw.source ?? "unknown-market-data"),
     dataQuality:raw.data_quality ? String(raw.data_quality) : undefined
   };
