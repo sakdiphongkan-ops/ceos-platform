@@ -25,7 +25,7 @@ const NORMALIZATION_REJECTIONS:Record<string,number>={
 };
 
 function nullableFiniteNumber(value:unknown):number|null{
-  if(value===null || value===undefined || value==="") return null;
+  if(value===null || value===undefined || (typeof value==="string" && value.trim()==="")) return null;
   const n=Number(value);
   return Number.isFinite(n)?n:null;
 }
@@ -106,7 +106,7 @@ export function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVeri
   }
 
   if(requireVerifiedBook){
-    const quality=String(q.dataQuality??"").trim().toLowerCase().replace(/[\\s-]+/g,"_");
+    const quality=String(q.dataQuality??"").trim().toLowerCase().replace(/[\s-]+/g,"_");
     const verifiedQuality=["verified","verified_book","book_verified","verified_execution_book"].includes(quality);
     const explicitlyUnverified=quality.includes("unverified") || quality==="not_verified" || quality.startsWith("not_");
     const explicitVerification =
