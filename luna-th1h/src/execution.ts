@@ -156,9 +156,11 @@ export function planOrder(
     && Number(q.ask)>0
     && Number(q.ask)>=Number(q.bid);
   const hasDepth=Number(q.bidSize??0)>0 && Number(q.askSize??0)>0;
-  const verifiedBook=hasBook
-    && hasDepth
-    && !String(q.dataQuality??"").toLowerCase().includes("unverified");
+  const quality=String(q.dataQuality??"").trim().toLowerCase().replace(/[\\s-]+/g,"_");
+  const verifiedQuality=["verified","verified_book","book_verified","verified_execution_book"].includes(quality);
+  const explicitlyUnverified=quality.includes("unverified") || quality==="not_verified" || quality.startsWith("not_");
+  const trustedSettradeRealtime=String(q.source??"").toLowerCase().startsWith("settrade-open-api-realtime");
+  const verifiedBook=hasBook && hasDepth && (verifiedQuality || trustedSettradeRealtime) && !explicitlyUnverified;
   const allowPriceOnlyPaper=allowPaperPriceOnlyExecution(q);
 
   // BUYs require a verified executable book in live/verified paths.
@@ -168,7 +170,9 @@ export function planOrder(
     ? (verifiedBook
       ? Number(q.ask)
       : (allowPriceOnlyPaper?usablePrice(q.last,q.ask,q.bid):0))
-    : (verifiedBook?Number(q.bid):usablePrice(q.last,q.bid,q.ask));
+    : (verifiedBook
+      ? Number(q.bid)
+      : (allowPriceOnlyPaper?usablePrice(q.last,q.bid,q.ask):0));
   if(side==="BUY" && !referencePrice){
     return {accepted:false,reason:"BUY_BLOCKED_NO_VERIFIED_BOOK"};
   }
