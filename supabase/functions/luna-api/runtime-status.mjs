@@ -10,3 +10,33 @@ export function resolveRuntimeStatus(body) {
   if (readiness) return readiness;
   return "UNKNOWN";
 }
+
+// Prefer the standard Supabase service-role JWT when the Edge Function runtime
+// provides it. A configured API secret may be a newer sb_secret_* API key, which
+// is not interchangeable with the JWT used as Authorization: Bearer by supabase-js.
+export function resolveServiceKey(serviceRoleKey, configuredDefaultKey) {
+  const serviceRole = String(serviceRoleKey ?? "").trim();
+  if (serviceRole) return serviceRole;
+  return String(configuredDefaultKey ?? "").trim();
+}
+
+// Surface only sanitized, non-secret error metadata for public-safe feed diagnostics.
+// Never return database error messages, hints, connection strings or credentials.
+export function describeSourceFailure(result) {
+  const failure = result?.status === "rejected"
+    ? result.reason
+    : result?.value?.error;
+  if (!failure) return {};
+
+  const rawMessage = String(failure?.message ?? "");
+  let failureCode = String(failure?.code ?? "").trim();
+  if (!failureCode && /FETCH_BODY_TIMEOUT/i.test(rawMessage)) failureCode = "FETCH_BODY_TIMEOUT";
+  if (!failureCode && /AbortError|TimeoutError/i.test(String(failure?.name ?? ""))) failureCode = "REQUEST_TIMEOUT";
+  if (!failureCode) failureCode = String(failure?.name ?? "UNKNOWN").slice(0, 48);
+
+  const status = Number(failure?.status ?? failure?.statusCode);
+  return {
+    failure_code: failureCode.slice(0, 64),
+    http_status: Number.isFinite(status) && status > 0 ? status : null
+  };
+}
