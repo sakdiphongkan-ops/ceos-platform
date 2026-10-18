@@ -59,7 +59,7 @@ export function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVeri
     return null;
   }
   const q:Quote = {
-    symbol:raw.symbol.trim(),
+    symbol:raw.symbol.trim().toUpperCase(),
     ts:raw.ts,
     sourceTs:typeof raw.source_ts==="string" && raw.source_ts.trim() ? raw.source_ts : undefined,
     bookReceivedTs:typeof raw.book_received_ts==="string" && raw.book_received_ts.trim() ? raw.book_received_ts : undefined,
