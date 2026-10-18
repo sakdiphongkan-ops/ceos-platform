@@ -3,7 +3,10 @@ import type {Quote} from "../types.js";
 const BASE_URL=process.env.SET_MARKETPLACE_BASE_URL ?? "https://marketplace.set.or.th/api/public/realtime-data/stock";
 const API_KEY=process.env.SET_MARKETPLACE_API_KEY ?? "";
 const MARKETS=process.env.SET_MARKETPLACE_MARKETS ?? "SET,mai";
-const POLL_MS=Math.max(500,Number(process.env.SET_MARKETPLACE_POLL_MS ?? 1000));
+const pollCandidate=Number(process.env.SET_MARKETPLACE_POLL_MS ?? 1000);
+const POLL_MS=Number.isFinite(pollCandidate) && pollCandidate>=500 && pollCandidate<=60_000
+  ? pollCandidate
+  : 1000;
 
 type SetLevel={rank:number;price:number|null;volume:number|null};
 type SetStock={
@@ -15,7 +18,8 @@ type SetStock={
   offer?:SetLevel[];
 };
 
-function numberOrNull(v:unknown){
+export function numberOrNull(v:unknown):number|null{
+  if(v===null || v===undefined || (typeof v==="string" && v.trim()==="")) return null;
   const n=Number(v);
   return Number.isFinite(n)?n:null;
 }
@@ -27,7 +31,7 @@ function normalizeTime(value:unknown){
   return new Date(ms).toISOString();
 }
 
-function toQuote(row:SetStock):Quote|null{
+export function normalizeSetStockQuote(row:SetStock):Quote|null{
   if(!row.symbol || !row.time) return null;
   const bid=(row.bid ?? []).find(x=>x?.rank===1) ?? row.bid?.[0];
   const offer=(row.offer ?? []).find(x=>x?.rank===1) ?? row.offer?.[0];
@@ -41,6 +45,12 @@ function toQuote(row:SetStock):Quote|null{
   const bidPrice=numberOrNull(bid?.price);
   const askPrice=numberOrNull(offer?.price);
   const last=numberOrNull(row.last);
+  if((last!==null && last<=0) || (bidPrice!==null && bidPrice<=0) || (askPrice!==null && askPrice<=0)){
+    return null;
+  }
+  if(bidPrice!==null && askPrice!==null && askPrice<bidPrice) return null;
+  if(last===null && bidPrice===null && askPrice===null) return null;
+
   const verified = bidPrice!==null && askPrice!==null
     && bidPrice>0 && askPrice>0 && askPrice>=bidPrice
     && Number(bid?.volume??0)>0 && Number(offer?.volume??0)>0;
@@ -79,7 +89,7 @@ async function fetchSnapshot():Promise<Quote[]>{
         ? (payload as any).stock
         : [];
 
-  return rows.map((row):Quote|null=>toQuote(row as SetStock)).filter((x):x is Quote=>x!==null);
+  return rows.map((row):Quote|null=>normalizeSetStockQuote(row as SetStock)).filter((x):x is Quote=>x!==null);
 }
 
 export async function* setMarketplaceQuotes():AsyncGenerator<Quote>{
