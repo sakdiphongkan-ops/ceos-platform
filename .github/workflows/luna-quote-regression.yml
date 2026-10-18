@@ -10,6 +10,7 @@ on:
       - "luna-th1h/src/quote-regression.test.ts"
       - "luna-th1h/src/ingest-retention-migration-contract.test.ts"
       - "supabase/migrations/20261018093000_luna_verified_ingest_retention_idempotency.sql"
+      - "supabase/tests/luna_ingest_retention_idempotency.pg.sql"
       - "luna-th1h/package.json"
       - ".github/workflows/luna-quote-regression.yml"
   pull_request:
