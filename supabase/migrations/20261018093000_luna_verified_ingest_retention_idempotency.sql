@@ -34,7 +34,13 @@ begin
   end if;
 
   -- Reject malformed JSON shapes/rows before jsonb_to_recordset casts can throw.
-  if coalesce(jsonb_typeof(p_rows),'') <> 'array' or jsonb_array_length(p_rows)=0 then
+  if coalesce(jsonb_typeof(p_rows),'') <> 'array' then
+    return jsonb_build_object(
+      'ok',false,'accepted',false,'idempotent',false,
+      'source',p_source,'reject_reason','EMPTY_OR_INVALID_BATCH'
+    );
+  end if;
+  if jsonb_array_length(p_rows)=0 then
     return jsonb_build_object(
       'ok',false,'accepted',false,'idempotent',false,
       'source',p_source,'reject_reason','EMPTY_OR_INVALID_BATCH'
