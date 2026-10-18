@@ -6,7 +6,9 @@ on:
       - luna/quote-regression-20261018
     paths:
       - "luna-th1h/src/market/provider.ts"
+      - "luna-th1h/src/market/set-marketplace.ts"
       - "luna-th1h/src/execution.ts"
+      - "luna-th1h/src/execution-reservation.test.ts"
       - "luna-th1h/src/quote-regression.test.ts"
       - "luna-th1h/src/ingest-retention-migration-contract.test.ts"
       - "supabase/migrations/20261018093000_luna_verified_ingest_retention_idempotency.sql"
@@ -19,7 +21,9 @@ on:
     branches: [master]
     paths:
       - "luna-th1h/src/market/provider.ts"
+      - "luna-th1h/src/market/set-marketplace.ts"
       - "luna-th1h/src/execution.ts"
+      - "luna-th1h/src/execution-reservation.test.ts"
       - "luna-th1h/src/quote-regression.test.ts"
       - "luna-th1h/src/ingest-retention-migration-contract.test.ts"
       - "supabase/migrations/20261018093000_luna_verified_ingest_retention_idempotency.sql"
