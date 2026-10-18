@@ -70,9 +70,11 @@ export function normalizeSetStockQuote(row:SetStock,nowMs:number=Date.now(),maxQ
   if(bidPrice!==null && askPrice!==null && askPrice<bidPrice) return null;
   if(last===null && bidPrice===null && askPrice===null) return null;
 
+  const bidSize=numberOrNull(bid?.volume);
+  const askSize=numberOrNull(offer?.volume);
   const verified = bidPrice!==null && askPrice!==null
     && bidPrice>0 && askPrice>0 && askPrice>=bidPrice
-    && Number(bid?.volume??0)>0 && Number(offer?.volume??0)>0;
+    && bidSize!==null && bidSize>0 && askSize!==null && askSize>0;
   return {
     symbol:row.symbol.trim().toUpperCase(),
     ts:new Date(nowMs).toISOString(),
@@ -80,8 +82,10 @@ export function normalizeSetStockQuote(row:SetStock,nowMs:number=Date.now(),maxQ
     bid:bidPrice,
     ask:askPrice,
     last,
-    bidSize:numberOrNull(bid?.volume),
-    askSize:numberOrNull(offer?.volume),
+    bidSize,
+    askSize,
+    bookReceivedTs:verified?new Date(nowMs).toISOString():undefined,
+    bookSourceTs:verified?sourceTs:undefined,
     bidLevels,
     askLevels,
     source:"set-marketplace",
