@@ -170,3 +170,26 @@ $function$;
 -- FROM private.luna_ingest_http_requests a
 -- LEFT JOIN net._http_response r ON r.id = a.request_id
 -- ORDER BY a.queued_at DESC LIMIT 100;
+
+
+-- SECURITY DEFINER scheduler wrappers must remain invokable only by the trusted
+-- scheduler/service role, including on a fresh database with default PUBLIC EXECUTE.
+REVOKE ALL ON FUNCTION public.luna_trigger_toptrader_market_ingest(jsonb) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.luna_trigger_toptrader_ws_ingest() FROM PUBLIC;
+
+DO $acl$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname='anon') THEN
+    EXECUTE 'REVOKE ALL ON FUNCTION public.luna_trigger_toptrader_market_ingest(jsonb) FROM anon';
+    EXECUTE 'REVOKE ALL ON FUNCTION public.luna_trigger_toptrader_ws_ingest() FROM anon';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname='authenticated') THEN
+    EXECUTE 'REVOKE ALL ON FUNCTION public.luna_trigger_toptrader_market_ingest(jsonb) FROM authenticated';
+    EXECUTE 'REVOKE ALL ON FUNCTION public.luna_trigger_toptrader_ws_ingest() FROM authenticated';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname='service_role') THEN
+    EXECUTE 'GRANT EXECUTE ON FUNCTION public.luna_trigger_toptrader_market_ingest(jsonb) TO service_role';
+    EXECUTE 'GRANT EXECUTE ON FUNCTION public.luna_trigger_toptrader_ws_ingest() TO service_role';
+  END IF;
+END;
+$acl$;
