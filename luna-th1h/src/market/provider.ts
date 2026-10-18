@@ -129,14 +129,20 @@ export function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVeri
   const quoteFreshnessLimit=allowPublicPriceOnly ? PUBLIC_FALLBACK_MAX_QUOTE_AGE_MS : effectiveMaxQuoteAgeMs;
   if(requireVerifiedBook){
     const bookReceivedMs=q.bookReceivedTs ? Date.parse(q.bookReceivedTs) : Number.NaN;
-    const bookSourceMs=q.bookSourceTs ? Date.parse(q.bookSourceTs) : Number.NaN;
+    // Prefer an actual book/source timestamp, then the quote's actual source timestamp.
+    // Only the exact authenticated Settrade realtime stream may fall back to local
+    // receive time when the provider does not publish a source timestamp.
+    const bookSourceMs=q.bookSourceTs
+      ? Date.parse(q.bookSourceTs)
+      : q.sourceTs ? Date.parse(q.sourceTs) : Number.NaN;
     const bookReceivedAge=nowMs-bookReceivedMs;
     const bookSourceAge=nowMs-bookSourceMs;
-    const bookFresh=Number.isFinite(bookReceivedMs)
-      && Number.isFinite(bookSourceMs)
-      && bookReceivedAge>=0 && bookSourceAge>=0
-      && bookReceivedAge<=quoteFreshnessLimit
-      && bookSourceAge<=quoteFreshnessLimit;
+    const receivedFresh=Number.isFinite(bookReceivedMs)
+      && bookReceivedAge>=0 && bookReceivedAge<=quoteFreshnessLimit;
+    const sourceFresh=Number.isFinite(bookSourceMs)
+      ? bookSourceAge>=0 && bookSourceAge<=quoteFreshnessLimit
+      : sourceName==="settrade-open-api-realtime" && !q.bookSourceTs && !q.sourceTs;
+    const bookFresh=receivedFresh && sourceFresh;
     const quality=String(q.dataQuality??"").trim().toLowerCase().replace(/[\s-]+/g,"_");
     const verifiedQuality=["verified","verified_book","book_verified","verified_execution_book"].includes(quality);
     const explicitlyUnverified=quality.includes("unverified") || quality==="not_verified" || quality.startsWith("not_");
