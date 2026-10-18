@@ -60,6 +60,22 @@ def snapshot(conn):
     conn.commit()
 
 
+def snapshot_at(conn, ts, equity, upsert=False):
+    statement = """
+        INSERT INTO public.luna_paper_equity_snapshots
+            (experiment_code,strategy_version,session_id,ts,equity)
+        VALUES (%s,'test',%s,%s,%s)
+    """
+    if upsert:
+        statement += """
+            ON CONFLICT (experiment_code,strategy_version,ts)
+            DO UPDATE SET equity=EXCLUDED.equity
+        """
+    with conn.cursor() as cur:
+        cur.execute(statement, (EXPERIMENT, SESSION, ts, equity))
+    conn.commit()
+
+
 def expect_block(conn, name):
     try:
         snapshot(conn)
@@ -124,6 +140,47 @@ def assert_update_guard(conn):
         cur.execute("DELETE FROM public.luna_market_ticks WHERE symbol='CPALL';")
     conn.commit()
     expect_update_block(conn, "update after one held symbol loses quote")
+
+
+def assert_duplicate_snapshot_upsert(conn):
+    reset_ticks(conn)
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM public.luna_paper_live_positions WHERE experiment_code=%s;", (EXPERIMENT,))
+        cur.execute(
+            "INSERT INTO public.luna_paper_live_positions VALUES (%s,'PTT',100),(%s,'CPALL',100);",
+            (EXPERIMENT, EXPERIMENT),
+        )
+        cur.execute("SELECT now();")
+        snapshot_ts = cur.fetchone()[0]
+    conn.commit()
+    add_tick(conn, "PTT")
+    add_tick(conn, "CPALL")
+
+    snapshot_at(conn, snapshot_ts, 10000, upsert=False)
+    snapshot_at(conn, snapshot_ts, 12000, upsert=True)
+    with conn.cursor() as cur:
+        cur.execute("SELECT count(*),max(equity) FROM public.luna_paper_equity_snapshots WHERE experiment_code=%s AND strategy_version='test' AND ts=%s;", (EXPERIMENT, snapshot_ts))
+        row_count, equity = cur.fetchone()
+    assert row_count == 1 and float(equity) == 12000.0, (row_count, equity)
+    print("PASS duplicate snapshot upsert: valid duplicate updates exactly one row")
+
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM public.luna_market_ticks WHERE symbol='CPALL';")
+    conn.commit()
+    try:
+        snapshot_at(conn, snapshot_ts, 15000, upsert=True)
+    except psycopg2.Error as exc:
+        conn.rollback()
+        assert exc.pgcode == "23514", (exc.pgcode, exc)
+        assert "LUNA_VALUATION_INCOMPLETE" in str(exc), exc
+    else:
+        raise AssertionError("duplicate snapshot upsert with missing held-symbol quote unexpectedly succeeded")
+
+    with conn.cursor() as cur:
+        cur.execute("SELECT count(*),max(equity) FROM public.luna_paper_equity_snapshots WHERE experiment_code=%s AND strategy_version='test' AND ts=%s;", (EXPERIMENT, snapshot_ts))
+        row_count, equity = cur.fetchone()
+    assert row_count == 1 and float(equity) == 12000.0, (row_count, equity)
+    print("PASS duplicate snapshot upsert: incomplete valuation cannot overwrite prior verified equity")
 
 
 def main():
@@ -202,7 +259,8 @@ def main():
 
         assert_cash_only_allowed(conn)
         assert_update_guard(conn)
-        print("PASS snapshot guard regression matrix: expanded insert/update cases")
+        assert_duplicate_snapshot_upsert(conn)
+        print("PASS snapshot guard regression matrix: insert, update and duplicate snapshot cases")
         return 0
     finally:
         conn.close()
