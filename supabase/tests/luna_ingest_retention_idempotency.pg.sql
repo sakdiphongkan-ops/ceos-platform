@@ -143,28 +143,28 @@ BEGIN
   v_result := public.luna_ingest_verified_market_batch(
     'TOPTRADER_REALTIME',clock_timestamp(),NULL,true,'[]'::jsonb
   );
-  IF v_result->>'accepted' <> 'false' OR v_result->>'reject_reason' <> 'EMPTY_OR_INVALID_BATCH' THEN
+  IF v_result->>'accepted' IS DISTINCT FROM 'false' OR v_result->>'reject_reason' IS DISTINCT FROM 'EMPTY_OR_INVALID_BATCH' THEN
     RAISE EXCEPTION 'empty row array must return a clean rejection before hash validation: %',v_result;
   END IF;
 
   v_result := public.luna_ingest_verified_market_batch(
     'TOPTRADER_REALTIME',clock_timestamp(),NULL,true,'[{}]'::jsonb
   );
-  IF v_result->>'accepted' <> 'false' OR v_result->>'reject_reason' <> 'MISSING_PAYLOAD_HASH' THEN
+  IF v_result->>'accepted' IS DISTINCT FROM 'false' OR v_result->>'reject_reason' IS DISTINCT FROM 'MISSING_PAYLOAD_HASH' THEN
     RAISE EXCEPTION 'missing payload hash must return a clean rejection: %',v_result;
   END IF;
 
   v_result := public.luna_ingest_verified_market_batch(
     'TOPTRADER_REALTIME',NULL,'hash-null-feed',true,'[]'::jsonb
   );
-  IF v_result->>'accepted' <> 'false' OR v_result->>'reject_reason' <> 'INVALID_OR_FUTURE_FEED_TIMESTAMP' THEN
+  IF v_result->>'accepted' IS DISTINCT FROM 'false' OR v_result->>'reject_reason' IS DISTINCT FROM 'INVALID_OR_FUTURE_FEED_TIMESTAMP' THEN
     RAISE EXCEPTION 'null feed timestamp must return a clean rejection: %',v_result;
   END IF;
 
   v_result := public.luna_ingest_verified_market_batch(
     'TOPTRADER_REALTIME',clock_timestamp(),'hash-scalar-row',true,'[null]'::jsonb
   );
-  IF v_result->>'accepted' <> 'false' OR v_result->>'reject_reason' <> 'INVALID_MARKET_TICK_ROW' THEN
+  IF v_result->>'accepted' IS DISTINCT FROM 'false' OR v_result->>'reject_reason' IS DISTINCT FROM 'INVALID_MARKET_TICK_ROW' THEN
     RAISE EXCEPTION 'scalar JSON row should be rejected without PostgreSQL exception: %',v_result;
   END IF;
 
@@ -173,7 +173,7 @@ BEGIN
     jsonb_build_array(jsonb_build_object('symbol','PTT','ts','not-a-timestamp',
       'bid',31.75,'ask',31.80,'last',31.80,'bid_size',1000,'ask_size',1200))
   );
-  IF v_result->>'accepted' <> 'false' OR v_result->>'reject_reason' <> 'INVALID_MARKET_TICK_ROW' THEN
+  IF v_result->>'accepted' IS DISTINCT FROM 'false' OR v_result->>'reject_reason' IS DISTINCT FROM 'INVALID_MARKET_TICK_ROW' THEN
     RAISE EXCEPTION 'malformed typed row should return a structured rejection: %',v_result;
   END IF;
 
@@ -182,7 +182,7 @@ BEGIN
     jsonb_build_array(jsonb_build_object('symbol','PTT','ts',clock_timestamp(),
       'bid','NaN','ask','Infinity','last','Infinity','bid_size',1000,'ask_size',1200))
   );
-  IF v_result->>'accepted' <> 'false' OR v_result->>'reject_reason' <> 'INVALID_MARKET_TICK_ROW' THEN
+  IF v_result->>'accepted' IS DISTINCT FROM 'false' OR v_result->>'reject_reason' IS DISTINCT FROM 'INVALID_MARKET_TICK_ROW' THEN
     RAISE EXCEPTION 'NaN/Infinity prices must fail closed: %',v_result;
   END IF;
 
@@ -195,7 +195,7 @@ BEGIN
   v_result := public.luna_ingest_verified_market_batch(
     'TOPTRADER_REALTIME',v_ts,'hash-complete-1',true,v_rows
   );
-  IF v_result->>'accepted' <> 'true' OR v_result->>'idempotent' <> 'false' THEN
+  IF v_result->>'accepted' IS DISTINCT FROM 'true' OR v_result->>'idempotent' IS DISTINCT FROM 'false' THEN
     RAISE EXCEPTION 'fresh batch should be accepted on first insert: %',v_result;
   END IF;
   v_batch := (v_result->>'batch_id')::uuid;
@@ -203,7 +203,7 @@ BEGIN
   v_result := public.luna_ingest_verified_market_batch(
     'TOPTRADER_REALTIME',v_ts,'hash-complete-1',true,v_rows
   );
-  IF v_result->>'accepted' <> 'true' OR v_result->>'idempotent' <> 'true' THEN
+  IF v_result->>'accepted' IS DISTINCT FROM 'true' OR v_result->>'idempotent' IS DISTINCT FROM 'true' THEN
     RAISE EXCEPTION 'fully retained batch should be an accepted idempotent retry: %',v_result;
   END IF;
   IF (v_result->>'rows_retained')::integer <> 1 THEN
@@ -217,8 +217,8 @@ BEGIN
   v_result := public.luna_ingest_verified_market_batch(
     'TOPTRADER_REALTIME',v_ts,'hash-complete-1',true,v_rows
   );
-  IF v_result->>'accepted' <> 'false'
-     OR v_result->>'reject_reason' <> 'IDEMPOTENCY_TICKS_NOT_RETAINED' THEN
+  IF v_result->>'accepted' IS DISTINCT FROM 'false'
+     OR v_result->>'reject_reason' IS DISTINCT FROM 'IDEMPOTENCY_TICKS_NOT_RETAINED' THEN
     RAISE EXCEPTION 'expired accepted metadata must fail closed: %',v_result;
   END IF;
   SELECT accepted,tick_count INTO STRICT v_accepted,v_expected
@@ -234,8 +234,8 @@ BEGIN
   v_result := public.luna_ingest_verified_market_batch(
     'TOPTRADER_REALTIME',v_ts,'hash-complete-1',true,v_rows
   );
-  IF v_result->>'accepted' <> 'false'
-     OR v_result->>'reject_reason' <> 'IDEMPOTENCY_TICKS_NOT_RETAINED' THEN
+  IF v_result->>'accepted' IS DISTINCT FROM 'false'
+     OR v_result->>'reject_reason' IS DISTINCT FROM 'IDEMPOTENCY_TICKS_NOT_RETAINED' THEN
     RAISE EXCEPTION 'expired replay must not regain accepted status: %',v_result;
   END IF;
 
@@ -248,7 +248,7 @@ BEGIN
   v_result := public.luna_ingest_verified_market_batch(
     'TOPTRADER_REALTIME',v_ts,'hash-complete-2',true,v_rows
   );
-  IF v_result->>'accepted' <> 'true' OR (v_result->>'rows_ingested')::integer <> 1 THEN
+  IF v_result->>'accepted' IS DISTINCT FROM 'true' OR (v_result->>'rows_ingested')::integer <> 1 THEN
     RAISE EXCEPTION 'new fresh snapshot should ingest successfully: %',v_result;
   END IF;
 
@@ -264,7 +264,7 @@ BEGIN
   v_result := public.luna_ingest_verified_market_batch(
     'TOPTRADER_REALTIME',v_ts,'hash-complete-2',true,v_rows
   );
-  IF v_result->>'accepted' <> 'false' OR v_result->>'reject_reason' <> 'STALE_FEED_TIMESTAMP' THEN
+  IF v_result->>'accepted' IS DISTINCT FROM 'false' OR v_result->>'reject_reason' IS DISTINCT FROM 'STALE_FEED_TIMESTAMP' THEN
     RAISE EXCEPTION 'stale identical replay must fail even if rows are retained: %',v_result;
   END IF;
   SELECT accepted INTO STRICT v_accepted
@@ -282,7 +282,7 @@ BEGIN
   v_result := public.luna_ingest_verified_market_batch(
     'TOPTRADER_REALTIME',v_ts,'hash-source-toggle',true,v_rows
   );
-  IF v_result->>'accepted' <> 'true' THEN
+  IF v_result->>'accepted' IS DISTINCT FROM 'true' THEN
     RAISE EXCEPTION 'source-toggle fixture should start accepted: %',v_result;
   END IF;
   v_batch := (v_result->>'batch_id')::uuid;
@@ -291,7 +291,7 @@ BEGIN
   v_result := public.luna_ingest_verified_market_batch(
     'TOPTRADER_REALTIME',v_ts,'hash-source-toggle',true,v_rows
   );
-  IF v_result->>'accepted' <> 'false' OR v_result->>'reject_reason' <> 'SOURCE_NOT_CONFIGURED_OR_ENABLED' THEN
+  IF v_result->>'accepted' IS DISTINCT FROM 'false' OR v_result->>'reject_reason' IS DISTINCT FROM 'SOURCE_NOT_CONFIGURED_OR_ENABLED' THEN
     RAISE EXCEPTION 'disabled source must not receive idempotent success: %',v_result;
   END IF;
   UPDATE public.luna_verified_market_sources SET enabled=true WHERE source_code='TOPTRADER_REALTIME';
@@ -299,7 +299,7 @@ BEGIN
   v_result := public.luna_ingest_verified_market_batch(
     'TOPTRADER_REALTIME',v_ts,'hash-source-toggle',true,v_rows
   );
-  IF v_result->>'accepted' <> 'false' OR v_result->>'retry_requires_new_snapshot' <> 'true' THEN
+  IF v_result->>'accepted' IS DISTINCT FROM 'false' OR v_result->>'retry_requires_new_snapshot' IS DISTINCT FROM 'true' THEN
     RAISE EXCEPTION 'rejected batch with retained ticks must require a new snapshot: %',v_result;
   END IF;
   SELECT count(*) INTO v_retained FROM public.luna_market_ticks
@@ -319,7 +319,7 @@ BEGIN
   v_result := public.luna_ingest_verified_market_batch(
     'TOPTRADER_REALTIME',v_ts,'hash-partial-1',true,v_rows
   );
-  IF v_result->>'accepted' <> 'true' OR (v_result->>'rows_ingested')::integer <> 2 THEN
+  IF v_result->>'accepted' IS DISTINCT FROM 'true' OR (v_result->>'rows_ingested')::integer <> 2 THEN
     RAISE EXCEPTION 'two-symbol fixture should ingest successfully: %',v_result;
   END IF;
   v_batch := (v_result->>'batch_id')::uuid;
@@ -330,8 +330,8 @@ BEGIN
   v_result := public.luna_ingest_verified_market_batch(
     'TOPTRADER_REALTIME',v_ts,'hash-partial-1',true,v_rows
   );
-  IF v_result->>'accepted' <> 'false'
-     OR v_result->>'reject_reason' <> 'IDEMPOTENCY_TICKS_NOT_RETAINED'
+  IF v_result->>'accepted' IS DISTINCT FROM 'false'
+     OR v_result->>'reject_reason' IS DISTINCT FROM 'IDEMPOTENCY_TICKS_NOT_RETAINED'
      OR (v_result->>'rows_expected')::integer <> 2
      OR (v_result->>'rows_retained')::integer <> 1 THEN
     RAISE EXCEPTION 'partially retained batch must fail closed with counts: %',v_result;
@@ -346,7 +346,7 @@ BEGIN
   v_result := public.luna_ingest_verified_market_batch(
     'TOPTRADER_REALTIME',v_ts,'hash-closed-session',true,v_rows
   );
-  IF v_result->>'accepted' <> 'true' THEN
+  IF v_result->>'accepted' IS DISTINCT FROM 'true' THEN
     RAISE EXCEPTION 'closed-session fixture should start accepted: %',v_result;
   END IF;
   v_batch := (v_result->>'batch_id')::uuid;
@@ -357,7 +357,7 @@ BEGIN
   v_result := public.luna_ingest_verified_market_batch(
     'TOPTRADER_REALTIME',v_ts,'hash-closed-session',true,v_rows
   );
-  IF v_result->>'accepted' <> 'false' OR v_result->>'reject_reason' <> 'NO_OPEN_MARKET_SESSION' THEN
+  IF v_result->>'accepted' IS DISTINCT FROM 'false' OR v_result->>'reject_reason' IS DISTINCT FROM 'NO_OPEN_MARKET_SESSION' THEN
     RAISE EXCEPTION 'idempotent replay must respect closed session: %',v_result;
   END IF;
   SELECT accepted INTO STRICT v_accepted
@@ -417,10 +417,11 @@ BEGIN
   FROM private.luna_ingest_http_requests
   WHERE request_id = v_rest_request;
 
-  IF v_row.http_status <> 200
+  IF v_row.http_status IS DISTINCT FROM 200
      OR v_row.timed_out IS DISTINCT FROM false
      OR v_row.response_at IS NULL
-     OR v_row.response_excerpt NOT LIKE '%NO_FRESH_MATCHED_BOOK%' THEN
+     OR COALESCE(v_row.response_excerpt, '') NOT LIKE '%NO_FRESH_MATCHED_BOOK%'
+     OR length(COALESCE(v_row.response_excerpt, '')) > 400 THEN
     RAISE EXCEPTION 'REST HTTP response must be reconciled and archived: %', row_to_json(v_row);
   END IF;
 
@@ -441,7 +442,7 @@ BEGIN
   WHERE request_id = v_ws_request;
 
   IF v_row.timed_out IS DISTINCT FROM true
-     OR v_row.error_msg <> 'fixture upstream timeout'
+     OR v_row.error_msg IS DISTINCT FROM 'fixture upstream timeout'
      OR v_row.response_at IS NULL THEN
     RAISE EXCEPTION 'HTTP timeout must be captured: %', row_to_json(v_row);
   END IF;
