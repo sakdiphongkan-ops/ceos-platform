@@ -128,7 +128,20 @@ jobs:
           rc=$?
           set -e
           test "$rc" -eq 1
-      - name: GREEN — verify markers and rejected-batch retry repair
+      - name: RED — reproduce unknown source being accepted before source-lookup guard
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: 5432
+          PGDATABASE: postgres
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          set +e
+          python scripts/db/test_luna_verified_ingest_marker.py --mode source-baseline
+          rc=$?
+          set -e
+          test "$rc" -eq 1
+      - name: GREEN — verify markers, idempotency, conflict handling and source rejection matrix
         env:
           PGHOST: 127.0.0.1
           PGPORT: 5432
