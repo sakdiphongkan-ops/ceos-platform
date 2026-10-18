@@ -55,7 +55,7 @@ function allowPaperPriceOnlyExecution(q:Quote){
     && mode==="paper"
     && executionMode!=="live"
     && !liveTradingArmed
-    && source.includes("tradingview-public-screener");
+    && source==="tradingview-public-screener";
 }
 
 export type PlannedOrder = {
