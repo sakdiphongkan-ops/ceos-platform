@@ -37,11 +37,19 @@ function normalizeTime(value:unknown){
   return new Date(ms).toISOString();
 }
 
-export function normalizeSetStockQuote(row:SetStock,nowMs:number=Date.now(),maxQuoteAgeMs:number=MAX_QUOTE_AGE_MS):Quote|null{
+export function normalizeSetStockQuote(value:unknown,nowMs:number=Date.now(),maxQuoteAgeMs:number=MAX_QUOTE_AGE_MS):Quote|null{
+  if(!value || typeof value!=="object" || Array.isArray(value)) return null;
+  const row=value as SetStock;
   if(typeof row.symbol!=="string" || !row.symbol.trim()
     || typeof row.time!=="string" || !row.time.trim()) return null;
-  const bid=(row.bid ?? []).find(x=>x?.rank===1) ?? row.bid?.[0];
-  const offer=(row.offer ?? []).find(x=>x?.rank===1) ?? row.offer?.[0];
+  // External JSON must not be trusted to honor the TypeScript interface.
+  // Malformed book containers must reject the row, not throw from .find().
+  if((row.bid!==undefined && !Array.isArray(row.bid))
+    || (row.offer!==undefined && !Array.isArray(row.offer))) return null;
+  const bidRows=(row.bid ?? []).filter((x):x is SetLevel=>!!x && typeof x==="object" && !Array.isArray(x));
+  const offerRows=(row.offer ?? []).filter((x):x is SetLevel=>!!x && typeof x==="object" && !Array.isArray(x));
+  const bid=bidRows.find(x=>x.rank===1) ?? bidRows[0];
+  const offer=offerRows.find(x=>x.rank===1) ?? offerRows[0];
   let sourceTs:string;
   try{
     sourceTs=normalizeTime(row.time);
@@ -55,10 +63,10 @@ export function normalizeSetStockQuote(row:SetStock,nowMs:number=Date.now(),maxQ
   if(!Number.isFinite(sourceTsMs) || sourceTsMs>nowMs || nowMs-sourceTsMs>effectiveMaxAge){
     return null;
   }
-  const bidLevels=(row.bid ?? [])
+  const bidLevels=bidRows
     .map(x=>({price:numberOrNull(x?.price),size:numberOrNull(x?.volume)}))
     .filter((x):x is {price:number;size:number}=>x.price!==null&&x.price>0&&x.size!==null&&x.size>0);
-  const askLevels=(row.offer ?? [])
+  const askLevels=offerRows
     .map(x=>({price:numberOrNull(x?.price),size:numberOrNull(x?.volume)}))
     .filter((x):x is {price:number;size:number}=>x.price!==null&&x.price>0&&x.size!==null&&x.size>0);
   const bidPrice=numberOrNull(bid?.price);
