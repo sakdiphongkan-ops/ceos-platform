@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import psycopg2
@@ -276,6 +276,81 @@ def run_insert_conflict_contract(conn):
             "remaining_original_rows": all_tick_rows}
 
 
+
+def run_rejection_matrix(conn):
+    def call_case(name, expected_reason, *, source="TOPTRADER_REALTIME",
+                  feed_ts=None, book_complete=True, rows=None,
+                  close_session=False, deactivate_ptt=False):
+        now = datetime.now(timezone.utc)
+        if feed_ts is None:
+            feed_ts = now
+        if rows is None:
+            rows = [{
+                "symbol": "PTT", "ts": now.isoformat(),
+                "bid": 34.50, "ask": 34.75, "last": 34.60,
+                "bid_size": 1000, "ask_size": 1200, "raw": {"vendor": "fixture"},
+            }]
+        with conn.cursor() as cur:
+            if close_session:
+                cur.execute("UPDATE public.luna_sessions SET status='CLOSED';")
+            if deactivate_ptt:
+                cur.execute("UPDATE public.luna_universe SET is_active=false WHERE symbol='PTT';")
+            cur.execute(
+                """
+                SELECT public.luna_ingest_verified_market_batch(
+                  %s, %s, %s, %s, %s::jsonb
+                );
+                """,
+                (source, feed_ts, "sha-reject-" + name, book_complete, json.dumps(rows)),
+            )
+            result = cur.fetchone()[0]
+            assert result["accepted"] is False, (name, result)
+            assert result["reject_reason"] == expected_reason, (name, result)
+            batch_id = result["batch_id"]
+            cur.execute(
+                "SELECT accepted,reject_reason FROM public.luna_market_ingest_batches WHERE batch_id=%s;",
+                (batch_id,),
+            )
+            batch = cur.fetchone()
+            cur.execute(
+                "SELECT count(*) FROM public.luna_market_ticks WHERE raw->>'verification_batch_id'=%s;",
+                (batch_id,),
+            )
+            ticks_for_batch = cur.fetchone()[0]
+            if close_session:
+                cur.execute("UPDATE public.luna_sessions SET status='OPEN';")
+            if deactivate_ptt:
+                cur.execute("UPDATE public.luna_universe SET is_active=true WHERE symbol='PTT';")
+        conn.commit()
+        assert batch == (False, expected_reason), (name, batch)
+        assert ticks_for_batch == 0, (name, ticks_for_batch)
+        return {"name": name, "reason": expected_reason, "ticks_for_batch": ticks_for_batch}
+
+    now = datetime.now(timezone.utc)
+    crossed = [{
+        "symbol": "PTT", "ts": now.isoformat(),
+        "bid": 34.75, "ask": 34.50, "last": 34.60,
+        "bid_size": 1000, "ask_size": 1200, "raw": {"vendor": "fixture"},
+    }]
+    duplicate = [
+        {"symbol": "PTT", "ts": now.isoformat(), "bid": 34.50, "ask": 34.75, "last": 34.60,
+         "bid_size": 1000, "ask_size": 1200, "raw": {"vendor": "fixture"}},
+        {"symbol": "PTT", "ts": now.isoformat(), "bid": 34.50, "ask": 34.75, "last": 34.60,
+         "bid_size": 1000, "ask_size": 1200, "raw": {"vendor": "fixture"}},
+    ]
+    cases = [
+        call_case("unknown-source", "SOURCE_NOT_CONFIGURED_OR_ENABLED", source="UNVERIFIED_VENDOR"),
+        call_case("stale-feed", "STALE_FEED_TIMESTAMP", feed_ts=now - timedelta(seconds=120)),
+        call_case("future-feed", "INVALID_OR_FUTURE_FEED_TIMESTAMP", feed_ts=now + timedelta(seconds=60)),
+        call_case("incomplete-book", "INCOMPLETE_ORDER_BOOK", book_complete=False),
+        call_case("crossed-book", "INVALID_MARKET_TICK_ROW", rows=crossed),
+        call_case("duplicate-symbols", "DUPLICATE_SYMBOL_IN_BATCH", rows=duplicate),
+        call_case("inactive-universe-symbol", "SYMBOL_NOT_IN_ACTIVE_UNIVERSE", deactivate_ptt=True),
+        call_case("no-open-session", "NO_OPEN_MARKET_SESSION", close_session=True),
+    ]
+    return cases
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", choices=("baseline", "migration", "fixed"), required=True)
@@ -307,8 +382,10 @@ def main():
         install_idempotency_fix(conn)
         retry = run_rejected_batch_retry_contract(conn)
         conflict = run_insert_conflict_contract(conn)
+        rejections = run_rejection_matrix(conn)
         print(json.dumps({"status": "PASS", "result": result, "raw": raw,
-                          "retry_contract": retry, "insert_conflict_contract": conflict}, default=str))
+                          "retry_contract": retry, "insert_conflict_contract": conflict,
+                          "rejection_matrix": rejections}, default=str))
         return 0
     finally:
         conn.close()
