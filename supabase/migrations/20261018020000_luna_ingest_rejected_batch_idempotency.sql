@@ -204,7 +204,8 @@ begin
       'ok',false,'accepted',false,'idempotent',false,'batch_id',v_batch,
       'source',p_source,'session_id',v_session,
       'reject_reason','TICK_INSERT_CONFLICT',
-      'rows_expected',v_rows,'rows_inserted',v_inserted
+      'rows_expected',v_rows,'rows_persisted',0,
+      'rows_inserted_before_cleanup',v_inserted,'conflict_rows',v_rows-v_inserted
     );
   END IF;
 
