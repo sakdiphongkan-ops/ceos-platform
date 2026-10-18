@@ -25,7 +25,9 @@ const NORMALIZATION_REJECTIONS:Record<string,number>={
 };
 
 function nullableFiniteNumber(value:unknown):number|null{
-  if(value===null || value===undefined || (typeof value==="string" && value.trim()==="")) return null;
+  if(value===null || value===undefined) return null;
+  if(typeof value==="string" && value.trim()==="") return null;
+  if(typeof value!=="number" && typeof value!=="string") return null;
   const n=Number(value);
   return Number.isFinite(n)?n:null;
 }
@@ -44,21 +46,29 @@ export function marketQuotes(provider:string):AsyncGenerator<Quote>{
 }
 
 export function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVerifiedBook:boolean, priceOnlyFallback:boolean, paperMode:boolean, liveTradingArmed:boolean, nowMs:number=Date.now()):Quote|null{
-  if(!raw?.symbol || !raw?.ts){
+  const effectiveMaxQuoteAgeMs=boundedPositiveNumber(maxQuoteAgeMs,2_000,1,60_000);
+  if(typeof raw?.symbol!=="string" || !raw.symbol.trim()
+    || typeof raw?.ts!=="string" || !raw.ts.trim()){
     NORMALIZATION_REJECTIONS.missing_fields++;
     return null;
   }
   const q:Quote = {
-    symbol:String(raw.symbol),
-    ts:String(raw.ts),
-    sourceTs: raw.source_ts ? String(raw.source_ts) : undefined,
+    symbol:raw.symbol.trim(),
+    ts:raw.ts,
+    sourceTs:typeof raw.source_ts==="string" && raw.source_ts.trim() ? raw.source_ts : undefined,
     bid:nullableFiniteNumber(raw.bid),
     ask:nullableFiniteNumber(raw.ask),
     last:nullableFiniteNumber(raw.last),
     bidSize:nullableFiniteNumber(raw.bid_size),
     askSize:nullableFiniteNumber(raw.ask_size),
-    bidLevels:Array.isArray(raw.bid_levels)?raw.bid_levels.map((x:any)=>({price:Number(x.price),size:Number(x.size)})).filter((x:any)=>Number.isFinite(x.price)&&x.price>0&&Number.isFinite(x.size)&&x.size>0):undefined,
-    askLevels:Array.isArray(raw.ask_levels)?raw.ask_levels.map((x:any)=>({price:Number(x.price),size:Number(x.size)})).filter((x:any)=>Number.isFinite(x.price)&&x.price>0&&Number.isFinite(x.size)&&x.size>0):undefined,
+    bidLevels:Array.isArray(raw.bid_levels)?raw.bid_levels
+      .filter((x:any)=>x!==null && typeof x==="object" && !Array.isArray(x))
+      .map((x:any)=>({price:nullableFiniteNumber(x.price),size:nullableFiniteNumber(x.size)}))
+      .filter((x:any):x is {price:number;size:number}=>x.price!==null&&x.price>0&&x.size!==null&&x.size>0):undefined,
+    askLevels:Array.isArray(raw.ask_levels)?raw.ask_levels
+      .filter((x:any)=>x!==null && typeof x==="object" && !Array.isArray(x))
+      .map((x:any)=>({price:nullableFiniteNumber(x.price),size:nullableFiniteNumber(x.size)}))
+      .filter((x:any):x is {price:number;size:number}=>x.price!==null&&x.price>0&&x.size!==null&&x.size>0):undefined,
     depthComplete:raw.depth_complete===true || raw.depthComplete===true,
     source:String(raw.source ?? "unknown-market-data"),
     dataQuality:raw.data_quality ? String(raw.data_quality) : undefined
@@ -151,7 +161,7 @@ export function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVeri
     NORMALIZATION_REJECTIONS.future_timestamp++;
     return null;
   }
-  if(quoteAgeMs>(allowPublicPriceOnly ? PUBLIC_FALLBACK_MAX_QUOTE_AGE_MS : maxQuoteAgeMs)){
+  if(quoteAgeMs>(allowPublicPriceOnly ? PUBLIC_FALLBACK_MAX_QUOTE_AGE_MS : effectiveMaxQuoteAgeMs)){
     NORMALIZATION_REJECTIONS.stale++;
     return null;
   }
