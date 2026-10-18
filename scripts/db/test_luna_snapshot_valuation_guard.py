@@ -9,7 +9,7 @@ from pathlib import Path
 import psycopg2
 
 ROOT = Path(__file__).resolve().parents[2]
-MIGRATION = ROOT / "supabase/migrations/202610170001_luna_paper_snapshot_valuation_guard.sql"
+MIGRATION = ROOT / "supabase/migrations/20261018014128_202610170001_luna_paper_snapshot_valuation_guard.sql"
 SESSION = "00000000-0000-0000-0000-000000000001"
 EXPERIMENT = "LUNA-PAPER-LIVE-15M-VERIFIED"
 
