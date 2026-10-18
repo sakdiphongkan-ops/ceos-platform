@@ -92,11 +92,6 @@ export function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVeri
     }
   }
 
-  if(q.last===null && q.bid===null && q.ask===null){
-    NORMALIZATION_REJECTIONS.no_price++;
-    return null;
-  }
-
   if(allowPublicPriceOnly){
     q.bid=null;
     q.ask=null;
@@ -104,6 +99,14 @@ export function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVeri
     q.askSize=null;
     q.bidLevels=undefined;
     q.askLevels=undefined;
+    q.depthComplete=false;
+  }
+
+  // Check usable price after applying any intentionally destructive fallback
+  // normalization so a price-less public quote cannot be emitted accidentally.
+  if(q.last===null && q.bid===null && q.ask===null){
+    NORMALIZATION_REJECTIONS.no_price++;
+    return null;
   }
 
   if(requireVerifiedBook){
