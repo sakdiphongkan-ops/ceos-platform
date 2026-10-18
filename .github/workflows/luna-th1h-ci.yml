@@ -171,8 +171,8 @@ jobs:
           cache: true
       - name: Type-check versioned TopTrader Edge Function sources
         run: |
-          deno check supabase/functions/luna-toptrader-market-ingest/index.ts
-          deno check supabase/functions/luna-toptrader-ws-ingest/index.ts
+          deno check --node-modules-dir=auto supabase/functions/luna-toptrader-market-ingest/index.ts
+          deno check --node-modules-dir=auto supabase/functions/luna-toptrader-ws-ingest/index.ts
 
   research_repaired_tournament_v3:
     if: github.event_name == 'workflow_dispatch' && inputs.pit_membership_url != '' && inputs.pit_membership_sha256 != ''
