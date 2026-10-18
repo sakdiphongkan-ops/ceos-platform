@@ -71,18 +71,21 @@ begin
     from public.luna_market_ingest_batches
     where batch_id=v_existing;
 
-    if v_reject is null and jsonb_array_length(p_rows)=v_existing_expected then
-      select
-        count(*),
-        count(*) filter (
-          where ts >= now() - make_interval(secs=>greatest(coalesce(v_max_staleness,60),1))
-            and ts <= now() + interval '30 seconds'
-        )
-      into v_existing_tick_rows,v_existing_fresh_tick_rows
-      from public.luna_market_ticks
-      where raw->>'verification_batch_id'=v_existing::text;
+    select
+      count(*),
+      count(*) filter (
+        where ts >= now() - make_interval(secs=>greatest(coalesce(v_max_staleness,60),1))
+          and ts <= now() + interval '30 seconds'
+      )
+    into v_existing_tick_rows,v_existing_fresh_tick_rows
+    from public.luna_market_ticks
+    where raw->>'verification_batch_id'=v_existing::text;
 
-      if v_existing_expected > 0
+    -- This nested conditional intentionally evaluates array_length only after
+    -- the earlier guards established that p_rows is a non-empty JSON array.
+    if v_reject is null then
+      if jsonb_array_length(p_rows)=v_existing_expected
+         and v_existing_expected > 0
          and v_existing_tick_rows = v_existing_expected
          and v_existing_fresh_tick_rows = v_existing_expected then
         return jsonb_build_object(
@@ -92,16 +95,6 @@ begin
           'rows_fresh',v_existing_fresh_tick_rows
         );
       end if;
-    else
-      select
-        count(*),
-        count(*) filter (
-          where ts >= now() - make_interval(secs=>greatest(coalesce(v_max_staleness,60),1))
-            and ts <= now() + interval '30 seconds'
-        )
-      into v_existing_tick_rows,v_existing_fresh_tick_rows
-      from public.luna_market_ticks
-      where raw->>'verification_batch_id'=v_existing::text;
     end if;
 
     v_reject := coalesce(
