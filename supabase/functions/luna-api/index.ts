@@ -1,10 +1,10 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { resolveRuntimeStatus } from "./runtime-status.mjs";
+import { describeSourceFailure, resolveRuntimeStatus, resolveServiceKey } from "./runtime-status.mjs";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SECRET_KEYS = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}");
-const SERVICE_KEY = SECRET_KEYS.default ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const SERVICE_KEY = resolveServiceKey(Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"), SECRET_KEYS.default);
 
 const STRATEGY = "luna-th1h-v1.4.0-15m-riskgated";
 const PAPER_EXPERIMENT = "LUNA-PAPER-LIVE-15M-VERIFIED";
@@ -551,11 +551,12 @@ async function buildFeed() {
   ];
   const hasFailure = (r: any) =>
     r.status === "rejected" || (r.status === "fulfilled" && Boolean(r.value?.error));
-  const sourceFailures: { message: string; code: string }[] = dbResultsByName
+  const sourceFailures: { message: string; code: string; failure_code?: string; http_status?: number | null }[] = dbResultsByName
     .filter(([, r]) => hasFailure(r))
     .map(([name, r]) => ({
       message: r.status === "rejected" ? "SOURCE_TIMEOUT_OR_REJECTED" : "SOURCE_QUERY_FAILED",
-      code: name
+      code: name,
+      ...describeSourceFailure(r)
     }));
   if (indexResult.status === "rejected" || (indexResult.status === "fulfilled" && !indexResult.value?.ok))
     sourceFailures.push({ message: "EXTERNAL_SOURCE_UNAVAILABLE", code: "market_index" });
