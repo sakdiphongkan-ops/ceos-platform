@@ -52,6 +52,11 @@ export function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVeri
     NORMALIZATION_REJECTIONS.missing_fields++;
     return null;
   }
+  if(raw.source_ts!==undefined && raw.source_ts!==null
+    && (typeof raw.source_ts!=="string" || !raw.source_ts.trim())){
+    NORMALIZATION_REJECTIONS.invalid_timestamp++;
+    return null;
+  }
   const q:Quote = {
     symbol:raw.symbol.trim(),
     ts:raw.ts,
@@ -146,22 +151,24 @@ export function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVeri
   }
 
   const quoteTsMs=Date.parse(q.ts);
-  if(!Number.isFinite(quoteTsMs) || quoteTsMs>nowMs+30_000){
+  if(!Number.isFinite(quoteTsMs)){
     NORMALIZATION_REJECTIONS.invalid_timestamp++;
     return null;
   }
   const freshnessTs=q.sourceTs ?? q.ts;
-  const parsedTs=Date.parse(freshnessTs);
-  if(!Number.isFinite(parsedTs)){
+  const sourceTsMs=Date.parse(freshnessTs);
+  if(!Number.isFinite(sourceTsMs)){
     NORMALIZATION_REJECTIONS.invalid_timestamp++;
     return null;
   }
-  const quoteAgeMs=nowMs-parsedTs;
-  if(quoteAgeMs<0){
+  const quoteAgeMs=nowMs-quoteTsMs;
+  const sourceAgeMs=nowMs-sourceTsMs;
+  if(quoteAgeMs<0 || sourceAgeMs<0){
     NORMALIZATION_REJECTIONS.future_timestamp++;
     return null;
   }
-  if(quoteAgeMs>(allowPublicPriceOnly ? PUBLIC_FALLBACK_MAX_QUOTE_AGE_MS : effectiveMaxQuoteAgeMs)){
+  const effectiveFreshnessLimit=allowPublicPriceOnly ? PUBLIC_FALLBACK_MAX_QUOTE_AGE_MS : effectiveMaxQuoteAgeMs;
+  if(quoteAgeMs>effectiveFreshnessLimit || sourceAgeMs>effectiveFreshnessLimit){
     NORMALIZATION_REJECTIONS.stale++;
     return null;
   }
