@@ -16,8 +16,47 @@ declare
   v_universe_valid integer:=0; v_distinct_symbols integer:=0;
   v_batch uuid:=gen_random_uuid(); v_reject text;
   v_existing uuid; v_existing_accepted boolean; v_reuse_existing boolean:=false;
-  v_existing_tick_rows bigint:=0; v_existing_expected integer:=0;
+  v_existing_tick_rows bigint:=0; v_existing_fresh_tick_rows bigint:=0;
+  v_existing_expected integer:=0;
 begin
+  -- An absent/blank hash cannot be stored in the ingest ledger (payload_hash is NOT NULL).
+  -- Reject it cleanly rather than raising a database constraint error.
+  if nullif(trim(coalesce(p_payload_hash,'')),'') is null then
+    return jsonb_build_object(
+      'ok',false,'accepted',false,'idempotent',false,
+      'source',p_source,'reject_reason','MISSING_PAYLOAD_HASH'
+    );
+  end if;
+
+  select configured, enabled, execution_grade, book_grade,
+         source_type, authority, max_staleness_seconds
+    into v_configured, v_enabled, v_execution_grade, v_book_grade,
+         v_source_type, v_authority, v_max_staleness
+  from public.luna_verified_market_sources
+  where upper(source_code)=upper(p_source);
+
+  v_source_found := FOUND;
+  if not v_source_found or v_configured is not true or v_enabled is not true then
+    v_reject:='SOURCE_NOT_CONFIGURED_OR_ENABLED';
+  elsif v_execution_grade is not true then
+    v_reject:='SOURCE_NOT_EXECUTION_GRADE';
+  elsif v_book_grade is not true then
+    v_reject:='SOURCE_NOT_BOOK_GRADE';
+  end if;
+
+  -- Run current freshness/contract gates before any idempotent early return.
+  if p_feed_ts is null or p_feed_ts > now() + interval '30 seconds' then
+    v_reject:=coalesce(v_reject,'INVALID_OR_FUTURE_FEED_TIMESTAMP');
+  elsif p_feed_ts < now() - make_interval(secs=>greatest(coalesce(v_max_staleness,60),1)) then
+    v_reject:=coalesce(v_reject,'STALE_FEED_TIMESTAMP');
+  elsif not coalesce(p_book_complete,false) then
+    v_reject:=coalesce(v_reject,'INCOMPLETE_ORDER_BOOK');
+  elsif coalesce(jsonb_typeof(p_rows),'') <> 'array' then
+    v_reject:=coalesce(v_reject,'EMPTY_OR_INVALID_BATCH');
+  elsif jsonb_array_length(p_rows)=0 then
+    v_reject:=coalesce(v_reject,'EMPTY_OR_INVALID_BATCH');
+  end if;
+
   select batch_id,accepted into v_existing,v_existing_accepted
   from public.luna_market_ingest_batches
   where upper(source)=upper(p_source)
@@ -25,38 +64,65 @@ begin
     and payload_hash=p_payload_hash
   limit 1;
 
-  -- An accepted metadata row is not itself proof that the tick rows still exist:
-  -- the 35-minute retention job removes ticks while retaining batch history.
-  -- Only confirm an idempotent success while every row from that batch remains.
+  -- An idempotent response is allowed only when current source/freshness gates pass,
+  -- the caller's batch shape matches the metadata, and every retained tick is fresh.
   if v_existing is not null and v_existing_accepted is true then
     select tick_count into v_existing_expected
     from public.luna_market_ingest_batches
     where batch_id=v_existing;
 
-    select count(*) into v_existing_tick_rows
-    from public.luna_market_ticks
-    where raw->>'verification_batch_id'=v_existing::text;
+    if v_reject is null and jsonb_array_length(p_rows)=v_existing_expected then
+      select
+        count(*),
+        count(*) filter (
+          where ts >= now() - make_interval(secs=>greatest(coalesce(v_max_staleness,60),1))
+            and ts <= now() + interval '30 seconds'
+        )
+      into v_existing_tick_rows,v_existing_fresh_tick_rows
+      from public.luna_market_ticks
+      where raw->>'verification_batch_id'=v_existing::text;
 
-    if v_existing_expected > 0 and v_existing_tick_rows = v_existing_expected then
-      return jsonb_build_object(
-        'ok',true,'accepted',true,'idempotent',true,
-        'batch_id',v_existing,'source',p_source,
-        'rows_expected',v_existing_expected,'rows_retained',v_existing_tick_rows
-      );
+      if v_existing_expected > 0
+         and v_existing_tick_rows = v_existing_expected
+         and v_existing_fresh_tick_rows = v_existing_expected then
+        return jsonb_build_object(
+          'ok',true,'accepted',true,'idempotent',true,
+          'batch_id',v_existing,'source',p_source,
+          'rows_expected',v_existing_expected,'rows_retained',v_existing_tick_rows,
+          'rows_fresh',v_existing_fresh_tick_rows
+        );
+      end if;
+    else
+      select
+        count(*),
+        count(*) filter (
+          where ts >= now() - make_interval(secs=>greatest(coalesce(v_max_staleness,60),1))
+            and ts <= now() + interval '30 seconds'
+        )
+      into v_existing_tick_rows,v_existing_fresh_tick_rows
+      from public.luna_market_ticks
+      where raw->>'verification_batch_id'=v_existing::text;
     end if;
 
+    v_reject := coalesce(
+      v_reject,
+      case
+        when v_existing_tick_rows <> v_existing_expected then 'IDEMPOTENCY_TICKS_NOT_RETAINED'
+        when v_existing_fresh_tick_rows <> v_existing_expected then 'STALE_FEED_TIMESTAMP'
+        else 'IDEMPOTENCY_TICK_COUNT_MISMATCH'
+      end
+    );
+
     update public.luna_market_ingest_batches
-    set accepted=false,
-        reject_reason='IDEMPOTENCY_TICKS_NOT_RETAINED'
+    set accepted=false,reject_reason=v_reject
     where batch_id=v_existing;
 
-    -- Fail this replay closed. A subsequent fresh observation will have a new
-    -- feed timestamp/hash and may be ingested as a distinct batch.
     return jsonb_build_object(
       'ok',false,'accepted',false,'idempotent',false,
       'batch_id',v_existing,'source',p_source,
-      'reject_reason','IDEMPOTENCY_TICKS_NOT_RETAINED',
+      'reject_reason',v_reject,
       'rows_expected',v_existing_expected,'rows_retained',v_existing_tick_rows,
+      'rows_fresh',v_existing_fresh_tick_rows,
       'retry_requires_new_snapshot',true
     );
   elsif v_existing is not null then
@@ -83,36 +149,6 @@ begin
     end if;
     v_batch := v_existing;
     v_reuse_existing := true;
-  end if;
-
-  select configured, enabled, execution_grade, book_grade,
-         source_type, authority, max_staleness_seconds
-    into v_configured, v_enabled, v_execution_grade, v_book_grade,
-         v_source_type, v_authority, v_max_staleness
-  from public.luna_verified_market_sources
-  where upper(source_code)=upper(p_source);
-
-  v_source_found := FOUND;
-  if not v_source_found or v_configured is not true or v_enabled is not true then
-    v_reject:='SOURCE_NOT_CONFIGURED_OR_ENABLED';
-  elsif v_execution_grade is not true then
-    v_reject:='SOURCE_NOT_EXECUTION_GRADE';
-  elsif v_book_grade is not true then
-    v_reject:='SOURCE_NOT_BOOK_GRADE';
-  end if;
-
-  if p_feed_ts is null or p_feed_ts > now() + interval '30 seconds' then
-    v_reject:=coalesce(v_reject,'INVALID_OR_FUTURE_FEED_TIMESTAMP');
-  elsif p_feed_ts < now() - make_interval(secs=>greatest(v_max_staleness,1)) then
-    v_reject:=coalesce(v_reject,'STALE_FEED_TIMESTAMP');
-  elsif nullif(trim(coalesce(p_payload_hash,'')),'') is null then
-    v_reject:=coalesce(v_reject,'MISSING_PAYLOAD_HASH');
-  elsif not coalesce(p_book_complete,false) then
-    v_reject:=coalesce(v_reject,'INCOMPLETE_ORDER_BOOK');
-  elsif coalesce(jsonb_typeof(p_rows),'') <> 'array' then
-    v_reject:=coalesce(v_reject,'EMPTY_OR_INVALID_BATCH');
-  elsif jsonb_array_length(p_rows)=0 then
-    v_reject:=coalesce(v_reject,'EMPTY_OR_INVALID_BATCH');
   end if;
 
   select id into v_session
