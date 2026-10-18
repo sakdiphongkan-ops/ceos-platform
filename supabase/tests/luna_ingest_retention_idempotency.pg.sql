@@ -139,12 +139,33 @@ DECLARE
   v_expected integer;
   v_retained bigint;
 BEGIN
-  -- Malformed input should return a structured rejection, not raise a NOT NULL error.
+  -- Missing inputs and malformed JSON rows must return structured rejections.
   v_result := public.luna_ingest_verified_market_batch(
     'TOPTRADER_REALTIME',clock_timestamp(),NULL,true,'[]'::jsonb
   );
+  IF v_result->>'accepted' <> 'false' OR v_result->>'reject_reason' <> 'EMPTY_OR_INVALID_BATCH' THEN
+    RAISE EXCEPTION 'empty row array must return a clean rejection before hash validation: %',v_result;
+  END IF;
+
+  v_result := public.luna_ingest_verified_market_batch(
+    'TOPTRADER_REALTIME',clock_timestamp(),NULL,true,'[{}]'::jsonb
+  );
   IF v_result->>'accepted' <> 'false' OR v_result->>'reject_reason' <> 'MISSING_PAYLOAD_HASH' THEN
     RAISE EXCEPTION 'missing payload hash must return a clean rejection: %',v_result;
+  END IF;
+
+  v_result := public.luna_ingest_verified_market_batch(
+    'TOPTRADER_REALTIME',NULL,'hash-null-feed',true,'[]'::jsonb
+  );
+  IF v_result->>'accepted' <> 'false' OR v_result->>'reject_reason' <> 'INVALID_OR_FUTURE_FEED_TIMESTAMP' THEN
+    RAISE EXCEPTION 'null feed timestamp must return a clean rejection: %',v_result;
+  END IF;
+
+  v_result := public.luna_ingest_verified_market_batch(
+    'TOPTRADER_REALTIME',clock_timestamp(),'hash-scalar-row',true,'[null]'::jsonb
+  );
+  IF v_result->>'accepted' <> 'false' OR v_result->>'reject_reason' <> 'EMPTY_OR_INVALID_BATCH' THEN
+    RAISE EXCEPTION 'scalar JSON row should be rejected without PostgreSQL exception: %',v_result;
   END IF;
 
   -- Case A: a fully persisted accepted batch may report an idempotent retry.
@@ -229,6 +250,41 @@ BEGIN
   FROM public.luna_market_ingest_batches WHERE batch_id=v_batch;
   IF v_accepted IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'stale replay must invalidate accepted metadata';
+  END IF;
+
+  -- A source disabled after initial acceptance cannot bypass current gates or delete its retained tick.
+  v_ts := clock_timestamp();
+  v_rows := jsonb_build_array(jsonb_build_object(
+    'symbol','PTT','ts',v_ts,'bid',31.76,'ask',31.81,'last',31.80,
+    'bid_size',1000,'ask_size',1200,'raw',jsonb_build_object('test','source-toggle')
+  ));
+  v_result := public.luna_ingest_verified_market_batch(
+    'TOPTRADER_REALTIME',v_ts,'hash-source-toggle',true,v_rows
+  );
+  IF v_result->>'accepted' <> 'true' THEN
+    RAISE EXCEPTION 'source-toggle fixture should start accepted: %',v_result;
+  END IF;
+  v_batch := (v_result->>'batch_id')::uuid;
+  UPDATE public.luna_verified_market_sources SET enabled=false WHERE source_code='TOPTRADER_REALTIME';
+
+  v_result := public.luna_ingest_verified_market_batch(
+    'TOPTRADER_REALTIME',v_ts,'hash-source-toggle',true,v_rows
+  );
+  IF v_result->>'accepted' <> 'false' OR v_result->>'reject_reason' <> 'SOURCE_NOT_CONFIGURED_OR_ENABLED' THEN
+    RAISE EXCEPTION 'disabled source must not receive idempotent success: %',v_result;
+  END IF;
+  UPDATE public.luna_verified_market_sources SET enabled=true WHERE source_code='TOPTRADER_REALTIME';
+
+  v_result := public.luna_ingest_verified_market_batch(
+    'TOPTRADER_REALTIME',v_ts,'hash-source-toggle',true,v_rows
+  );
+  IF v_result->>'accepted' <> 'false' OR v_result->>'retry_requires_new_snapshot' <> 'true' THEN
+    RAISE EXCEPTION 'rejected batch with retained ticks must require a new snapshot: %',v_result;
+  END IF;
+  SELECT count(*) INTO v_retained FROM public.luna_market_ticks
+  WHERE raw->>'verification_batch_id'=v_batch::text;
+  IF v_retained <> 1 THEN
+    RAISE EXCEPTION 'retry guard must preserve existing retained tick; actual rows %',v_retained;
   END IF;
 
   -- Case B: partial retention is also not allowed to report accepted=true.
