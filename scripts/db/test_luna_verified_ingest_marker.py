@@ -5,12 +5,14 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 import psycopg2
 
 ROOT = Path(__file__).resolve().parents[2]
 MIGRATION = ROOT / "supabase/migrations/202610170004_luna_verified_ingest_marker.sql"
+IDEMPOTENCY_MIGRATION = ROOT / "supabase/migrations/20261018020000_luna_ingest_rejected_batch_idempotency.sql"
 
 
 def connect():
@@ -77,6 +79,8 @@ def setup(conn):
               reject_reason text,
               session_id uuid
             );
+            CREATE UNIQUE INDEX luna_market_ingest_batches_source_ts_hash_uq
+              ON public.luna_market_ingest_batches(source, feed_ts, payload_hash);
 
             CREATE TABLE public.luna_market_ticks (
               session_id uuid NOT NULL,
@@ -133,6 +137,13 @@ def install_migration(conn):
     conn.commit()
 
 
+def install_idempotency_fix(conn):
+    sql = IDEMPOTENCY_MIGRATION.read_text(encoding="utf-8")
+    with conn.cursor() as cur:
+        cur.execute(sql)
+    conn.commit()
+
+
 def run_contract(conn, expect_verified: bool):
     with conn.cursor() as cur:
         cur.execute(
@@ -160,9 +171,53 @@ def run_contract(conn, expect_verified: bool):
     return result, raw
 
 
+
+def run_rejected_batch_retry_contract(conn):
+    feed_ts = datetime.now(timezone.utc)
+    rows = [{
+        "symbol": "PTT", "ts": feed_ts.isoformat(),
+        "bid": 34.50, "ask": 34.75, "last": 34.60,
+        "bid_size": 1000, "ask_size": 1200, "raw": {"vendor": "fixture"},
+    }]
+    payload_hash = "sha-retry-same-payload"
+    results = []
+    with conn.cursor() as cur:
+        for book_complete in (False, True, True):
+            cur.execute(
+                """
+                SELECT public.luna_ingest_verified_market_batch(
+                  %s, %s, %s, %s, %s::jsonb
+                );
+                """,
+                ("TOPTRADER_REALTIME", feed_ts, payload_hash, book_complete, json.dumps(rows)),
+            )
+            results.append(cur.fetchone()[0])
+        conn.commit()
+
+        first, retried, duplicate = results
+        assert first["accepted"] is False, first
+        assert retried["accepted"] is True and retried.get("idempotent") is False, retried
+        assert duplicate["accepted"] is True and duplicate.get("idempotent") is True, duplicate
+        batch_id = retried["batch_id"]
+        cur.execute(
+            "SELECT accepted, reject_reason FROM public.luna_market_ingest_batches WHERE batch_id=%s;",
+            (batch_id,),
+        )
+        batch = cur.fetchone()
+        cur.execute(
+            "SELECT count(*) FROM public.luna_market_ticks WHERE raw->>'verification_batch_id'=%s;",
+            (batch_id,),
+        )
+        inserted_ticks = cur.fetchone()[0]
+    assert batch == (True, None), batch
+    assert inserted_ticks == 1, (batch_id, inserted_ticks)
+    return {"first_reject": first, "retry_accepted": retried, "accepted_duplicate": duplicate,
+            "ticks_for_batch": inserted_ticks}
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", choices=("baseline", "migration"), required=True)
+    parser.add_argument("--mode", choices=("baseline", "migration", "fixed"), required=True)
     args = parser.parse_args()
 
     conn = connect()
@@ -179,7 +234,18 @@ def main():
 
         install_migration(conn)
         result, raw = run_contract(conn, expect_verified=True)
-        print(json.dumps({"status": "PASS", "result": result, "raw": raw}, default=str))
+
+        if args.mode == "migration":
+            try:
+                run_rejected_batch_retry_contract(conn)
+            except AssertionError as exc:
+                print(f"EXPECTED IDEMPOTENCY RED: {exc}")
+                return 1
+            raise AssertionError("pre-fix ingestion unexpectedly passed rejected-batch retry contract")
+
+        install_idempotency_fix(conn)
+        retry = run_rejected_batch_retry_contract(conn)
+        print(json.dumps({"status": "PASS", "result": result, "raw": raw, "retry_contract": retry}, default=str))
         return 0
     finally:
         conn.close()
