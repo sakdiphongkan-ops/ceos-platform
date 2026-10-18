@@ -3,6 +3,7 @@ import {mockQuotes} from "./mock.js";
 import {setMarketplaceQuotes} from "./set-marketplace.js";
 
 export function boundedPositiveNumber(value:unknown,fallback:number,minimum:number,maximum:number):number{
+  if(typeof value!=="number" && typeof value!=="string") return fallback;
   if(typeof value==="string" && value.trim()==="") return fallback;
   const parsed=Number(value);
   return Number.isFinite(parsed) && parsed>=minimum && parsed<=maximum ? parsed : fallback;
