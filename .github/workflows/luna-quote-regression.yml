@@ -18,6 +18,9 @@ on:
       - "luna-th1h/src/market/provider.ts"
       - "luna-th1h/src/execution.ts"
       - "luna-th1h/src/quote-regression.test.ts"
+      - "luna-th1h/src/ingest-retention-migration-contract.test.ts"
+      - "supabase/migrations/20261018093000_luna_verified_ingest_retention_idempotency.sql"
+      - "supabase/tests/luna_ingest_retention_idempotency.pg.sql"
       - "luna-th1h/package.json"
       - ".github/workflows/luna-quote-regression.yml"
 
@@ -27,6 +30,25 @@ permissions:
 jobs:
   quote-regression:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: luna_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d luna_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: luna_test
     defaults:
       run:
         working-directory: luna-th1h
@@ -41,5 +63,9 @@ jobs:
         run: npm run test:quote-regression
       - name: Check staged ingest-retention migration contract
         run: npm run test:ingest-retention-contract
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Exercise idempotency fix in disposable PostgreSQL
+        run: psql -X -v ON_ERROR_STOP=1 -f ../supabase/tests/luna_ingest_retention_idempotency.pg.sql
       - name: Typecheck worker and test sources
         run: npm run typecheck
