@@ -62,7 +62,7 @@ CREATE TABLE public.luna_market_ticks (
 
 CREATE FUNCTION public.luna_register_verified_feed_heartbeat(
   text,timestamptz,integer,boolean,text
-) RETURNS void LANGUAGE sql AS $$ SELECT; $$;
+) RETURNS void LANGUAGE plpgsql AS $ BEGIN RETURN; END; $;
 
 INSERT INTO public.luna_verified_market_sources
 (source_code,configured,enabled,execution_grade,book_grade,source_type,authority,max_staleness_seconds)
@@ -82,6 +82,7 @@ DECLARE
   v_rows jsonb;
   v_result jsonb;
   v_batch uuid;
+  v_accepted boolean;
   v_expected integer;
   v_retained bigint;
 BEGIN
@@ -120,10 +121,13 @@ BEGIN
      OR v_result->>'reject_reason' <> 'IDEMPOTENCY_TICKS_NOT_RETAINED' THEN
     RAISE EXCEPTION 'expired accepted metadata must fail closed: %',v_result;
   END IF;
-  SELECT accepted,tick_count INTO STRICT v_expected,v_retained
+  SELECT accepted,tick_count INTO STRICT v_accepted,v_expected
   FROM public.luna_market_ingest_batches WHERE batch_id=v_batch;
-  IF v_expected::text <> '0' THEN
-    RAISE EXCEPTION 'expired batch metadata must be marked rejected';
+  SELECT count(*) INTO v_retained FROM public.luna_market_ticks
+  WHERE raw->>'verification_batch_id'=v_batch::text;
+  IF v_accepted IS DISTINCT FROM false OR v_expected <> 1 OR v_retained <> 0 THEN
+    RAISE EXCEPTION 'expired batch metadata must be rejected but retain expected row count (accepted %, expected %, retained %)',
+      v_accepted,v_expected,v_retained;
   END IF;
 
   -- An identical replay must stay rejected until a new observation/hash arrives.
