@@ -16,6 +16,12 @@ const NORMALIZATION_REJECTIONS:Record<string,number>={
   stale:0,
 };
 
+function nullableFiniteNumber(value:unknown):number|null{
+  if(value===null || value===undefined || value==="") return null;
+  const n=Number(value);
+  return Number.isFinite(n)?n:null;
+}
+
 export function marketQuotes(provider:string):AsyncGenerator<Quote>{
   switch(provider){
     case "mock":
@@ -29,7 +35,7 @@ export function marketQuotes(provider:string):AsyncGenerator<Quote>{
   }
 }
 
-function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVerifiedBook:boolean, priceOnlyFallback:boolean, paperMode:boolean, liveTradingArmed:boolean):Quote|null{
+export function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVerifiedBook:boolean, priceOnlyFallback:boolean, paperMode:boolean, liveTradingArmed:boolean, nowMs:number=Date.now()):Quote|null{
   if(!raw?.symbol || !raw?.ts){
     NORMALIZATION_REJECTIONS.missing_fields++;
     return null;
@@ -38,11 +44,11 @@ function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVerifiedBoo
     symbol:String(raw.symbol),
     ts:String(raw.ts),
     sourceTs: raw.source_ts ? String(raw.source_ts) : undefined,
-    bid:Number.isFinite(Number(raw.bid))?Number(raw.bid):null,
-    ask:Number.isFinite(Number(raw.ask))?Number(raw.ask):null,
-    last:Number.isFinite(Number(raw.last))?Number(raw.last):null,
-    bidSize:Number.isFinite(Number(raw.bid_size))?Number(raw.bid_size):null,
-    askSize:Number.isFinite(Number(raw.ask_size))?Number(raw.ask_size):null,
+    bid:nullableFiniteNumber(raw.bid),
+    ask:nullableFiniteNumber(raw.ask),
+    last:nullableFiniteNumber(raw.last),
+    bidSize:nullableFiniteNumber(raw.bid_size),
+    askSize:nullableFiniteNumber(raw.ask_size),
     bidLevels:Array.isArray(raw.bid_levels)?raw.bid_levels.map((x:any)=>({price:Number(x.price),size:Number(x.size)})).filter((x:any)=>Number.isFinite(x.price)&&x.price>0&&Number.isFinite(x.size)&&x.size>0):undefined,
     askLevels:Array.isArray(raw.ask_levels)?raw.ask_levels.map((x:any)=>({price:Number(x.price),size:Number(x.size)})).filter((x:any)=>Number.isFinite(x.price)&&x.price>0&&Number.isFinite(x.size)&&x.size>0):undefined,
     source:String(raw.source ?? "unknown-market-data"),
@@ -70,14 +76,26 @@ function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVerifiedBoo
   }
 
   if(requireVerifiedBook){
+    const quality=String(q.dataQuality??"").toLowerCase();
+    const explicitVerification =
+      raw?.verified_book===true
+      || raw?.verifiedBook===true
+      || raw?.verified===true
+      || (quality.includes("verified") && !quality.includes("unverified"))
+      // The authenticated Settrade realtime stream is an approved source;
+      // TopTrader public snapshots still need the explicit verified marker
+      // produced by the book-parity validator.
+      || sourceName.startsWith("settrade-open-api-realtime");
     const verifiedBook =
       Number.isFinite(Number(q.bid))
       && Number.isFinite(Number(q.ask))
       && Number(q.bid)>0
+      && Number(q.ask)>0
       && Number(q.ask)>=Number(q.bid)
       && Number(q.bidSize)>0
       && Number(q.askSize)>0
-      && !String(q.dataQuality??"").toLowerCase().includes("unverified");
+      && explicitVerification
+      && !quality.includes("unverified");
     if(!verifiedBook && !allowPublicPriceOnly){
       NORMALIZATION_REJECTIONS.unverified_book++;
       return null;
@@ -90,7 +108,7 @@ function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVerifiedBoo
     NORMALIZATION_REJECTIONS.invalid_timestamp++;
     return null;
   }
-  const quoteAgeMs=Date.now()-parsedTs;
+  const quoteAgeMs=nowMs-parsedTs;
   if(quoteAgeMs<0){
     NORMALIZATION_REJECTIONS.future_timestamp++;
     return null;
@@ -100,6 +118,16 @@ function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVerifiedBoo
     return null;
   }
   return q;
+}
+
+export function shouldEmitQuote(previous:Map<string,string>,q:Quote):boolean{
+  const signature=JSON.stringify([
+    q.ts,q.sourceTs??null,q.bid,q.ask,q.last,q.bidSize,q.askSize,
+    q.source,q.dataQuality??null
+  ]);
+  if(previous.get(q.symbol)===signature) return false;
+  previous.set(q.symbol,signature);
+  return true;
 }
 
 async function fetchGatewaySnapshot(url:string,key:string,timeoutMs:number){
@@ -278,9 +306,7 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
             liveTradingArmed
           );
           if(!q) continue;
-          const sig=JSON.stringify([q.ts,q.bid,q.ask,q.last,q.bidSize,q.askSize]);
-          if(previous.get(q.symbol)===sig) continue;
-          previous.set(q.symbol,sig);
+          if(!shouldEmitQuote(previous,q)) continue;
           yield q;
         }
       }catch(err){
@@ -368,9 +394,7 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
         continue;
       }
       acceptedCount++;
-      const sig=JSON.stringify([q.ts,q.bid,q.ask,q.last,q.bidSize,q.askSize]);
-      if(previous.get(q.symbol)===sig) continue;
-      previous.set(q.symbol,sig);
+      if(!shouldEmitQuote(previous,q)) continue;
       yield q;
     }
     if(Date.now()-lastDiagnosticsAt>=10_000){
