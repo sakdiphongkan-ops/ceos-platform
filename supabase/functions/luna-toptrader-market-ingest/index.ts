@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { isFreshTickObservationAgeMs } from "./quote-freshness.mjs";
+import { buildPrioritySymbols } from "./priority-symbols.mjs";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -273,6 +274,16 @@ Deno.serve(async (req: Request) => {
       .limit(15);
     if (queuedResult.error) priorityQueryErrors.push("queued_orders:" + queuedResult.error.message);
 
+    // Every open holding needs a fresh verified book for portfolio valuation.
+    // Keep holdings in the per-minute priority sweep even when they have no new signal/order.
+    const heldPositionsResult = await supabase.from("luna_paper_live_positions")
+      .select("symbol")
+      .eq("experiment_code", "LUNA-PAPER-LIVE-15M-VERIFIED")
+      .gt("qty", 0)
+      .order("updated_at", { ascending: false })
+      .limit(1000);
+    if (heldPositionsResult.error) priorityQueryErrors.push("held_positions:" + heldPositionsResult.error.message);
+
     const candidateResult = await supabase.from("luna_shadow_15m_decisions")
       .select("symbol,bar_end,candidate_action,momentum_1,feed_verified,verified_book,execution_blocked")
       .eq("session_id", maintenance.data.session_id)
@@ -298,11 +309,14 @@ Deno.serve(async (req: Request) => {
       ...ranked(latestCandidates.filter((r: any) => r.candidate_action === "BUY_CANDIDATE")).slice(0, 10),
       ...ranked(latestCandidates.filter((r: any) => r.candidate_action === "SELL_CANDIDATE")).slice(0, 10),
     ].map((r: any) => String(r.symbol ?? "").trim().toUpperCase()).filter(Boolean);
-    const activeSet = new Set(symbols);
-    const prioritySymbols = [...new Set([
-      ...(queuedResult.data ?? []).map((r: any) => String(r.symbol ?? "").trim().toUpperCase()),
-      ...signalSymbols,
-    ])].filter((symbol) => activeSet.has(symbol)).slice(0, 30);
+    const priorityQueue = buildPrioritySymbols({
+      activeSymbols: symbols,
+      heldSymbols: (heldPositionsResult.data ?? []).map((r: any) => String(r.symbol ?? "").trim().toUpperCase()),
+      queuedSymbols: (queuedResult.data ?? []).map((r: any) => String(r.symbol ?? "").trim().toUpperCase()),
+      signalSymbols,
+      limit: 30,
+    });
+    const prioritySymbols = priorityQueue.symbols;
     const prioritySet = new Set(prioritySymbols);
 
     // Prioritise active paper orders and verified candidates using smaller, sequential
@@ -408,6 +422,10 @@ Deno.serve(async (req: Request) => {
       accepted_batches: accepted, rejected_batches: rejected, mismatch_rows: mismatchRows, stale_rows: staleRows, stale_tick_observation_rows: staleTickRows,
       upstream_error_count: errors.length, upstream_errors: errors.slice(0, 8),
       priority_symbols_requested: prioritySymbols.length,
+      held_positions_found: priorityQueue.heldCount,
+      held_position_symbols_requested: priorityQueue.heldSymbols,
+      held_symbols_outside_active_universe: priorityQueue.heldSymbolsOutsideActiveUniverse,
+      priority_limit_exceeded_by_holdings: priorityQueue.limitExceededByHoldings,
       priority_query_errors: priorityQueryErrors,
       priority_chunk_size: 5,
       priority_only_mode: priorityOnly,
