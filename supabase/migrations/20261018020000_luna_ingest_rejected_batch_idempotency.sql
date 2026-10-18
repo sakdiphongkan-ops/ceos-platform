@@ -23,7 +23,7 @@ declare
   v_execution_grade boolean:=false; v_book_grade boolean:=false;
   v_source_type text; v_authority text;
   v_max_staleness integer:=60;
-  v_session uuid; v_rows integer:=0; v_valid integer:=0;
+  v_session uuid; v_rows integer:=0; v_valid integer:=0; v_inserted integer:=0;
   v_universe_valid integer:=0; v_distinct_symbols integer:=0;
   v_batch uuid:=gen_random_uuid(); v_reject text;
   v_existing uuid; v_existing_accepted boolean; v_reuse_existing boolean:=false;
@@ -188,6 +188,25 @@ begin
     bid_size bigint, ask_size bigint, raw jsonb
   )
   on conflict do nothing;
+
+  GET DIAGNOSTICS v_inserted = ROW_COUNT;
+  IF v_inserted <> v_rows THEN
+    -- On a partial conflict, remove any rows from this attempted batch before returning.
+    -- This guarantees we never mark a partially persisted set of ticks as verified/accepted.
+    DELETE FROM public.luna_market_ticks
+    WHERE raw->>'verification_batch_id'=v_batch::text;
+
+    UPDATE public.luna_market_ingest_batches
+    SET accepted=false,reject_reason='TICK_INSERT_CONFLICT'
+    WHERE batch_id=v_batch;
+
+    RETURN jsonb_build_object(
+      'ok',false,'accepted',false,'idempotent',false,'batch_id',v_batch,
+      'source',p_source,'session_id',v_session,
+      'reject_reason','TICK_INSERT_CONFLICT',
+      'rows_expected',v_rows,'rows_inserted',v_inserted
+    );
+  END IF;
 
   perform public.luna_register_verified_feed_heartbeat(
     p_source,p_feed_ts,v_rows,p_book_complete,p_payload_hash
