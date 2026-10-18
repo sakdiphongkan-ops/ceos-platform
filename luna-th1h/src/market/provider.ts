@@ -140,14 +140,17 @@ export function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVeri
     const quality=String(q.dataQuality??"").trim().toLowerCase().replace(/[\s-]+/g,"_");
     const verifiedQuality=["verified","verified_book","book_verified","verified_execution_book"].includes(quality);
     const explicitlyUnverified=quality.includes("unverified") || quality==="not_verified" || quality.startsWith("not_");
+    const authenticatedRealtimeSource =
+      sourceName==="settrade-open-api-realtime"
+      || sourceName==="set-market-data-api-realtime";
     const explicitVerification =
       raw?.verified_book===true
       || raw?.verifiedBook===true
       || raw?.verified===true
       || verifiedQuality
-      // The authenticated Settrade realtime stream is an approved source;
-      // TopTrader/public snapshots require explicit book-parity verification.
-      || sourceName.startsWith("settrade-open-api-realtime");
+      // Only exact, configured authenticated realtime source identifiers bypass
+      // a separately-issued verification marker. Do not trust source-name prefixes.
+      || authenticatedRealtimeSource;
     const verifiedBook =
       typeof q.bid==="number" && Number.isFinite(q.bid) && q.bid>0
       && typeof q.ask==="number" && Number.isFinite(q.ask) && q.ask>0
@@ -189,10 +192,15 @@ export function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVeri
 }
 
 export function shouldEmitQuote(previous:Map<string,string>,q:Quote):boolean{
+  // Receipt timestamps advance on every poll and must not defeat deduplication.
+  // Preserve actual source-time changes, while treating an absent provider source
+  // timestamp as absent rather than substituting the local receipt time.
+  const sourceTimestamp=q.sourceTs??null;
+  const bookSourceTimestamp=q.sourceTs ? (q.bookSourceTs??null) : null;
   const signature=JSON.stringify([
-    q.ts,q.sourceTs??null,q.bid,q.ask,q.last,q.bidSize,q.askSize,
+    sourceTimestamp,bookSourceTimestamp,q.bid,q.ask,q.last,q.bidSize,q.askSize,
     q.bidLevels??null,q.askLevels??null,q.depthComplete??null,
-    q.bookReceivedTs??null,q.bookSourceTs??null,q.source,q.dataQuality??null
+    q.source,q.dataQuality??null
   ]);
   if(previous.get(q.symbol)===signature) return false;
   previous.set(q.symbol,signature);
