@@ -314,14 +314,14 @@ export function planOrder(
 
   const notional=qty*referencePrice;
   const risk=validateOrder({
-    symbol:q.symbol,side,notional,
+    symbol,side,notional,
     grossExposure:currentGrossExposure(state)+Math.max(0,reservations.reservedGrossExposure),
     currentPositionNotional:currentNotional,
     cash:Math.max(0,state.cash-Math.max(0,reservations.reservedBuyCash))
   });
   if(!risk.ok) return {accepted:false,reason:risk.reason};
   return {
-    accepted:true,symbol:q.symbol,side,qty,referencePrice,
+    accepted:true,symbol,side,qty,referencePrice,
     visibleDepth:verifiedBook?(q.bidLevels?.length?q.bidLevels.reduce((s,l)=>s+Math.max(0,l.size),0):Number(q.bidSize??0)):0,
     depthLevels:verifiedBook && q.depthComplete ? q.bidLevels:undefined,
     depthComplete:verifiedBook && q.depthComplete===true,
