@@ -4,7 +4,7 @@
  * provider, write to Supabase, create orders, or enable live trading.
  */
 import {strict as assert} from "node:assert";
-import {normalizeGatewayQuote,shouldEmitQuote} from "./market/provider.js";
+import {boundedPositiveNumber,normalizeGatewayQuote,shouldEmitQuote} from "./market/provider.js";
 import {createPortfolio,planOrder} from "./execution.js";
 
 const NOW=Date.parse("2026-10-18T03:00:00.000Z");
@@ -68,16 +68,19 @@ check("future_timestamp",()=>{
   assert.equal(q,null);
 });
 
-// 5. Crossed/invalid bid-ask book must fail closed.
-check("invalid_bid_ask",()=>{
-  const q=normalize({bid:31.90,ask:31.80});
-  assert.equal(q,null);
+// 5. Invalid/non-positive prices and crossed books must fail closed.
+check("invalid_price_and_book",()=>{
+  assert.equal(normalize({last:0}),null);
+  assert.equal(normalize({bid:-1}),null);
+  assert.equal(normalize({bid:31.90,ask:31.80}),null);
 });
 
-// 6. Book with no explicit verification provenance must fail closed.
-check("missing_verification",()=>{
-  const q=normalize({data_quality:undefined,verified_book:undefined,verified:undefined});
-  assert.equal(q,null);
+// 6. Verification must be an exact approved marker, not a substring match.
+check("strict_verification_provenance",()=>{
+  assert.equal(normalize({data_quality:undefined,verified_book:undefined,verified:undefined}),null);
+  assert.equal(normalize({data_quality:"not verified",verified_book:undefined,verified:undefined}),null);
+  assert.equal(normalize({data_quality:"unverified_book",verified_book:undefined,verified:undefined}),null);
+  assert.ok(normalize({data_quality:"VERIFIED_BOOK"}));
 });
 
 // 7. SELL with zero holdings must never fabricate sellable quantity.
@@ -95,8 +98,22 @@ check("zero_position_sell",()=>{
   if(!result.accepted) assert.equal(result.reason,"NO_LONG_POSITION");
 });
 
-// 8. Identical duplicate snapshots are suppressed; a newer source timestamp is not.
-check("duplicate_snapshot",()=>{
+// 8. SELL cannot use an unverified last price outside the named paper-only fallback.
+check("unverified_sell_with_position",()=>{
+  const q={...normalize()!,source:"set-marketplace",dataQuality:"not verified"};
+  const portfolio=createPortfolio(30_000);
+  portfolio.positions.PTT={qty:100,avgPrice:31.5,costBasis:3150,realizedPnl:0};
+  const result=planOrder({
+    symbol:"PTT",ts:FRESH_TS,action:"SELL",
+    reason:"REGRESSION_UNVERIFIED_SELL",strategyVersion:"quote-regression"
+  },q,portfolio);
+  assert.equal(result.accepted,false);
+  if(!result.accepted) assert.equal(result.reason,"NO_EXIT_PRICE");
+});
+
+// 9. Identical duplicate snapshots are suppressed; changed source timestamps
+// and changed deeper book levels must be emitted.
+check("duplicate_snapshot_includes_depth",()=>{
   const q=normalize();
   assert.ok(q);
   const previous=new Map<string,string>();
@@ -105,8 +122,20 @@ check("duplicate_snapshot",()=>{
   assert.equal(shouldEmitQuote(previous,{
     ...q,sourceTs:new Date(NOW-200).toISOString()
   }),true);
+  assert.equal(shouldEmitQuote(previous,{
+    ...q,bidLevels:[{price:31.7,size:500}]
+  }),true);
+});
+
+// 10. Malformed environment values must not disable quote-age checks or spin polling.
+check("bounded_environment_numbers",()=>{
+  assert.equal(boundedPositiveNumber("NaN",2_000,1,60_000),2_000);
+  assert.equal(boundedPositiveNumber("Infinity",2_000,1,60_000),2_000);
+  assert.equal(boundedPositiveNumber("",2_000,1,60_000),2_000);
+  assert.equal(boundedPositiveNumber("0",2_000,1,60_000),2_000);
+  assert.equal(boundedPositiveNumber("5000",2_000,1,60_000),5_000);
 });
 
 console.log("LUNA quote regression matrix: PASS");
 for(const name of passed) console.log("PASS "+name);
-console.log(`TOTAL ${passed.length}/8; paper-only; no network/database/order side effects`);
+console.log(`TOTAL ${passed.length}/10; paper-only; no network/database/order side effects`);
