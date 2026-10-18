@@ -1150,7 +1150,7 @@ def _apply_toptrader_rest_payload(payload: Any) -> int:
         symbol = str(row.get("symbol") or "").upper()
         if symbol not in SYMBOLS:
             continue
-        _quote_payload(symbol=symbol, last=row.get("last"), bid=row.get("bid") if REALTIME_BOOK else None, ask=row.get("ask") if REALTIME_BOOK else None, source="toptrader-public-rest", source_ts=_epoch_to_iso(row.get("datetime")), total_volume=row.get("volume"), raw=row, book_snapshot=REALTIME_BOOK)
+        _quote_payload(symbol=symbol, last=row.get("last"), bid=row.get("bid") if REALTIME_BOOK else None, ask=row.get("ask") if REALTIME_BOOK else None, source="toptrader-public-rest", source_ts=_epoch_to_iso(row.get("datetime")), total_volume=row.get("volume"), raw=row)
         found += 1
     return found
 
