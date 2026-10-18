@@ -4,6 +4,58 @@
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+-- Minimal disposable pg_net/scheduler fixtures for the request-audit migration.
+CREATE SCHEMA IF NOT EXISTS private;
+CREATE SCHEMA IF NOT EXISTS net;
+
+CREATE TABLE private.luna_scheduler_secrets (
+  name text PRIMARY KEY,
+  secret text NOT NULL
+);
+INSERT INTO private.luna_scheduler_secrets(name, secret)
+VALUES ('tradingview_ingest', 'fixture-secret-never-returned');
+
+CREATE TABLE net.http_request_queue (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  method text NOT NULL,
+  url text NOT NULL,
+  headers jsonb NOT NULL,
+  body jsonb NOT NULL,
+  timeout_milliseconds integer NOT NULL,
+  requested_at timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+
+CREATE TABLE net._http_response (
+  id bigint PRIMARY KEY,
+  status_code integer,
+  content_type text,
+  headers jsonb,
+  content text,
+  timed_out boolean,
+  error_msg text,
+  created timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+
+CREATE FUNCTION net.http_post(
+  p_url text,
+  p_body jsonb,
+  p_params jsonb,
+  p_headers jsonb,
+  p_timeout_milliseconds integer
+)
+RETURNS bigint
+LANGUAGE plpgsql
+AS $stub$
+DECLARE
+  v_request_id bigint;
+BEGIN
+  INSERT INTO net.http_request_queue(method, url, headers, body, timeout_milliseconds)
+  VALUES ('POST', p_url, p_headers, p_body, p_timeout_milliseconds)
+  RETURNING id INTO v_request_id;
+  RETURN v_request_id;
+END;
+$stub$;
+
 CREATE TABLE public.luna_verified_market_sources (
   source_code text primary key,
   configured boolean not null,
