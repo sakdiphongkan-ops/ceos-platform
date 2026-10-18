@@ -267,7 +267,8 @@ async function buildFeed() {
       .from("luna_execution_controls")
       .select("execution_mode,armed,kill_switch,max_daily_loss,max_daily_turnover,max_order_notional,max_orders_per_minute,updated_at,updated_by")
       .eq("id", true)
-      .maybeSingle(),
+      .maybeSingle()
+      .retry(false),
     supabase
       .from("luna_fast_live_state")
       .select("symbol,current_price,last_quote_ts,source,score")
@@ -335,6 +336,7 @@ async function buildFeed() {
       .gt("ts", new Date(Date.now() - 60000).toISOString())
       .order("ts", { ascending: false })
       .limit(1000)
+      .retry(false)
   ]);
 
   const session = sessionResult.status === "fulfilled" ? (sessionResult.value.data?.[0] ?? null) : null;
