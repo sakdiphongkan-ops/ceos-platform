@@ -15,6 +15,8 @@ const validRaw={
   symbol:"PTT",
   ts:FRESH_TS,
   source_ts:FRESH_TS,
+  book_received_ts:FRESH_TS,
+  book_source_ts:FRESH_TS,
   bid:31.75,
   ask:31.80,
   last:31.80,
@@ -76,6 +78,9 @@ check("invalid_price_and_book",()=>{
   assert.equal(normalize({bid:31.90,ask:31.80}),null);
   assert.equal(normalize({bid:true}),null);
   assert.equal(normalize({ask:{price:31.8}}),null);
+  assert.equal(normalize({...validRaw,book_received_ts:undefined}),null);
+  assert.equal(normalize({...validRaw,book_received_ts:new Date(NOW-5_000).toISOString()}),null);
+  assert.equal(normalize({...validRaw,book_source_ts:new Date(NOW-5_000).toISOString()}),null);
   assert.doesNotThrow(()=>normalize({bid_levels:[null,{price:true,size:"large"}]}));
 });
 
@@ -168,6 +173,8 @@ check("set_marketplace_null_and_invalid_price",()=>{
   },NOW,2_000);
   assert.ok(valid);
   assert.equal(valid.sourceTs,freshTime);
+  assert.equal(valid.bookReceivedTs,new Date(NOW).toISOString());
+  assert.equal(valid.bookSourceTs,freshTime);
   assert.equal(valid.ts,new Date(NOW).toISOString());
 
   const missing=normalizeSetStockQuote({
