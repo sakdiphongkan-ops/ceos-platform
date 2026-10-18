@@ -177,7 +177,9 @@ check("paper_price_only_fallback_is_narrow",()=>{
   assert.equal(allowed.bidSize,null);
   const noLast=normalizeGatewayQuote({...raw,last:null},2_000,true,true,true,false,NOW);
   assert.equal(noLast,null);
-  const liveArmed=normalizeGatewayQuote(raw,2_000,true,true,true,true,NOW);
+  const liveArmed=normalizeGatewayQuote({
+    ...raw,data_quality:undefined,verified_book:undefined,verifiedBook:undefined,verified:undefined
+  },2_000,true,true,true,true,NOW);
   assert.equal(liveArmed,null);
 });
 
