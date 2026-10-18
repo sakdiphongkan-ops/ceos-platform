@@ -8,6 +8,22 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE SCHEMA IF NOT EXISTS private;
 CREATE SCHEMA IF NOT EXISTS net;
 
+-- Mirror Supabase API roles so the disposable integration test verifies SECURITY
+-- DEFINER RPC ACLs, not only function behavior under the postgres owner.
+DO $roles$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname='anon') THEN
+    CREATE ROLE anon NOLOGIN;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname='authenticated') THEN
+    CREATE ROLE authenticated NOLOGIN;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname='service_role') THEN
+    CREATE ROLE service_role NOLOGIN;
+  END IF;
+END;
+$roles$;
+
 CREATE TABLE private.luna_scheduler_secrets (
   name text PRIMARY KEY,
   secret text NOT NULL
@@ -128,6 +144,26 @@ VALUES ('PTT',true),('KBANK',true),('AOT',true);
 
 \ir ../migrations/20261018093000_luna_verified_ingest_retention_idempotency.sql
 \ir ../migrations/20261018110000_luna_ingest_http_request_audit.sql
+
+DO $grants$
+BEGIN
+  IF has_function_privilege('anon','public.luna_ingest_verified_market_batch(text,timestamp with time zone,text,boolean,jsonb)'::regprocedure,'EXECUTE')
+     OR has_function_privilege('authenticated','public.luna_ingest_verified_market_batch(text,timestamp with time zone,text,boolean,jsonb)'::regprocedure,'EXECUTE')
+     OR NOT has_function_privilege('service_role','public.luna_ingest_verified_market_batch(text,timestamp with time zone,text,boolean,jsonb)'::regprocedure,'EXECUTE') THEN
+    RAISE EXCEPTION 'verified-ingest RPC must be executable only by service_role';
+  END IF;
+  IF has_function_privilege('anon','public.luna_trigger_toptrader_market_ingest(jsonb)'::regprocedure,'EXECUTE')
+     OR has_function_privilege('authenticated','public.luna_trigger_toptrader_market_ingest(jsonb)'::regprocedure,'EXECUTE')
+     OR NOT has_function_privilege('service_role','public.luna_trigger_toptrader_market_ingest(jsonb)'::regprocedure,'EXECUTE') THEN
+    RAISE EXCEPTION 'REST ingest scheduler wrapper must be executable only by service_role';
+  END IF;
+  IF has_function_privilege('anon','public.luna_trigger_toptrader_ws_ingest()'::regprocedure,'EXECUTE')
+     OR has_function_privilege('authenticated','public.luna_trigger_toptrader_ws_ingest()'::regprocedure,'EXECUTE')
+     OR NOT has_function_privilege('service_role','public.luna_trigger_toptrader_ws_ingest()'::regprocedure,'EXECUTE') THEN
+    RAISE EXCEPTION 'WS ingest scheduler wrapper must be executable only by service_role';
+  END IF;
+END;
+$grants$;
 
 DO $$
 DECLARE
