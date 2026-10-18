@@ -1,5 +1,14 @@
 # LUNA quote regression investigation — 2026-10-18
 
+## Latest verification snapshot — 2026-10-18 10:36 UTC
+
+- PR #44 head: `8f4db5c7d0223b0e5d1052262041e0c774b1b4bd`; still open as Draft, not merged.
+- All six latest GitHub Actions workflows for that head completed successfully: [quote regression matrix](https://github.com/sakdiphongkan-ops/ceos-platform/actions/runs/39119510044), [LUNA gateway CI](https://github.com/sakdiphongkan-ops/ceos-platform/actions/runs/39119510024), [LUNA-TH1H CI](https://github.com/sakdiphongkan-ops/ceos-platform/actions/runs/39119510023), [CEOS Platform Build](https://github.com/sakdiphongkan-ops/ceos-platform/actions/runs/39119509980), [Next.js Security Upgrade CI](https://github.com/sakdiphongkan-ops/ceos-platform/actions/runs/39119509979), and [LUNA 2.0 CI](https://github.com/sakdiphongkan-ops/ceos-platform/actions/runs/39119509989).
+- Fresh read-only Supabase snapshot at 10:36:26 UTC: 259 accepted `TOPTRADER_REALTIME` batches; latest accepted batch created at 2026-10-15 08:35:02 UTC, with feed timestamp 08:34:31 UTC. Current `luna_market_ticks` rows = 0 and `luna_worker_quote_cache` rows = 0. The zero tick count is compatible with the configured 35-minute retention outside session; the zero worker-cache count is a separate unresolved consumer/telemetry issue.
+- The audit migration table and reconciliation function are absent from production, and neither proposed migration in this PR has been applied. Cron jobs 3, 8, 10, 12, and 13 are active. Railway production still reports all five LUNA services Offline, with no pending deployment work.
+- The SET official 2026 holiday calendar lists October 16 and October 23 as holidays, but not Monday October 19; Monday October 19 is therefore the next expected trading session, subject to any updated exchange notice ([SET calendar](https://www.set.or.th/en/about/event-calendar/holiday?year=2026)). The next-open test must observe the live session; a Sunday/closed-session probe cannot establish a provider outage.
+
+
 ## Regression matrix
 
 Owner references: `202610170003` and `202610170001`.
