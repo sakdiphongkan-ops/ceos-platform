@@ -86,7 +86,7 @@ export function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVeri
     priceOnlyFallback
     && paperMode
     && !liveTradingArmed
-    && sourceName.includes("tradingview-public-screener");
+    && sourceName==="tradingview-public-screener";
 
   // A last price must be strictly positive. For normal feeds, validate any
   // supplied top-of-book fields even when callers disable the verified-book gate.
