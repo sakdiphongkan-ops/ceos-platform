@@ -2,9 +2,15 @@ import type {Quote} from "../types.js";
 import {mockQuotes} from "./mock.js";
 import {setMarketplaceQuotes} from "./set-marketplace.js";
 
+export function boundedPositiveNumber(value:unknown,fallback:number,minimum:number,maximum:number):number{
+  if(typeof value==="string" && value.trim()==="") return fallback;
+  const parsed=Number(value);
+  return Number.isFinite(parsed) && parsed>=minimum && parsed<=maximum ? parsed : fallback;
+}
+
 const PUBLIC_FALLBACK_MAX_QUOTE_AGE_MS=Math.max(
   5_000,
-  Number(process.env.LUNA_PUBLIC_FALLBACK_MAX_QUOTE_AGE_MS ?? 8_000)
+  boundedPositiveNumber(process.env.LUNA_PUBLIC_FALLBACK_MAX_QUOTE_AGE_MS,8_000,1,60_000)
 );
 
 const NORMALIZATION_REJECTIONS:Record<string,number>={
@@ -14,6 +20,8 @@ const NORMALIZATION_REJECTIONS:Record<string,number>={
   invalid_timestamp:0,
   future_timestamp:0,
   stale:0,
+  invalid_price:0,
+  invalid_book:0,
 };
 
 function nullableFiniteNumber(value:unknown):number|null{
@@ -54,17 +62,39 @@ export function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVeri
     source:String(raw.source ?? "unknown-market-data"),
     dataQuality:raw.data_quality ? String(raw.data_quality) : undefined
   };
-  if(q.last===null && q.bid===null && q.ask===null){
-    NORMALIZATION_REJECTIONS.no_price++;
-    return null;
-  }
-
   const sourceName=String(q.source??"").toLowerCase();
   const allowPublicPriceOnly =
     priceOnlyFallback
     && paperMode
     && !liveTradingArmed
     && sourceName.includes("tradingview-public-screener");
+
+  // A last price must be strictly positive. For normal feeds, validate any
+  // supplied top-of-book fields even when callers disable the verified-book gate.
+  // Public price-only fallback intentionally discards book fields below.
+  if(q.last!==null && q.last<=0){
+    NORMALIZATION_REJECTIONS.invalid_price++;
+    return null;
+  }
+  if(!allowPublicPriceOnly){
+    if((q.bid!==null && q.bid<=0) || (q.ask!==null && q.ask<=0)){
+      NORMALIZATION_REJECTIONS.invalid_price++;
+      return null;
+    }
+    if(q.bid!==null && q.ask!==null && q.ask<q.bid){
+      NORMALIZATION_REJECTIONS.invalid_book++;
+      return null;
+    }
+    if((q.bidSize!==null && q.bidSize<=0) || (q.askSize!==null && q.askSize<=0)){
+      NORMALIZATION_REJECTIONS.invalid_book++;
+      return null;
+    }
+  }
+
+  if(q.last===null && q.bid===null && q.ask===null){
+    NORMALIZATION_REJECTIONS.no_price++;
+    return null;
+  }
 
   if(allowPublicPriceOnly){
     q.bid=null;
@@ -76,32 +106,36 @@ export function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVeri
   }
 
   if(requireVerifiedBook){
-    const quality=String(q.dataQuality??"").toLowerCase();
+    const quality=String(q.dataQuality??"").trim().toLowerCase().replace(/[\\s-]+/g,"_");
+    const verifiedQuality=["verified","verified_book","book_verified","verified_execution_book"].includes(quality);
+    const explicitlyUnverified=quality.includes("unverified") || quality==="not_verified" || quality.startsWith("not_");
     const explicitVerification =
       raw?.verified_book===true
       || raw?.verifiedBook===true
       || raw?.verified===true
-      || (quality.includes("verified") && !quality.includes("unverified"))
+      || verifiedQuality
       // The authenticated Settrade realtime stream is an approved source;
-      // TopTrader public snapshots still need the explicit verified marker
-      // produced by the book-parity validator.
+      // TopTrader/public snapshots require explicit book-parity verification.
       || sourceName.startsWith("settrade-open-api-realtime");
     const verifiedBook =
-      Number.isFinite(Number(q.bid))
-      && Number.isFinite(Number(q.ask))
-      && Number(q.bid)>0
-      && Number(q.ask)>0
-      && Number(q.ask)>=Number(q.bid)
-      && Number(q.bidSize)>0
-      && Number(q.askSize)>0
+      typeof q.bid==="number" && Number.isFinite(q.bid) && q.bid>0
+      && typeof q.ask==="number" && Number.isFinite(q.ask) && q.ask>0
+      && q.ask>=q.bid
+      && typeof q.bidSize==="number" && Number.isFinite(q.bidSize) && q.bidSize>0
+      && typeof q.askSize==="number" && Number.isFinite(q.askSize) && q.askSize>0
       && explicitVerification
-      && !quality.includes("unverified");
+      && !explicitlyUnverified;
     if(!verifiedBook && !allowPublicPriceOnly){
       NORMALIZATION_REJECTIONS.unverified_book++;
       return null;
     }
   }
 
+  const quoteTsMs=Date.parse(q.ts);
+  if(!Number.isFinite(quoteTsMs) || quoteTsMs>nowMs+30_000){
+    NORMALIZATION_REJECTIONS.invalid_timestamp++;
+    return null;
+  }
   const freshnessTs=q.sourceTs ?? q.ts;
   const parsedTs=Date.parse(freshnessTs);
   if(!Number.isFinite(parsedTs)){
@@ -123,6 +157,7 @@ export function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVeri
 export function shouldEmitQuote(previous:Map<string,string>,q:Quote):boolean{
   const signature=JSON.stringify([
     q.ts,q.sourceTs??null,q.bid,q.ask,q.last,q.bidSize,q.askSize,
+    q.bidLevels??null,q.askLevels??null,q.depthComplete??null,
     q.source,q.dataQuality??null
   ]);
   if(previous.get(q.symbol)===signature) return false;
@@ -265,8 +300,8 @@ async function* gatewayWebSocketMessages(streamUrl:string,key:string):AsyncGener
 async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
   const url = process.env.LUNA_MARKET_GATEWAY_URL ?? "";
   const key = process.env.LUNA_MARKET_GATEWAY_KEY ?? "";
-  const pollMs = Math.max(50,Number(process.env.LUNA_MARKET_GATEWAY_POLL_MS ?? 100));
-  const timeoutMs = Math.max(200,Number(process.env.LUNA_MARKET_GATEWAY_TIMEOUT_MS ?? 750));
+  const pollMs = boundedPositiveNumber(process.env.LUNA_MARKET_GATEWAY_POLL_MS,100,50,60_000);
+  const timeoutMs = boundedPositiveNumber(process.env.LUNA_MARKET_GATEWAY_TIMEOUT_MS,750,200,60_000);
   const streamEnabled=String(process.env.LUNA_MARKET_GATEWAY_STREAM_ENABLED ?? "true").toLowerCase()==="true";
   const configuredStreamUrl=String(process.env.LUNA_MARKET_GATEWAY_STREAM_URL ?? "").trim();
   const streamUrl = configuredStreamUrl || url.replace(/^http:/i,"ws:").replace(/^https:/i,"wss:")+"/quotes/stream";
@@ -282,7 +317,7 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
     process.env.LUNA_PRICE_ONLY_FALLBACK
       ?? (paperMode && !liveTradingArmed ? "true" : "false")
   ).toLowerCase()==="true";
-  const maxQuoteAgeMs=Number(process.env.LUNA_MAX_QUOTE_AGE_MS ?? 2000);
+  const maxQuoteAgeMs=boundedPositiveNumber(process.env.LUNA_MAX_QUOTE_AGE_MS,2_000,1,60_000);
   let acceptedCount=0;
   let rejectedCount=0;
   let lastDiagnosticsAt=0;
