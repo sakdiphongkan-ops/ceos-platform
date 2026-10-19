@@ -142,8 +142,8 @@ VALUES ('11111111-1111-4111-8111-111111111111',current_date,now()-interval '5 mi
 INSERT INTO public.luna_universe(symbol,is_active)
 VALUES ('PTT',true),('KBANK',true),('AOT',true);
 
-\ir ../migrations/20261018093000_luna_verified_ingest_retention_idempotency.sql
-\ir ../migrations/20261018110000_luna_ingest_http_request_audit.sql
+\ir ../migrations/20261019021449_luna_verified_ingest_retention_idempotency_20261018.sql
+\ir ../migrations/20261019021452_luna_ingest_http_request_audit_20261018.sql
 
 DO $grants$
 BEGIN
