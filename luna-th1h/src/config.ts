@@ -47,7 +47,15 @@ const num=(name:string,fallback:number)=>{
   const [minimum,maximum]=NUMERIC_BOUNDS[name] ?? [0,Number.MAX_SAFE_INTEGER];
   return parseConfigNumber(process.env[name],fallback,minimum,maximum);
 };
-const bool=(name:string, fallback:boolean)=>String(process.env[name] ?? fallback).toLowerCase()==="true";
+export function parseConfigBoolean(raw:string|undefined,fallback:boolean):boolean{
+  if(raw===undefined) return fallback;
+  const normalized=raw.trim().toLowerCase();
+  if(normalized==="true") return true;
+  if(normalized==="false") return false;
+  return fallback;
+}
+
+const bool=(name:string, fallback:boolean)=>parseConfigBoolean(process.env[name],fallback);
 
 const MARKET_TIMEZONE="Asia/Bangkok";
 const requestedTimezone=process.env.LUNA_TIMEZONE ?? MARKET_TIMEZONE;
