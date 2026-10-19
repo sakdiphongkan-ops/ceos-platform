@@ -16,13 +16,10 @@ const PUBLIC_FALLBACK_MAX_QUOTE_AGE_MS=Math.max(
 );
 
 export function requireVerifiedBookFromEnvironment(value:unknown):boolean{
-  // Only the exact explicit string "false" disables this gate. Missing or
-  // malformed values must preserve the safe verified-book requirement.
+  // Only explicitly configured false may disable this gate. Missing or
+  // malformed values preserve the safe verified-book requirement.
   if(typeof value!=="string") return true;
-  const normalized=value.trim().toLowerCase();
-  if(normalized==="false") return false;
-  if(normalized==="true") return true;
-  return true;
+  return parseConfigBoolean(value,true);
 }
 
 const NORMALIZATION_REJECTIONS:Record<string,number>={
