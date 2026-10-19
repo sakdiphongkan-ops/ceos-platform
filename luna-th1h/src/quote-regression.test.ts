@@ -385,6 +385,39 @@ check("non_finite_execution_inputs_fail_closed",()=>{
   if(!badStateOrder.accepted) assert.equal(badStateOrder.reason,"INVALID_PORTFOLIO_STATE");
 });
 
+// 15. Rejected fills must leave every portfolio field unchanged.
+check("apply_fill_failure_is_atomic",()=>{
+  const state=createPortfolio(30_000);
+  state.positions.ptt={qty:2,avgPrice:31.5,costBasis:63,realizedPnl:0};
+  const beforeCash=state.cash;
+  const beforePosition={...state.positions.ptt};
+  assert.throws(()=>applyFill(state,{
+    symbol:"PTT",side:"SELL",qty:3,
+    referencePrice:31.8,fillPrice:31.8,notional:95.4,
+    fee:0,slippage:0,totalCashDelta:95.4
+  }),/SELL_EXCEEDS_POSITION/);
+  assert.deepEqual(state.positions,{ptt:beforePosition});
+  assert.equal(state.cash,beforeCash);
+
+  const empty=createPortfolio(30_000);
+  assert.throws(()=>applyFill(empty,{
+    symbol:"PTT",side:"BUY",qty:1_000,
+    referencePrice:100,fillPrice:100,notional:100_000,
+    fee:0,slippage:0,totalCashDelta:-100_000
+  }),/INSUFFICIENT_PAPER_CASH/);
+  assert.deepEqual(empty.positions,{});
+  assert.equal(empty.cash,30_000);
+
+  const slippageState=createPortfolio(30_000);
+  assert.throws(()=>applyFill(slippageState,{
+    symbol:"PTT",side:"BUY",qty:1,
+    referencePrice:100,fillPrice:101,notional:101,
+    fee:0,slippage:0,totalCashDelta:-101
+  }),/INCONSISTENT_SIMULATED_FILL/);
+  assert.deepEqual(slippageState.positions,{});
+  assert.equal(slippageState.cash,30_000);
+});
+
 console.log("LUNA quote regression matrix: PASS");
 for(const name of passed) console.log("PASS "+name);
-console.log(`TOTAL ${passed.length}/14; paper-only; no network/database/order side effects`);
+console.log(`TOTAL ${passed.length}/15; paper-only; no network/database/order side effects`);
