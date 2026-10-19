@@ -19,6 +19,28 @@ app._connectivity_proof = lambda: {
 }
 app._selected_provider = "SETTRADE"
 
+def assert_invalid_place_order(**overrides):
+    payload = {
+        "client_order_id": "validation-test-1",
+        "session_id": "validation-session-1",
+        "strategy_version": "validation-test",
+        "symbol": "AAA",
+        "side": "BUY",
+        "price": 100.1,
+        "volume": 1,
+    }
+    payload.update(overrides)
+    try:
+        app.PlaceOrder(**payload)
+    except Exception:
+        return
+    raise AssertionError("invalid place-order payload was accepted")
+
+assert_invalid_place_order(price=float("nan"))
+assert_invalid_place_order(price=float("inf"))
+assert_invalid_place_order(volume=True)
+assert_invalid_place_order(volume=1.5)
+
 class Payload:
     def __init__(self, client_order_id="test-order-1", symbol="AAA", side="BUY", price=100.1, volume=100):
         self.client_order_id = client_order_id
@@ -36,6 +58,9 @@ with app._quote_lock:
         "bid_size": 1000,
         "ask_size": 1000,
         "source": "settrade-open-api-realtime",
+        "source_ts": None,
+        "book_received_ts": app._now_iso(),
+        "book_source_ts": None,
         "_ingested_ts": time.time(),
     }
 
