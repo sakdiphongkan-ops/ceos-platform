@@ -5,8 +5,10 @@
  */
 import {strict as assert} from "node:assert";
 import {boundedPositiveNumber,normalizeGatewayQuote,shouldEmitQuote} from "./market/provider.js";
+import {config,parseConfigNumber} from "./config.js";
+import {validateOrder} from "./risk.js";
 import {normalizeSetStockQuote,numberOrNull} from "./market/set-marketplace.js";
-import {createPortfolio,planOrder} from "./execution.js";
+import {createPortfolio,planOrder,simulateFill} from "./execution.js";
 
 const NOW=Date.parse("2026-10-18T03:00:00.000Z");
 const FRESH_TS=new Date(NOW-250).toISOString();
@@ -316,6 +318,57 @@ check("paper_price_only_fallback_is_narrow",()=>{
   assert.equal(liveArmed,null);
 });
 
+// 14. Invalid environment/config/reservation/signal/order values must fail closed.
+check("non_finite_execution_inputs_fail_closed",()=>{
+  assert.equal(parseConfigNumber("NaN",2_000,1,60_000),2_000);
+  assert.equal(parseConfigNumber("Infinity",2_000,1,60_000),2_000);
+  assert.equal(parseConfigNumber("-1",2_000,1,60_000),2_000);
+  assert.equal(parseConfigNumber("61000",2_000,1,60_000),2_000);
+
+  const q=normalize();
+  assert.ok(q);
+  const previousMaxOrders=config.maxOrdersPerMinute;
+  try{
+    config.maxOrdersPerMinute=Number.NaN;
+    const invalidConfig=planOrder({
+      symbol:"PTT",ts:FRESH_TS,action:"BUY",
+      reason:"REGRESSION_NAN_CONFIG",strategyVersion:"quote-regression"
+    },q,createPortfolio(30_000));
+    assert.equal(invalidConfig.accepted,false);
+    if(!invalidConfig.accepted) assert.equal(invalidConfig.reason,"INVALID_EXECUTION_CONFIG");
+  }finally{
+    config.maxOrdersPerMinute=previousMaxOrders;
+  }
+
+  const invalidReservation=planOrder({
+    symbol:"PTT",ts:FRESH_TS,action:"BUY",
+    reason:"REGRESSION_NAN_RESERVATION",strategyVersion:"quote-regression"
+  },q,createPortfolio(30_000),{
+    reservedBuyCash:Number.NaN,reservedGrossExposure:0,reservedSellQty:{}
+  });
+  assert.equal(invalidReservation.accepted,false);
+  if(!invalidReservation.accepted) assert.equal(invalidReservation.reason,"INVALID_EXECUTION_RESERVATIONS");
+
+  const invalidAllocation=planOrder({
+    symbol:"PTT",ts:FRESH_TS,action:"BUY",
+    reason:"REGRESSION_NAN_ALLOCATION",strategyVersion:"quote-regression",
+    targetAllocationPct:Number.NaN
+  },q,createPortfolio(30_000));
+  assert.equal(invalidAllocation.accepted,false);
+  if(!invalidAllocation.accepted) assert.equal(invalidAllocation.reason,"INVALID_TARGET_ALLOCATION");
+
+  const invalidRisk=validateOrder({
+    symbol:"PTT",side:"BUY",notional:Number.NaN,
+    grossExposure:0,currentPositionNotional:0,cash:30_000
+  });
+  assert.equal(invalidRisk.ok,false);
+
+  assert.throws(()=>simulateFill({
+    accepted:true,symbol:"PTT",side:"BUY",qty:Number.NaN as unknown as number,
+    referencePrice:31.8,visibleDepth:0,spreadBps:0,reason:"REGRESSION_NAN_FILL"
+  }),/INVALID_SIMULATED_FILL_INPUT/);
+});
+
 console.log("LUNA quote regression matrix: PASS");
 for(const name of passed) console.log("PASS "+name);
-console.log(`TOTAL ${passed.length}/13; paper-only; no network/database/order side effects`);
+console.log(`TOTAL ${passed.length}/14; paper-only; no network/database/order side effects`);
