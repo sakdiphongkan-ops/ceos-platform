@@ -37,10 +37,22 @@ def assert_invalid_place_order(**overrides):
     raise AssertionError("invalid place-order payload was accepted")
 
 assert_invalid_place_order(price=True)
+assert_invalid_place_order(price="100")
 assert_invalid_place_order(price=float("nan"))
 assert_invalid_place_order(price=float("inf"))
 assert_invalid_place_order(volume=True)
 assert_invalid_place_order(volume=1.5)
+# Integer-valued share prices are valid and must not be rejected.
+integer_price = app.PlaceOrder(
+    client_order_id="integer-price-test",
+    session_id="validation-session-1",
+    strategy_version="validation-test",
+    symbol="AAA",
+    side="BUY",
+    price=100,
+    volume=1,
+)
+assert integer_price.price == 100.0
 
 class Payload:
     def __init__(self, client_order_id="test-order-1", symbol="AAA", side="BUY", price=100.1, volume=100):

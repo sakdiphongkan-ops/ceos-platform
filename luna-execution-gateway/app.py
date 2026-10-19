@@ -19,7 +19,7 @@ except Exception:
     websockets = None
 
 from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel, Field, StrictFloat, StrictInt
+from pydantic import BaseModel, Field, StrictInt, field_validator
 from broker_timing import extract_broker_native_submitted_at_ms
 
 try:
@@ -1800,9 +1800,20 @@ class PlaceOrder(BaseModel):
     strategy_version: str = Field(min_length=1, max_length=200)
     symbol: str = Field(min_length=1, max_length=32)
     side: str
-    price: StrictFloat = Field(gt=0, allow_inf_nan=False)
+    price: float = Field(gt=0, allow_inf_nan=False)
     volume: StrictInt = Field(gt=0)
     reason: str = ""
+
+    @field_validator("price", mode="before")
+    @classmethod
+    def price_must_be_numeric_not_boolean(cls, value: Any) -> Any:
+        # Permit integer-valued stock prices (e.g. 100), but reject booleans and
+        # strings/containers before Pydantic's float conversion.
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError("price_must_be_numeric")
+        if not math.isfinite(float(value)):
+            raise ValueError("price_must_be_finite")
+        return value
 
 
 class CancelOrder(BaseModel):
