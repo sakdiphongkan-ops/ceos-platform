@@ -71,6 +71,7 @@ function executionConfigurationIsValid():boolean{
 }
 
 function portfolioStateIsValid(state:PortfolioState):boolean{
+  if(!state || typeof state!=="object" || Array.isArray(state)) return false;
   const finiteNonNegative=(value:unknown)=>
     typeof value==="number" && Number.isFinite(value) && value>=0;
   if(!finiteNonNegative(state.cash) || !finiteNonNegative(state.initialCapital) || state.initialCapital===0
@@ -80,6 +81,7 @@ function portfolioStateIsValid(state:PortfolioState):boolean{
   if(state.recentBuyTimestamps!==undefined
     && (!Array.isArray(state.recentBuyTimestamps) || !state.recentBuyTimestamps.every(x=>typeof x==="number" && Number.isFinite(x)))) return false;
   if(!state.positions || typeof state.positions!=="object" || Array.isArray(state.positions)) return false;
+  if(!state.marks || typeof state.marks!=="object" || Array.isArray(state.marks)) return false;
   return Object.values(state.positions).every(pos=>
     !!pos && finiteNonNegative(pos.qty) && finiteNonNegative(pos.avgPrice)
     && finiteNonNegative(pos.costBasis)
@@ -210,6 +212,9 @@ export function planOrder(
   reservations:ExecutionReservations={reservedBuyCash:0,reservedGrossExposure:0,reservedSellQty:{}},
   costOverrides:ExecutionCostOverrides={}
 ):PlannedOrder{
+  if(!signal || typeof signal!=="object" || !q || typeof q!=="object"){
+    return {accepted:false,reason:"INVALID_EXECUTION_INPUT"};
+  }
   if(signal.action==="HOLD") return {accepted:false,reason:"SIGNAL_HOLD"};
   if(signal.action!=="BUY" && signal.action!=="SELL"){
     return {accepted:false,reason:"INVALID_SIGNAL_ACTION"};
