@@ -892,13 +892,19 @@ def _normalize_account_state(eq):
 
 
 def _num(value):
-    try:
-        if value is None or value == "":
-            return None
-        n = float(value)
-        return n if n == n and n not in (float("inf"), float("-inf")) else None
-    except Exception:
+    # JSON booleans are Python integers by inheritance; never turn true into price 1.
+    # Reject containers and non-finite values instead of coercing provider payloads.
+    if value is None or isinstance(value, bool):
         return None
+    if not isinstance(value, (int, float, str)):
+        return None
+    if isinstance(value, str) and not value.strip():
+        return None
+    try:
+        n = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return n if math.isfinite(n) else None
 
 
 def _now_iso():

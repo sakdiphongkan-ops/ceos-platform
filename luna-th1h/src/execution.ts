@@ -101,13 +101,20 @@ function portfolioStateIsValid(state:PortfolioState):boolean{
 function reservationsAreValid(reservations:ExecutionReservations):boolean{
   const finiteNonNegative=(value:unknown)=>
     typeof value==="number" && Number.isFinite(value) && value>=0;
-  return !!reservations
-    && finiteNonNegative(reservations.reservedBuyCash)
-    && finiteNonNegative(reservations.reservedGrossExposure)
-    && !!reservations.reservedSellQty
-    && typeof reservations.reservedSellQty==="object"
-    && !Array.isArray(reservations.reservedSellQty)
-    && Object.values(reservations.reservedSellQty).every(finiteNonNegative);
+  if(!reservations
+    || !finiteNonNegative(reservations.reservedBuyCash)
+    || !finiteNonNegative(reservations.reservedGrossExposure)
+    || !reservations.reservedSellQty
+    || typeof reservations.reservedSellQty!=="object"
+    || Array.isArray(reservations.reservedSellQty)) return false;
+  const canonicalKeys=new Set<string>();
+  for(const key of Object.keys(reservations.reservedSellQty)){
+    if(!key.trim()) return false;
+    const canonical=canonicalSymbol(key);
+    if(canonicalKeys.has(canonical)) return false;
+    canonicalKeys.add(canonical);
+  }
+  return Object.values(reservations.reservedSellQty).every(finiteNonNegative);
 }
 
 function allowPaperPriceOnlyExecution(q:Quote){
@@ -373,7 +380,7 @@ export function planOrder(
     recent.push(orderNowMs);
     return {
       accepted:true,symbol,side,qty,referencePrice,
-      visibleDepth:verifiedBook?(q.askLevels?.length?q.askLevels.reduce((s,l)=>s+Math.max(0,l.size),0):Number(q.askSize??0)):0,
+      visibleDepth:verifiedBook?(q.depthComplete && q.askLevels?.length?q.askLevels.reduce((s,l)=>s+Math.max(0,l.size),0):Number(q.askSize??0)):0,
       depthLevels:verifiedBook && q.depthComplete ? q.askLevels:undefined,
       depthComplete:verifiedBook && q.depthComplete===true,
       spreadBps:verifiedBook
@@ -405,7 +412,7 @@ export function planOrder(
   if(!risk.ok) return {accepted:false,reason:risk.reason};
   return {
     accepted:true,symbol,side,qty,referencePrice,
-    visibleDepth:verifiedBook?(q.bidLevels?.length?q.bidLevels.reduce((s,l)=>s+Math.max(0,l.size),0):Number(q.bidSize??0)):0,
+    visibleDepth:verifiedBook?(q.depthComplete && q.bidLevels?.length?q.bidLevels.reduce((s,l)=>s+Math.max(0,l.size),0):Number(q.bidSize??0)):0,
     depthLevels:verifiedBook && q.depthComplete ? q.bidLevels:undefined,
     depthComplete:verifiedBook && q.depthComplete===true,
     spreadBps:verifiedBook

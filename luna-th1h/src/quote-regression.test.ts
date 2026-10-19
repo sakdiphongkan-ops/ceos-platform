@@ -207,6 +207,21 @@ check("execution_source_allowlist_is_exact",()=>{
   },lowerQuote,lowerPortfolio);
   assert.equal(lowerSell.accepted,true);
   if(lowerSell.accepted) assert.equal(lowerSell.symbol,"PTT");
+
+  // Partial depth levels are informational only; impact must use the live top size.
+  const partialDepthQuote={
+    ...normalized,
+    askSize:100,
+    askLevels:[{price:31.8,size:10_000}],
+    depthComplete:false
+  };
+  const partialDepthOrder=planOrder({
+    symbol:"PTT",ts:FRESH_TS,action:"BUY",
+    reason:"REGRESSION_PARTIAL_DEPTH_IMPACT",strategyVersion:"quote-regression",
+    targetAllocationPct:5
+  },partialDepthQuote,createPortfolio(30_000));
+  assert.equal(partialDepthOrder.accepted,true);
+  if(partialDepthOrder.accepted) assert.equal(partialDepthOrder.visibleDepth,100);
 });
 
 // 11. Malformed environment values must not disable quote-age checks or spin polling.

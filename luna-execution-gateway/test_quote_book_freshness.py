@@ -4,6 +4,13 @@ from datetime import datetime, timedelta, timezone
 
 
 def test_gateway_env_parsers_fail_closed():
+    assert gateway_app._num(True) is None
+    assert gateway_app._num(False) is None
+    assert gateway_app._num({"price": 31.8}) is None
+    assert gateway_app._num([31.8]) is None
+    assert gateway_app._num("NaN") is None
+    assert gateway_app._num("Infinity") is None
+    assert gateway_app._num("31.8") == 31.8
     assert gateway_app._env_bool("not-a-bool", True) is True
     assert gateway_app._env_bool("not-a-bool", False) is False
     assert gateway_app._env_bool("false", True) is False
@@ -79,6 +86,18 @@ def test_price_only_event_does_not_refresh_order_book_age():
         assert partial["bid_size"] is None and partial["ask_size"] is None
         assert partial["book_received_ts"] is None
         assert partial["book_source_ts"] is None
+
+        # Boolean prices are malformed provider data, not the numeric value 1.
+        gateway_app._quote_payload(
+            symbol=symbol, bid=True, ask=31.80, bid_size=100, ask_size=200,
+            source="settrade-open-api-realtime", source_ts=None,
+            book_snapshot=True,
+        )
+        invalid = dict(gateway_app._quotes[symbol])
+        assert invalid["bid"] is None and invalid["ask"] is None
+        assert invalid["bid_size"] is None and invalid["ask_size"] is None
+        assert invalid["book_received_ts"] is None
+        assert invalid["book_source_ts"] is None
     finally:
         gateway_app._quotes.pop(symbol, None)
 
