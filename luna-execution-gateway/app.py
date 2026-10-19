@@ -19,7 +19,7 @@ except Exception:
     websockets = None
 
 from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel, Field, FiniteFloat, StrictInt
+from pydantic import BaseModel, Field, StrictFloat, StrictInt
 from broker_timing import extract_broker_native_submitted_at_ms
 
 try:
@@ -1800,7 +1800,7 @@ class PlaceOrder(BaseModel):
     strategy_version: str = Field(min_length=1, max_length=200)
     symbol: str = Field(min_length=1, max_length=32)
     side: str
-    price: FiniteFloat = Field(gt=0)
+    price: StrictFloat = Field(gt=0, allow_inf_nan=False)
     volume: StrictInt = Field(gt=0)
     reason: str = ""
 
@@ -2230,6 +2230,17 @@ def place(
     }
 
 
+def _hard_cancel_gate():
+    # Cancelling is a broker-side mutation too; never bypass the paper-only,
+    # armed-state, kill-switch or order-gate controls used for new orders.
+    if PAPER_ONLY_MODE or not LIVE_ARMED:
+        raise HTTPException(status_code=423, detail={"code": "live_trading_not_armed"})
+    if GATEWAY_KILL_SWITCH:
+        raise HTTPException(status_code=423, detail={"code": "gateway_kill_switch_active"})
+    if not GATEWAY_ORDER_GATE_ENABLED:
+        raise HTTPException(status_code=423, detail={"code": "hard_order_gate_disabled"})
+
+
 @app.post("/cancel")
 def cancel(
     payload: CancelOrder,
@@ -2237,6 +2248,7 @@ def cancel(
     x_luna_order: Optional[str] = Header(default=None),
 ):
     order_auth(x_luna_gateway, x_luna_order)
+    _hard_cancel_gate()
     eq = client()
     try:
         ledger = _ledger_lookup_broker_order(payload.broker_order_id)
@@ -2247,6 +2259,10 @@ def cancel(
         not request
         or not request.get("executed")
         or str(request.get("broker_order_id")) != payload.broker_order_id
+        or (
+            request.get("client_order_id") is not None
+            and str(request.get("client_order_id")) != payload.client_order_id
+        )
     ):
         raise HTTPException(status_code=409, detail={"code": "cancel_order_not_bound_to_persisted_execution"})
 

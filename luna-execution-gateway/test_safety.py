@@ -36,6 +36,7 @@ def assert_invalid_place_order(**overrides):
         return
     raise AssertionError("invalid place-order payload was accepted")
 
+assert_invalid_place_order(price=True)
 assert_invalid_place_order(price=float("nan"))
 assert_invalid_place_order(price=float("inf"))
 assert_invalid_place_order(volume=True)
@@ -88,5 +89,32 @@ try:
     raise AssertionError("circuit breaker did not block")
 except Exception as exc:
     assert getattr(exc, "status_code", None) == 503
+
+# Cancels are prohibited under paper-only, unarmed, kill-switch, and disabled-gate states.
+previous = (
+    app.PAPER_ONLY_MODE, app.LIVE_ARMED, app.GATEWAY_KILL_SWITCH,
+    app.GATEWAY_ORDER_GATE_ENABLED
+)
+try:
+    for paper_only, armed, kill, gate, expected_code in [
+        (True, False, False, True, "live_trading_not_armed"),
+        (False, False, False, True, "live_trading_not_armed"),
+        (False, True, True, True, "gateway_kill_switch_active"),
+        (False, True, False, False, "hard_order_gate_disabled"),
+    ]:
+        app.PAPER_ONLY_MODE = paper_only
+        app.LIVE_ARMED = armed
+        app.GATEWAY_KILL_SWITCH = kill
+        app.GATEWAY_ORDER_GATE_ENABLED = gate
+        try:
+            app._hard_cancel_gate()
+        except Exception as exc:
+            assert getattr(exc, "status_code", None) == 423
+            assert exc.detail["code"] == expected_code
+        else:
+            raise AssertionError("cancel gate failed to block an unsafe state")
+finally:
+    (app.PAPER_ONLY_MODE, app.LIVE_ARMED, app.GATEWAY_KILL_SWITCH,
+     app.GATEWAY_ORDER_GATE_ENABLED) = previous
 
 print("gateway safety guard tests: PASS")
