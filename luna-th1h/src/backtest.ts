@@ -46,8 +46,9 @@ export interface BacktestResult{
   finalPortfolio:ReturnType<typeof snapshot>;
 }
 
-function equity(state:PortfolioState){
-  const s=snapshot(state);
+function equity(state:PortfolioState,nowMs=Date.now()){
+  const s=snapshot(state,nowMs);
+  if(!s.valuation_ready || s.market_value===null) throw new Error(`BACKTEST_VALUATION_INCOMPLETE:${s.unpriced_symbols.join(",")}`);
   return s.cash+s.market_value;
 }
 
@@ -158,7 +159,8 @@ export function runBacktest(
       });
     }
 
-    const s=snapshot(state);
+    const s=snapshot(state,nowMs);
+    if(!s.valuation_ready || s.market_value===null || s.gross_exposure===null || s.unrealized_pnl===null) throw new Error(`BACKTEST_VALUATION_INCOMPLETE:${s.unpriced_symbols.join(",")}`);
     equityCurve.push({
       ts:q.ts,
       equity:s.cash+s.market_value,
@@ -171,7 +173,9 @@ export function runBacktest(
     });
   }
 
-  const finalPortfolio=snapshot(state);
+  const finalNowMs=quotes.length?Date.parse(quotes[quotes.length-1].ts):Date.now();
+  const finalPortfolio=snapshot(state,finalNowMs);
+  if(!finalPortfolio.valuation_ready || finalPortfolio.market_value===null) throw new Error(`BACKTEST_FINAL_VALUATION_INCOMPLETE:${finalPortfolio.unpriced_symbols.join(",")}`);
   const finalEquity=finalPortfolio.cash+finalPortfolio.market_value;
   const wins=trades.filter(t=>t.realizedPnl>0).length;
   const losses=trades.filter(t=>t.realizedPnl<0).length;
