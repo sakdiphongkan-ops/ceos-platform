@@ -1,5 +1,6 @@
 import asyncio
 import json
+import math
 import os
 import threading
 import time
@@ -28,6 +29,43 @@ except Exception:  # pragma: no cover
     Investor = None
     settrade_config = {}
 
+def _env_bool(raw: Optional[str], fallback: bool) -> bool:
+    """Parse an explicit boolean; malformed values preserve the safe default."""
+    if raw is None:
+        return fallback
+    value = raw.strip().lower()
+    if value == "true":
+        return True
+    if value == "false":
+        return False
+    return fallback
+
+
+def _bounded_float(raw: Optional[str], fallback: float, minimum: float, maximum: float) -> float:
+    """Parse a finite, bounded environment number without crashing startup."""
+    try:
+        value = float(raw) if raw is not None and raw.strip() else float(fallback)
+    except (TypeError, ValueError, OverflowError):
+        return float(fallback)
+    if not math.isfinite(value) or value < minimum or value > maximum:
+        return float(fallback)
+    return value
+
+
+def _bounded_int(raw: Optional[str], fallback: int, minimum: int, maximum: int) -> int:
+    """Parse an integer environment value; fractional/non-finite input falls back."""
+    try:
+        numeric = float(raw) if raw is not None and raw.strip() else float(fallback)
+    except (TypeError, ValueError, OverflowError):
+        return int(fallback)
+    if not math.isfinite(numeric) or not numeric.is_integer():
+        return int(fallback)
+    value = int(numeric)
+    if value < minimum or value > maximum:
+        return int(fallback)
+    return value
+
+
 APP_VERSION = "0.7.3"
 RELEASE_SOURCE_REVISION = (
     os.getenv("LUNA_DEPLOY_SOURCE_SHA")
@@ -51,21 +89,21 @@ print(
 
 # This service is paper-only by default. Live broker execution requires an explicit
 # operator override of LUNA_PAPER_ONLY_MODE=false in addition to the existing gates.
-PAPER_ONLY_MODE = os.getenv("LUNA_PAPER_ONLY_MODE", "true").lower() == "true"
-LIVE_ARMED = os.getenv("LIVE_TRADING_ARMED", "false").lower() == "true" and not PAPER_ONLY_MODE
+PAPER_ONLY_MODE = _env_bool(os.getenv("LUNA_PAPER_ONLY_MODE"), True)
+LIVE_ARMED = _env_bool(os.getenv("LIVE_TRADING_ARMED"), False) and not PAPER_ONLY_MODE
 GATEWAY_KEY = os.getenv("LUNA_GATEWAY_KEY", "")
 MARKETDATA_INGEST_KEY = os.getenv("LUNA_MARKETDATA_INGEST_KEY", "")
 
 
-GATEWAY_ORDER_GATE_ENABLED = os.getenv("LUNA_GATEWAY_ORDER_GATE_ENABLED", "false").lower() == "true"
-GATEWAY_KILL_SWITCH = os.getenv("LUNA_GATEWAY_KILL_SWITCH", "true").lower() == "true"
-GATEWAY_MAX_ORDER_NOTIONAL = max(1.0, float(os.getenv("LUNA_GATEWAY_MAX_ORDER_NOTIONAL", "50000")))
-GATEWAY_MAX_ORDERS_PER_MINUTE = max(1, int(os.getenv("LUNA_GATEWAY_MAX_ORDERS_PER_MINUTE", "2")))
-GATEWAY_MAX_QUOTE_AGE_SEC = max(0.1, float(os.getenv("LUNA_GATEWAY_MAX_QUOTE_AGE_SEC", "2")))
-GATEWAY_MAX_PRICE_DEVIATION_BPS = max(1.0, float(os.getenv("LUNA_GATEWAY_MAX_PRICE_DEVIATION_BPS", "75")))
-GATEWAY_BROKER_FAILURE_TRIP_COUNT = max(1, int(os.getenv("LUNA_GATEWAY_BROKER_FAILURE_TRIP_COUNT", "3")))
+GATEWAY_ORDER_GATE_ENABLED = _env_bool(os.getenv("LUNA_GATEWAY_ORDER_GATE_ENABLED"), False)
+GATEWAY_KILL_SWITCH = _env_bool(os.getenv("LUNA_GATEWAY_KILL_SWITCH"), True)
+GATEWAY_MAX_ORDER_NOTIONAL = _bounded_float(os.getenv("LUNA_GATEWAY_MAX_ORDER_NOTIONAL"), 50000.0, 1.0, 1_000_000_000.0)
+GATEWAY_MAX_ORDERS_PER_MINUTE = _bounded_int(os.getenv("LUNA_GATEWAY_MAX_ORDERS_PER_MINUTE"), 2, 1, 1000)
+GATEWAY_MAX_QUOTE_AGE_SEC = _bounded_float(os.getenv("LUNA_GATEWAY_MAX_QUOTE_AGE_SEC"), 2.0, 0.1, 60.0)
+GATEWAY_MAX_PRICE_DEVIATION_BPS = _bounded_float(os.getenv("LUNA_GATEWAY_MAX_PRICE_DEVIATION_BPS"), 75.0, 1.0, 10_000.0)
+GATEWAY_BROKER_FAILURE_TRIP_COUNT = _bounded_int(os.getenv("LUNA_GATEWAY_BROKER_FAILURE_TRIP_COUNT"), 3, 1, 1000)
 GATEWAY_CIRCUIT_RESET_KEY = os.getenv("LUNA_GATEWAY_CIRCUIT_RESET_KEY", "")
-LUNA_LIVE_MIN_REALTIME_COVERAGE = min(1.0, max(0.0, float(os.getenv("LUNA_LIVE_MIN_REALTIME_COVERAGE", "0.99"))))
+LUNA_LIVE_MIN_REALTIME_COVERAGE = _bounded_float(os.getenv("LUNA_LIVE_MIN_REALTIME_COVERAGE"), 0.99, 0.5, 1.0)
 
 _safety_lock = threading.Lock()
 _broker_failure_streak = 0
@@ -95,26 +133,26 @@ SET_API_BASE = os.getenv(
     "SET_MARKETDATA_API_BASE",
     "https://marketplace.set.or.th/api/public/realtime-data/stock",
 )
-SET_API_POLL_SEC = max(1.0, float(os.getenv("SET_MARKETDATA_POLL_SEC", "2")))
-SET_API_TIMEOUT_SEC = max(2.0, float(os.getenv("SET_MARKETDATA_TIMEOUT_SEC", "8")))
-TOPTRADER_ENABLED = os.getenv("LUNA_TOPTRADER_BACKUP_ENABLED", "true").lower() == "true"
+SET_API_POLL_SEC = _bounded_float(os.getenv("SET_MARKETDATA_POLL_SEC"), 2.0, 1.0, 60.0)
+SET_API_TIMEOUT_SEC = _bounded_float(os.getenv("SET_MARKETDATA_TIMEOUT_SEC"), 8.0, 2.0, 120.0)
+TOPTRADER_ENABLED = _env_bool(os.getenv("LUNA_TOPTRADER_BACKUP_ENABLED"), True)
 TOPTRADER_API_BASE = os.getenv("LUNA_TOPTRADER_API_BASE", "https://api.toptrader.co.th/v1/market/tick")
 TOPTRADER_SYMBOLS_BASE = os.getenv("LUNA_TOPTRADER_SYMBOLS_BASE", "https://api.toptrader.co.th/v1/market/symbols")
-TOPTRADER_WS_ENABLED = os.getenv("LUNA_TOPTRADER_WS_ENABLED", "true").lower() == "true"
+TOPTRADER_WS_ENABLED = _env_bool(os.getenv("LUNA_TOPTRADER_WS_ENABLED"), True)
 TOPTRADER_WS_BASE = os.getenv("LUNA_TOPTRADER_WS_BASE", "wss://ws.toptrader.co.th/market")
-TOPTRADER_WS_CHUNK_SIZE = max(1, min(512, int(os.getenv("LUNA_TOPTRADER_WS_CHUNK_SIZE", "128"))))
-TOPTRADER_WS_RECONNECT_SEC = max(1.0, float(os.getenv("LUNA_TOPTRADER_WS_RECONNECT_SEC", "3")))
-TOPTRADER_POLL_SEC = max(1.0, float(os.getenv("LUNA_TOPTRADER_POLL_SEC", "2")))
-TOPTRADER_TIMEOUT_SEC = max(2.0, float(os.getenv("LUNA_TOPTRADER_TIMEOUT_SEC", "8")))
-TOPTRADER_REST_PUMP_ENABLED = os.getenv("LUNA_TOPTRADER_REST_PUMP_ENABLED", "true").lower() == "true"
+TOPTRADER_WS_CHUNK_SIZE = _bounded_int(os.getenv("LUNA_TOPTRADER_WS_CHUNK_SIZE"), 128, 1, 512)
+TOPTRADER_WS_RECONNECT_SEC = _bounded_float(os.getenv("LUNA_TOPTRADER_WS_RECONNECT_SEC"), 3.0, 1.0, 300.0)
+TOPTRADER_POLL_SEC = _bounded_float(os.getenv("LUNA_TOPTRADER_POLL_SEC"), 2.0, 1.0, 60.0)
+TOPTRADER_TIMEOUT_SEC = _bounded_float(os.getenv("LUNA_TOPTRADER_TIMEOUT_SEC"), 8.0, 2.0, 120.0)
+TOPTRADER_REST_PUMP_ENABLED = _env_bool(os.getenv("LUNA_TOPTRADER_REST_PUMP_ENABLED"), True)
 
 # Paper-only public fallback. TradingView's public Thailand screener is not
 # treated as exchange-certified real-time data; it is used only to keep the
 # Paper Trading pipeline alive when licensed providers are unavailable.
 TRADINGVIEW_URL = os.getenv("TRADINGVIEW_SCANNER_URL", "https://scanner.tradingview.com/thailand/scan")
-TRADINGVIEW_POLL_SEC = max(2.0, float(os.getenv("TRADINGVIEW_POLL_SEC", "5")))
+TRADINGVIEW_POLL_SEC = _bounded_float(os.getenv("TRADINGVIEW_POLL_SEC"), 5.0, 2.0, 300.0)
 PUBLIC_FALLBACK_ENABLED = (
-    os.getenv("LUNA_PUBLIC_MARKETDATA_FALLBACK", "false").lower() == "true"
+    _env_bool(os.getenv("LUNA_PUBLIC_MARKETDATA_FALLBACK"), False)
     and not LIVE_ARMED
 )
 
@@ -125,7 +163,7 @@ APP_CODE = os.getenv("LUNA_SETTRADE_APP_CODE") or os.getenv("SETTRADE_APP_CODE",
 SETTRADE_ENV = (os.getenv("LUNA_SETTRADE_ENV") or os.getenv("SETTRADE_ENV", "prod")).lower()
 EXECUTION_LEDGER_URL = os.getenv("LUNA_EXECUTION_LEDGER_URL", "https://wigzicwgcsrhdummrbjx.supabase.co/functions/v1/luna-execution-gateway").rstrip("/")
 EXECUTION_LEDGER_KEY = os.getenv("LUNA_AGENT_KEY", "")
-EXECUTION_LEDGER_ENABLED = os.getenv("LUNA_EXECUTION_LEDGER_ENABLED", "false").lower() == "true"
+EXECUTION_LEDGER_ENABLED = _env_bool(os.getenv("LUNA_EXECUTION_LEDGER_ENABLED"), False)
 ORDER_AUTH_KEY = os.getenv("LUNA_ORDER_AUTH_KEY", "")
 try:
     SETTRADE_SDK_VERSION = package_version("settrade-v2")
@@ -138,20 +176,20 @@ try:
 except Exception:
     pass
 
-REALTIME_ENABLED = os.getenv("REALTIME_MARKETDATA_ENABLED", "false").lower() == "true"
-REALTIME_BOOK = os.getenv("REALTIME_BID_OFFER_ENABLED", "true").lower() == "true"
+REALTIME_ENABLED = _env_bool(os.getenv("REALTIME_MARKETDATA_ENABLED"), False)
+REALTIME_BOOK = _env_bool(os.getenv("REALTIME_BID_OFFER_ENABLED"), True)
 INGEST_ENABLED = bool(MARKETDATA_INGEST_KEY)
-EXTERNAL_BRIDGE_MAX_AGE_SEC = max(5.0, float(os.getenv("LUNA_EXTERNAL_BRIDGE_MAX_AGE_SEC", "10")))
+EXTERNAL_BRIDGE_MAX_AGE_SEC = _bounded_float(os.getenv("LUNA_EXTERNAL_BRIDGE_MAX_AGE_SEC"), 10.0, 5.0, 600.0)
 _external_bridge_last_ts = 0.0
-PUBLIC_STREAM_ENABLED = os.getenv("LUNA_PUBLIC_STREAM_ENABLED", "true").lower() == "true"
-PUBLIC_AUTHORIZED_FEED_ENABLED = os.getenv("LUNA_PUBLIC_AUTHORIZED_FEED_ENABLED", "false").lower() == "true"
-PUBLIC_STREAM_MAX_CLIENTS = max(1, int(os.getenv("LUNA_PUBLIC_STREAM_MAX_CLIENTS", "50")))
+PUBLIC_STREAM_ENABLED = _env_bool(os.getenv("LUNA_PUBLIC_STREAM_ENABLED"), True)
+PUBLIC_AUTHORIZED_FEED_ENABLED = _env_bool(os.getenv("LUNA_PUBLIC_AUTHORIZED_FEED_ENABLED"), False)
+PUBLIC_STREAM_MAX_CLIENTS = _bounded_int(os.getenv("LUNA_PUBLIC_STREAM_MAX_CLIENTS"), 50, 1, 500)
 SYMBOLS = [s.strip().upper() for s in os.getenv("SETTRADE_REALTIME_SYMBOLS", "").split(",") if s.strip()]
 
-RECONNECT_BASE_SEC = max(1.0, float(os.getenv("LUNA_MARKET_RECONNECT_BASE_SEC", "2")))
-RECONNECT_MAX_SEC = max(RECONNECT_BASE_SEC, float(os.getenv("LUNA_MARKET_RECONNECT_MAX_SEC", "60")))
-STALE_AFTER_SEC = max(5.0, float(os.getenv("LUNA_MARKET_STALE_AFTER_SEC", "20")))
-CREDENTIAL_RETRY_SEC = max(5.0, float(os.getenv("LUNA_MARKET_CREDENTIAL_RETRY_SEC", "10")))
+RECONNECT_BASE_SEC = _bounded_float(os.getenv("LUNA_MARKET_RECONNECT_BASE_SEC"), 2.0, 1.0, 300.0)
+RECONNECT_MAX_SEC = _bounded_float(os.getenv("LUNA_MARKET_RECONNECT_MAX_SEC"), max(60.0, RECONNECT_BASE_SEC), RECONNECT_BASE_SEC, 600.0)
+STALE_AFTER_SEC = _bounded_float(os.getenv("LUNA_MARKET_STALE_AFTER_SEC"), 20.0, 5.0, 600.0)
+CREDENTIAL_RETRY_SEC = _bounded_float(os.getenv("LUNA_MARKET_CREDENTIAL_RETRY_SEC"), 10.0, 5.0, 600.0)
 
 SETTRADE_MARKETDATA_CREDENTIALS = {
     "SETTRADE_BROKER_ID": BROKER_ID,
@@ -509,6 +547,8 @@ def _connectivity_proof() -> Dict[str, Any]:
         "set_api_backup_configured": set_api_configured(),
         "realtime_enabled": REALTIME_ENABLED,
         "symbols_configured": coverage["target_count"] > 0,
+        "fresh_quotes_present": coverage["fresh_quote_count"] > 0,
+        "verified_book_present": coverage["verified_book_count"] > 0,
         "fresh_coverage_sufficient": coverage["fresh_coverage_ratio"] >= LUNA_LIVE_MIN_REALTIME_COVERAGE,
         "verified_book_coverage_sufficient": coverage["verified_book_coverage_ratio"] >= LUNA_LIVE_MIN_REALTIME_COVERAGE,
     }
@@ -526,6 +566,8 @@ def _connectivity_proof() -> Dict[str, Any]:
             and checks["execution_ledger_configured"]
             and checks["realtime_enabled"]
             and checks["symbols_configured"]
+            and checks["fresh_quotes_present"]
+            and checks["verified_book_present"]
             and checks["fresh_coverage_sufficient"]
             and checks["verified_book_coverage_sufficient"]
         ),
@@ -550,7 +592,13 @@ def _system_status() -> str:
     if LIVE_ARMED and proof["live_execution_ready"] and not GATEWAY_KILL_SWITCH and GATEWAY_ORDER_GATE_ENABLED:
         return "LIVE_READY"
     if not LIVE_ARMED:
-        if proof["checks"]["authorized_marketdata_selected"] and proof["checks"]["fresh_coverage_sufficient"]:
+        if (
+            proof["checks"]["authorized_marketdata_selected"]
+            and proof["checks"]["fresh_quotes_present"]
+            and proof["checks"]["verified_book_present"]
+            and proof["checks"]["fresh_coverage_sufficient"]
+            and proof["checks"]["verified_book_coverage_sufficient"]
+        ):
             return "PAPER_READY"
         if proof["checks"]["realtime_enabled"] and proof["coverage"]["quoted_count"] > 0:
             return "PAPER_DEGRADED"

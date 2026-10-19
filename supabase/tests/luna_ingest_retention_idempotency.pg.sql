@@ -167,6 +167,11 @@ BEGIN
      OR has_function_privilege('service_role','private.luna_reconcile_ingest_http_requests(integer)'::regprocedure,'EXECUTE') THEN
     RAISE EXCEPTION 'private HTTP audit reconciler must remain owner-only; scheduler wrappers invoke it under SECURITY DEFINER';
   END IF;
+  IF has_function_privilege('anon','private.luna_reconcile_ingest_http_requests(integer)'::regprocedure,'EXECUTE')
+     OR has_function_privilege('authenticated','private.luna_reconcile_ingest_http_requests(integer)'::regprocedure,'EXECUTE')
+     OR has_function_privilege('service_role','private.luna_reconcile_ingest_http_requests(integer)'::regprocedure,'EXECUTE') THEN
+    RAISE EXCEPTION 'private HTTP audit reconciler must remain owner-only; scheduler wrappers invoke it under SECURITY DEFINER';
+  END IF;
 END;
 $grants$;
 

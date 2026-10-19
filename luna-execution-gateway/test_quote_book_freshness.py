@@ -3,6 +3,49 @@ import app as gateway_app
 from datetime import datetime, timedelta, timezone
 
 
+def test_gateway_env_parsers_fail_closed():
+    assert gateway_app._env_bool("not-a-bool", True) is True
+    assert gateway_app._env_bool("not-a-bool", False) is False
+    assert gateway_app._env_bool("false", True) is False
+    assert gateway_app._env_bool("TRUE", False) is True
+    assert gateway_app._bounded_float("NaN", 2.0, 0.1, 60.0) == 2.0
+    assert gateway_app._bounded_float("Infinity", 2.0, 0.1, 60.0) == 2.0
+    assert gateway_app._bounded_float("oops", 2.0, 0.1, 60.0) == 2.0
+    assert gateway_app._bounded_float("-1", 2.0, 0.1, 60.0) == 2.0
+    assert gateway_app._bounded_int("2.5", 3, 1, 10) == 3
+    assert gateway_app._bounded_int("NaN", 3, 1, 10) == 3
+    assert gateway_app._bounded_int("oops", 3, 1, 10) == 3
+
+
+def test_zero_coverage_cannot_make_empty_feed_ready():
+    symbol = "LUNA_EMPTY_COVERAGE_TEST"
+    old_symbols = gateway_app.SYMBOLS
+    old_provider = gateway_app._selected_provider
+    old_min_coverage = gateway_app.LUNA_LIVE_MIN_REALTIME_COVERAGE
+    old_quotes = dict(gateway_app._quotes)
+    try:
+        gateway_app.SYMBOLS = [symbol]
+        gateway_app._selected_provider = "SETTRADE"
+        gateway_app.LUNA_LIVE_MIN_REALTIME_COVERAGE = 0.0
+        with gateway_app._quote_lock:
+            gateway_app._quotes.clear()
+        proof = gateway_app._connectivity_proof()
+        assert proof["coverage"]["fresh_quote_count"] == 0
+        assert proof["coverage"]["verified_book_count"] == 0
+        assert proof["checks"]["fresh_coverage_sufficient"] is True
+        assert proof["checks"]["fresh_quotes_present"] is False
+        assert proof["checks"]["verified_book_present"] is False
+        assert proof["live_execution_ready"] is False
+        assert gateway_app._system_status() == "LOCKED"
+    finally:
+        with gateway_app._quote_lock:
+            gateway_app._quotes.clear()
+            gateway_app._quotes.update(old_quotes)
+        gateway_app.SYMBOLS = old_symbols
+        gateway_app._selected_provider = old_provider
+        gateway_app.LUNA_LIVE_MIN_REALTIME_COVERAGE = old_min_coverage
+
+
 def test_price_only_event_does_not_refresh_order_book_age():
     symbol = "LUNA_BOOK_FRESHNESS_TEST"
     gateway_app._quotes.pop(symbol, None)

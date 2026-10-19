@@ -103,7 +103,9 @@ jobs:
           proof = app._connectivity_proof()
           assert proof["checks"]["selected_provider_credentials_configured"] is True
           assert proof["checks"]["set_api_backup_configured"] is False
-          assert proof["live_execution_ready"] is True
+          assert proof["checks"]["fresh_quotes_present"] is False
+          assert proof["checks"]["verified_book_present"] is False
+          assert proof["live_execution_ready"] is False
           print("LUNA_PROVIDER_POLICY_SMOKE_OK")
           PY
 
