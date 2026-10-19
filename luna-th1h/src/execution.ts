@@ -36,14 +36,67 @@ export interface ExecutionCostOverrides{
   extraSlippageBps?:number;
 }
 
+function nonNegativeBps(value:unknown,fallback:number):number{
+  return typeof value==="number" && Number.isFinite(value) && value>=0 && value<=10_000
+    ? value
+    : fallback;
+}
+
 function executionCosts(overrides:ExecutionCostOverrides = {}){
   return {
-    feeBps:Number.isFinite(overrides.feeBps)?Number(overrides.feeBps):config.feeBps,
-    sellTaxBps:Number.isFinite(overrides.sellTaxBps)?Number(overrides.sellTaxBps):config.sellTaxBps,
-    slippageBps:(Number.isFinite(overrides.slippageBps)?Number(overrides.slippageBps):config.slippageBps)
-      +(Number.isFinite(overrides.extraSlippageBps)?Number(overrides.extraSlippageBps):0),
-    marketImpactBps:Number.isFinite(overrides.marketImpactBps)?Number(overrides.marketImpactBps):config.marketImpactBps
+    feeBps:nonNegativeBps(overrides.feeBps,config.feeBps),
+    sellTaxBps:nonNegativeBps(overrides.sellTaxBps,config.sellTaxBps),
+    slippageBps:nonNegativeBps(overrides.slippageBps,config.slippageBps)
+      +nonNegativeBps(overrides.extraSlippageBps,0),
+    marketImpactBps:nonNegativeBps(overrides.marketImpactBps,config.marketImpactBps)
   };
+}
+
+function executionConfigurationIsValid():boolean{
+  const values=[
+    config.initialCapital,config.maxPositionPct,config.maxGrossExposurePct,
+    config.entryNotionalPct,config.maxDailyLoss,config.maxDailyTurnover,
+    config.maxOrderNotional,config.maxOrdersPerMinute,config.feeBps,
+    config.sellTaxBps,config.slippageBps,config.marketImpactBps
+  ];
+  return values.every(value=>typeof value==="number" && Number.isFinite(value))
+    && config.initialCapital>0
+    && config.maxPositionPct>=0 && config.maxPositionPct<=1
+    && config.maxGrossExposurePct>=0 && config.maxGrossExposurePct<=1
+    && config.entryNotionalPct>=0 && config.entryNotionalPct<=1
+    && config.maxDailyLoss>=0 && config.maxDailyTurnover>=0
+    && config.maxOrderNotional>=0 && config.maxOrdersPerMinute>=1
+    && [config.feeBps,config.sellTaxBps,config.slippageBps,config.marketImpactBps]
+      .every(value=>value>=0 && value<=10_000);
+}
+
+function portfolioStateIsValid(state:PortfolioState):boolean{
+  const finiteNonNegative=(value:unknown)=>
+    typeof value==="number" && Number.isFinite(value) && value>=0;
+  if(!finiteNonNegative(state.cash) || !finiteNonNegative(state.initialCapital) || state.initialCapital===0
+    || !finiteNonNegative(state.fees) || !finiteNonNegative(state.slippageCost)) return false;
+  if(state.dayStartEquity!==undefined && !finiteNonNegative(state.dayStartEquity)) return false;
+  if(state.dailyTurnover!==undefined && !finiteNonNegative(state.dailyTurnover)) return false;
+  if(state.recentBuyTimestamps!==undefined
+    && (!Array.isArray(state.recentBuyTimestamps) || !state.recentBuyTimestamps.every(x=>typeof x==="number" && Number.isFinite(x)))) return false;
+  if(!state.positions || typeof state.positions!=="object" || Array.isArray(state.positions)) return false;
+  return Object.values(state.positions).every(pos=>
+    !!pos && finiteNonNegative(pos.qty) && finiteNonNegative(pos.avgPrice)
+    && finiteNonNegative(pos.costBasis)
+    && typeof pos.realizedPnl==="number" && Number.isFinite(pos.realizedPnl)
+  );
+}
+
+function reservationsAreValid(reservations:ExecutionReservations):boolean{
+  const finiteNonNegative=(value:unknown)=>
+    typeof value==="number" && Number.isFinite(value) && value>=0;
+  return !!reservations
+    && finiteNonNegative(reservations.reservedBuyCash)
+    && finiteNonNegative(reservations.reservedGrossExposure)
+    && !!reservations.reservedSellQty
+    && typeof reservations.reservedSellQty==="object"
+    && !Array.isArray(reservations.reservedSellQty)
+    && Object.values(reservations.reservedSellQty).every(finiteNonNegative);
 }
 
 function allowPaperPriceOnlyExecution(q:Quote){
@@ -169,6 +222,22 @@ export function planOrder(
 
   const side:Side=signal.action;
   const symbol=canonicalSymbol(signal.symbol);
+  if(!executionConfigurationIsValid()){
+    return {accepted:false,reason:"INVALID_EXECUTION_CONFIG"};
+  }
+  if(!portfolioStateIsValid(state)){
+    return {accepted:false,reason:"INVALID_PORTFOLIO_STATE"};
+  }
+  if(!reservationsAreValid(reservations)){
+    return {accepted:false,reason:"INVALID_EXECUTION_RESERVATIONS"};
+  }
+  if(signal.targetAllocationPct!==undefined
+    && (typeof signal.targetAllocationPct!=="number"
+      || !Number.isFinite(signal.targetAllocationPct)
+      || signal.targetAllocationPct<0
+      || signal.targetAllocationPct>100)){
+    return {accepted:false,reason:"INVALID_TARGET_ALLOCATION"};
+  }
   ensureDailyRiskState(state,signal.ts);
   const hasBook=typeof q.bid==="number" && Number.isFinite(q.bid)
     && q.bid>0
@@ -335,6 +404,21 @@ export function simulateFill(
   order:Extract<PlannedOrder,{accepted:true}>,
   costOverrides:ExecutionCostOverrides={}
 ):SimulatedFill{
+  if(!order || typeof order.symbol!=="string" || !order.symbol.trim()
+    || (order.side!=="BUY" && order.side!=="SELL")
+    || typeof order.qty!=="number" || !Number.isFinite(order.qty) || order.qty<=0
+    || !Number.isSafeInteger(order.qty)
+    || typeof order.referencePrice!=="number" || !Number.isFinite(order.referencePrice) || order.referencePrice<=0
+    || typeof order.visibleDepth!=="number" || !Number.isFinite(order.visibleDepth) || order.visibleDepth<0
+    || typeof order.spreadBps!=="number" || !Number.isFinite(order.spreadBps) || order.spreadBps<0){
+    throw new Error("INVALID_SIMULATED_FILL_INPUT");
+  }
+  if(order.depthComplete===true && order.depthLevels?.length
+    && !order.depthLevels.every(level=>
+      !!level && typeof level.price==="number" && Number.isFinite(level.price) && level.price>0
+      && typeof level.size==="number" && Number.isFinite(level.size) && level.size>0)){
+    throw new Error("INVALID_SIMULATED_FILL_DEPTH");
+  }
   const costs=executionCosts(costOverrides);
   const slippageRate=costs.slippageBps/10000;
   const feeRate=costs.feeBps/10000;
@@ -344,6 +428,10 @@ export function simulateFill(
     : 0;
   const impactRate=(costs.marketImpactBps/10000)*Math.sqrt(participation);
   const totalPricePenalty=slippageRate+impactRate;
+  if(!Number.isFinite(totalPricePenalty) || totalPricePenalty<0
+    || (order.side==="SELL" && totalPricePenalty>=1)){
+    throw new Error("INVALID_SIMULATED_FILL_COST");
+  }
   let fillPrice=order.side==="BUY"
     ? order.referencePrice*(1+totalPricePenalty)
     : order.referencePrice*(1-totalPricePenalty);
@@ -377,6 +465,15 @@ export function simulateFill(
 }
 
 export function applyFill(state:PortfolioState,fill:SimulatedFill){
+  if(!portfolioStateIsValid(state)
+    || !fill || typeof fill.symbol!=="string" || !fill.symbol.trim()
+    || (fill.side!=="BUY" && fill.side!=="SELL")
+    || !Number.isSafeInteger(fill.qty) || fill.qty<=0
+    || ![fill.referencePrice,fill.fillPrice,fill.notional,fill.fee,fill.slippage,fill.totalCashDelta]
+      .every(value=>typeof value==="number" && Number.isFinite(value))
+    || fill.referencePrice<=0 || fill.fillPrice<=0 || fill.notional<=0 || fill.fee<0 || fill.slippage<0){
+    throw new Error("INVALID_SIMULATED_FILL");
+  }
   const symbol=canonicalSymbol(fill.symbol);
   const priorKey=existingPositionKey(state,symbol);
   const pos=position(state,symbol);
