@@ -1,5 +1,23 @@
 # LUNA quote regression investigation — 2026-10-18
 
+## Final release audit snapshot — 2026-10-19 02:37 UTC
+
+### Code review and CI
+
+- Release candidate code head `0b44acfb109fe91bb9bc08e929b7e87292865826` passed all six GitHub Actions workflows: LUNA quote regression matrix, LUNA-TH1H CI, LUNA gateway CI, CEOS Platform Build, Next.js Security CI, and LUNA 2.0 CI (including browser compatibility and mobile smoke).
+- Scope reviewed: all PR #44 changed files plus linked runtime critical paths in quote normalization, SET-marketplace ingestion, execution planner, risk validation, simulated fill/portfolio mutation, Python gateway quote/freshness coverage, SQL migrations and grants, cron/HTTP audit, test fixtures and CI filters.
+- Final deterministic quote/risk matrix contains 15 passing cases. Added fail-closed checks for non-finite/out-of-range numeric configuration, malformed boolean environment values, source-name spoofing, source timestamp freshness, duplicate snapshots, symbol mismatch/canonicalization, invalid execution configuration/reservations/target allocations, non-finite risk inputs, invalid simulated fill arithmetic, insufficient paper cash, over-position SELL and atomic rejection (no portfolio mutation when a fill is rejected).
+- Database integration executes both migrations against a disposable PostgreSQL instance and asserts idempotency/retention behavior, HTTP response reconciliation/timeouts, bounded response excerpts and service-role-only RPC grants. The missing-semicolon migration failure was caught and corrected before the successful integration run.
+
+### Latest production observation (read-only)
+
+- Checked at 2026-10-19 02:37:21 UTC (09:37 ICT; before the expected 10:00 morning session). The private audit table contains 51 request rows, of which 49 are reconciled. 47 have HTTP 200 with `OUTSIDE_MARKET_WINDOW`; two REST requests timed out at the 10-second limit during the earlier 09:21 ICT check (one reported DNS timeout, one reached almost the full HTTP response timeout). Two newest requests were still pending asynchronous reconciliation at query time.
+- Accepted `TOPTRADER_REALTIME` batch history remains 259, with latest accepted batch at 2026-10-15 08:35:02 UTC (15:35 ICT). Retained ticks = 0 and worker quote cache = 0. Closed/pre-open `OUTSIDE_MARKET_WINDOW` responses are expected before the session; they do not prove in-session feed health. The two timeouts are recorded as unresolved transport/latency observations; no timeout, scheduler or freshness setting was loosened based on them.
+- Paper runtime is still paper-only; database execution control is `execution_mode='paper'`, `armed=false`, `kill_switch=false`. No queued orders were observed in the previous runtime check.
+- All five Railway production services remain Offline with no active deployments or pending staged work. The connected tools do not expose the account's plan, available credits or a hard $0 usage cap. Railway's public Free-tier documentation lists $0 monthly subscription with $1/month of included resource credit; persistent compute usage can consume that credit, but this account's actual plan/cap cannot be verified from the connected API. The runtime deployment is therefore intentionally held to honor the no-payment constraint.
+- Release remains **not fully production-ready** until a real open-session test verifies provider response -> accepted verified batch -> fresh retained tick -> worker cache/consumer -> new paper bar/equity snapshot. PR #44 remains Draft and unmerged; no Railway runtime deployment/restart has been performed. The two Supabase migrations are applied and verified under versions `20261019021449` and `20261019021452`.
+
+
 ## Historical inspection snapshot — 2026-10-18 10:36 UTC
 
 - PR #44 head: `8f4db5c7d0223b0e5d1052262041e0c774b1b4bd`; still open as Draft, not merged.
