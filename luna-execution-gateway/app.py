@@ -19,7 +19,7 @@ except Exception:
     websockets = None
 
 from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, FiniteFloat, StrictInt
 from broker_timing import extract_broker_native_submitted_at_ms
 
 try:
@@ -432,6 +432,50 @@ def _prune_order_attempts(now: float):
         _order_attempt_timestamps.pop(0)
 
 
+def _timestamp_is_fresh(value: Any, now: float, max_age_sec: float) -> bool:
+    if not isinstance(value, str) or not value.strip():
+        return False
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            return False
+        age = now - parsed.timestamp()
+    except (TypeError, ValueError, OverflowError):
+        return False
+    return 0.0 <= age <= max_age_sec
+
+
+def _quote_freshness_state(quote: Dict[str, Any], now: Optional[float] = None) -> tuple[bool, bool]:
+    """Return (fresh_quote, fresh_book), keeping source timestamps distinct from receipt time."""
+    current = time.time() if now is None else now
+    source = str(quote.get("source") or "").strip().lower()
+    try:
+        ingested = float(quote.get("_ingested_ts"))
+        ingested_age = current - ingested
+        receive_fresh = math.isfinite(ingested) and 0.0 <= ingested_age <= GATEWAY_MAX_QUOTE_AGE_SEC
+    except (TypeError, ValueError, OverflowError):
+        receive_fresh = False
+
+    quote_source_ts = quote.get("source_ts")
+    if quote_source_ts is None or (isinstance(quote_source_ts, str) and not quote_source_ts.strip()):
+        quote_source_fresh = source == "settrade-open-api-realtime"
+    else:
+        quote_source_fresh = _timestamp_is_fresh(quote_source_ts, current, GATEWAY_MAX_QUOTE_AGE_SEC)
+    quote_fresh = receive_fresh and quote_source_fresh
+    if not quote_fresh:
+        return False, False
+
+    book_received_fresh = _timestamp_is_fresh(
+        quote.get("book_received_ts"), current, GATEWAY_MAX_QUOTE_AGE_SEC
+    )
+    book_source_ts = quote.get("book_source_ts")
+    if book_source_ts is None or (isinstance(book_source_ts, str) and not book_source_ts.strip()):
+        book_source_fresh = source == "settrade-open-api-realtime"
+    else:
+        book_source_fresh = _timestamp_is_fresh(book_source_ts, current, GATEWAY_MAX_QUOTE_AGE_SEC)
+    return True, book_received_fresh and book_source_fresh
+
+
 def _quote_matches_selected_provider(quote: Dict[str, Any]) -> bool:
     source = str(quote.get("source") or "").lower()
     if _selected_provider == "SETTRADE":
@@ -454,60 +498,21 @@ def _quote_coverage_snapshot() -> Dict[str, Any]:
             continue
         if not _quote_matches_selected_provider(quote):
             continue
-        ts = quote.get("_ingested_ts")
-        if ts is None:
-            continue
-        age = now - float(ts)
-        if not 0.0 <= age <= GATEWAY_MAX_QUOTE_AGE_SEC:
-            continue
-
-        # A recent local receive time cannot make an explicitly stale source quote fresh.
-        # The authenticated Settrade realtime stream may omit provider timestamps;
-        # for that exact source only, transport receive age is the documented fallback.
-        source_raw = quote.get("source_ts")
-        source = str(quote.get("source") or "").strip().lower()
-        source_fresh = False
-        if isinstance(source_raw, str) and source_raw.strip():
-            try:
-                source_dt = datetime.fromisoformat(source_raw.replace("Z", "+00:00"))
-                if source_dt.tzinfo is not None:
-                    source_age = now - source_dt.timestamp()
-                    source_fresh = 0.0 <= source_age <= GATEWAY_MAX_QUOTE_AGE_SEC
-            except (ValueError, TypeError, OverflowError):
-                source_fresh = False
-        elif source == "settrade-open-api-realtime":
-            source_fresh = True
-
-        if not source_fresh:
+        quote_fresh, book_timestamps_fresh = _quote_freshness_state(quote, now)
+        if not quote_fresh:
             continue
 
         fresh_symbols.add(symbol)
         bid = _num(quote.get("bid")); ask = _num(quote.get("ask"))
         bs = _num(quote.get("bid_size")); ass = _num(quote.get("ask_size"))
-        try:
-            received_raw = quote.get("book_received_ts")
-            source_book_raw = quote.get("book_source_ts")
-            if not received_raw:
-                raise ValueError("book_receive_timestamp_missing")
-            received_dt = datetime.fromisoformat(str(received_raw).replace("Z", "+00:00"))
-            if received_dt.tzinfo is None:
-                raise ValueError("book_receive_timestamp_timezone_missing")
-            received_age = now - received_dt.timestamp()
-            if isinstance(source_book_raw, str) and source_book_raw.strip():
-                source_dt = datetime.fromisoformat(source_book_raw.replace("Z", "+00:00"))
-                if source_dt.tzinfo is None:
-                    raise ValueError("book_source_timestamp_timezone_missing")
-                source_age = now - source_dt.timestamp()
-                source_book_fresh = 0.0 <= source_age <= GATEWAY_MAX_QUOTE_AGE_SEC
-            else:
-                source_book_fresh = source == "settrade-open-api-realtime"
-            book_fresh = (
-                0.0 <= received_age <= GATEWAY_MAX_QUOTE_AGE_SEC
-                and source_book_fresh
-            )
-        except (ValueError, TypeError, OverflowError):
-            book_fresh = False
-        if bid and bid > 0 and ask and ask > 0 and ask >= bid and bs and bs > 0 and ass and ass > 0 and book_fresh:
+        book_fresh = (
+            book_timestamps_fresh
+            and bid is not None and bid > 0
+            and ask is not None and ask > 0 and ask >= bid
+            and bs is not None and bs > 0
+            and ass is not None and ass > 0
+        )
+        if book_fresh:
             verified_book_symbols.add(symbol)
     target_count = len(target_symbols)
     return {
@@ -641,22 +646,31 @@ def _hard_order_gate(payload: Any):
     if side == "BUY" and phase != "ACTIVE":
         raise HTTPException(status_code=423, detail={"code": "buy_locked_by_market_phase", "market_phase": phase})
 
-    notional = float(payload.price) * int(payload.volume)
-    if notional <= 0 or notional > GATEWAY_MAX_ORDER_NOTIONAL + 1e-9:
+    price = _num(payload.price)
+    volume = payload.volume
+    if price is None or price <= 0 or isinstance(volume, bool) or not isinstance(volume, int) or volume <= 0:
+        raise HTTPException(status_code=422, detail={"code": "invalid_order_price_or_volume"})
+    notional = price * volume
+    if not math.isfinite(notional) or notional <= 0 or notional > GATEWAY_MAX_ORDER_NOTIONAL + 1e-9:
         raise HTTPException(status_code=422, detail={"code": "max_order_notional", "notional": notional})
 
+    symbol = str(payload.symbol).strip().upper()
     with _quote_lock:
-        quote = dict(_quotes.get(str(payload.symbol).strip().upper(), {}))
+        quote = dict(_quotes.get(symbol, {}))
     if not quote:
         raise HTTPException(status_code=503, detail={"code": "verified_quote_unavailable"})
+    if str(quote.get("symbol") or "").strip().upper() != symbol:
+        raise HTTPException(status_code=503, detail={"code": "quote_symbol_mismatch"})
     if not _quote_matches_selected_provider(quote):
         raise HTTPException(
             status_code=503,
             detail={"code": "quote_provider_mismatch", "selected_provider": _selected_provider},
         )
-    age = time.time() - float(quote.get("_ingested_ts") or 0.0)
-    if age < 0 or age > GATEWAY_MAX_QUOTE_AGE_SEC:
-        raise HTTPException(status_code=503, detail={"code": "quote_stale", "age_sec": age})
+    quote_fresh, book_timestamps_fresh = _quote_freshness_state(quote)
+    if not quote_fresh:
+        raise HTTPException(status_code=503, detail={"code": "quote_source_stale_or_unverified"})
+    if not book_timestamps_fresh:
+        raise HTTPException(status_code=503, detail={"code": "book_source_stale_or_unverified"})
     bid = _num(quote.get("bid"))
     ask = _num(quote.get("ask"))
     bid_size = _num(quote.get("bid_size"))
@@ -670,7 +684,7 @@ def _hard_order_gate(payload: Any):
     ):
         raise HTTPException(status_code=503, detail={"code": "verified_book_unavailable"})
     executable = ask if side == "BUY" else bid
-    deviation_bps = abs(float(payload.price) - executable) / executable * 10000.0
+    deviation_bps = abs(price - executable) / executable * 10000.0
     if deviation_bps > GATEWAY_MAX_PRICE_DEVIATION_BPS:
         raise HTTPException(status_code=423, detail={
             "code": "price_deviation_guard",
@@ -1786,8 +1800,8 @@ class PlaceOrder(BaseModel):
     strategy_version: str = Field(min_length=1, max_length=200)
     symbol: str = Field(min_length=1, max_length=32)
     side: str
-    price: float = Field(gt=0)
-    volume: int = Field(gt=0)
+    price: FiniteFloat = Field(gt=0)
+    volume: StrictInt = Field(gt=0)
     reason: str = ""
 
 

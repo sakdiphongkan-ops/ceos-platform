@@ -369,6 +369,18 @@ check("non_finite_execution_inputs_fail_closed",()=>{
   assert.equal(invalidReservation.accepted,false);
   if(!invalidReservation.accepted) assert.equal(invalidReservation.reason,"INVALID_EXECUTION_RESERVATIONS");
 
+  const duplicateReservationKeys=planOrder({
+    symbol:"PTT",ts:FRESH_TS,action:"SELL",
+    reason:"REGRESSION_DUPLICATE_RESERVATION_KEYS",strategyVersion:"quote-regression"
+  },q,{
+    ...createPortfolio(30_000),
+    positions:{PTT:{qty:100,avgPrice:31.5,costBasis:3150,realizedPnl:0}}
+  },{
+    reservedBuyCash:0,reservedGrossExposure:0,reservedSellQty:{PTT:10,ptt:90}
+  });
+  assert.equal(duplicateReservationKeys.accepted,false);
+  if(!duplicateReservationKeys.accepted) assert.equal(duplicateReservationKeys.reason,"INVALID_EXECUTION_RESERVATIONS");
+
   const invalidAllocation=planOrder({
     symbol:"PTT",ts:FRESH_TS,action:"BUY",
     reason:"REGRESSION_NAN_ALLOCATION",strategyVersion:"quote-regression",
