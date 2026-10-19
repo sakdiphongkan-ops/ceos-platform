@@ -425,6 +425,10 @@ export function simulateFill(
     throw new Error("INVALID_SIMULATED_FILL_DEPTH");
   }
   const costs=executionCosts(costOverrides);
+  if(![costs.feeBps,costs.sellTaxBps,costs.slippageBps,costs.marketImpactBps]
+    .every(value=>typeof value==="number" && Number.isFinite(value) && value>=0 && value<=20_000)){
+    throw new Error("INVALID_SIMULATED_FILL_COST");
+  }
   const slippageRate=costs.slippageBps/10000;
   const feeRate=costs.feeBps/10000;
   const taxRate=order.side==="SELL"?costs.sellTaxBps/10000:0;
@@ -433,8 +437,7 @@ export function simulateFill(
     : 0;
   const impactRate=(costs.marketImpactBps/10000)*Math.sqrt(participation);
   const totalPricePenalty=slippageRate+impactRate;
-  if(!Number.isFinite(totalPricePenalty) || totalPricePenalty<0
-    || (order.side==="SELL" && totalPricePenalty>=1)){
+  if(!Number.isFinite(totalPricePenalty) || totalPricePenalty<0 || totalPricePenalty>0.5){
     throw new Error("INVALID_SIMULATED_FILL_COST");
   }
   let fillPrice=order.side==="BUY"
@@ -457,12 +460,19 @@ export function simulateFill(
       if(order.side==="SELL") fillPrice=cash/order.qty*(1-slippageRate);
     }
   }
+  if(!Number.isFinite(fillPrice) || fillPrice<=0){
+    throw new Error("INVALID_SIMULATED_FILL_PRICE");
+  }
   const notional=fillPrice*order.qty;
   const fee=notional*(feeRate+taxRate);
   const slippage=Math.abs(fillPrice-order.referencePrice)*order.qty;
   const totalCashDelta=order.side==="BUY"
     ? -(notional+fee)
     : (notional-fee);
+  if(![notional,fee,slippage,totalCashDelta].every(value=>Number.isFinite(value))
+    || notional<=0 || fee<0 || slippage<0){
+    throw new Error("INVALID_SIMULATED_FILL_RESULT");
+  }
   return {
     symbol:order.symbol,side:order.side,qty:order.qty,
     referencePrice:order.referencePrice,fillPrice,notional,fee,slippage,totalCashDelta
@@ -478,6 +488,13 @@ export function applyFill(state:PortfolioState,fill:SimulatedFill){
       .every(value=>typeof value==="number" && Number.isFinite(value))
     || fill.referencePrice<=0 || fill.fillPrice<=0 || fill.notional<=0 || fill.fee<0 || fill.slippage<0){
     throw new Error("INVALID_SIMULATED_FILL");
+  }
+  const expectedNotional=fill.qty*fill.fillPrice;
+  const expectedCashDelta=fill.side==="BUY" ? -(fill.notional+fill.fee) : fill.notional-fill.fee;
+  const tolerance=Math.max(1e-6,Math.abs(expectedNotional)*1e-8);
+  if(Math.abs(fill.notional-expectedNotional)>tolerance
+    || Math.abs(fill.totalCashDelta-expectedCashDelta)>Math.max(1e-6,Math.abs(expectedCashDelta)*1e-8)){
+    throw new Error("INCONSISTENT_SIMULATED_FILL");
   }
   const symbol=canonicalSymbol(fill.symbol);
   const priorKey=existingPositionKey(state,symbol);
