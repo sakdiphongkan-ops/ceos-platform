@@ -1,5 +1,6 @@
 -- LUNA TopTrader HTTP request audit.
--- Staged source-control change only: do not apply to production until reviewed.
+-- Applied to the connected production database on 2026-10-19 under migration version
+-- 20261019021452. This file mirrors the deployed function/table definitions.
 -- Stores request metadata and a bounded response excerpt, never auth headers or payloads.
 CREATE TABLE IF NOT EXISTS private.luna_ingest_http_requests (
   request_id bigint PRIMARY KEY,

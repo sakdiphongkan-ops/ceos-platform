@@ -1,7 +1,7 @@
 /**
- * Static contract guard for the staged Supabase migration.
- * This proves the migration source retains the safety checks; it is not a
- * substitute for applying/testing the migration on a disposable Postgres DB.
+ * Static contract guard for the deployed Supabase migration source.
+ * This verifies source safety checks; the disposable PostgreSQL integration
+ * suite separately exercises function and ACL behavior.
  * It has no database, network, provider, or order side effects.
  */
 import {strict as assert} from "node:assert";

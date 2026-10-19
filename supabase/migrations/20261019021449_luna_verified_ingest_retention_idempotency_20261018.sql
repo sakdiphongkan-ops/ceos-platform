@@ -1,6 +1,6 @@
 -- Prevent stale accepted-batch metadata from masquerading as a live verified feed.
--- This migration is intentionally staged in the PR branch only; it has NOT been
--- applied to the connected production database.
+-- Applied to the connected production database on 2026-10-19 under migration version
+-- 20261019021449. Keep this filename aligned with the Supabase migration ledger.
 CREATE OR REPLACE FUNCTION public.luna_ingest_verified_market_batch(p_source text, p_feed_ts timestamp with time zone, p_payload_hash text, p_book_complete boolean, p_rows jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
