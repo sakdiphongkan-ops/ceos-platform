@@ -8,7 +8,7 @@ import {boundedPositiveNumber,normalizeGatewayQuote,shouldEmitQuote} from "./mar
 import {config,parseConfigBoolean,parseConfigNumber} from "./config.js";
 import {validateOrder} from "./risk.js";
 import {normalizeSetStockQuote,numberOrNull} from "./market/set-marketplace.js";
-import {createPortfolio,planOrder,simulateFill} from "./execution.js";
+import {applyFill,createPortfolio,planOrder,simulateFill} from "./execution.js";
 
 const NOW=Date.parse("2026-10-18T03:00:00.000Z");
 const FRESH_TS=new Date(NOW-250).toISOString();
@@ -372,6 +372,17 @@ check("non_finite_execution_inputs_fail_closed",()=>{
     accepted:true,symbol:"PTT",side:"BUY",qty:Number.NaN as unknown as number,
     referencePrice:31.8,visibleDepth:0,spreadBps:0,reason:"REGRESSION_NAN_FILL"
   }),/INVALID_SIMULATED_FILL_INPUT/);
+  assert.throws(()=>applyFill(createPortfolio(30_000),{
+    symbol:"PTT",side:"BUY",qty:1,referencePrice:100,fillPrice:100,
+    notional:99,fee:0,slippage:0,totalCashDelta:-99
+  }),/INCONSISTENT_SIMULATED_FILL/);
+  const badPortfolio={...createPortfolio(30_000),cash:Number.NaN};
+  const badStateOrder=planOrder({
+    symbol:"PTT",ts:FRESH_TS,action:"BUY",
+    reason:"REGRESSION_NAN_PORTFOLIO",strategyVersion:"quote-regression"
+  },q,badPortfolio);
+  assert.equal(badStateOrder.accepted,false);
+  if(!badStateOrder.accepted) assert.equal(badStateOrder.reason,"INVALID_PORTFOLIO_STATE");
 });
 
 console.log("LUNA quote regression matrix: PASS");
