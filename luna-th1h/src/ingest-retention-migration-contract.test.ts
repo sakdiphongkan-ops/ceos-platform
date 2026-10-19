@@ -10,7 +10,7 @@ import {resolve} from "node:path";
 
 const migrationPath=resolve(
   process.cwd(),
-  "../supabase/migrations/20261018093000_luna_verified_ingest_retention_idempotency.sql"
+  "../supabase/migrations/20261019021449_luna_verified_ingest_retention_idempotency_20261018.sql"
 );
 const sql=readFileSync(migrationPath,"utf8");
 const hashGuard=sql.indexOf("if nullif(trim(coalesce(p_payload_hash,'')),'') is null then");
