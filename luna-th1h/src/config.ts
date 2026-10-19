@@ -1,5 +1,52 @@
 // LUNA_SOURCE_REFRESH_2026_09_22
-const num=(name:string, fallback:number)=>Number(process.env[name] ?? fallback);
+export function parseConfigNumber(
+  raw:string|undefined,
+  fallback:number,
+  minimum=0,
+  maximum=Number.MAX_SAFE_INTEGER
+):number{
+  if(raw===undefined || raw.trim()==="") return fallback;
+  const parsed=Number(raw);
+  if(!Number.isFinite(parsed) || parsed<minimum || parsed>maximum) return fallback;
+  return parsed;
+}
+
+const NUMERIC_BOUNDS:Record<string,[number,number]>={
+  LUNA_INITIAL_CAPITAL:[1,1_000_000_000_000],
+  LUNA_MAX_POSITION_PCT:[0,1],
+  LUNA_MAX_GROSS_EXPOSURE_PCT:[0,1],
+  LUNA_ENTRY_NOTIONAL_PCT:[0,1],
+  LUNA_MAX_DAILY_LOSS:[0,1_000_000_000_000],
+  LUNA_MAX_DAILY_TURNOVER:[0,1_000_000_000_000],
+  LUNA_MAX_ORDER_NOTIONAL:[0,1_000_000_000_000],
+  LUNA_MAX_ORDERS_PER_MINUTE:[1,1_000],
+  LUNA_FEE_BPS:[0,10_000],
+  LUNA_SELL_TAX_BPS:[0,10_000],
+  LUNA_SLIPPAGE_BPS:[0,10_000],
+  LUNA_MARKET_IMPACT_BPS:[0,10_000],
+  LUNA_LIVE_RECONCILIATION_MS:[100,120_000],
+  LUNA_LIVE_SAFETY_GATEWAY_FAILURE_TRIP_COUNT:[1,1_000],
+  LUNA_LIVE_SAFETY_MAX_QUOTE_DEVIATION_BPS:[0,10_000],
+  LUNA_LIVE_SAFETY_MAX_CLOCK_SKEW_MS:[0,60_000],
+  LUNA_LIVE_ACCOUNT_CASH_DRIFT_TOLERANCE:[0,1_000_000_000_000],
+  LUNA_LIVE_ACCOUNT_QTY_DRIFT_TOLERANCE:[0,1_000_000_000],
+  LUNA_M1_OVERLAY_REFRESH_MS:[1_000,86_400_000],
+  LUNA_MARKET_GATEWAY_POLL_MS:[20,60_000],
+  LUNA_MAX_QUOTE_AGE_MS:[100,60_000],
+  LUNA_MAX_EXECUTION_CONCURRENCY:[1,100],
+  LUNA_MAX_ANALYSIS_CONCURRENCY:[1,1_000],
+  LUNA_TELEMETRY_BATCH_SIZE:[1,10_000],
+  LUNA_TELEMETRY_FLUSH_MS:[50,60_000],
+  LUNA_TELEMETRY_TICK_SHARE:[0,1],
+  LUNA_HOLD_TICK_PERSIST_MS:[1_000,300_000],
+  LUNA_HEARTBEAT_MS:[250,60_000],
+  LUNA_SUPABASE_REQUEST_TIMEOUT_MS:[100,120_000],
+};
+
+const num=(name:string,fallback:number)=>{
+  const [minimum,maximum]=NUMERIC_BOUNDS[name] ?? [0,Number.MAX_SAFE_INTEGER];
+  return parseConfigNumber(process.env[name],fallback,minimum,maximum);
+};
 const bool=(name:string, fallback:boolean)=>String(process.env[name] ?? fallback).toLowerCase()==="true";
 
 const MARKET_TIMEZONE="Asia/Bangkok";
