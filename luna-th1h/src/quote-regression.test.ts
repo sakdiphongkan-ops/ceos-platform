@@ -4,7 +4,7 @@
  * provider, write to Supabase, create orders, or enable live trading.
  */
 import {strict as assert} from "node:assert";
-import {boundedPositiveNumber,normalizeGatewayQuote,shouldEmitQuote} from "./market/provider.js";
+import {boundedPositiveNumber,normalizeGatewayQuote,requireVerifiedBookFromEnvironment,shouldEmitQuote} from "./market/provider.js";
 import {config,parseConfigBoolean,parseConfigNumber} from "./config.js";
 import {validateOrder} from "./risk.js";
 import {normalizeSetStockQuote,numberOrNull} from "./market/set-marketplace.js";
@@ -45,6 +45,15 @@ function check(name:string,fn:()=>void){
   fn();
   passed.push(name);
 }
+
+check("verified_book_gate_config_fails_closed",()=>{
+  assert.equal(requireVerifiedBookFromEnvironment(undefined),true);
+  assert.equal(requireVerifiedBookFromEnvironment(null),true);
+  assert.equal(requireVerifiedBookFromEnvironment(""),true);
+  assert.equal(requireVerifiedBookFromEnvironment("invalid"),true);
+  assert.equal(requireVerifiedBookFromEnvironment("FALSE"),false);
+  assert.equal(requireVerifiedBookFromEnvironment("true"),true);
+});
 
 // 1. Fresh quote with explicit verification is accepted.
 check("fresh_quote",()=>{
@@ -447,4 +456,4 @@ check("apply_fill_failure_is_atomic",()=>{
 
 console.log("LUNA quote regression matrix: PASS");
 for(const name of passed) console.log("PASS "+name);
-console.log(`TOTAL ${passed.length}/15; paper-only; no network/database/order side effects`);
+console.log(`TOTAL ${passed.length}/16; paper-only; no network/database/order side effects`);

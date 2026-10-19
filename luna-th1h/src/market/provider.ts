@@ -1,4 +1,5 @@
 import type {Quote} from "../types.js";
+import {parseConfigBoolean} from "../config.js";
 import {mockQuotes} from "./mock.js";
 import {setMarketplaceQuotes} from "./set-marketplace.js";
 
@@ -13,6 +14,16 @@ const PUBLIC_FALLBACK_MAX_QUOTE_AGE_MS=Math.max(
   5_000,
   boundedPositiveNumber(process.env.LUNA_PUBLIC_FALLBACK_MAX_QUOTE_AGE_MS,8_000,1,60_000)
 );
+
+export function requireVerifiedBookFromEnvironment(value:unknown):boolean{
+  // Only the exact explicit string "false" disables this gate. Missing or
+  // malformed values must preserve the safe verified-book requirement.
+  if(typeof value!=="string") return true;
+  const normalized=value.trim().toLowerCase();
+  if(normalized==="false") return false;
+  if(normalized==="true") return true;
+  return true;
+}
 
 const NORMALIZATION_REJECTIONS:Record<string,number>={
   missing_fields:0,
@@ -374,7 +385,7 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
   const previous = new Map<string,string>();
   let lastGatewayCount=-1;
   let emptyBackoffMs=Math.max(500,Math.min(5000,pollMs));
-  const requireVerifiedBook=String(process.env.LUNA_REQUIRE_VERIFIED_BOOK ?? "true").toLowerCase()==="true";
+  const requireVerifiedBook=requireVerifiedBookFromEnvironment(process.env.LUNA_REQUIRE_VERIFIED_BOOK);
   const paperMode=String(process.env.LUNA_MODE ?? "paper").toLowerCase()==="paper";
   const liveTradingArmed=String(process.env.LIVE_TRADING_ARMED ?? "false").toLowerCase()==="true";
   const priceOnlyFallback=String(
