@@ -5,7 +5,7 @@
  */
 import {strict as assert} from "node:assert";
 import {boundedPositiveNumber,normalizeGatewayQuote,shouldEmitQuote} from "./market/provider.js";
-import {config,parseConfigNumber} from "./config.js";
+import {config,parseConfigBoolean,parseConfigNumber} from "./config.js";
 import {validateOrder} from "./risk.js";
 import {normalizeSetStockQuote,numberOrNull} from "./market/set-marketplace.js";
 import {createPortfolio,planOrder,simulateFill} from "./execution.js";
@@ -324,6 +324,11 @@ check("non_finite_execution_inputs_fail_closed",()=>{
   assert.equal(parseConfigNumber("Infinity",2_000,1,60_000),2_000);
   assert.equal(parseConfigNumber("-1",2_000,1,60_000),2_000);
   assert.equal(parseConfigNumber("61000",2_000,1,60_000),2_000);
+  assert.equal(parseConfigBoolean(undefined,true),true);
+  assert.equal(parseConfigBoolean("TRUE",false),true);
+  assert.equal(parseConfigBoolean("false",true),false);
+  assert.equal(parseConfigBoolean("not-a-boolean",true),true);
+  assert.equal(parseConfigBoolean("not-a-boolean",false),false);
 
   const q=normalize();
   assert.ok(q);
