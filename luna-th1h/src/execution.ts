@@ -82,8 +82,17 @@ function portfolioStateIsValid(state:PortfolioState):boolean{
     && (!Array.isArray(state.recentBuyTimestamps) || !state.recentBuyTimestamps.every(x=>typeof x==="number" && Number.isFinite(x)))) return false;
   if(!state.positions || typeof state.positions!=="object" || Array.isArray(state.positions)) return false;
   if(!state.marks || typeof state.marks!=="object" || Array.isArray(state.marks)) return false;
+  const positionKeys=Object.keys(state.positions);
+  const canonicalKeys=new Set<string>();
+  for(const key of positionKeys){
+    if(typeof key!=="string" || !key.trim()) return false;
+    const canonical=canonicalSymbol(key);
+    if(canonicalKeys.has(canonical)) return false;
+    canonicalKeys.add(canonical);
+  }
   return Object.values(state.positions).every(pos=>
-    !!pos && finiteNonNegative(pos.qty) && finiteNonNegative(pos.avgPrice)
+    !!pos && typeof pos.qty==="number" && Number.isSafeInteger(pos.qty) && pos.qty>=0
+    && finiteNonNegative(pos.avgPrice)
     && finiteNonNegative(pos.costBasis)
     && typeof pos.realizedPnl==="number" && Number.isFinite(pos.realizedPnl)
   );
@@ -492,38 +501,65 @@ export function applyFill(state:PortfolioState,fill:SimulatedFill){
   const expectedNotional=fill.qty*fill.fillPrice;
   const expectedCashDelta=fill.side==="BUY" ? -(fill.notional+fill.fee) : fill.notional-fill.fee;
   const tolerance=Math.max(1e-6,Math.abs(expectedNotional)*1e-8);
+  const expectedSlippage=Math.abs(fill.fillPrice-fill.referencePrice)*fill.qty;
   if(Math.abs(fill.notional-expectedNotional)>tolerance
+    || Math.abs(fill.slippage-expectedSlippage)>Math.max(1e-6,Math.abs(expectedSlippage)*1e-8)
     || Math.abs(fill.totalCashDelta-expectedCashDelta)>Math.max(1e-6,Math.abs(expectedCashDelta)*1e-8)){
     throw new Error("INCONSISTENT_SIMULATED_FILL");
   }
+
   const symbol=canonicalSymbol(fill.symbol);
   const priorKey=existingPositionKey(state,symbol);
   const pos=position(state,symbol);
-  if(priorKey!==symbol && Object.prototype.hasOwnProperty.call(state.positions,priorKey)){
-    delete state.positions[priorKey];
+  // Validate all state-dependent constraints before mutating the portfolio.
+  // In particular, an invalid SELL must not delete a legacy symbol key.
+  if(fill.side==="SELL" && fill.qty>pos.qty) throw new Error("SELL_EXCEEDS_POSITION");
+  const cashTolerance=Math.max(1e-6,state.cash*1e-12);
+  if(fill.side==="BUY" && -fill.totalCashDelta>state.cash+cashTolerance){
+    throw new Error("INSUFFICIENT_PAPER_CASH");
   }
+
+  let nextPosition:PositionState;
   if(fill.side==="BUY"){
     const newQty=pos.qty+fill.qty;
     const newCost=pos.costBasis+fill.notional+fill.fee;
-    state.positions[symbol]={
+    nextPosition={
       qty:newQty,avgPrice:newCost/newQty,costBasis:newCost,realizedPnl:pos.realizedPnl
     };
   }else{
-    if(fill.qty>pos.qty) throw new Error("SELL_EXCEEDS_POSITION");
     const realized=(fill.notional-fill.fee)-(pos.avgPrice*fill.qty);
     const newQty=pos.qty-fill.qty;
     const newCost=Math.max(0,pos.costBasis-(pos.avgPrice*fill.qty));
-    state.positions[symbol]={
+    nextPosition={
       qty:newQty,
       avgPrice:newQty>0?newCost/newQty:0,
       costBasis:newCost,
       realizedPnl:pos.realizedPnl+realized
     };
   }
-  state.cash+=fill.totalCashDelta;
-  state.fees+=fill.fee;
-  state.dailyTurnover=(Number(state.dailyTurnover??0)+fill.notional);
-  state.slippageCost+=fill.slippage;
+
+  const nextCash=state.cash+fill.totalCashDelta;
+  const nextFees=state.fees+fill.fee;
+  const nextDailyTurnover=Number(state.dailyTurnover??0)+fill.notional;
+  const nextSlippageCost=state.slippageCost+fill.slippage;
+  if(!Number.isSafeInteger(nextPosition.qty) || nextPosition.qty<0
+    || ![nextPosition.avgPrice,nextPosition.costBasis,nextPosition.realizedPnl,
+      nextCash,nextFees,nextDailyTurnover,nextSlippageCost]
+      .every(value=>typeof value==="number" && Number.isFinite(value))
+    || nextPosition.avgPrice<0 || nextPosition.costBasis<0
+    || nextCash< -cashTolerance || nextFees<0 || nextDailyTurnover<0 || nextSlippageCost<0){
+    throw new Error("INVALID_SIMULATED_FILL_RESULT");
+  }
+
+  // Commit the in-memory state only after every guard passes.
+  if(priorKey!==symbol && Object.prototype.hasOwnProperty.call(state.positions,priorKey)){
+    delete state.positions[priorKey];
+  }
+  state.positions[symbol]=nextPosition;
+  state.cash=Math.max(0,nextCash);
+  state.fees=nextFees;
+  state.dailyTurnover=nextDailyTurnover;
+  state.slippageCost=nextSlippageCost;
 }
 
 export function currentGrossExposure(state:PortfolioState){
