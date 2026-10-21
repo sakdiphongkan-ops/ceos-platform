@@ -153,8 +153,8 @@ export default function LunaPortfolioPage() {
   },[lastRealtimeTickAt]);
 
   const marketPhase=clock ? uiMarketPhase(clock) : null;
-  const marketPhaseLabelText=marketPhase ? marketPhaseLabelText : "SYNCING CLOCK";
-  const marketPhaseHintText=marketPhase ? marketPhaseHintText : "Waiting for Bangkok clock";
+  const marketPhaseLabelText=marketPhase ? marketPhaseLabel(marketPhase) : "SYNCING CLOCK";
+  const marketPhaseHintText=marketPhase ? marketPhaseHint(marketPhase) : "Waiting for Bangkok clock";
   const todaySessionDate=clock ? bangkokDate(clock) : "—";
 
   const sessionData=useMemo(()=>{
