@@ -248,6 +248,7 @@ export default function LunaPortfolioPage() {
           : Number.POSITIVE_INFINITY;
         const signalIsCurrent=
           sessionIsToday
+          && marketPhase !== null
           && ["ACTIVE","REDUCE_ONLY","FORCE_CLOSE"].includes(marketPhase)
           && Number.isFinite(signalAgeMs)
           && signalAgeMs<=15_000;
