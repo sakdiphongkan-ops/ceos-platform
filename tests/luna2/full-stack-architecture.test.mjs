@@ -256,3 +256,12 @@ test("LUNA JEX-inspired candles render only validated Settrade OHLC and never ex
   assert.doesNotMatch(panel, /LUNA_GATEWAY_KEY/);
   assert.doesNotMatch(panel, /mockQuotes|synthetic candle|Math\.random/);
 });
+
+test("LUNA dashboard does not report false market/API states before hydration or when ages are null", () => {
+  const page = read("app/luna/page.tsx");
+  assert.match(page, /const marketPhase=clock \\? uiMarketPhase\\(clock\\) : null;/);
+  assert.match(page, /marketPhaseLabelText=marketPhase \\? marketPhaseLabel\\(marketPhase\\) : "SYNCING CLOCK"/);
+  assert.match(page, /marketFeed\\.latest_age_ms != null && Number\\.isFinite/);
+  assert.match(page, /backendRuntime\\?\\.latest_age_ms != null && Number\\.isFinite/);
+  assert.match(page, /API \\{isConnecting \\? "CHECKING" : live \\? "CONNECTED" : "UNREACHABLE"\\}/);
+});
