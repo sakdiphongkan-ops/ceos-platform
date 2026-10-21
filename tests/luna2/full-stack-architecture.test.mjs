@@ -264,4 +264,5 @@ test("LUNA dashboard does not report false market/API states before hydration or
   assert.match(page, /marketFeed\\.latest_age_ms != null && Number\\.isFinite/);
   assert.match(page, /backendRuntime\\?\\.latest_age_ms != null && Number\\.isFinite/);
   assert.match(page, /API \\{isConnecting \\? "CHECKING" : live \\? "CONNECTED" : "UNREACHABLE"\\}/);
+  assert.match(page, /!clock \\? "waiting for Bangkok clock" : sessionIsToday/);
 });
