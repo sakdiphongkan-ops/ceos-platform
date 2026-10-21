@@ -18,19 +18,33 @@ import {
 } from "../../lib/luna-client";
 
 type Position = {
-  symbol: string; name: string; qty: number; avgCost: number; last: number; dayChange: number;
+  symbol: string; name: string; qty: number; avgCost: number | null; last: number | null;
   realized: number; signal: "BUY" | "SELL" | "HOLD"; signalReason: string;
 };
 
 type Trade = {
-  time: string; symbol: string; side: "BUY" | "SELL"; qty: number; price: number; value: number;
-  status: "FILLED" | "PARTIAL" | "REJECTED"; strategy: string; reason: string;
+  time: string; symbol: string; side: "BUY" | "SELL"; qty: number; price: number | null; value: number | null;
+  status: string; strategy: string; reason: string;
 };
 
 const money = (n: number) =>
   new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n) || 0);
 
 const signed = (n: number) => `${n >= 0 ? "+" : "-"}฿${money(Math.abs(n))}`;
+
+function marketTimestampMs(value: unknown): number {
+  if (typeof value === "number" || (typeof value === "string" && /^[0-9]{10,13}$/.test(value))) {
+    const numeric = Number(value);
+    return numeric < 100_000_000_000 ? numeric * 1000 : numeric;
+  }
+  return Date.parse(String(value ?? ""));
+}
+
+function hasFreshMarketTimestamp(value: unknown, maxAgeMs = 15_000): boolean {
+  const timestamp = marketTimestampMs(value);
+  const age = Date.now() - timestamp;
+  return Number.isFinite(timestamp) && age >= 0 && age <= maxAgeMs;
+}
 
 export default function LunaPortfolioPage() {
   const [tab,setTab]=useState<"holdings"|"trades"|"closed"|"research">("holdings");
@@ -195,15 +209,29 @@ export default function LunaPortfolioPage() {
   }=sessionData;
 
   const positions=useMemo<Position[]>(()=>{
-    const tickBySymbol=new Map(sessionTicks.map((tick)=>[String(tick.symbol),tick]));
+    const sortedTicks = [...sessionTicks].sort((a,b)=>
+      marketTimestampMs(a.ts??a.timestamp??a.created_at)-marketTimestampMs(b.ts??b.timestamp??b.created_at)
+    );
+    const tickBySymbol = new Map<string, Record<string,any>>();
+    for (const tick of sortedTicks) tickBySymbol.set(String(tick.symbol),tick);
     const signalBySymbol=new Map(sessionSignals.map((signal)=>[String(signal.symbol),signal]));
+    const feedVerified=feed?.market_feed?.verified_realtime===true;
 
     return sessionPositions
       .filter((position)=>Number(position.qty)>0)
       .map((position)=>{
         const symbol=String(position.symbol);
-        const realtimeTick=realtimeQuotes[symbol];
-        const tick=realtimeTick ?? tickBySymbol.get(symbol);
+        const streamQuote = feedVerified && realtimeConnected ? realtimeQuotes[symbol] : undefined;
+        const streamQuoteIsFresh = streamQuote && hasFreshMarketTimestamp(streamQuote.source_ts??streamQuote.ts);
+        const storedTick = tickBySymbol.get(symbol);
+        const storedTickIsFresh = feedVerified && storedTick
+          && hasFreshMarketTimestamp(storedTick.ts??storedTick.timestamp??storedTick.created_at);
+        const tick = streamQuoteIsFresh ? streamQuote : storedTickIsFresh ? storedTick : undefined;
+        const rawLast=tick?.last;
+        const parsedLast=rawLast==null?NaN:Number(rawLast);
+        const last=Number.isFinite(parsedLast)&&parsedLast>0?parsedLast:null;
+        const parsedAvgCost=Number(position.avg_price);
+        const avgCost=Number.isFinite(parsedAvgCost)&&parsedAvgCost>0?parsedAvgCost:null;
         const signal=signalBySymbol.get(symbol);
         const signalTs=signal?.ts??signal?.created_at;
         const signalAgeMs=signalTs
@@ -215,7 +243,6 @@ export default function LunaPortfolioPage() {
           && Number.isFinite(signalAgeMs)
           && signalAgeMs<=15_000;
 
-        const last=Number(tick?.last??tick?.bid??tick?.ask??position.avg_price);
         const action=
           signalIsCurrent
           && (signal?.action==="BUY"||signal?.action==="SELL"||signal?.action==="HOLD")
@@ -226,9 +253,8 @@ export default function LunaPortfolioPage() {
           symbol,
           name:symbol,
           qty:Number(position.qty),
-          avgCost:Number(position.avg_price),
+          avgCost,
           last,
-          dayChange:0,
           realized:Number(position.realized_pnl??0),
           signal:action,
           signalReason:signalIsCurrent
@@ -237,8 +263,10 @@ export default function LunaPortfolioPage() {
         };
       });
   },[
-    marketPhase,
+    feed?.market_feed?.verified_realtime,
+    realtimeConnected,
     realtimeQuotes,
+    marketPhase,
     sessionIsToday,
     sessionPositions,
     sessionSignals,
@@ -250,21 +278,32 @@ export default function LunaPortfolioPage() {
 
     return sessionOrders.map((order)=>{
       const fill=fillByOrderId.get(String(order.id));
-      const status=order.status==="PARTIAL"
-        ? "PARTIAL"
-        : order.status==="REJECTED"
-          ? "REJECTED"
-          : "FILLED";
-      const price=Number(order.avg_fill_price??fill?.price??order.limit_price??0);
-      const qty=Number(order.filled_qty||order.qty);
+      const orderStatus=String(order.status??"UNKNOWN").trim().toUpperCase()||"UNKNOWN";
+      const filledQtyRaw=Number(order.filled_qty??fill?.qty??0);
+      const filledQty=Number.isFinite(filledQtyRaw)&&filledQtyRaw>0?filledQtyRaw:0;
+      const requestedQtyRaw=Number(order.qty??0);
+      const requestedQty=Number.isFinite(requestedQtyRaw)&&requestedQtyRaw>0?requestedQtyRaw:0;
+      const fillPriceRaw=Number(order.avg_fill_price??fill?.price);
+      const fillPrice=Number.isFinite(fillPriceRaw)&&fillPriceRaw>0?fillPriceRaw:null;
+      const limitPriceRaw=Number(order.limit_price);
+      const limitPrice=Number.isFinite(limitPriceRaw)&&limitPriceRaw>0?limitPriceRaw:null;
+      const status=orderStatus==="REJECTED" ? "REJECTED"
+        : ["CANCELLED","CANCELED"].includes(orderStatus) ? "CANCELLED"
+        : orderStatus==="EXPIRED" ? "EXPIRED"
+        : orderStatus==="PARTIAL"||orderStatus==="PARTIALLY_FILLED"||(filledQty>0&&requestedQty>filledQty) ? "PARTIAL"
+        : orderStatus==="FILLED"||(requestedQty>0&&filledQty>=requestedQty) ? "FILLED"
+        : ["NEW","OPEN","SUBMITTED","ACCEPTED"].includes(orderStatus) ? "OPEN"
+        : orderStatus==="PENDING"||orderStatus==="PENDING_NEW" ? "PENDING"
+        : orderStatus;
+      const qty=filledQty>0?filledQty:requestedQty;
 
       return {
-        time:new Date(order.created_at).toLocaleTimeString("en-GB",{hour12:false}),
-        symbol:order.symbol,
+        time:order.created_at ? new Date(order.created_at).toLocaleTimeString("en-GB",{hour12:false}) : "—",
+        symbol:String(order.symbol??"—"),
         side:order.side==="SELL" ? "SELL" : "BUY",
         qty,
-        price,
-        value:price*qty,
+        price:fillPrice??limitPrice,
+        value:fillPrice!==null&&filledQty>0?fillPrice*filledQty:null,
         status,
         strategy:session?.strategy_version??"—",
         reason:order.reason??"—",
@@ -310,21 +349,24 @@ export default function LunaPortfolioPage() {
     const normalizedQuery=query.toLowerCase();
     const matchesQuery=(position.symbol+" "+position.name).toLowerCase().includes(normalizedQuery);
     const matchesSignal=signalFilter==="ALL" || position.signal===signalFilter;
-    const matchesProfit=!profitOnly || position.last>=position.avgCost;
+    const matchesProfit=!profitOnly || (position.last!==null && position.avgCost!==null && position.last>=position.avgCost);
     return matchesQuery && matchesSignal && matchesProfit;
   }),[positions,profitOnly,query,signalFilter]);
 
   const filterCount=(signalFilter!=="ALL"?1:0)+(profitOnly?1:0);
   const updatedAt=feed?.generated_at ? new Date(feed.generated_at).toLocaleTimeString("en-GB",{hour12:false}) : "—";
   const initial=Number(session?.initial_capital??30000);
-  const liveMarketValue=positions.reduce((s,p)=>s+p.qty*p.last,0);
-  const hasMarketValue=positions.length>0 || sessionSnapshot?.market_value!=null;
-  const marketValue=positions.length ? liveMarketValue : Number(sessionSnapshot?.market_value??0);
+  const hasCurrentMarketMarks=positions.length>0 && positions.every((p)=>p.last!==null);
+  const liveMarketValue=hasCurrentMarketMarks ? positions.reduce((sum,p)=>sum+p.qty*(p.last??0),0) : null;
+  const hasMarketValue=liveMarketValue!==null || sessionSnapshot?.market_value!=null;
+  const marketValue=liveMarketValue ?? Number(sessionSnapshot?.market_value??0);
   const hasVerifiedPortfolioSnapshot=sessionSnapshot?.cash!=null && sessionSnapshot?.market_value!=null;
   const cash=Number(sessionSnapshot?.cash??0);
   const equity=hasVerifiedPortfolioSnapshot ? cash+marketValue : 0;
-  const liveUnrealized=positions.reduce((s,p)=>s+p.qty*(p.last-p.avgCost),0);
-  const unrealized=positions.length ? liveUnrealized : Number(sessionSnapshot?.unrealized_pnl??0);
+  const hasLiveUnrealized=positions.length>0 && positions.every((p)=>p.last!==null && p.avgCost!==null);
+  const liveUnrealized=hasLiveUnrealized ? positions.reduce((sum,p)=>sum+p.qty*((p.last??0)-(p.avgCost??0)),0) : null;
+  const hasUnrealized=liveUnrealized!==null || sessionSnapshot?.unrealized_pnl!=null;
+  const unrealized=liveUnrealized ?? Number(sessionSnapshot?.unrealized_pnl??0);
   const realized=Number(sessionSnapshot?.realized_pnl??positions.reduce((s,p)=>s+p.realized,0));
   const fees=Number(sessionSnapshot?.fees??0);
   const exposure=equity?Number(sessionSnapshot?.gross_exposure??marketValue)/equity*100:0;
@@ -418,7 +460,7 @@ export default function LunaPortfolioPage() {
     : liveExecution
       ? "LIVE EXECUTION"
       : killSwitch
-        ? "PAPER EXECUTION / KILL SWITCH OFF"
+        ? "PAPER EXECUTION / KILL SWITCH ON"
         : "PAPER EXECUTION / LIVE ORDER LOCKED";
   const killSwitchDisplay=feed ? (killSwitch ? "ON" : "OFF") : "LOCKED";
   const killSwitchDetail=feed ? (armed ? "armed" : "disarmed") : "awaiting backend";
@@ -459,9 +501,9 @@ export default function LunaPortfolioPage() {
       {error&&<div className="error-banner"><span>{error}</span><button onClick={load}>Retry</button></div>}
       <section className="summary-grid"><Metric label="Market ticks" value={String(sessionTicks.length)} sub="Latest session feed"/><Metric label="Shadow BUY" value={String(shadow?.buy_candidates??0)} sub="v1.4 candidates"/><Metric label="Shadow SELL" value={String(shadow?.sell_candidates??0)} sub="v1.4 candidates"/><Metric label="Signals" value={String(sessionSignals.length)} sub="Execution signals"/><Metric label="Orders" value={String(sessionOrders.length)} sub="Recorded this session"/>
         <Metric label="Total Equity" value={hasVerifiedPortfolioSnapshot ? `฿${money(equity)}` : "—"} sub={hasVerifiedPortfolioSnapshot ? `Initial ฿${money(initial)}` : "Awaiting verified portfolio snapshot"} positive={hasVerifiedPortfolioSnapshot ? equity>=initial : undefined}/>
-        <Metric label="Market Value" value={hasMarketValue ? `฿${money(marketValue)}` : "—"} sub={hasMarketValue ? `${exposure.toFixed(1)}% exposure` : "Awaiting verified positions / snapshot"}/>
+        <Metric label="Market Value" value={hasMarketValue ? `฿${money(marketValue)}` : "—"} sub={hasMarketValue ? `${liveMarketValue!==null?"Fresh verified marks":"Verified portfolio snapshot"} · ${exposure.toFixed(1)}% exposure` : "Awaiting verified positions / snapshot"}/>
         <Metric label="Cash" value={sessionSnapshot?.cash!=null ? `฿${money(cash)}` : "—"} sub={sessionSnapshot?.cash!=null ? "Verified snapshot cash" : "Awaiting verified portfolio snapshot"}/>
-        <Metric label="Unrealized P&L" value={positions.length>0 || sessionSnapshot?.unrealized_pnl!=null ? signed(unrealized) : "—"} sub={positions.length>0 || sessionSnapshot?.unrealized_pnl!=null ? "Current open positions" : "Awaiting verified portfolio data"} positive={positions.length>0 || sessionSnapshot?.unrealized_pnl!=null ? unrealized>=0 : undefined}/>
+        <Metric label="Unrealized P&L" value={hasUnrealized ? signed(unrealized) : "—"} sub={hasUnrealized ? (liveUnrealized!==null?"Fresh verified marks":"Verified portfolio snapshot") : "Awaiting verified portfolio data"} positive={hasUnrealized ? unrealized>=0 : undefined}/>
         <Metric label="Realized P&L" value={sessionSnapshot?.realized_pnl!=null ? signed(realized) : "—"} sub={sessionSnapshot?.realized_pnl!=null ? "Verified snapshot" : "Awaiting verified portfolio snapshot"} positive={sessionSnapshot?.realized_pnl!=null ? realized>=0 : undefined}/>
         <Metric label="Fees" value={sessionSnapshot?.fees!=null ? `-฿${money(fees)}` : "—"} sub={sessionSnapshot?.fees!=null ? "Recorded execution cost" : "Awaiting verified portfolio snapshot"}/>
         <LatencyMetric label="Latency p95" metric={feed?.latency?.summary?.end_to_end_ms?.p95} sampleCount={feed?.latency?.summary?.sample_count??0} sub="real executions"/>
@@ -489,7 +531,7 @@ export default function LunaPortfolioPage() {
 </div></div>
           <div className="tabs"><button className={tab==="holdings"?"active":""} onClick={()=>setTab("holdings")}>Holdings <span>{positions.length}</span></button><button className={tab==="trades"?"active":""} onClick={()=>setTab("trades")}>Today's Trades <span>{trades.length}</span></button><button className={tab==="closed"?"active":""} onClick={()=>setTab("closed")}>Closed Positions <span>{closedPositions.length}</span></button><button className={tab==="research"?"active":""} onClick={()=>setTab("research")}>Research <span>WF</span></button></div>
           {loading&&!feed?<div className="loading-state"><RefreshCw size={18}/> Loading live portfolio feed…</div>:
-          tab==="holdings"?<div className="table-wrap"><table><thead><tr><th>SYMBOL</th><th>QTY</th><th>AVG COST</th><th>LAST</th><th>MARKET VALUE</th><th>UNREALIZED P&amp;L</th><th>WEIGHT</th><th>SIGNAL</th></tr></thead><tbody>{filteredPositions.length?filteredPositions.map(p=>{const value=p.qty*p.last;const weight=equity?value/equity*100:0;const pnl=p.qty*(p.last-p.avgCost);return <tr
+          tab==="holdings"?<div className="table-wrap"><table><thead><tr><th>SYMBOL</th><th>QTY</th><th>AVG COST</th><th>LAST</th><th>MARKET VALUE</th><th>UNREALIZED P&amp;L</th><th>WEIGHT</th><th>SIGNAL</th></tr></thead><tbody>{filteredPositions.length?filteredPositions.map(p=>{const value=p.last!==null?p.qty*p.last:null;const weight=value!==null&&equity?value/equity*100:null;const pnl=p.last!==null&&p.avgCost!==null?p.qty*(p.last-p.avgCost):null;return <tr
   key={p.symbol}
   className={selectedPos?.symbol===p.symbol?"selected-row":""}
   tabIndex={0}
@@ -497,13 +539,12 @@ export default function LunaPortfolioPage() {
   aria-label={p.symbol+" position"}
   onClick={()=>setSelected(p)}
   onKeyDown={(event)=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();setSelected(p);}}}
-><td><div className="symbol-cell"><strong>{p.symbol}</strong><span>{p.name}</span></div></td><td>{money(p.qty).replace(".00","")}</td><td>฿{p.avgCost.toFixed(2)}</td><td><strong>฿{p.last.toFixed(2)}</strong></td><td>฿{money(value)}</td><td className={pnl>=0?"positive":"negative"}>{signed(pnl)}</td><td><div className="weight-cell"><span>{weight.toFixed(1)}%</span><i><b style={{width:`${Math.min(weight,100)}%`}}/></i></div></td><td><SignalBadge signal={p.signal}/></td></tr>;}):<tr><td colSpan={8} className="empty-table"><div>{sessionIsToday ? "No open positions currently — positions are removed from Holdings after execution closes them." : `No current trading session yet for ${todaySessionDate}. LUNA is ${marketPhaseLabel(marketPhase).toLowerCase()} and execution is locked.`}</div>{trades.length>0&&<button className="filter-button" style={{marginTop:8}} onClick={()=>setTab("trades")}>View today\'s executed trades ({trades.length})</button>}</td></tr>}</tbody></table></div>:
-          tab==="research"?<ResearchPanel/>:tab==="trades"?<div className="table-wrap"><table><thead><tr><th>TIME</th><th>SYMBOL</th><th>SIDE</th><th>QTY</th><th>PRICE</th><th>VALUE</th><th>STATUS</th><th>STRATEGY</th></tr></thead><tbody>{trades.length?trades.map(t=><tr key={`${t.time}-${t.symbol}-${t.qty}`}><td className="muted">{t.time}</td><td><strong>{t.symbol}</strong></td><td><SideBadge side={t.side}/></td><td>{money(t.qty).replace(".00","")}</td><td>฿{t.price.toFixed(2)}</td><td>฿{money(t.value)}</td><td><StatusBadge status={t.status}/></td><td className="muted">{t.strategy}</td></tr>):<tr><td colSpan={8} className="empty-table">No orders recorded for this session.</td></tr>}</tbody></table></div>:
+><td><div className="symbol-cell"><strong>{p.symbol}</strong><span>{p.name}</span></div></td><td>{money(p.qty).replace(".00","")}</td><td>{p.avgCost!==null?"฿"+p.avgCost.toFixed(2):"—"}</td><td><strong>{p.last!==null?"฿"+p.last.toFixed(2):"—"}</strong></td><td>{value!==null?"฿"+money(value):"—"}</td><td className={pnl===null?"muted":pnl>=0?"positive":"negative"}>{pnl===null?"—":signed(pnl)}</td><td><div className="weight-cell"><span>{weight!==null?weight.toFixed(1)+"%":"—"}</span><i><b style={{width:(weight===null?0:Math.min(Math.max(weight,0),100))+"%"}}/></i></div></td><td><SignalBadge signal={p.signal}/></td></tr>;})          tab==="research"?<ResearchPanel/>:tab==="trades"?<div className="table-wrap"><table><thead><tr><th>TIME</th><th>SYMBOL</th><th>SIDE</th><th>QTY</th><th>FILL / LIMIT</th><th>FILLED VALUE</th><th>STATUS</th><th>STRATEGY</th></tr></thead><tbody>{trades.length?trades.map(t=><tr key={`${t.time}-${t.symbol}-${t.qty}`}><td className="muted">{t.time}</td><td><strong>{t.symbol}</strong></td><td><SideBadge side={t.side}/></td><td>{money(t.qty).replace(".00","")}</td><td>{t.price!==null?"฿"+t.price.toFixed(2):"—"}</td><td>{t.value!==null?"฿"+money(t.value):"—"}</td><td><StatusBadge status={t.status}/></td><td className="muted">{t.strategy}</td></tr>):<tr><td colSpan={8} className="empty-table">No orders recorded for this session.</td></tr>}</tbody></table></div>:
           <div className="table-wrap"><table><thead><tr><th>SYMBOL</th><th>ENTRY</th><th>EXIT</th><th>QTY</th><th>REALIZED P&amp;L</th><th>HOLD TIME</th></tr></thead><tbody>{closedPositions.length?closedPositions.map(p=><tr key={p.symbol}><td><strong>{p.symbol}</strong></td><td>฿{p.entry.toFixed(2)}</td><td>฿{p.exit.toFixed(2)}</td><td>{money(p.qty).replace(".00","")}</td><td className={p.pnl>=0?"positive":"negative"}>{signed(p.pnl)}</td><td className="muted">{p.duration}</td></tr>):<tr><td colSpan={6} className="empty-table">No closed positions reconstructed from fills.</td></tr>}</tbody></table></div>}
         </div>
-        <aside className="side-card">{selectedPos?<><div className="detail-head"><div><div className="detail-symbol">{selectedPos.symbol}</div><div className="muted">{selectedPos.name}</div></div><button className="close-button" onClick={()=>setSelected(null)}><X size={15}/></button></div><div className="price-block"><div>฿{selectedPos.last.toFixed(2)}</div><span className={selectedPos.last>=selectedPos.avgCost?"positive":"negative"}>{selectedPos.last>=selectedPos.avgCost?<ArrowUpRight size={14}/>:<ArrowDownRight size={14}/>} {((selectedPos.last/selectedPos.avgCost-1)*100).toFixed(2)}%</span></div><div className="detail-grid"><Detail label="Position" value={`${money(selectedPos.qty).replace(".00","")} shares`}/><Detail label="Avg Cost" value={`฿${selectedPos.avgCost.toFixed(2)}`}/><Detail label="Market Value" value={`฿${money(selectedPos.qty*selectedPos.last)}`}/><Detail label="Unrealized P&L" value={signed(selectedPos.qty*(selectedPos.last-selectedPos.avgCost))} positive={selectedPos.last>=selectedPos.avgCost}/><Detail label="Portfolio Weight" value={`${(equity?(selectedPos.qty*selectedPos.last/equity*100):0).toFixed(1)}%`}/><Detail label="Sizing" value="Dynamic · signal strength"/></div><div className="section-label">CURRENT SIGNAL</div><div className="signal-panel"><SignalBadge signal={selectedPos.signal} large/><p>{selectedPos.signalReason}</p></div><div className="section-label">EXECUTION TIMELINE</div><div className="timeline">{trades.filter(t=>t.symbol===selectedPos.symbol).map(t=><div className="timeline-item" key={t.time}><div className={`timeline-dot ${t.side.toLowerCase()}`}/><div><strong>{t.side} {money(t.qty).replace(".00","")} @ ฿{t.price.toFixed(2)}</strong><span>{t.time} · {t.reason}</span></div></div>)}<div className="timeline-item future"><div className="timeline-dot"/><div><strong>Position currently open</strong><span>Latest feed mark</span></div></div></div><div className="audit-strip"><Layers3 size={15}/><span>Execution → Position → Snapshot → Audit event</span></div></>:<div className="empty-detail"><strong>Select a position</strong><span>Click any holding to inspect its live execution history.</span></div>}</aside>
+        <aside className="side-card">{selectedPos?<><div className="detail-head"><div><div className="detail-symbol">{selectedPos.symbol}</div><div className="muted">{selectedPos.name}</div></div><button className="close-button" onClick={()=>setSelected(null)}><X size={15}/></button></div><div className="price-block"><div>{selectedPos.last!==null?"฿"+selectedPos.last.toFixed(2):"Price unavailable"}</div>{selectedPos.last!==null&&selectedPos.avgCost!==null?<span className={selectedPos.last>=selectedPos.avgCost?"positive":"negative"}>{selectedPos.last>=selectedPos.avgCost?<ArrowUpRight size={14}/>:<ArrowDownRight size={14}/>} {((selectedPos.last/selectedPos.avgCost-1)*100).toFixed(2)}%</span>:<span className="muted">Awaiting fresh verified quote</span>}</div><div className="detail-grid"><Detail label="Position" value={money(selectedPos.qty).replace(".00","")+" shares"}/><Detail label="Avg Cost" value={selectedPos.avgCost!==null?"฿"+selectedPos.avgCost.toFixed(2):"—"}/><Detail label="Market Value" value={selectedPos.last!==null?"฿"+money(selectedPos.qty*selectedPos.last):"—"}/><Detail label="Unrealized P&L" value={selectedPos.last!==null&&selectedPos.avgCost!==null?signed(selectedPos.qty*(selectedPos.last-selectedPos.avgCost)):"—"} positive={selectedPos.last!==null&&selectedPos.avgCost!==null?selectedPos.last>=selectedPos.avgCost:undefined}/><Detail label="Portfolio Weight" value={selectedPos.last!==null&&equity?(selectedPos.qty*selectedPos.last/equity*100).toFixed(1)+"%":"—"}/><Detail label="Sizing" value="Dynamic · signal strength"/></div><div className="section-label">CURRENT SIGNAL</div><div className="signal-panel"><SignalBadge signal={selectedPos.signal} large/><p>{selectedPos.signalReason}</p></div><div className="section-label">EXECUTION TIMELINE</div><div className="timeline">{trades.filter(t=>t.symbol===selectedPos.symbol).map(t=><div className="timeline-item" key={t.time}><div className={`timeline-dot ${t.side.toLowerCase()}`}/><div><strong>{t.side} {money(t.qty).replace(".00","")} @ ฿{t.price.toFixed(2)}</strong><span>{t.time} · {t.reason}</span></div></div>)}<div className="timeline-item future"><div className="timeline-dot"/><div><strong>Position currently open</strong><span>{selectedPos.last!==null?"Fresh verified mark":"Waiting for verified mark"}</span></div></div></div><div className="audit-strip"><Layers3 size={15}/><span>Execution → Position → Snapshot → Audit event</span></div></>:<div className="empty-detail"><strong>Select a position</strong><span>Click any holding to inspect its live execution history.</span></div>}</aside>
       </section>
-      <section className="bottom-grid"><div className="mini-card"><div className="mini-title"><BarChart3 size={16}/> Exposure by position</div><div className="bars">{positions.map(p=><div className="bar-row" key={p.symbol}><span>{p.symbol}</span><i><b style={{width:`${Math.min((equity?(p.qty*p.last/equity*100):0)*5,100)}%`}}/></i><strong>{(equity?p.qty*p.last/equity*100:0).toFixed(1)}%</strong></div>)}</div></div><div className="mini-card"><div className="mini-title"><History size={16}/> Session controls</div><div className="control-list"><div><span>Strategy</span><strong>{session?.strategy_version??"—"}</strong></div><div><span>Initial capital</span><strong>฿{money(initial)}</strong></div><div><span>Gross exposure</span><strong>{exposure.toFixed(1)}% / 100%</strong></div><div><span>End of day</span><strong>FORCE CLOSE</strong></div></div><div className={`live-toggle ${live ? "on" : "off"}`}><CircleDot size={13}/>{live ? `API connected · feed: ${marketFeedLabel}` : "Feed unavailable"}</div></div><div className="mini-card"><div className="mini-title"><WalletCards size={16}/> Audit integrity</div><div className="audit-score"><strong>{feed?.counts?.audits?"READY":"WAITING"}</strong><span>{feed?.counts?.audits??0} audit events · {feed?.counts?.fills??0} fills · {feed?.counts?.snapshots??0} snapshots</span></div><div className="hash-line">universe loaded · quote coverage tracked · real latency ledger · API-backed</div></div></section>
+      <section className="bottom-grid"><div className="mini-card"><div className="mini-title"><BarChart3 size={16}/> Exposure by position</div><div className="bars">{positions.map(p=>{const weight=p.last!==null&&equity?p.qty*p.last/equity*100:null;return <div className="bar-row" key={p.symbol}><span>{p.symbol}</span><i><b style={{width:(weight===null?0:Math.min(Math.max(weight*5,0),100))+"%"}}/></i><strong>{weight===null?"—":weight.toFixed(1)+"%"}</strong></div>})}</div></div><div className="mini-card"><div className="mini-title"><History size={16}/> Session controls</div><div className="control-list"><div><span>Strategy</span><strong>{session?.strategy_version??"—"}</strong></div><div><span>Initial capital</span><strong>฿{money(initial)}</strong></div><div><span>Gross exposure</span><strong>{exposure.toFixed(1)}% / 100%</strong></div><div><span>End of day</span><strong>FORCE CLOSE</strong></div></div><div className={`live-toggle ${live ? "on" : "off"}`}><CircleDot size={13}/>{live ? `API connected · feed: ${marketFeedLabel}` : "Feed unavailable"}</div></div><div className="mini-card"><div className="mini-title"><WalletCards size={16}/> Audit integrity</div><div className="audit-score"><strong>{feed?.counts?.audits?"READY":"WAITING"}</strong><span>{feed?.counts?.audits??0} audit events · {feed?.counts?.fills??0} fills · {feed?.counts?.snapshots??0} snapshots</span></div><div className="hash-line">universe loaded · quote coverage tracked · real latency ledger · API-backed</div></div></section>
     </div>
   </main>
 }
