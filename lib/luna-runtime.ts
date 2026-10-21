@@ -119,5 +119,8 @@ export function marketPhaseHint(phase: UiMarketPhase): string {
 }
 
 export function isRealtimeFresh(timestampMs: number | null, maxAgeMs = 5_000): boolean {
-  return timestampMs != null && Date.now() - timestampMs <= maxAgeMs;
+  if (timestampMs == null || !Number.isFinite(timestampMs)) return false;
+  const ageMs = Date.now() - timestampMs;
+  // A future-dated tick is invalid, not "fresh".
+  return ageMs >= 0 && ageMs <= maxAgeMs;
 }
