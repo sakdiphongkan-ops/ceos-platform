@@ -152,7 +152,9 @@ export default function LunaPortfolioPage() {
     return()=>clearInterval(id);
   },[lastRealtimeTickAt]);
 
-  const marketPhase=clock ? uiMarketPhase(clock) : "CLOSED";
+  const marketPhase=clock ? uiMarketPhase(clock) : null;
+  const marketPhaseLabelText=marketPhase ? marketPhaseLabelText : "SYNCING CLOCK";
+  const marketPhaseHintText=marketPhase ? marketPhaseHintText : "Waiting for Bangkok clock";
   const todaySessionDate=clock ? bangkokDate(clock) : "—";
 
   const sessionData=useMemo(()=>{
@@ -266,7 +268,7 @@ export default function LunaPortfolioPage() {
           signal:action,
           signalReason:signalIsCurrent
             ? (signal?.reason??"No current signal recorded")
-            : marketPhaseHint(marketPhase),
+            : marketPhaseHintText,
         };
       });
   },[
@@ -411,14 +413,14 @@ export default function LunaPortfolioPage() {
   const realtimeFresh=realtimeAgeMs!=null && realtimeAgeMs<=5000;
   const marketFeedAge=realtimeFresh && realtimeAgeMs!=null
     ? Math.round(realtimeAgeMs) + " ms since UI tick"
-    : Number.isFinite(Number(marketFeed.latest_age_ms))
+    : marketFeed.latest_age_ms != null && Number.isFinite(Number(marketFeed.latest_age_ms))
       ? Math.max(0,Math.round(Number(marketFeed.latest_age_ms))) + " ms old"
       : "age unavailable";
 
   const backendRuntime=runtimeStatus?.runtime;
   const backendStrategy=String(backendRuntime?.strategy_version??backendRuntime?.session?.strategy_version??"");
   const strategyMismatch=Boolean(backendStrategy && backendStrategy!==LUNA_STRATEGY);
-  const runtimeAgeMs=Number.isFinite(Number(backendRuntime?.latest_age_ms)) ? Math.max(0,Number(backendRuntime?.latest_age_ms)) : null;
+  const runtimeAgeMs=backendRuntime?.latest_age_ms != null && Number.isFinite(Number(backendRuntime.latest_age_ms)) ? Math.max(0,Number(backendRuntime.latest_age_ms)) : null;
   const backendRuntimeLive=backendRuntime?.state==="LIVE" && Number(backendRuntime?.ticks_30s??0)>0;
   const backendRuntimeFresh=backendRuntimeLive && runtimeAgeMs!=null && runtimeAgeMs<=10000;
   const runtimeState:RuntimeState = !live
@@ -494,7 +496,7 @@ export default function LunaPortfolioPage() {
         <button className={tab==="research"?"active":""} onClick={()=>setTab("research")}>Research</button>
       </nav>
       <div className="top-actions">
-        <div className={`market-status phase-${marketPhase.toLowerCase()}`}><CircleDot size={11}/> SET · {marketPhaseLabel(marketPhase)}</div><div className="timeframe-chip"><BarChart3 size={13}/> {TIMEFRAME}</div>
+        <div className={`market-status phase-${marketPhase?.toLowerCase() ?? "syncing"}`}><CircleDot size={11}/> SET · {marketPhaseLabelText}</div><div className="timeframe-chip"><BarChart3 size={13}/> {TIMEFRAME}</div>
         <button className={"icon-button "+(refreshing?"refreshing":"")} title={refreshing?"Refreshing LUNA feed…":"Refresh LUNA feed"} aria-label={refreshing?"Refreshing LUNA feed":"Refresh LUNA feed"} onClick={load} disabled={refreshing}><RefreshCw size={17}/><span className="refresh-label">{refreshing?"Refreshing":"Refresh"}</span></button>
         <div className={`session-chip session-runtime-${runtimeTone.toLowerCase()}`}><Clock3 size={14}/> {todaySessionDate} · {clock ? bangkokClock(clock) : "Synchronizing clock"} · {isConnecting ? "CONNECTING" : runtimeState==="ACTIVE" ? (realtimeFresh ? "SYSTEM ACTIVE · UI REALTIME" : "SYSTEM ACTIVE · SERVER") : runtimeState==="STANDBY" ? "ONLINE · STANDBY" : runtimeState==="DEGRADED" ? "ONLINE · CHECK" : "OFFLINE"}</div>
       </div>
@@ -505,11 +507,11 @@ export default function LunaPortfolioPage() {
       <section className={`runtime-banner runtime-${runtimeTone.toLowerCase()}`} aria-live="polite">
         <div className="runtime-banner-icon"><CircleDot size={15}/></div>
         <div className="runtime-banner-copy"><strong>{runtimeDisplayLabel}</strong><span>{runtimeDisplayDetail}</span></div>
-        <div className="runtime-banner-meta"><span>API {live ? "CONNECTED" : "UNREACHABLE"}</span><span>BACKEND {backendRuntime?.state??"UNKNOWN"}</span><span>LAST TICK {runtimeAgeMs!=null ? Math.round(runtimeAgeMs)+" ms" : "—"}</span></div>
+        <div className="runtime-banner-meta"><span>API {isConnecting ? "CHECKING" : live ? "CONNECTED" : "UNREACHABLE"}</span><span>BACKEND {backendRuntime?.state??"UNKNOWN"}</span><span>LAST TICK {runtimeAgeMs!=null ? Math.round(runtimeAgeMs)+" ms" : "—"}</span></div>
       </section>
       <SystemControlRoom strategy={session?.strategy_version ?? LUNA_STRATEGY} asOf={todaySessionDate} />
       <section className="live-operating-strip">
-        <div className={`market-phase-cell phase-${marketPhase.toLowerCase()}`}><span>MARKET / SET</span><strong>{marketPhaseLabel(marketPhase)}</strong><small>{clock ? bangkokClock(clock) : "Synchronizing clock"} · {marketPhaseHint(marketPhase)}</small></div>
+        <div className={`market-phase-cell phase-${marketPhase?.toLowerCase() ?? "syncing"}`}><span>MARKET / SET</span><strong>{marketPhaseLabelText}</strong><small>{clock ? bangkokClock(clock) : "Synchronizing clock"} · {marketPhaseHintText}</small></div>
         <div><span>EXECUTION MODE</span><strong>{executionMode}</strong><small>{liveExecution ? "live gate open" : "paper only"}</small></div>
         <div><span>KILL SWITCH</span><strong>{killSwitchDisplay}</strong><small>{killSwitchDetail}</small></div>
         <div><span>RUNTIME</span><strong>{runtimeShort}</strong><small>{sessionIsToday ? "today's session detected" : "no open session today"}</small></div>
@@ -559,7 +561,7 @@ export default function LunaPortfolioPage() {
   onClick={()=>setSelected(p)}
   onKeyDown={(event)=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();setSelected(p);}}}
 ><td><div className="symbol-cell"><strong>{p.symbol}</strong><span>{p.name}</span></div></td><td>{money(p.qty).replace(".00","")}</td><td>{p.avgCost!==null?"฿"+p.avgCost.toFixed(2):"—"}</td><td><strong>{p.last!==null?"฿"+p.last.toFixed(2):"—"}</strong></td><td>{value!==null?"฿"+money(value):"—"}</td><td className={pnl===null?"muted":pnl>=0?"positive":"negative"}>{pnl===null?"—":signed(pnl)}</td><td><div className="weight-cell"><span>{weight!==null?weight.toFixed(1)+"%":"—"}</span><i><b style={{width:(weight===null?0:Math.min(Math.max(weight,0),100))+"%"}}/></i></div></td><td><SignalBadge signal={p.signal}/></td></tr>;})
-:<tr><td colSpan={8} className="empty-table"><div>{sessionIsToday ? "No open positions currently — positions are removed from Holdings after execution closes them." : "No current trading session yet for "+todaySessionDate+". LUNA is "+marketPhaseLabel(marketPhase).toLowerCase()+" and execution is locked."}</div>{trades.length>0&&<button className="filter-button" style={{marginTop:8}} onClick={()=>setTab("trades")}>{"View today's executed trades ("+trades.length+")"}</button>}</td></tr>}</tbody></table></div>:
+:<tr><td colSpan={8} className="empty-table"><div>{sessionIsToday ? "No open positions currently — positions are removed from Holdings after execution closes them." : "No current trading session yet for "+todaySessionDate+". LUNA is "+marketPhaseLabelText.toLowerCase()+" and execution is locked."}</div>{trades.length>0&&<button className="filter-button" style={{marginTop:8}} onClick={()=>setTab("trades")}>{"View today's executed trades ("+trades.length+")"}</button>}</td></tr>}</tbody></table></div>:
           tab==="research"?<ResearchPanel/>:tab==="trades"?<div className="table-wrap"><table><thead><tr><th>TIME</th><th>SYMBOL</th><th>SIDE</th><th>QTY</th><th>FILL / LIMIT</th><th>FILLED VALUE</th><th>STATUS</th><th>STRATEGY</th></tr></thead><tbody>{trades.length?trades.map(t=><tr key={`${t.time}-${t.symbol}-${t.qty}`}><td className="muted">{t.time}</td><td><strong>{t.symbol}</strong></td><td><SideBadge side={t.side}/></td><td>{money(t.qty).replace(".00","")}</td><td>{t.price!==null?"฿"+t.price.toFixed(2):"—"}</td><td>{t.value!==null?"฿"+money(t.value):"—"}</td><td><StatusBadge status={t.status}/></td><td className="muted">{t.strategy}</td></tr>):<tr><td colSpan={8} className="empty-table">No orders recorded for this session.</td></tr>}</tbody></table></div>:
           <div className="table-wrap"><table><thead><tr><th>SYMBOL</th><th>ENTRY</th><th>EXIT</th><th>QTY</th><th>REALIZED P&amp;L</th><th>HOLD TIME</th></tr></thead><tbody>{closedPositions.length?closedPositions.map(p=><tr key={p.symbol}><td><strong>{p.symbol}</strong></td><td>฿{p.entry.toFixed(2)}</td><td>฿{p.exit.toFixed(2)}</td><td>{money(p.qty).replace(".00","")}</td><td className={p.pnl>=0?"positive":"negative"}>{signed(p.pnl)}</td><td className="muted">{p.duration}</td></tr>):<tr><td colSpan={6} className="empty-table">No closed positions reconstructed from fills.</td></tr>}</tbody></table></div>}
         </div>
