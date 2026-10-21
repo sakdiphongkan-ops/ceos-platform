@@ -260,6 +260,7 @@ test("LUNA JEX-inspired candles render only validated Settrade OHLC and never ex
 test("LUNA dashboard does not report false market/API states before hydration or when ages are null", () => {
   const page = read("app/luna/page.tsx");
   assert.ok(page.includes('const marketPhase=clock ? uiMarketPhase(clock) : null;'));
+  assert.ok(page.includes('marketPhase !== null && ["ACTIVE","REDUCE_ONLY","FORCE_CLOSE"].includes(marketPhase)'));
   assert.ok(page.includes('marketPhaseLabelText=marketPhase ? marketPhaseLabel(marketPhase) : "SYNCING CLOCK"'));
   assert.ok(page.includes('marketFeed.latest_age_ms != null && Number.isFinite(Number(marketFeed.latest_age_ms))'));
   assert.ok(page.includes('backendRuntime?.latest_age_ms != null && Number.isFinite(Number(backendRuntime.latest_age_ms))'));
