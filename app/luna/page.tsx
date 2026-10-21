@@ -281,7 +281,11 @@ export default function LunaPortfolioPage() {
     return sessionOrders.map((order)=>{
       const fill=fillByOrderId.get(String(order.id));
       const orderStatus=String(order.status??"UNKNOWN").trim().toUpperCase()||"UNKNOWN";
-      const filledQtyRaw=Number(order.filled_qty??fill?.qty??0);
+      const orderFilledQtyRaw=Number(order.filled_qty);
+      const fillQtyRaw=Number(fill?.qty);
+      const filledQtyRaw=Number.isFinite(orderFilledQtyRaw)&&orderFilledQtyRaw>0
+        ? orderFilledQtyRaw
+        : fillQtyRaw;
       const filledQty=Number.isFinite(filledQtyRaw)&&filledQtyRaw>0?filledQtyRaw:0;
       const requestedQtyRaw=Number(order.qty??0);
       const requestedQty=Number.isFinite(requestedQtyRaw)&&requestedQtyRaw>0?requestedQtyRaw:0;
