@@ -259,10 +259,10 @@ test("LUNA JEX-inspired candles render only validated Settrade OHLC and never ex
 
 test("LUNA dashboard does not report false market/API states before hydration or when ages are null", () => {
   const page = read("app/luna/page.tsx");
-  assert.match(page, /const marketPhase=clock \\? uiMarketPhase\\(clock\\) : null;/);
-  assert.match(page, /marketPhaseLabelText=marketPhase \\? marketPhaseLabel\\(marketPhase\\) : "SYNCING CLOCK"/);
-  assert.match(page, /marketFeed\\.latest_age_ms != null && Number\\.isFinite/);
-  assert.match(page, /backendRuntime\\?\\.latest_age_ms != null && Number\\.isFinite/);
-  assert.match(page, /API \\{isConnecting \\? "CHECKING" : live \\? "CONNECTED" : "UNREACHABLE"\\}/);
-  assert.match(page, /!clock \\? "waiting for Bangkok clock" : sessionIsToday/);
+  assert.ok(page.includes('const marketPhase=clock ? uiMarketPhase(clock) : null;'));
+  assert.ok(page.includes('marketPhaseLabelText=marketPhase ? marketPhaseLabel(marketPhase) : "SYNCING CLOCK"'));
+  assert.ok(page.includes('marketFeed.latest_age_ms != null && Number.isFinite(Number(marketFeed.latest_age_ms))'));
+  assert.ok(page.includes('backendRuntime?.latest_age_ms != null && Number.isFinite(Number(backendRuntime.latest_age_ms))'));
+  assert.ok(page.includes('API {isConnecting ? "CHECKING" : live ? "CONNECTED" : "UNREACHABLE"}'));
+  assert.ok(page.includes('!clock ? "waiting for Bangkok clock" : sessionIsToday'));
 });
