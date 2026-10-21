@@ -61,7 +61,7 @@ export default function LunaPortfolioPage() {
   const [realtimeQuotes,setRealtimeQuotes]=useState<Record<string,RealtimeQuote>>({});
   const [realtimeConnected,setRealtimeConnected]=useState(false);
   const [lastRealtimeTickAt,setLastRealtimeTickAt]=useState<number|null>(null);
-  const [clock,setClock]=useState(()=>new Date());
+  const [clock,setClock]=useState<Date|null>(null);
   const [runtimeStatus,setRuntimeStatus]=useState<RuntimeStatus|null>(null);
   const [shadowStatus,setShadowStatus]=useState<ShadowStatus|null>(null);
   const refreshInFlight=useRef(false);
@@ -137,7 +137,12 @@ export default function LunaPortfolioPage() {
     });
   },[]);
 
-  useEffect(()=>{ const id=setInterval(()=>setClock(new Date()),1000); return()=>clearInterval(id); },[]);
+  useEffect(()=>{
+    // Match the server-rendered first paint; install the real clock only after hydration.
+    setClock(new Date());
+    const id=setInterval(()=>setClock(new Date()),1000);
+    return()=>clearInterval(id);
+  },[]);
 
   // A socket connection is not considered realtime until a fresh tick arrives.
   useEffect(()=>{
@@ -147,8 +152,8 @@ export default function LunaPortfolioPage() {
     return()=>clearInterval(id);
   },[lastRealtimeTickAt]);
 
-  const marketPhase=uiMarketPhase(clock);
-  const todaySessionDate=bangkokDate(clock);
+  const marketPhase=clock ? uiMarketPhase(clock) : "CLOSED";
+  const todaySessionDate=clock ? bangkokDate(clock) : "—";
 
   const sessionData=useMemo(()=>{
     const sessions=[...(feed?.sessions??[])].sort((a,b)=>{
@@ -491,7 +496,7 @@ export default function LunaPortfolioPage() {
       <div className="top-actions">
         <div className={`market-status phase-${marketPhase.toLowerCase()}`}><CircleDot size={11}/> SET · {marketPhaseLabel(marketPhase)}</div><div className="timeframe-chip"><BarChart3 size={13}/> {TIMEFRAME}</div>
         <button className={"icon-button "+(refreshing?"refreshing":"")} title={refreshing?"Refreshing LUNA feed…":"Refresh LUNA feed"} aria-label={refreshing?"Refreshing LUNA feed":"Refresh LUNA feed"} onClick={load} disabled={refreshing}><RefreshCw size={17}/><span className="refresh-label">{refreshing?"Refreshing":"Refresh"}</span></button>
-        <div className={`session-chip session-runtime-${runtimeTone.toLowerCase()}`}><Clock3 size={14}/> {todaySessionDate} · {bangkokClock(clock)} · {isConnecting ? "CONNECTING" : runtimeState==="ACTIVE" ? (realtimeFresh ? "SYSTEM ACTIVE · UI REALTIME" : "SYSTEM ACTIVE · SERVER") : runtimeState==="STANDBY" ? "ONLINE · STANDBY" : runtimeState==="DEGRADED" ? "ONLINE · CHECK" : "OFFLINE"}</div>
+        <div className={`session-chip session-runtime-${runtimeTone.toLowerCase()}`}><Clock3 size={14}/> {todaySessionDate} · {clock ? bangkokClock(clock) : "Synchronizing clock"} · {isConnecting ? "CONNECTING" : runtimeState==="ACTIVE" ? (realtimeFresh ? "SYSTEM ACTIVE · UI REALTIME" : "SYSTEM ACTIVE · SERVER") : runtimeState==="STANDBY" ? "ONLINE · STANDBY" : runtimeState==="DEGRADED" ? "ONLINE · CHECK" : "OFFLINE"}</div>
       </div>
     </header>
     <div className="page">
@@ -504,7 +509,7 @@ export default function LunaPortfolioPage() {
       </section>
       <SystemControlRoom strategy={session?.strategy_version ?? LUNA_STRATEGY} asOf={todaySessionDate} />
       <section className="live-operating-strip">
-        <div className={`market-phase-cell phase-${marketPhase.toLowerCase()}`}><span>MARKET / SET</span><strong>{marketPhaseLabel(marketPhase)}</strong><small>{bangkokClock(clock)} · {marketPhaseHint(marketPhase)}</small></div>
+        <div className={`market-phase-cell phase-${marketPhase.toLowerCase()}`}><span>MARKET / SET</span><strong>{marketPhaseLabel(marketPhase)}</strong><small>{clock ? bangkokClock(clock) : "Synchronizing clock"} · {marketPhaseHint(marketPhase)}</small></div>
         <div><span>EXECUTION MODE</span><strong>{executionMode}</strong><small>{liveExecution ? "live gate open" : "paper only"}</small></div>
         <div><span>KILL SWITCH</span><strong>{killSwitchDisplay}</strong><small>{killSwitchDetail}</small></div>
         <div><span>RUNTIME</span><strong>{runtimeShort}</strong><small>{sessionIsToday ? "today's session detected" : "no open session today"}</small></div>
