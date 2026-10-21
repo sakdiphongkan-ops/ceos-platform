@@ -1245,3 +1245,54 @@ body [tabindex]:focus-visible {
   .luna-shell .metric-value{font-size:21px}
   .luna-shell .bottom-grid{grid-template-columns:minmax(0,1fr)}
 }
+
+
+/* LUNA human-logic regression fixes: preserve both navigation levels without overlap. */
+.luna-shell .topbar {
+  top: 64px;
+  z-index: 45;
+}
+.luna-shell .status-badge.open,
+.luna-shell .status-badge.pending,
+.luna-shell .status-badge.expired,
+.luna-shell .status-badge.cancelled {
+  color: #5f6c60;
+  border-color: #d6d9cf;
+  background: #eeece4;
+}
+.luna-shell .status-badge.unknown {
+  color: #795b2c;
+  border-color: #e1d2b5;
+  background: #f4ecde;
+}
+.luna-shell select:focus-visible,
+.luna-shell a:focus-visible,
+.luna-shell summary:focus-visible {
+  outline: 2px solid #2f5640;
+  outline-offset: 3px;
+}
+@media (max-width: 640px) {
+  .luna-shell .topbar {
+    top: 64px;
+  }
+  .luna-shell .topbar .session-chip {
+    max-width: min(100%, 360px);
+  }
+  .luna-shell .market-history-toolbar {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+  .luna-shell .market-history-symbol {
+    min-width: 0;
+    flex: 1 1 110px;
+  }
+  .luna-shell .market-history-intervals {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+  .luna-shell .table-wrap {
+    max-width: 100%;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+}
