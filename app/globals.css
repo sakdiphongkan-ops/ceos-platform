@@ -956,3 +956,292 @@ body [tabindex]:focus-visible {
 .luna-login-page [class*="text-[#777970]"],
 .luna-login-page [class*="text-[#999a93]"],
 .luna-login-page [class*="text-[#85877f]"]{color:#565b52!important}
+
+
+/* LUNA Fintech UI refresh — warm cream / evergreen financial product language.
+   Operational data, backend authority and paper-only controls remain unchanged. */
+.luna-shell{
+  --bg:#e9e7dd;
+  --bg-soft:#efede5;
+  --panel:#fbf9f2;
+  --panel-2:#f4f1e8;
+  --panel-3:#eae7dc;
+  --line:#d9d6ca;
+  --line-strong:#c6c8b8;
+  --text:#243129;
+  --text-strong:#0c1b14;
+  --muted:#5d6a60;
+  --muted-2:#778078;
+  --accent:#2f5640;
+  --accent-strong:#254a35;
+  --accent-dim:rgba(47,86,64,.10);
+  --gold:#9a8157;
+  --gold-dim:rgba(154,129,87,.12);
+  --danger:#a7534d;
+  background:
+    radial-gradient(ellipse at 82% -10%,rgba(173,187,160,.26),transparent 32%),
+    linear-gradient(180deg,#f2f0e8 0%,#e9e7dd 65%,#e5e2d8 100%);
+}
+.luna-shell .topbar{
+  background:rgba(246,244,237,.93);
+  border-bottom-color:rgba(12,27,20,.12);
+  box-shadow:0 6px 22px rgba(35,42,32,.045);
+}
+.luna-shell .brand-mark{
+  color:#f8f5eb;
+  background:linear-gradient(145deg,#42694e,#0c1b14);
+  box-shadow:0 8px 24px rgba(17,49,29,.19);
+}
+.luna-shell .top-nav{
+  background:#f8f6ef;
+  border-color:#d9d6ca;
+}
+.luna-shell .top-nav button.active{
+  color:#f9f6ee;
+  background:#0c1b14;
+  box-shadow:inset 0 0 0 1px rgba(244,240,225,.10);
+}
+.luna-shell .market-status,
+.luna-shell .session-chip,
+.luna-shell .timeframe-chip{
+  background:rgba(255,254,249,.72);
+  border-color:#d9d6ca;
+  color:#4f5d52;
+}
+.luna-shell .hero-row{
+  position:relative;
+  isolation:isolate;
+  overflow:hidden;
+  min-height:250px;
+  align-items:center;
+  padding:34px 36px;
+  margin-bottom:18px;
+  border:1px solid rgba(240,242,222,.10);
+  border-radius:22px;
+  background:
+    radial-gradient(circle at 88% 12%,rgba(139,183,145,.17),transparent 24%),
+    linear-gradient(123deg,#0c1b14 0%,#173522 66%,#2f5640 100%);
+  box-shadow:0 22px 48px rgba(20,44,29,.16);
+}
+.luna-shell .hero-row:after{
+  content:"";
+  position:absolute;
+  z-index:-1;
+  inset:0;
+  pointer-events:none;
+  opacity:.26;
+  background:
+    linear-gradient(90deg,transparent 0 67%,rgba(231,238,216,.13) 67.1% 67.25%,transparent 67.35%),
+    linear-gradient(0deg,transparent 0 72%,rgba(231,238,216,.10) 72.1% 72.25%,transparent 72.35%),
+    radial-gradient(circle at 68% 72%,rgba(231,238,216,.50) 0 2px,transparent 3px),
+    radial-gradient(circle at 88% 28%,rgba(231,238,216,.35) 0 2px,transparent 3px);
+}
+.luna-shell .hero-copy{position:relative;z-index:1;max-width:830px;min-width:0}
+.luna-shell .hero-row .eyebrow{color:#b8d6bd}
+.luna-shell .hero-row h2{
+  max-width:790px;
+  margin:12px 0 13px;
+  color:#fbf8ef;
+  font-size:clamp(32px,4.25vw,55px);
+  line-height:1.02;
+  letter-spacing:-.055em;
+  font-weight:690;
+}
+.luna-shell .hero-row h2 span{color:#bfd7bb}
+.luna-shell .hero-row p{
+  max-width:650px;
+  color:#d1ddd1;
+  font-size:13px;
+  line-height:1.7;
+}
+.luna-shell .hero-meta{justify-content:flex-end;flex-wrap:wrap;align-self:flex-start;position:relative;z-index:1}
+.luna-shell .hero-meta .data-chip{
+  color:#f5f3e9;
+  border-color:rgba(237,240,220,.22);
+  background:rgba(255,255,255,.06);
+}
+.luna-shell .hero-meta .runtime-chip .data-dot{background:#a5dbb2}
+.luna-shell .hero-meta .safe-badge{
+  color:#d2e6d0;
+  background:rgba(173,212,172,.11);
+  border-color:rgba(200,231,194,.24);
+}
+.luna-shell .summary-grid{gap:11px;margin:0 0 15px}
+.luna-shell .metric-card{
+  min-height:112px;
+  padding:16px 17px;
+  border-color:#d9d6ca;
+  border-radius:15px;
+  background:linear-gradient(180deg,#fffdf7 0%,#f6f3eb 100%);
+  box-shadow:0 7px 23px rgba(43,49,37,.045);
+}
+.luna-shell .metric-label{color:#647165;letter-spacing:.105em}
+.luna-shell .metric-value{color:#0c1b14;font-size:25px;font-weight:760}
+.luna-shell .metric-sub{color:#647165}
+.luna-shell .metric-card:nth-child(4),
+.luna-shell .metric-card:nth-child(7),
+.luna-shell .metric-card:nth-child(10),
+.luna-shell .metric-card:nth-child(11){border-color:#d4ddcf}
+.luna-shell .content-grid{gap:14px;grid-template-columns:minmax(0,1.62fr) minmax(310px,.72fr)}
+.luna-shell .main-card,
+.luna-shell .mini-card,
+.luna-shell .control-room-card,
+.luna-shell .live-operating-strip>div{
+  border-color:#d9d6ca;
+  background:linear-gradient(180deg,#fcfaf4 0%,#f6f3eb 100%);
+  box-shadow:0 10px 28px rgba(43,49,37,.045);
+}
+.luna-shell .side-card{
+  background:#0c1b14;
+  border-color:#1e3b29;
+  box-shadow:0 16px 34px rgba(20,44,29,.13);
+}
+.luna-shell .side-card .muted,
+.luna-shell .side-card .section-label,
+.luna-shell .side-card .timeline-item span{color:#c2cfc3}
+.luna-shell .side-card .detail-symbol,
+.luna-shell .side-card .control-list strong{color:#f7f5eb}
+.luna-shell .side-card .detail-item{background:#15271b;border-color:#2d4934}
+.luna-shell .side-card .detail-item span{color:#c2cfc3}
+.luna-shell .side-card .detail-item strong{color:#f7f5eb}
+.luna-shell .side-card .signal-panel{background:rgba(255,255,255,.045);border-color:#35583d}
+.luna-shell .side-card .signal-panel p{color:#d0ded0}
+.luna-shell .side-card .close-button{background:#1d3625;border-color:#426448;color:#ecf2e8}
+.luna-shell .card-head{padding:19px 20px 16px}
+.luna-shell .card-title{color:#13251a;font-size:15px;letter-spacing:-.02em}
+.luna-shell .card-subtitle{color:#6a766b;font-size:10px}
+.luna-shell .tabs{border-bottom-color:#dedbcf}
+.luna-shell .tabs button{color:#667367}
+.luna-shell .tabs button.active{color:#0c1b14}
+.luna-shell .tabs button.active:after{background:#2f5640}
+.luna-shell .tabs span{background:#e9ede5;border-color:#d7e0d2;color:#395b3e!important}
+.luna-shell .table-wrap table{font-size:11px}
+.luna-shell .table-wrap th{
+  color:#637064;
+  background:#f0eee6;
+  border-bottom-color:#dedbcf;
+  letter-spacing:.105em;
+}
+.luna-shell .table-wrap td{border-bottom-color:#e4e1d7;color:#29362d}
+.luna-shell .table-wrap tbody tr:hover,
+.luna-shell .table-wrap tbody tr.selected-row{background:rgba(47,86,64,.055)}
+.luna-shell .symbol-cell span{color:#687569!important}
+.luna-shell .symbol-cell strong{color:#17291d}
+.luna-shell .search-box{background:#fffdf7;border-color:#d9d6ca}
+.luna-shell .search-box input{color:#243129}
+.luna-shell .search-box input::placeholder{color:#748075}
+.luna-shell .filter-button{background:#f4f1e9;color:#405342;border-color:#d9d6ca}
+.luna-shell .detail-item{background:#f0eee6;border-color:#dfdbd1}
+.luna-shell .detail-item strong{color:#243129}
+.luna-shell .detail-item span{color:#647165}
+.luna-shell .bottom-grid{gap:14px}
+.luna-shell .mini-card{border-radius:15px;padding:18px}
+.luna-shell .mini-title{color:#16301f}
+.luna-shell .control-list span{color:#687569!important}
+.luna-shell .control-list strong{color:#243129}
+.luna-shell .control-list div{border-bottom:1px solid #e4e1d7;padding-bottom:7px}
+.luna-shell .control-list div:last-child{border-bottom:0}
+.luna-shell .control-room-card{
+  border-color:#d4dccf;
+  background:
+    radial-gradient(circle at 100% 0,rgba(47,86,64,.075),transparent 28%),
+    linear-gradient(180deg,#fbfaf3,#f0eee5);
+}
+.luna-shell .control-room-title{color:#13251a}
+.luna-shell .control-room-sub{color:#617064}
+.luna-shell .control-stat{background:#fffdf7;border-color:#dfdbd1}
+.luna-shell .control-stat span,
+.luna-shell .control-stat small{color:#647165}
+.luna-shell .control-stat strong{color:#0c1b14}
+.luna-shell .control-panel{background:#f5f2e9;border-color:#dfdbd1}
+.luna-shell .gate-row{border-bottom-color:#e3dfd4}
+.luna-shell .gate-row,
+.luna-shell .forecast-meta{color:#647165}
+.luna-shell .forecast-meta strong{color:#0c1b14}
+.luna-shell .stage-chip{background:#ece9df;border-color:#d8d5ca;color:#667368}
+.luna-shell .stage-chip.ready{background:#e8efe5;border-color:#cdddc7;color:#2f5a38}
+.luna-shell .top-symbols span{background:#f0eee6;border-color:#d7d3c8;color:#58675b}
+.luna-shell .audit-kpis div{background:#fffdf7;border-color:#dfdbd1}
+.luna-shell .audit-kpis span{color:#647165}
+.luna-shell .audit-kpis strong{color:#253129}
+.luna-shell .audit-note{color:#647165}
+.luna-shell .live-operating-strip>div{border-radius:12px}
+.luna-shell .live-operating-strip span,
+.luna-shell .live-operating-strip small{color:#657366}
+.luna-shell .live-operating-strip strong{color:#16301f}
+.luna-shell .live-operating-note{color:#526451!important}
+.luna-shell .agent-reasoning-card{
+  border-color:#d9d6ca;
+  background:linear-gradient(180deg,#fcfaf4,#f6f3eb);
+  box-shadow:0 10px 26px rgba(43,49,37,.035);
+}
+.luna-shell .agent-reasoning-head h3{color:#12271a}
+.luna-shell .agent-reasoning-head p{color:#647165}
+.luna-shell .agent-reasoning-meta>span{border-color:#dfdbd1;background:#fffdf7}
+.luna-shell .agent-factor-grid>span{background:#f0eee6}
+.luna-shell .agent-decision{border-color:#dfdbd1;background:#fffdf7}
+.luna-shell .agent-decision summary{background:#fffdf7}
+.luna-shell .agent-decision-body{background:#fbf9f2}
+.luna-shell .agent-decision-time,
+.luna-shell .agent-expand{color:#697569}
+.luna-shell .agent-cycle-status.verified{background:#e8efe5;color:#2f5a38}
+.luna-shell .agent-cycle-status.blocked{background:#f4ecde;color:#795b2c}
+.luna-shell .runtime-banner{background:rgba(251,250,243,.92)}
+.luna-shell .runtime-banner-copy strong{color:#203326}
+.luna-shell .runtime-banner-copy span{color:#56665a}
+.luna-shell .runtime-banner-meta{color:#5d6d60}
+.luna-shell .runtime-banner-icon{background:#e6ede1;color:#2f5640}
+.luna-shell .coverage-strip>div{background:#fbf9f2;border-color:#d9d6ca}
+.luna-shell .coverage-strip span,
+.luna-shell .coverage-strip small{color:#647165}
+.luna-shell .coverage-strip strong{color:#0c1b14}
+.luna-shell .research-panel{background:#f3f0e7}
+.luna-shell .research-banner{background:#fcfaf4;border-color:#d9d6ca}
+.luna-shell .research-grid>div{background:#fffdf7;border-color:#dfdbd1}
+.luna-shell .research-grid span{color:#243129}
+.luna-shell .research-source{background:#fffdf7;border-color:#dfdbd1;color:#243129}
+.luna-shell .research-note{background:#eaece3;color:#506053;border-left-color:#2f5640}
+.luna-shell .research-pipeline{background:#eeece3;border-color:#d9d6ca;color:#3f5142}
+.luna-shell .hash-line{color:#647165}
+.luna-shell .market-history-card{border-color:#d7d8cb;background:linear-gradient(180deg,#fcfaf4,#f0eee5);box-shadow:0 11px 29px rgba(43,49,37,.045)}
+.luna-shell .market-history-head h3{color:#0c1b14}
+.luna-shell .market-history-head p{color:#58675b}
+.luna-shell .market-history-connection{border-color:#d9d6ca;background:#eeece3;color:#526253}
+.luna-shell .market-history-connection.connected{background:#e7efe3;border-color:#cfddc8;color:#2f5a38}
+.luna-shell .market-history-symbol select{background:#fffdf7;border-color:#d6d3c7;color:#243129}
+.luna-shell .market-history-intervals{background:#eeece3;border-color:#d9d6ca}
+.luna-shell .market-history-intervals button{color:#516052}
+.luna-shell .market-history-intervals button.active{background:#0c1b14;color:#fbf8ef;border-color:#0c1b14}
+.luna-shell .market-history-refresh{background:#f4f1e9;border-color:#d9d6ca;color:#334d39}
+.luna-shell .market-history-stats>div{background:#fffdf7;border-color:#dfdbd1}
+.luna-shell .market-history-stats span{color:#627064}
+.luna-shell .market-history-stats strong{color:#14281b}
+.luna-shell .market-history-chart{border-color:#dfdbd1;background:#fffdf7}
+.luna-shell .market-history-footer{color:#647165}
+.luna-shell .market-history-footer strong{color:#2f5640}
+.luna-shell .market-history-empty{background:#fffdf7;border-color:#dfdbd1}
+.luna-shell .market-history-empty strong{color:#243129}
+.luna-shell .market-history-empty span{color:#647165}
+.luna-shell .market-history-empty button{background:#f4f1e9;border-color:#d9d6ca;color:#334d39}
+.luna-shell .error-banner{background:#fbefec;border-color:#e7c9c3;color:#873b35}
+.luna-shell .error-banner button{color:#873b35}
+.luna-shell .control-stat:nth-child(4){border-color:#b9ceb8}
+.luna-shell .control-stat:nth-child(4) strong{color:#2f5640}
+.luna-shell .safe-badge{color:#2f5640}
+.luna-shell .runtime-active .runtime-banner-icon{background:#e5eee0;color:#2f6542}
+@media(max-width:980px){
+  .luna-shell .hero-row{align-items:flex-start;flex-direction:column;padding:27px 25px;gap:15px}
+  .luna-shell .hero-meta{justify-content:flex-start;width:100%}
+  .luna-shell .hero-row h2{font-size:clamp(30px,6vw,43px)}
+  .luna-shell .content-grid{grid-template-columns:minmax(0,1fr)}
+  .luna-shell .side-card{position:relative;top:auto;min-height:0}
+  .luna-shell .bottom-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:700px){
+  .luna-shell .hero-row{padding:23px 19px;border-radius:17px}
+  .luna-shell .hero-row h2{font-size:31px}
+  .luna-shell .summary-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .luna-shell .metric-card{min-height:102px;padding:13px}
+  .luna-shell .metric-value{font-size:21px}
+  .luna-shell .bottom-grid{grid-template-columns:minmax(0,1fr)}
+}

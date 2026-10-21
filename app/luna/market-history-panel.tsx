@@ -134,7 +134,7 @@ export default function MarketHistoryPanel() {
     <section className="market-history-card" aria-labelledby="luna-market-history-title">
       <div className="market-history-head">
         <div>
-          <div className="market-history-kicker"><BarChart3 size={14}/> MARKET FIELD · HISTORICAL OHLC</div>
+          <div className="market-history-kicker"><BarChart3 size={14}/> MARKET REFERENCE · HISTORICAL OHLC</div>
           <h3 id="luna-market-history-title">{symbol} · SET</h3>
           <p>Source-verified historical candles from the authorized SETTRADE gateway. This panel never synthesizes missing candles.</p>
         </div>

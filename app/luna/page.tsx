@@ -425,7 +425,7 @@ export default function LunaPortfolioPage() {
 
   return <main className="luna-shell">
     <header className="topbar">
-      <div className="brand"><div className="brand-mark">L</div><div><div className="eyebrow">LUNA-TH1H</div><h1>Control Room</h1></div></div>
+      <div className="brand"><div className="brand-mark">L</div><div><div className="eyebrow">LUNA / INTELLIGENT INVESTMENT SYSTEM</div><h1>Mission Control</h1></div></div>
       <nav className="top-nav" aria-label="LUNA workspace">
         <button className={tab==="holdings"?"active":""} onClick={()=>setTab("holdings")}>Overview</button>
         <button className={tab==="trades"?"active":""} onClick={()=>setTab("trades")}>Trades</button>
@@ -439,8 +439,9 @@ export default function LunaPortfolioPage() {
       </div>
     </header>
     <div className="page">
-      <section className="hero-row"><div><div className="eyebrow">INTRADAY CONTROL · OPERATIONAL OVERVIEW</div><h2>LUNA command center</h2><p>See capital, risk, execution and research state at a glance.</p></div><div className="hero-meta"><div className={`data-chip runtime-chip runtime-${runtimeTone.toLowerCase()}`}><span className="data-dot"/>{runtimeDisplayLabel}</div><div className="safe-badge"><ShieldCheck size={15}/> {safetyBadge}</div></div></section>
-      <MarketHistoryPanel />\n      <section className={`runtime-banner runtime-${runtimeTone.toLowerCase()}`} aria-live="polite">
+      <section className="hero-row"><div className="hero-copy"><div className="eyebrow">FINTECH CONTROL ROOM · 15M RISK-GATED</div><h2>Market intelligence.<br/><span>Decisions with guardrails.</span></h2><p>Verified SET/mai market references, portfolio exposure, decision reasoning and safety gates — in one operational view. No synthetic market values.</p></div><div className="hero-meta"><div className={`data-chip runtime-chip runtime-${runtimeTone.toLowerCase()}`}><span className="data-dot"/>{runtimeDisplayLabel}</div><div className="safe-badge"><ShieldCheck size={15}/> {safetyBadge}</div></div></section>
+      <MarketHistoryPanel />
+      <section className={`runtime-banner runtime-${runtimeTone.toLowerCase()}`} aria-live="polite">
         <div className="runtime-banner-icon"><CircleDot size={15}/></div>
         <div className="runtime-banner-copy"><strong>{runtimeDisplayLabel}</strong><span>{runtimeDisplayDetail}</span></div>
         <div className="runtime-banner-meta"><span>API {live ? "CONNECTED" : "UNREACHABLE"}</span><span>BACKEND {backendRuntime?.state??"UNKNOWN"}</span><span>LAST TICK {runtimeAgeMs!=null ? Math.round(runtimeAgeMs)+" ms" : "—"}</span></div>
