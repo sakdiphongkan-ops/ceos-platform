@@ -35,18 +35,47 @@ jobs:
           python scripts/research/luna_tradingview_thailand_screener_snapshot_v1.py \
             --output research/luna_tradingview_thailand_screener_snapshot_v1 \
             --start 0 --end 2000
+      - name: Check overlay credentials
+        id: overlay_access
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [[ -n "$SUPABASE_SERVICE_ROLE_KEY" ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build M1 x TradingView research overlay
+        if: steps.overlay_access.outputs.available == 'true'
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           python scripts/research/luna_tradingview_m1_overlay_v1.py             --snapshot research/luna_tradingview_thailand_screener_snapshot_v1/tradingview_thailand_screener_snapshot.csv             --output research/luna_tradingview_m1_overlay_v1
 
-      - name: Validate
+      - name: Mark M1 overlay skipped when credentials are unavailable
+        if: steps.overlay_access.outputs.available != 'true'
+        run: |
+          mkdir -p research/luna_tradingview_m1_overlay_v1
+          printf '%s\n' '{"status":"SKIPPED","reason":"SUPABASE_SERVICE_ROLE_KEY is not configured in GitHub Actions; no M1 overlay was generated","research_only":true,"production_changed":false}' > research/luna_tradingview_m1_overlay_v1/summary.json
+
+      - name: Validate snapshot
         run: |
           test -s research/luna_tradingview_thailand_screener_snapshot_v1/summary.json
           test -s research/luna_tradingview_thailand_screener_snapshot_v1/tradingview_thailand_screener_snapshot.csv
+
+      - name: Validate M1 overlay
+        if: steps.overlay_access.outputs.available == 'true'
+        run: |
           test -s research/luna_tradingview_m1_overlay_v1/summary.json
           test -s research/luna_tradingview_m1_overlay_v1/m1_tradingview_overlay.csv
+
+      - name: Validate explicit M1 overlay skip
+        if: steps.overlay_access.outputs.available != 'true'
+        run: |
+          test -s research/luna_tradingview_m1_overlay_v1/summary.json
+          grep -q '"status":"SKIPPED"' research/luna_tradingview_m1_overlay_v1/summary.json
+
       - name: Save snapshot
         run: |
           mkdir -p research-results
@@ -58,8 +87,11 @@ jobs:
              research-results/luna-tradingview-thailand-live-raw.json
           cp research/luna_tradingview_m1_overlay_v1/summary.json \
              research-results/luna-tradingview-m1-overlay-summary.json
-          cp research/luna_tradingview_m1_overlay_v1/m1_tradingview_overlay.csv \
-             research-results/luna-tradingview-m1-overlay.csv
+          if [[ -f research/luna_tradingview_m1_overlay_v1/m1_tradingview_overlay.csv ]]; then
+            cp research/luna_tradingview_m1_overlay_v1/m1_tradingview_overlay.csv research-results/luna-tradingview-m1-overlay.csv
+          else
+            rm -f research-results/luna-tradingview-m1-overlay.csv
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add research-results/
