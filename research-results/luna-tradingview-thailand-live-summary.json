@@ -2,9 +2,9 @@
   "status": "COMPLETED",
   "endpoint": "https://scanner.tradingview.com/thailand/scan",
   "rows_by_interval": {
-    "1D": 878,
-    "1M": 878,
-    "1W": 878
+    "1D": 874,
+    "1M": 874,
+    "1W": 874
   },
   "intervals": [
     "1D",
@@ -12,5 +12,7 @@
     "1M"
   ],
   "indicator_count": 79,
+  "technical_indicator_count": 72,
+  "static_indicator_count": 7,
   "source_note": "Public TradingView screener snapshot; current/live, not a historical backtest series."
 }
