@@ -101,7 +101,9 @@ def main():
         "endpoint": BASE,
         "rows_by_interval": by_i,
         "intervals": ["1D","1W","1M"],
-        "indicator_count": len(INDICATORS),
+        "indicator_count": len(TECHNICAL_INDICATORS) + len(STATIC_INDICATORS),
+        "technical_indicator_count": len(TECHNICAL_INDICATORS),
+        "static_indicator_count": len(STATIC_INDICATORS),
         "source_note": "Public TradingView screener snapshot; current/live, not a historical backtest series."
     }
     (out / "summary.json").write_text(
