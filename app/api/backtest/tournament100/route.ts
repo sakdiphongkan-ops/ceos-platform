@@ -39,10 +39,29 @@ function getMode(value: string | null): ResearchMode {
   return "portfolio";
 }
 
-function getUniverse(value: string | null) {
-  return value === "liquid10"
-    ? { name: "liquid10", symbols: [...LIQUID10] }
-    : { name: "full", symbols: [...SYMBOLS] };
+type UniverseSelection = {
+  name: string;
+  requestedUniverse: string;
+  coverageStatus: "EXPLICIT_SAMPLE" | "PARTIAL_SAMPLE";
+  symbols: string[];
+};
+
+function getUniverse(value: string | null): UniverseSelection {
+  if (value === "liquid10") {
+    return {
+      name: "liquid10",
+      requestedUniverse: "liquid10",
+      coverageStatus: "EXPLICIT_SAMPLE",
+      symbols: [...LIQUID10],
+    };
+  }
+
+  return {
+    name: "research50",
+    requestedUniverse: "full",
+    coverageStatus: "PARTIAL_SAMPLE",
+    symbols: [...SYMBOLS],
+  };
 }
 
 function dateOnly(epochSeconds: number): string {
@@ -80,10 +99,15 @@ async function loadMarketData(symbols: string[], start: number, end: number): Pr
   return { barsBySymbol, errors };
 }
 
-function summarizeData(universe: string, universeCount: number, data: MarketData) {
+function summarizeData(universe: UniverseSelection, data: MarketData) {
   return {
-    universe,
-    universeCount,
+    universe: universe.name,
+    requestedUniverse: universe.requestedUniverse,
+    coverageStatus: universe.coverageStatus,
+    coverageMessage: universe.coverageStatus === "PARTIAL_SAMPLE"
+      ? "Only the configured 50-symbol research sample is evaluated; full SET/mai coverage is not verified."
+      : "Explicit 10-symbol sample only; this is not full SET/mai coverage.",
+    universeCount: universe.symbols.length,
     symbolsReturned: data.barsBySymbol.size,
     symbolsFailed: data.errors.length,
     bars15m: Array.from(data.barsBySymbol.values()).reduce((total, bars) => total + bars.length, 0),
@@ -121,7 +145,7 @@ export async function GET(request: Request) {
       Array.from(marketData.barsBySymbol.entries()).map(([symbol, bars]) => [symbol, buildSeries(bars)]),
     );
     const strategies = makeStrategies();
-    const dataSummary = summarizeData(universe.name, universe.symbols.length, marketData);
+    const dataSummary = summarizeData(universe, marketData);
     const referenceCostBps = 2 * SLIPPAGE_BPS + FEE_BPS + SELL_TAX_BPS;
 
     if (mode === "signal") {

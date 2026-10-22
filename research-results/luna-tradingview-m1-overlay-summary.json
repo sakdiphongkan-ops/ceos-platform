@@ -1,0 +1,1 @@
+{"status":"SKIPPED","reason":"SUPABASE_SERVICE_ROLE_KEY is not configured in GitHub Actions; no M1 overlay was generated","research_only":true,"production_changed":false}

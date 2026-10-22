@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, BarChart3, RefreshCw } from "lucide-react";
 import { fetchMarketBars, type LunaHistoricalBar } from "../../lib/luna-client";
 
@@ -70,12 +70,18 @@ export default function MarketHistoryPanel() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryToken, setRetryToken] = useState(0);
+  const requestSequence = useRef(0);
 
   const load = useCallback(async () => {
+    const requestId = ++requestSequence.current;
     setLoading(true);
     setError(null);
     try {
       const result = await fetchMarketBars(symbol, interval, 96);
+      // Symbol/timeframe can change before an older response completes. Only the newest
+      // request may update state, otherwise PTT data could appear under another symbol.
+      if (requestId !== requestSequence.current) return;
+
       if (!result.ok || result.source !== "settrade-open-api-historical" || result.symbol !== symbol || result.interval !== interval || !Array.isArray(result.bars) || result.bars.length === 0) {
         setBars([]);
         setSource(null);
@@ -101,17 +107,22 @@ export default function MarketHistoryPanel() {
       setSource(result.source);
       setFetchedAt(result.fetched_at ?? null);
     } catch {
+      if (requestId !== requestSequence.current) return;
       setBars([]);
       setSource(null);
       setFetchedAt(null);
       setError(errorText(undefined));
     } finally {
-      setLoading(false);
+      if (requestId === requestSequence.current) setLoading(false);
     }
   }, [interval, symbol]);
 
   useEffect(() => {
     void load();
+    return () => {
+      // Invalidate any in-flight request when symbol/timeframe changes or panel unmounts.
+      requestSequence.current += 1;
+    };
   }, [load, retryToken]);
 
   useEffect(() => {
@@ -134,7 +145,7 @@ export default function MarketHistoryPanel() {
     <section className="market-history-card" aria-labelledby="luna-market-history-title">
       <div className="market-history-head">
         <div>
-          <div className="market-history-kicker"><BarChart3 size={14}/> MARKET FIELD · HISTORICAL OHLC</div>
+          <div className="market-history-kicker"><BarChart3 size={14}/> MARKET REFERENCE · HISTORICAL OHLC</div>
           <h3 id="luna-market-history-title">{symbol} · SET</h3>
           <p>Source-verified historical candles from the authorized SETTRADE gateway. This panel never synthesizes missing candles.</p>
         </div>
