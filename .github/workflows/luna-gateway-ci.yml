@@ -103,7 +103,9 @@ jobs:
           proof = app._connectivity_proof()
           assert proof["checks"]["selected_provider_credentials_configured"] is True
           assert proof["checks"]["set_api_backup_configured"] is False
-          assert proof["live_execution_ready"] is True
+          assert proof["checks"]["fresh_quotes_present"] is False
+          assert proof["checks"]["verified_book_present"] is False
+          assert proof["live_execution_ready"] is False
           print("LUNA_PROVIDER_POLICY_SMOKE_OK")
           PY
 
@@ -139,9 +141,12 @@ jobs:
           proof = app._connectivity_proof()
           assert proof["coverage"]["fresh_quote_count"] == 0
           assert proof["live_execution_ready"] is False
-          app._quotes["AOT"]["source"] = "settrade-price-info"
+          app._quotes["AOT"]["source"] = "settrade-open-api-realtime"
           proof = app._connectivity_proof()
           assert proof["coverage"]["fresh_quote_count"] == 1
+          app._quotes["AOT"]["source"] = "settrade-open-api-realtime-spoof"
+          proof = app._connectivity_proof()
+          assert proof["coverage"]["fresh_quote_count"] == 0
           print("LUNA_PROVIDER_SOURCE_BINDING_OK")
           PY
 
@@ -198,6 +203,7 @@ jobs:
               bid_size=100,
               ask_size=100,
               source="settrade-open-api-realtime",
+              book_snapshot=True,
           )
           proof = app._connectivity_proof()
           assert proof["coverage"]["verified_book_count"] == 1

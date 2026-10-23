@@ -36,14 +36,85 @@ export interface ExecutionCostOverrides{
   extraSlippageBps?:number;
 }
 
+function nonNegativeBps(value:unknown,fallback:number):number{
+  return typeof value==="number" && Number.isFinite(value) && value>=0 && value<=10_000
+    ? value
+    : fallback;
+}
+
 function executionCosts(overrides:ExecutionCostOverrides = {}){
   return {
-    feeBps:Number.isFinite(overrides.feeBps)?Number(overrides.feeBps):config.feeBps,
-    sellTaxBps:Number.isFinite(overrides.sellTaxBps)?Number(overrides.sellTaxBps):config.sellTaxBps,
-    slippageBps:(Number.isFinite(overrides.slippageBps)?Number(overrides.slippageBps):config.slippageBps)
-      +(Number.isFinite(overrides.extraSlippageBps)?Number(overrides.extraSlippageBps):0),
-    marketImpactBps:Number.isFinite(overrides.marketImpactBps)?Number(overrides.marketImpactBps):config.marketImpactBps
+    feeBps:nonNegativeBps(overrides.feeBps,config.feeBps),
+    sellTaxBps:nonNegativeBps(overrides.sellTaxBps,config.sellTaxBps),
+    slippageBps:nonNegativeBps(overrides.slippageBps,config.slippageBps)
+      +nonNegativeBps(overrides.extraSlippageBps,0),
+    marketImpactBps:nonNegativeBps(overrides.marketImpactBps,config.marketImpactBps)
   };
+}
+
+function executionConfigurationIsValid():boolean{
+  const values=[
+    config.initialCapital,config.maxPositionPct,config.maxGrossExposurePct,
+    config.entryNotionalPct,config.maxDailyLoss,config.maxDailyTurnover,
+    config.maxOrderNotional,config.maxOrdersPerMinute,config.feeBps,
+    config.sellTaxBps,config.slippageBps,config.marketImpactBps
+  ];
+  return values.every(value=>typeof value==="number" && Number.isFinite(value))
+    && config.initialCapital>0
+    && config.maxPositionPct>=0 && config.maxPositionPct<=1
+    && config.maxGrossExposurePct>=0 && config.maxGrossExposurePct<=1
+    && config.entryNotionalPct>=0 && config.entryNotionalPct<=1
+    && config.maxDailyLoss>=0 && config.maxDailyTurnover>=0
+    && config.maxOrderNotional>=0 && config.maxOrdersPerMinute>=1
+    && [config.feeBps,config.sellTaxBps,config.slippageBps,config.marketImpactBps]
+      .every(value=>value>=0 && value<=10_000);
+}
+
+function portfolioStateIsValid(state:PortfolioState):boolean{
+  if(!state || typeof state!=="object" || Array.isArray(state)) return false;
+  const finiteNonNegative=(value:unknown)=>
+    typeof value==="number" && Number.isFinite(value) && value>=0;
+  if(!finiteNonNegative(state.cash) || !finiteNonNegative(state.initialCapital) || state.initialCapital===0
+    || !finiteNonNegative(state.fees) || !finiteNonNegative(state.slippageCost)) return false;
+  if(state.dayStartEquity!==undefined && !finiteNonNegative(state.dayStartEquity)) return false;
+  if(state.dailyTurnover!==undefined && !finiteNonNegative(state.dailyTurnover)) return false;
+  if(state.recentBuyTimestamps!==undefined
+    && (!Array.isArray(state.recentBuyTimestamps) || !state.recentBuyTimestamps.every(x=>typeof x==="number" && Number.isFinite(x)))) return false;
+  if(!state.positions || typeof state.positions!=="object" || Array.isArray(state.positions)) return false;
+  if(!state.marks || typeof state.marks!=="object" || Array.isArray(state.marks)) return false;
+  const positionKeys=Object.keys(state.positions);
+  const canonicalKeys=new Set<string>();
+  for(const key of positionKeys){
+    if(typeof key!=="string" || !key.trim()) return false;
+    const canonical=canonicalSymbol(key);
+    if(canonicalKeys.has(canonical)) return false;
+    canonicalKeys.add(canonical);
+  }
+  return Object.values(state.positions).every(pos=>
+    !!pos && typeof pos.qty==="number" && Number.isSafeInteger(pos.qty) && pos.qty>=0
+    && finiteNonNegative(pos.avgPrice)
+    && finiteNonNegative(pos.costBasis)
+    && typeof pos.realizedPnl==="number" && Number.isFinite(pos.realizedPnl)
+  );
+}
+
+function reservationsAreValid(reservations:ExecutionReservations):boolean{
+  const finiteNonNegative=(value:unknown)=>
+    typeof value==="number" && Number.isFinite(value) && value>=0;
+  if(!reservations
+    || !finiteNonNegative(reservations.reservedBuyCash)
+    || !finiteNonNegative(reservations.reservedGrossExposure)
+    || !reservations.reservedSellQty
+    || typeof reservations.reservedSellQty!=="object"
+    || Array.isArray(reservations.reservedSellQty)) return false;
+  const canonicalKeys=new Set<string>();
+  for(const key of Object.keys(reservations.reservedSellQty)){
+    if(!key.trim()) return false;
+    const canonical=canonicalSymbol(key);
+    if(canonicalKeys.has(canonical)) return false;
+    canonicalKeys.add(canonical);
+  }
+  return Object.values(reservations.reservedSellQty).every(finiteNonNegative);
 }
 
 function allowPaperPriceOnlyExecution(q:Quote){
@@ -53,9 +124,9 @@ function allowPaperPriceOnlyExecution(q:Quote){
   const source=String(q.source??"").toLowerCase();
   return config.priceOnlyFallback
     && mode==="paper"
-    && executionMode!=="live"
+    && executionMode==="paper"
     && !liveTradingArmed
-    && source.includes("tradingview-public-screener");
+    && source==="tradingview-public-screener";
 }
 
 export type PlannedOrder = {
@@ -90,8 +161,18 @@ export function createPortfolio(initialCapital:number):PortfolioState{
   return {cash:initialCapital,initialCapital,fees:0,slippageCost:0,positions:{},marks:{},recentBuyTimestamps:[],riskDayKey:undefined,dayStartEquity:initialCapital,dailyTurnover:0};
 }
 
+function canonicalSymbol(symbol:string):string{
+  return symbol.trim().toUpperCase();
+}
+
+function existingPositionKey(state:PortfolioState,symbol:string):string{
+  if(Object.prototype.hasOwnProperty.call(state.positions,symbol)) return symbol;
+  return Object.keys(state.positions).find(key=>canonicalSymbol(key)===symbol) ?? symbol;
+}
+
 function position(state:PortfolioState,symbol:string):PositionState{
-  return state.positions[symbol] ?? {qty:0,avgPrice:0,costBasis:0,realizedPnl:0};
+  return state.positions[existingPositionKey(state,canonicalSymbol(symbol))]
+    ?? {qty:0,avgPrice:0,costBasis:0,realizedPnl:0};
 }
 
 function roundDown(n:number){
@@ -135,7 +216,8 @@ function pruneRecentBuys(state:PortfolioState,nowMs:number){
 }
 
 export function mark(state:PortfolioState,q:Quote){
-  state.marks[q.symbol]=q;
+  const symbol=canonicalSymbol(q.symbol);
+  state.marks[symbol]={...q,symbol};
   ensureDailyRiskState(state,q.ts);
 }
 
@@ -146,19 +228,53 @@ export function planOrder(
   reservations:ExecutionReservations={reservedBuyCash:0,reservedGrossExposure:0,reservedSellQty:{}},
   costOverrides:ExecutionCostOverrides={}
 ):PlannedOrder{
+  if(!signal || typeof signal!=="object" || !q || typeof q!=="object"){
+    return {accepted:false,reason:"INVALID_EXECUTION_INPUT"};
+  }
   if(signal.action==="HOLD") return {accepted:false,reason:"SIGNAL_HOLD"};
+  if(signal.action!=="BUY" && signal.action!=="SELL"){
+    return {accepted:false,reason:"INVALID_SIGNAL_ACTION"};
+  }
+  if(typeof signal.symbol!=="string" || typeof q.symbol!=="string"
+    || !signal.symbol.trim() || !q.symbol.trim()
+    || signal.symbol.trim().toUpperCase()!==q.symbol.trim().toUpperCase()){
+    return {accepted:false,reason:"QUOTE_SYMBOL_MISMATCH"};
+  }
 
   const side:Side=signal.action;
+  const symbol=canonicalSymbol(signal.symbol);
+  if(!executionConfigurationIsValid()){
+    return {accepted:false,reason:"INVALID_EXECUTION_CONFIG"};
+  }
+  if(!portfolioStateIsValid(state)){
+    return {accepted:false,reason:"INVALID_PORTFOLIO_STATE"};
+  }
+  if(!reservationsAreValid(reservations)){
+    return {accepted:false,reason:"INVALID_EXECUTION_RESERVATIONS"};
+  }
+  if(signal.targetAllocationPct!==undefined
+    && (typeof signal.targetAllocationPct!=="number"
+      || !Number.isFinite(signal.targetAllocationPct)
+      || signal.targetAllocationPct<0
+      || signal.targetAllocationPct>100)){
+    return {accepted:false,reason:"INVALID_TARGET_ALLOCATION"};
+  }
   ensureDailyRiskState(state,signal.ts);
-  const hasBook=Number.isFinite(Number(q.bid))
-    && Number(q.bid)>0
-    && Number.isFinite(Number(q.ask))
-    && Number(q.ask)>0
-    && Number(q.ask)>=Number(q.bid);
-  const hasDepth=Number(q.bidSize??0)>0 && Number(q.askSize??0)>0;
-  const verifiedBook=hasBook
-    && hasDepth
-    && !String(q.dataQuality??"").toLowerCase().includes("unverified");
+  const hasBook=typeof q.bid==="number" && Number.isFinite(q.bid)
+    && q.bid>0
+    && typeof q.ask==="number" && Number.isFinite(q.ask)
+    && q.ask>0
+    && q.ask>=q.bid;
+  const hasDepth=typeof q.bidSize==="number" && Number.isFinite(q.bidSize) && q.bidSize>0
+    && typeof q.askSize==="number" && Number.isFinite(q.askSize) && q.askSize>0;
+  const quality=String(q.dataQuality??"").trim().toLowerCase().replace(/[\s-]+/g,"_");
+  const verifiedQuality=["verified","verified_book","book_verified","verified_execution_book"].includes(quality);
+  const explicitlyUnverified=quality.includes("unverified") || quality==="not_verified" || quality.startsWith("not_");
+  const sourceName=String(q.source??"").trim().toLowerCase();
+  const trustedRealtimeSource=
+    sourceName==="settrade-open-api-realtime"
+    || sourceName==="set-market-data-api-realtime";
+  const verifiedBook=hasBook && hasDepth && (verifiedQuality || trustedRealtimeSource) && !explicitlyUnverified;
   const allowPriceOnlyPaper=allowPaperPriceOnlyExecution(q);
 
   // BUYs require a verified executable book in live/verified paths.
@@ -168,7 +284,9 @@ export function planOrder(
     ? (verifiedBook
       ? Number(q.ask)
       : (allowPriceOnlyPaper?usablePrice(q.last,q.ask,q.bid):0))
-    : (verifiedBook?Number(q.bid):usablePrice(q.last,q.bid,q.ask));
+    : (verifiedBook
+      ? Number(q.bid)
+      : (allowPriceOnlyPaper?usablePrice(q.last,q.bid,q.ask):0));
   if(side==="BUY" && !referencePrice){
     return {accepted:false,reason:"BUY_BLOCKED_NO_VERIFIED_BOOK"};
   }
@@ -176,7 +294,7 @@ export function planOrder(
     return {accepted:false,reason:"NO_EXIT_PRICE"};
   }
 
-  const pos=position(state,q.symbol);
+  const pos=position(state,symbol);
   const currentNotional=pos.qty*referencePrice;
 
   if(side==="BUY"){
@@ -227,7 +345,7 @@ export function planOrder(
         -Math.max(0,reservations.reservedGrossExposure)
     );
     const feeRate=costs.feeBps/10000;
-    const estimatedAllInPerShare=referencePrice*(1+slippageRate)*(1+feeRate);
+    const estimatedAllInPerShare=referencePrice*(1+conservativeExecutionRate)*(1+feeRate);
     const availableCash=Math.max(0,state.cash-Math.max(0,reservations.reservedBuyCash));
     const affordable=availableCash/estimatedAllInPerShare;
     let qty=roundDown(Math.min(
@@ -253,7 +371,7 @@ export function planOrder(
 
     const notional=qty*referencePrice;
     const risk=validateOrder({
-      symbol:q.symbol,side,notional,
+      symbol,side,notional,
       grossExposure:currentGrossExposure(state)+Math.max(0,reservations.reservedGrossExposure),
       currentPositionNotional:currentNotional,
       cash:availableCash
@@ -261,8 +379,8 @@ export function planOrder(
     if(!risk.ok) return {accepted:false,reason:risk.reason};
     recent.push(orderNowMs);
     return {
-      accepted:true,symbol:q.symbol,side,qty,referencePrice,
-      visibleDepth:verifiedBook?(q.askLevels?.length?q.askLevels.reduce((s,l)=>s+Math.max(0,l.size),0):Number(q.askSize??0)):0,
+      accepted:true,symbol,side,qty,referencePrice,
+      visibleDepth:verifiedBook?(q.depthComplete && q.askLevels?.length?q.askLevels.reduce((s,l)=>s+Math.max(0,l.size),0):Number(q.askSize??0)):0,
       depthLevels:verifiedBook && q.depthComplete ? q.askLevels:undefined,
       depthComplete:verifiedBook && q.depthComplete===true,
       spreadBps:verifiedBook
@@ -271,7 +389,8 @@ export function planOrder(
     };
   }
 
-  const reservedForSymbol=Math.max(0,Number(reservations.reservedSellQty[q.symbol]??0));
+  const reservedKey=Object.keys(reservations.reservedSellQty).find(key=>canonicalSymbol(key)===symbol);
+  const reservedForSymbol=Math.max(0,Number(reservations.reservedSellQty[symbol]??(reservedKey?reservations.reservedSellQty[reservedKey]:0)??0));
   const availablePositionQty=Math.max(0,pos.qty-reservedForSymbol);
   if(availablePositionQty<=0) return {accepted:false,reason:"NO_LONG_POSITION"};
   let qty=availablePositionQty;
@@ -285,15 +404,15 @@ export function planOrder(
 
   const notional=qty*referencePrice;
   const risk=validateOrder({
-    symbol:q.symbol,side,notional,
+    symbol,side,notional,
     grossExposure:currentGrossExposure(state)+Math.max(0,reservations.reservedGrossExposure),
     currentPositionNotional:currentNotional,
     cash:Math.max(0,state.cash-Math.max(0,reservations.reservedBuyCash))
   });
   if(!risk.ok) return {accepted:false,reason:risk.reason};
   return {
-    accepted:true,symbol:q.symbol,side,qty,referencePrice,
-    visibleDepth:verifiedBook?(q.bidLevels?.length?q.bidLevels.reduce((s,l)=>s+Math.max(0,l.size),0):Number(q.bidSize??0)):0,
+    accepted:true,symbol,side,qty,referencePrice,
+    visibleDepth:verifiedBook?(q.depthComplete && q.bidLevels?.length?q.bidLevels.reduce((s,l)=>s+Math.max(0,l.size),0):Number(q.bidSize??0)):0,
     depthLevels:verifiedBook && q.depthComplete ? q.bidLevels:undefined,
     depthComplete:verifiedBook && q.depthComplete===true,
     spreadBps:verifiedBook
@@ -306,7 +425,26 @@ export function simulateFill(
   order:Extract<PlannedOrder,{accepted:true}>,
   costOverrides:ExecutionCostOverrides={}
 ):SimulatedFill{
+  if(!order || typeof order.symbol!=="string" || !order.symbol.trim()
+    || (order.side!=="BUY" && order.side!=="SELL")
+    || typeof order.qty!=="number" || !Number.isFinite(order.qty) || order.qty<=0
+    || !Number.isSafeInteger(order.qty)
+    || typeof order.referencePrice!=="number" || !Number.isFinite(order.referencePrice) || order.referencePrice<=0
+    || typeof order.visibleDepth!=="number" || !Number.isFinite(order.visibleDepth) || order.visibleDepth<0
+    || typeof order.spreadBps!=="number" || !Number.isFinite(order.spreadBps) || order.spreadBps<0){
+    throw new Error("INVALID_SIMULATED_FILL_INPUT");
+  }
+  if(order.depthComplete===true && order.depthLevels?.length
+    && !order.depthLevels.every(level=>
+      !!level && typeof level.price==="number" && Number.isFinite(level.price) && level.price>0
+      && typeof level.size==="number" && Number.isFinite(level.size) && level.size>0)){
+    throw new Error("INVALID_SIMULATED_FILL_DEPTH");
+  }
   const costs=executionCosts(costOverrides);
+  if(![costs.feeBps,costs.sellTaxBps,costs.slippageBps,costs.marketImpactBps]
+    .every(value=>typeof value==="number" && Number.isFinite(value) && value>=0 && value<=20_000)){
+    throw new Error("INVALID_SIMULATED_FILL_COST");
+  }
   const slippageRate=costs.slippageBps/10000;
   const feeRate=costs.feeBps/10000;
   const taxRate=order.side==="SELL"?costs.sellTaxBps/10000:0;
@@ -315,6 +453,9 @@ export function simulateFill(
     : 0;
   const impactRate=(costs.marketImpactBps/10000)*Math.sqrt(participation);
   const totalPricePenalty=slippageRate+impactRate;
+  if(!Number.isFinite(totalPricePenalty) || totalPricePenalty<0 || totalPricePenalty>0.5){
+    throw new Error("INVALID_SIMULATED_FILL_COST");
+  }
   let fillPrice=order.side==="BUY"
     ? order.referencePrice*(1+totalPricePenalty)
     : order.referencePrice*(1-totalPricePenalty);
@@ -335,12 +476,19 @@ export function simulateFill(
       if(order.side==="SELL") fillPrice=cash/order.qty*(1-slippageRate);
     }
   }
+  if(!Number.isFinite(fillPrice) || fillPrice<=0){
+    throw new Error("INVALID_SIMULATED_FILL_PRICE");
+  }
   const notional=fillPrice*order.qty;
   const fee=notional*(feeRate+taxRate);
   const slippage=Math.abs(fillPrice-order.referencePrice)*order.qty;
   const totalCashDelta=order.side==="BUY"
     ? -(notional+fee)
     : (notional-fee);
+  if(![notional,fee,slippage,totalCashDelta].every(value=>Number.isFinite(value))
+    || notional<=0 || fee<0 || slippage<0){
+    throw new Error("INVALID_SIMULATED_FILL_RESULT");
+  }
   return {
     symbol:order.symbol,side:order.side,qty:order.qty,
     referencePrice:order.referencePrice,fillPrice,notional,fee,slippage,totalCashDelta
@@ -348,34 +496,82 @@ export function simulateFill(
 }
 
 export function applyFill(state:PortfolioState,fill:SimulatedFill){
-  const pos=position(state,fill.symbol);
+  if(!portfolioStateIsValid(state)
+    || !fill || typeof fill.symbol!=="string" || !fill.symbol.trim()
+    || (fill.side!=="BUY" && fill.side!=="SELL")
+    || !Number.isSafeInteger(fill.qty) || fill.qty<=0
+    || ![fill.referencePrice,fill.fillPrice,fill.notional,fill.fee,fill.slippage,fill.totalCashDelta]
+      .every(value=>typeof value==="number" && Number.isFinite(value))
+    || fill.referencePrice<=0 || fill.fillPrice<=0 || fill.notional<=0 || fill.fee<0 || fill.slippage<0){
+    throw new Error("INVALID_SIMULATED_FILL");
+  }
+  const expectedNotional=fill.qty*fill.fillPrice;
+  const expectedCashDelta=fill.side==="BUY" ? -(fill.notional+fill.fee) : fill.notional-fill.fee;
+  const tolerance=Math.max(1e-6,Math.abs(expectedNotional)*1e-8);
+  const expectedSlippage=Math.abs(fill.fillPrice-fill.referencePrice)*fill.qty;
+  if(Math.abs(fill.notional-expectedNotional)>tolerance
+    || Math.abs(fill.slippage-expectedSlippage)>Math.max(1e-6,Math.abs(expectedSlippage)*1e-8)
+    || Math.abs(fill.totalCashDelta-expectedCashDelta)>Math.max(1e-6,Math.abs(expectedCashDelta)*1e-8)){
+    throw new Error("INCONSISTENT_SIMULATED_FILL");
+  }
+
+  const symbol=canonicalSymbol(fill.symbol);
+  const priorKey=existingPositionKey(state,symbol);
+  const pos=position(state,symbol);
+  // Validate all state-dependent constraints before mutating the portfolio.
+  // In particular, an invalid SELL must not delete a legacy symbol key.
+  if(fill.side==="SELL" && fill.qty>pos.qty) throw new Error("SELL_EXCEEDS_POSITION");
+  const cashTolerance=Math.max(1e-6,state.cash*1e-12);
+  if(fill.side==="BUY" && -fill.totalCashDelta>state.cash+cashTolerance){
+    throw new Error("INSUFFICIENT_PAPER_CASH");
+  }
+
+  let nextPosition:PositionState;
   if(fill.side==="BUY"){
     const newQty=pos.qty+fill.qty;
     const newCost=pos.costBasis+fill.notional+fill.fee;
-    state.positions[fill.symbol]={
+    nextPosition={
       qty:newQty,avgPrice:newCost/newQty,costBasis:newCost,realizedPnl:pos.realizedPnl
     };
   }else{
-    if(fill.qty>pos.qty) throw new Error("SELL_EXCEEDS_POSITION");
     const realized=(fill.notional-fill.fee)-(pos.avgPrice*fill.qty);
     const newQty=pos.qty-fill.qty;
     const newCost=Math.max(0,pos.costBasis-(pos.avgPrice*fill.qty));
-    state.positions[fill.symbol]={
+    nextPosition={
       qty:newQty,
       avgPrice:newQty>0?newCost/newQty:0,
       costBasis:newCost,
       realizedPnl:pos.realizedPnl+realized
     };
   }
-  state.cash+=fill.totalCashDelta;
-  state.fees+=fill.fee;
-  state.dailyTurnover=(Number(state.dailyTurnover??0)+fill.notional);
-  state.slippageCost+=fill.slippage;
+
+  const nextCash=state.cash+fill.totalCashDelta;
+  const nextFees=state.fees+fill.fee;
+  const nextDailyTurnover=Number(state.dailyTurnover??0)+fill.notional;
+  const nextSlippageCost=state.slippageCost+fill.slippage;
+  if(!Number.isSafeInteger(nextPosition.qty) || nextPosition.qty<0
+    || ![nextPosition.avgPrice,nextPosition.costBasis,nextPosition.realizedPnl,
+      nextCash,nextFees,nextDailyTurnover,nextSlippageCost]
+      .every(value=>typeof value==="number" && Number.isFinite(value))
+    || nextPosition.avgPrice<0 || nextPosition.costBasis<0
+    || nextCash< -cashTolerance || nextFees<0 || nextDailyTurnover<0 || nextSlippageCost<0){
+    throw new Error("INVALID_SIMULATED_FILL_RESULT");
+  }
+
+  // Commit the in-memory state only after every guard passes.
+  if(priorKey!==symbol && Object.prototype.hasOwnProperty.call(state.positions,priorKey)){
+    delete state.positions[priorKey];
+  }
+  state.positions[symbol]=nextPosition;
+  state.cash=Math.max(0,nextCash);
+  state.fees=nextFees;
+  state.dailyTurnover=nextDailyTurnover;
+  state.slippageCost=nextSlippageCost;
 }
 
 export function currentGrossExposure(state:PortfolioState){
   return Object.entries(state.positions).reduce((sum,[symbol,pos])=>{
-    const q=state.marks[symbol];
+    const q=state.marks[canonicalSymbol(symbol)] ?? state.marks[symbol];
     const price=usablePrice(q?.last,q?.bid,q?.ask,pos.avgPrice);
     return sum+Math.max(0,pos.qty*price);
   },0);
@@ -383,14 +579,14 @@ export function currentGrossExposure(state:PortfolioState){
 
 export function snapshot(state:PortfolioState){
   const marketValue=Object.entries(state.positions).reduce((sum,[symbol,pos])=>{
-    const q=state.marks[symbol];
+    const q=state.marks[canonicalSymbol(symbol)] ?? state.marks[symbol];
     const liquidationPrice=usablePrice(q?.bid,q?.last,q?.ask,pos.avgPrice);
     return sum+Math.max(0,pos.qty*liquidationPrice);
   },0);
   const grossExposure=currentGrossExposure(state);
   const realizedPnl=Object.values(state.positions).reduce((sum,p)=>sum+p.realizedPnl,0);
   const unrealizedPnl=Object.entries(state.positions).reduce((sum,[symbol,pos])=>{
-    const q=state.marks[symbol];
+    const q=state.marks[canonicalSymbol(symbol)] ?? state.marks[symbol];
     const markPrice=usablePrice(q?.bid,q?.last,q?.ask,pos.avgPrice);
     return sum+(markPrice*pos.qty-pos.costBasis);
   },0);
