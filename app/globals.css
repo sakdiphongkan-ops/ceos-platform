@@ -1458,3 +1458,5 @@ body [tabindex]:focus-visible {
 }
 /* WCAG AA: the empty position-detail helper sits on the dark detail card. */
 .luna-shell .side-card .empty-detail span{color:#c2cfc3!important}
+/* WCAG AA: inactive workspace navigation labels must remain readable on the light surface. */
+.luna-shell .top-nav button:not(.active){color:#566156!important}
