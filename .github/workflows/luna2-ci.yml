@@ -54,6 +54,8 @@ jobs:
 
       - name: Install browser engines
         run: npx playwright install chromium firefox webkit
+      - name: Install WebKit system dependencies
+        run: npx playwright install-deps webkit
 
       - name: Production build
         run: npm run build
