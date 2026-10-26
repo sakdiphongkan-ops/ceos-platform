@@ -1456,3 +1456,5 @@ body [tabindex]:focus-visible {
     white-space: nowrap;
   }
 }
+/* WCAG AA: the empty position-detail helper sits on the dark detail card. */
+.luna-shell .side-card .empty-detail span{color:#c2cfc3!important}
