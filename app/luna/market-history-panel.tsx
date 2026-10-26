@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, BarChart3, RefreshCw } from "lucide-react";
 import { fetchMarketBars, type LunaHistoricalBar } from "../../lib/luna-client";
 
@@ -53,6 +53,14 @@ function money(value: number): string {
   return value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function ageLabel(ageMs: number | null): string {
+  if (ageMs === null || !Number.isFinite(ageMs) || ageMs < 0) return "Unknown";
+  if (ageMs < 60_000) return `${Math.round(ageMs / 1000)} sec`;
+  if (ageMs < 3_600_000) return `${(ageMs / 60_000).toFixed(1)} min`;
+  if (ageMs < 86_400_000) return `${(ageMs / 3_600_000).toFixed(1)} hr`;
+  return `${(ageMs / 86_400_000).toFixed(1)} days`;
+}
+
 export default function MarketHistoryPanel() {
   const [symbol, setSymbol] = useState<string>("PTT");
   const [interval, setInterval] = useState<Interval>("15m");
@@ -62,12 +70,18 @@ export default function MarketHistoryPanel() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryToken, setRetryToken] = useState(0);
+  const requestSequence = useRef(0);
 
   const load = useCallback(async () => {
+    const requestId = ++requestSequence.current;
     setLoading(true);
     setError(null);
     try {
       const result = await fetchMarketBars(symbol, interval, 96);
+      // Symbol/timeframe can change before an older response completes. Only the newest
+      // request may update state, otherwise PTT data could appear under another symbol.
+      if (requestId !== requestSequence.current) return;
+
       if (!result.ok || result.source !== "settrade-open-api-historical" || result.symbol !== symbol || result.interval !== interval || !Array.isArray(result.bars) || result.bars.length === 0) {
         setBars([]);
         setSource(null);
@@ -93,17 +107,22 @@ export default function MarketHistoryPanel() {
       setSource(result.source);
       setFetchedAt(result.fetched_at ?? null);
     } catch {
+      if (requestId !== requestSequence.current) return;
       setBars([]);
       setSource(null);
       setFetchedAt(null);
       setError(errorText(undefined));
     } finally {
-      setLoading(false);
+      if (requestId === requestSequence.current) setLoading(false);
     }
   }, [interval, symbol]);
 
   useEffect(() => {
     void load();
+    return () => {
+      // Invalidate any in-flight request when symbol/timeframe changes or panel unmounts.
+      requestSequence.current += 1;
+    };
   }, [load, retryToken]);
 
   useEffect(() => {
@@ -113,6 +132,10 @@ export default function MarketHistoryPanel() {
   }, [error, load, source]);
 
   const latest = bars[bars.length - 1];
+  const latestTimestampMs = latest ? Date.parse(latest.timestamp) : NaN;
+  const latestBarAgeMs = latest && Number.isFinite(latestTimestampMs)
+    ? Math.max(0, Date.now() - latestTimestampMs)
+    : null;
   const previous = bars.length > 1 ? bars[bars.length - 2] : undefined;
   const change = latest && previous ? latest.close - previous.close : null;
   const changePct = latest && previous && previous.close > 0 ? (latest.close / previous.close - 1) * 100 : null;
@@ -122,12 +145,12 @@ export default function MarketHistoryPanel() {
     <section className="market-history-card" aria-labelledby="luna-market-history-title">
       <div className="market-history-head">
         <div>
-          <div className="market-history-kicker"><BarChart3 size={14}/> MARKET FIELD · HISTORICAL OHLC</div>
+          <div className="market-history-kicker"><BarChart3 size={14}/> MARKET REFERENCE · HISTORICAL OHLC</div>
           <h3 id="luna-market-history-title">{symbol} · SET</h3>
           <p>Source-verified historical candles from the authorized SETTRADE gateway. This panel never synthesizes missing candles.</p>
         </div>
         <div className={"market-history-connection " + (source ? "connected" : "unavailable")}>
-          <span className="market-history-dot" />{source ? "SOURCE VERIFIED" : loading ? "LOADING SOURCE" : "DATA UNAVAILABLE"}
+          <span className="market-history-dot" />{source ? "SOURCE VERIFIED · HISTORICAL" : loading ? "LOADING SOURCE" : "DATA UNAVAILABLE"}
         </div>
       </div>
 
@@ -159,7 +182,7 @@ export default function MarketHistoryPanel() {
       ) : (
         <>
           <div className="market-history-stats">
-            <div><span>Latest close</span><strong>{latest ? "฿" + money(latest.close) : loading ? "Loading…" : "—"}</strong></div>
+            <div><span>Latest historical close</span><strong>{latest ? "฿" + money(latest.close) : loading ? "Loading…" : "—"}</strong></div>
             <div><span>{interval} bar change</span><strong className={change === null ? "" : change >= 0 ? "positive" : "negative"}>{change === null ? "—" : `${change >= 0 ? "+" : "−"}฿${money(Math.abs(change))}`}</strong></div>
             <div><span>Change</span><strong className={changePct === null ? "" : changePct >= 0 ? "positive" : "negative"}>{changePct === null ? "—" : `${changePct >= 0 ? "+" : ""}${changePct.toFixed(2)}%`}</strong></div>
             <div><span>Latest bar</span><strong>{latest ? formatTime(latest.timestamp, true) : "—"}</strong></div>
@@ -174,6 +197,7 @@ export default function MarketHistoryPanel() {
         <span>Timeframe <strong>{interval === "60m" ? "1h" : interval}</strong> · Asia/Bangkok</span>
         <span>Source <strong>{source ?? "—"}</strong></span>
         <span>Fetched <strong>{fetchedAt ? formatTime(fetchedAt, true) : "—"}</strong></span>
+        <span>Last bar age <strong>{ageLabel(latestBarAgeMs)}</strong></span>
         <span>{bars.length ? `${bars.length} validated bars` : "No validated bars"}</span>
       </div>
     </section>

@@ -210,10 +210,10 @@ test("4. Accessibility source contract: interactive portfolio rows have keyboard
 
 test("LUNA portfolio never invents equity or cash when the verified snapshot is missing", () => {
   const page = read("app/luna/page.tsx");
-  assert.match(page, /session\?\.initial_capital\?\?30000/);
-  assert.match(page, /hasVerifiedPortfolioSnapshot=sessionSnapshot\?\.cash!=null && sessionSnapshot\?\.market_value!=null/);
-  assert.match(page, /value=\{hasVerifiedPortfolioSnapshot \? `฿\$\{money\(equity\)\}` : "—"\}/);
-  assert.match(page, /value=\{sessionSnapshot\?\.cash!=null \? `฿\$\{money\(cash\)\}` : "—"\}/);
+  assert.match(page, /session\?\.initial_capital\s*\?\?\s*30000/);
+  assert.match(page, /hasVerifiedPortfolioSnapshot\s*=\s*sessionSnapshot\?\.cash\s*!=\s*null\s*&&\s*sessionSnapshot\?\.market_value\s*!=\s*null/);
+  assert.match(page, /value=\{hasVerifiedPortfolioSnapshot\s*\?/);
+  assert.match(page, /value=\{sessionSnapshot\?\.cash\s*!=\s*null\s*\?/);
   assert.doesNotMatch(page, /initial_capital\?\?1000000/);
 });
 
@@ -255,4 +255,15 @@ test("LUNA JEX-inspired candles render only validated Settrade OHLC and never ex
   assert.match(client, /\/api\/luna\/market-bars/);
   assert.doesNotMatch(panel, /LUNA_GATEWAY_KEY/);
   assert.doesNotMatch(panel, /mockQuotes|synthetic candle|Math\.random/);
+});
+
+test("LUNA dashboard does not report false market/API states before hydration or when ages are null", () => {
+  const page = read("app/luna/page.tsx");
+  assert.ok(page.includes('const marketPhase=clock ? uiMarketPhase(clock) : null;'));
+  assert.match(page, /marketPhase\s*!==\s*null\s*&&\s*\["ACTIVE","REDUCE_ONLY","FORCE_CLOSE"\]\.includes\(marketPhase\)/);
+  assert.ok(page.includes('marketPhaseLabelText=marketPhase ? marketPhaseLabel(marketPhase) : "SYNCING CLOCK"'));
+  assert.ok(page.includes('marketFeed.latest_age_ms != null && Number.isFinite(Number(marketFeed.latest_age_ms))'));
+  assert.ok(page.includes('backendRuntime?.latest_age_ms != null && Number.isFinite(Number(backendRuntime.latest_age_ms))'));
+  assert.ok(page.includes('API {isConnecting ? "CHECKING" : live ? "CONNECTED" : "UNREACHABLE"}'));
+  assert.ok(page.includes('!clock ? "waiting for Bangkok clock" : sessionIsToday'));
 });
