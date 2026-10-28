@@ -18,7 +18,7 @@ type Interval = (typeof INTERVALS)[number]["value"];
 function errorText(code: string | undefined): string {
   switch (code) {
     case "AUTHENTICATION_REQUIRED":
-      return "Your LUNA session is not signed in. Sign in to LUNA before requesting historical bars from the authorized SETTRADE gateway."
+      return "Your LUNA session is not signed in. Sign in to LUNA before requesting historical bars from the authorized SETTRADE gateway.";
     case "MARKET_HISTORY_NOT_CONFIGURED":
       return "The historical SETTRADE gateway is not configured in this environment.";
     case "MARKET_HISTORY_UPSTREAM_UNAVAILABLE":
