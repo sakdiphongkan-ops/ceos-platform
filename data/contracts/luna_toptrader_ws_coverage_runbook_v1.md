@@ -37,10 +37,11 @@ Do not treat these as the same failure, and do not loosen freshness or tick/book
 - Readiness coverage threshold remains 80%; passing it is not broker authorization.
 - REST Book observations without event timestamps remain execution-ineligible.
 - The diagnostic probe does not write to market-data tables or create orders; live execution remains locked.
+- The private request-history excerpt limit is 7,500 characters; rows already stored remain unchanged.
 
 ## How to read the new telemetry
 
-Each production WebSocket run returns a compact `chunk_diagnostics` array. For every chunk it records:
+Each production WebSocket run returns a compact `chunk_diagnostics` array. The private request history retains up to 7,500 characters of each response so the per-chunk and mismatch summaries are not truncated. For every chunk it records:
 - number and lexical range of requested symbols;
 - WebSocket opened, query-string subscription used, and explicit subscription sent;
 - total frame messages, unique symbols with usable Tick/Book events;
