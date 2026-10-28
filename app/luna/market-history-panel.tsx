@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, BarChart3, RefreshCw } from "lucide-react";
+import Link from "next/link";
 import { fetchMarketBars, type LunaHistoricalBar } from "../../lib/luna-client";
 
 const SYMBOLS = ["PTT", "ADVANC", "AOT", "CPALL", "BDMS", "KBANK", "SCB", "DELTA", "GULF", "KTB"] as const;
@@ -17,7 +18,7 @@ type Interval = (typeof INTERVALS)[number]["value"];
 function errorText(code: string | undefined): string {
   switch (code) {
     case "AUTHENTICATION_REQUIRED":
-      return "Sign in to access authorized SETTRADE historical data.";
+      return "Your LUNA session is not signed in. Sign in to LUNA before requesting historical bars from the authorized SETTRADE gateway."
     case "MARKET_HISTORY_NOT_CONFIGURED":
       return "The historical SETTRADE gateway is not configured in this environment.";
     case "MARKET_HISTORY_UPSTREAM_UNAVAILABLE":
@@ -176,7 +177,18 @@ export default function MarketHistoryPanel() {
       {error ? (
         <div className="market-history-empty" role="status">
           <AlertTriangle size={18}/>
-          <div><strong>Verified candles not available</strong><span>{error}</span></div>
+          <div>
+            <strong>Verified candles not available</strong>
+            <span>{error}</span>
+            {error === errorText("AUTHENTICATION_REQUIRED") && (
+              <Link
+                href={"/luna/login?next=" + encodeURIComponent("/luna")}
+                className="inline-flex min-h-10 w-fit items-center justify-center rounded-xl border border-[#d8d8d0] bg-white px-4 text-sm font-medium text-[#33362f] transition hover:bg-[#f7f7f4] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#616d62]"
+              >
+                Sign in to LUNA
+              </Link>
+            )}
+          </div>
           <button type="button" onClick={() => setRetryToken((value) => value + 1)} disabled={loading}>Retry</button>
         </div>
       ) : (
