@@ -11,6 +11,38 @@ test.describe("LUNA cross-browser compatibility", () => {
     }
   });
 
+  test("login translates invalid credentials and callback failures into actionable messages", async ({ page }) => {
+    await page.route("**/auth/v1/token?grant_type=password", async (route) => {
+      await route.fulfill({
+        status: 400,
+        contentType: "application/json",
+        body: JSON.stringify({ code: "invalid_credentials", message: "Invalid login credentials" }),
+      });
+    });
+    await page.goto("/luna/login", { waitUntil: "domcontentloaded" });
+    await page.locator('input[autocomplete="email"]').fill("trader@example.com");
+    await page.locator('input[autocomplete="current-password"]').fill("wrong-password");
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await expect(page.getByRole("alert")).toContainText("อีเมลหรือรหัสผ่านไม่ถูกต้อง");
+
+    await page.goto("/luna/login?error=auth_callback_failed", { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("alert")).toContainText("ยืนยันตัวตนไม่สำเร็จ");
+  });
+
+  test("historical candle authentication error offers the LUNA sign-in path", async ({ page }) => {
+    await page.route("**/api/luna/market-bars**", async (route) => {
+      await route.fulfill({
+        status: 401,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: false, error: "AUTHENTICATION_REQUIRED" }),
+      });
+    });
+    await page.goto("/luna", { waitUntil: "domcontentloaded" });
+    const signIn = page.getByRole("link", { name: "Sign in to LUNA" });
+    await expect(signIn).toBeVisible();
+    await expect(signIn).toHaveAttribute("href", "/luna/login?next=%2Fluna");
+  });
+
   test("login controls remain touch-friendly and keyboard-safe", async ({ page }) => {
     await page.goto("/luna/login", { waitUntil: "domcontentloaded" });
     const inputs = page.locator("input");
