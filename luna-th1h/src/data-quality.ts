@@ -41,38 +41,39 @@ export function assessQuoteQuality(
     return {ok:false,reason:"INGEST_TIMESTAMP_IN_FUTURE",ageMs:ingestMs-nowMs,sourceToIngestMs:null};
   }
 
-  const ingestAgeMs=Math.max(0,nowMs-ingestMs);
-  if(ingestAgeMs>maxAgeMs) return {ok:false,reason:"STALE_QUOTE",ageMs:ingestAgeMs,sourceToIngestMs:null};
+  const ageMs=Math.max(0,nowMs-ingestMs);
+  if(ageMs>maxAgeMs) return {ok:false,reason:"STALE_QUOTE",ageMs,sourceToIngestMs:null};
 
   let sourceToIngestMs:number|null=null;
-  let freshnessAgeMs=ingestAgeMs;
   if(quote.sourceTs){
     const sourceMs=Date.parse(quote.sourceTs);
-    if(!Number.isFinite(sourceMs)) return {ok:false,reason:"INVALID_SOURCE_TIMESTAMP",ageMs:ingestAgeMs,sourceToIngestMs:null};
+    if(!Number.isFinite(sourceMs)) return {ok:false,reason:"INVALID_SOURCE_TIMESTAMP",ageMs,sourceToIngestMs:null};
     if(sourceMs-nowMs>maxFutureSkewMs){
-      return {ok:false,reason:"SOURCE_TIMESTAMP_IN_FUTURE",ageMs:sourceMs-nowMs,sourceToIngestMs:null};
+      return {ok:false,reason:"SOURCE_TIMESTAMP_IN_FUTURE",ageMs,sourceToIngestMs:null};
     }
     sourceToIngestMs=ingestMs-sourceMs;
-    if(sourceToIngestMs<0) return {ok:false,reason:"SOURCE_TIMESTAMP_AFTER_INGEST",ageMs:ingestAgeMs,sourceToIngestMs};
-    freshnessAgeMs=Math.max(0,nowMs-sourceMs);
-    if(freshnessAgeMs>maxAgeMs){
-      return {ok:false,reason:"STALE_SOURCE_TIMESTAMP",ageMs:freshnessAgeMs,sourceToIngestMs};
+    if(sourceToIngestMs<0) return {ok:false,reason:"SOURCE_TIMESTAMP_AFTER_INGEST",ageMs,sourceToIngestMs};
+
+    // Ingestion freshness is insufficient when a provider resends an old quote.
+    const sourceAgeMs=Math.max(0,nowMs-sourceMs);
+    if(sourceAgeMs>maxAgeMs){
+      return {ok:false,reason:"STALE_SOURCE_TIMESTAMP",ageMs:sourceAgeMs,sourceToIngestMs};
     }
   }
 
-  if(quote.last!=null && !isPositiveFinite(quote.last)) return {ok:false,reason:"NO_USABLE_PRICE",ageMs:freshnessAgeMs,sourceToIngestMs};
-  if(quote.bid!=null && !isPositiveFinite(quote.bid)) return {ok:false,reason:"INVALID_BID",ageMs:freshnessAgeMs,sourceToIngestMs};
-  if(quote.ask!=null && !isPositiveFinite(quote.ask)) return {ok:false,reason:"INVALID_ASK",ageMs:freshnessAgeMs,sourceToIngestMs};
+  if(quote.last!=null && !isPositiveFinite(quote.last)) return {ok:false,reason:"NO_USABLE_PRICE",ageMs,sourceToIngestMs};
+  if(quote.bid!=null && !isPositiveFinite(quote.bid)) return {ok:false,reason:"INVALID_BID",ageMs,sourceToIngestMs};
+  if(quote.ask!=null && !isPositiveFinite(quote.ask)) return {ok:false,reason:"INVALID_ASK",ageMs,sourceToIngestMs};
 
   const hasPrice=isPositiveFinite(quote.last)||isPositiveFinite(quote.bid)||isPositiveFinite(quote.ask);
-  if(!hasPrice) return {ok:false,reason:"NO_USABLE_PRICE",ageMs:freshnessAgeMs,sourceToIngestMs};
+  if(!hasPrice) return {ok:false,reason:"NO_USABLE_PRICE",ageMs,sourceToIngestMs};
 
   if(isPositiveFinite(quote.bid)&&isPositiveFinite(quote.ask)&&Number(quote.bid)>Number(quote.ask)){
-    return {ok:false,reason:"CROSSED_BOOK",ageMs:freshnessAgeMs,sourceToIngestMs};
+    return {ok:false,reason:"CROSSED_BOOK",ageMs,sourceToIngestMs};
   }
 
-  if(!isNonNegativeFinite(quote.bidSize)) return {ok:false,reason:"INVALID_BID_SIZE",ageMs:freshnessAgeMs,sourceToIngestMs};
-  if(!isNonNegativeFinite(quote.askSize)) return {ok:false,reason:"INVALID_ASK_SIZE",ageMs:freshnessAgeMs,sourceToIngestMs};
+  if(!isNonNegativeFinite(quote.bidSize)) return {ok:false,reason:"INVALID_BID_SIZE",ageMs,sourceToIngestMs};
+  if(!isNonNegativeFinite(quote.askSize)) return {ok:false,reason:"INVALID_ASK_SIZE",ageMs,sourceToIngestMs};
 
-  return {ok:true,reason:"OK",ageMs:freshnessAgeMs,sourceToIngestMs};
+  return {ok:true,reason:"OK",ageMs,sourceToIngestMs};
 }

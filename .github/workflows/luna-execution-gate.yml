@@ -1,9 +1,5 @@
 name: LUNA execution gate regression
 
-concurrency:
-  group: luna-execution-gate
-  cancel-in-progress: true
-
 on:
   push:
     branches: [master]
