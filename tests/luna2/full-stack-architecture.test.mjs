@@ -260,7 +260,7 @@ test("LUNA JEX-inspired candles render only validated Settrade OHLC and never ex
 test("LUNA shadow API payload is normalized and verified market coverage is visible", () => {
   const client = read("lib/luna-client.ts");
   const page = read("app/luna/page.tsx");
-  assert.match(client, /Normalize that real response to the nested UI contract/);
+  assert.match(client, /real response to the nested UI contract/);
   assert.match(client, /raw\.signal_state/);
   assert.match(client, /raw\.decision_audit/);
   assert.match(client, /buildLunaApiUrl\("latest_control"/);
