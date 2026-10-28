@@ -1,9 +1,48 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
 import { createClient } from "../../../lib/supabase/client";
+
+function friendlyAuthError(value: unknown): string {
+  const message = value instanceof Error ? value.message : String(value ?? "");
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("invalid login credentials") || normalized.includes("invalid_credentials")) {
+    return "อีเมลหรือรหัสผ่านไม่ถูกต้อง กรุณาตรวจสอบแล้วลองอีกครั้ง";
+  }
+  if (normalized.includes("email not confirmed") || normalized.includes("email_not_confirmed")) {
+    return "บัญชียังไม่ได้ยืนยันอีเมล กรุณาตรวจสอบอีเมลที่ใช้สมัครก่อนเข้าสู่ระบบ";
+  }
+  if (normalized.includes("user already registered") || normalized.includes("already registered")) {
+    return "อีเมลนี้มีบัญชีแล้ว กรุณาเลือกเข้าสู่ระบบแทนการสร้างบัญชีใหม่";
+  }
+  if (normalized.includes("password should be at least") || normalized.includes("password is too short")) {
+    return "รหัสผ่านสั้นเกินไป กรุณาตรวจสอบข้อกำหนดรหัสผ่านแล้วลองอีกครั้ง";
+  }
+  if (normalized.includes("too many requests") || normalized.includes("rate limit")) {
+    return "มีการลองเข้าสู่ระบบหลายครั้งเกินไป กรุณารอสักครู่แล้วลองใหม่";
+  }
+  if (normalized.includes("network") || normalized.includes("fetch")) {
+    return "เชื่อมต่อระบบเข้าสู่ระบบไม่ได้ชั่วคราว กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง";
+  }
+  return "เข้าสู่ระบบไม่สำเร็จ กรุณาตรวจสอบข้อมูลและลองอีกครั้ง หากยังมีปัญหาให้ติดต่อผู้ดูแลระบบ";
+}
+
+function callbackErrorMessage(code: string, detail: string): string {
+  const normalized = (code + " " + detail).toLowerCase();
+  if (normalized.includes("missing_code")) {
+    return "ลิงก์เข้าสู่ระบบไม่สมบูรณ์ กรุณาเริ่มเข้าสู่ระบบใหม่";
+  }
+  if (normalized.includes("access_denied")) {
+    return "การเข้าสู่ระบบถูกยกเลิก กรุณาลองใหม่อีกครั้ง";
+  }
+  if (normalized.includes("expired") || normalized.includes("invalid")) {
+    return "ลิงก์ยืนยันตัวตนหมดอายุหรือใช้ไม่ได้แล้ว กรุณาเริ่มเข้าสู่ระบบใหม่";
+  }
+  return "ยืนยันตัวตนไม่สำเร็จ กรุณาเข้าสู่ระบบใหม่อีกครั้ง";
+}
 
 export default function LunaLoginPage() {
   const [email, setEmail] = useState("");
@@ -12,6 +51,20 @@ export default function LunaLoginPage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const callbackCode = params.get("error");
+    const callbackDetail = params.get("error_description") ?? "";
+    if (callbackCode) {
+      setError(callbackErrorMessage(callbackCode, callbackDetail));
+      // Keep the safe next path, but remove provider error details from the address bar.
+      params.delete("error");
+      params.delete("error_description");
+      const query = params.toString();
+      window.history.replaceState({}, "", window.location.pathname + (query ? "?" + query : "") + window.location.hash);
+    }
+  }, []);
 
   const next = useMemo(() => {
     if (typeof window === "undefined") return "/luna";
@@ -46,9 +99,16 @@ export default function LunaLoginPage() {
         return;
       }
 
-      window.location.assign(next);
+      if (!result.data.session) {
+        setError("ยังไม่ได้รับเซสชันเข้าสู่ระบบ กรุณาลองใหม่อีกครั้ง");
+        return;
+      }
+
+      // A full navigation lets the browser persist the SSR cookie session
+      // before the server-rendered control room and protected API routes are requested.
+      window.location.replace(next);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Authentication failed");
+      setError(friendlyAuthError(e));
     } finally {
       setBusy(false);
     }
@@ -67,7 +127,7 @@ export default function LunaLoginPage() {
       });
       if (authError) throw authError;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Google sign-in is unavailable");
+      setError(friendlyAuthError(e));
       setBusy(false);
     }
   }
