@@ -89,7 +89,8 @@ export function uiMarketPhase(date: Date): UiMarketPhase {
 
   if (minutes < 600) return "PRE_OPEN";
   if (minutes < 750) return "ACTIVE";
-  if (minutes < 840) return "BREAK";
+  // The SET afternoon session reopens at 14:30 Bangkok time, not 14:00.
+  if (minutes < 870) return "BREAK";
   if (minutes < 980) return "ACTIVE";
   if (minutes < 985) return "REDUCE_ONLY";
   if (minutes < 990) return "FORCE_CLOSE";
