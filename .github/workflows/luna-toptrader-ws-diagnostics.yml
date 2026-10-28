@@ -1,0 +1,38 @@
+name: LUNA TopTrader WebSocket diagnostics
+on:
+  push:
+    branches: [master]
+    paths:
+      - "supabase/functions/luna-toptrader-ws-ingest/**"
+      - "supabase/migrations/202610280003_luna_toptrader_ingest_telemetry.sql"
+      - "data/contracts/luna_toptrader_ws_coverage_runbook_v1.md"
+      - ".github/workflows/luna-toptrader-ws-diagnostics.yml"
+  pull_request:
+    branches: [master]
+    paths:
+      - "supabase/functions/luna-toptrader-ws-ingest/**"
+      - "supabase/migrations/202610280003_luna_toptrader_ingest_telemetry.sql"
+      - "data/contracts/luna_toptrader_ws_coverage_runbook_v1.md"
+      - ".github/workflows/luna-toptrader-ws-diagnostics.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deno:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check WebSocket ingest
+        run: deno check supabase/functions/luna-toptrader-ws-ingest/index.ts
+      - name: Run diagnostic summary tests
+        run: deno test supabase/functions/luna-toptrader-ws-ingest/coverage-diagnostics.test.ts
+      - name: Check migration and runbook exist
+        run: |
+          test -s supabase/migrations/202610280003_luna_toptrader_ingest_telemetry.sql
+          test -s data/contracts/luna_toptrader_ws_coverage_runbook_v1.md
