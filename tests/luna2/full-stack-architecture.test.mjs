@@ -257,6 +257,14 @@ test("LUNA JEX-inspired candles render only validated Settrade OHLC and never ex
   assert.doesNotMatch(panel, /mockQuotes|synthetic candle|Math\.random/);
 });
 
+test("LUNA UI market-phase mirror keeps the afternoon pre-open locked until 14:30", () => {
+  const runtime = read("lib/luna-runtime.ts");
+  assert.match(runtime, /if \\(minutes < 750\\) return "ACTIVE";/);
+  assert.match(runtime, /if \\(minutes < 870\\) return "BREAK";/);
+  assert.match(runtime, /if \\(minutes < 980\\) return "ACTIVE";/);
+  assert.match(runtime, /Execution authority remains backend-controlled/);
+});
+
 test("LUNA dashboard does not report false market/API states before hydration or when ages are null", () => {
   const page = read("app/luna/page.tsx");
   assert.ok(page.includes('const marketPhase=clock ? uiMarketPhase(clock) : null;'));
