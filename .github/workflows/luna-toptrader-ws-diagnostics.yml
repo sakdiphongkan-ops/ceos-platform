@@ -5,6 +5,7 @@ on:
     paths:
       - "supabase/functions/luna-toptrader-ws-ingest/**"
       - "supabase/migrations/202610280003_luna_toptrader_ingest_telemetry.sql"
+      - "supabase/migrations/202610280004_luna_ingest_response_excerpt_capacity.sql"
       - "data/contracts/luna_toptrader_ws_coverage_runbook_v1.md"
       - ".github/workflows/luna-toptrader-ws-diagnostics.yml"
   pull_request:
@@ -12,6 +13,7 @@ on:
     paths:
       - "supabase/functions/luna-toptrader-ws-ingest/**"
       - "supabase/migrations/202610280003_luna_toptrader_ingest_telemetry.sql"
+      - "supabase/migrations/202610280004_luna_ingest_response_excerpt_capacity.sql"
       - "data/contracts/luna_toptrader_ws_coverage_runbook_v1.md"
       - ".github/workflows/luna-toptrader-ws-diagnostics.yml"
   workflow_dispatch:
@@ -40,4 +42,5 @@ jobs:
       - name: Check migration and runbook exist
         run: |
           test -s supabase/migrations/202610280003_luna_toptrader_ingest_telemetry.sql
+          test -s supabase/migrations/202610280004_luna_ingest_response_excerpt_capacity.sql
           test -s data/contracts/luna_toptrader_ws_coverage_runbook_v1.md
