@@ -14,11 +14,16 @@ export async function middleware(request: NextRequest) {
         return request.cookies.getAll();
       },
       setAll(cookiesToSet) {
-        for (const { name, value, options } of cookiesToSet) {
+        // Update the request cookie view first, then create one response and attach
+        // every auth cookie. Recreating the response per cookie drops earlier cookies.
+        for (const { name, value } of cookiesToSet) {
           request.cookies.set(name, value);
-          response = NextResponse.next({ request });
+        }
+        response = NextResponse.next({ request });
+        for (const { name, value, options } of cookiesToSet) {
           response.cookies.set(name, value, options);
         }
+        response.headers.set("Cache-Control", "private, no-store");
       },
     },
   });
@@ -41,5 +46,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/luna/account/:path*", "/auth/callback"],
+  matcher: ["/luna/account/:path*", "/api/luna/market-bars", "/auth/callback"],
 };
