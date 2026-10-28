@@ -257,12 +257,19 @@ test("LUNA JEX-inspired candles render only validated Settrade OHLC and never ex
   assert.doesNotMatch(panel, /mockQuotes|synthetic candle|Math\.random/);
 });
 
-test("LUNA dashboard exposes verified latest-bar coverage and bar freshness", () => {
+test("LUNA shadow API payload is normalized and verified market coverage is visible", () => {
+  const client = read("lib/luna-client.ts");
   const page = read("app/luna/page.tsx");
-  assert.match(page, /verified_latest_bar_symbols/);
-  assert.match(page, /shadowCoverageSymbols \/ 930 \* 100/);
-  assert.match(page, /last 15m bar verified/);
-  assert.match(page, /bar age/);
+  assert.match(client, /Normalize that real response to the nested UI contract/);
+  assert.match(client, /raw\.signal_state/);
+  assert.match(client, /raw\.decision_audit/);
+  assert.match(client, /buildLunaApiUrl\("latest_control"/);
+  assert.match(client, /verified_book_symbols/);
+  assert.match(client, /EXECUTION_READINESS_UNAVAILABLE/);
+  assert.match(page, /verified_book_symbols/);
+  assert.match(page, /shadowCoverageSymbols \/ shadowCoverageUniverse \* 100/);
+  assert.match(page, /fresh verified books/);
+  assert.match(page, /latest 15m bar age/);
   assert.match(page, /shadowCoverageDetail/);
 });
 
