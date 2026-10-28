@@ -257,6 +257,19 @@ test("LUNA JEX-inspired candles render only validated Settrade OHLC and never ex
   assert.doesNotMatch(panel, /mockQuotes|synthetic candle|Math\.random/);
 });
 
+test("LUNA mobile tables are keyboard-scrollable and table headers meet WCAG AA contrast", () => {
+  const page = read("app/luna/page.tsx");
+  const layout = read("app/luna/layout.tsx");
+  const css = read("app/globals.css");
+  assert.match(page, /className="table-wrap" tabIndex=\{0\} role="region"/);
+  assert.match(page, /aria-label="Holdings data table"/);
+  assert.match(page, /aria-label="Trade history data table"/);
+  assert.match(page, /aria-label="Closed positions data table"/);
+  assert.match(page, /aria-label="Backtest results data table"/);
+  assert.match(layout, /luna-global-nav-scroll" tabIndex=\{0\} role="region"/);
+  assert.match(css, /color:#616d62;\s*background:#f0eee6;/);
+});
+
 test("LUNA shadow API payload is normalized and verified market coverage is visible", () => {
   const client = read("lib/luna-client.ts");
   const page = read("app/luna/page.tsx");
