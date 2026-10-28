@@ -34,16 +34,16 @@ export type RuntimeStatus = {
 export type ShadowDecision = {
   symbol: string;
   bar_end: string;
-  close: number;
-  ema5: number;
-  ema20: number;
-  momentum_1: number;
-  bar_count: number;
+  close?: number | null;
+  ema5?: number | null;
+  ema20?: number | null;
+  momentum_1?: number | null;
+  bar_count?: number | null;
   candidate_action: string;
   verified_book: boolean;
   feed_verified: boolean;
   execution_blocked: boolean;
-  reason: string;
+  reason?: string | null;
 };
 
 export type ShadowStatus = {
@@ -59,7 +59,8 @@ export type ShadowStatus = {
     orders_allowed?: boolean;
     blockers?: string[];
     latest_source?: string | null;
-    verified_latest_bar_symbols?: number;
+    verified_book_symbols?: number;
+    verified_book_coverage_pct?: number;
     decisions?: ShadowDecision[];
   };
   error?: { message?: string };
@@ -294,12 +295,93 @@ export async function fetchMarketBars(
 }
 
 export async function fetchShadowStatus(asOf: string): Promise<ShadowStatus> {
-  return fetchJson<ShadowStatus>(
-    buildLunaApiUrl("shadow_status", {
-      strategy: LUNA_STRATEGY,
-      as_of: asOf,
-    }),
-  );
+  type ShadowApiPayload = {
+    ok?: boolean;
+    generated_at?: string;
+    strategy_version?: string;
+    status?: string;
+    signal_state?: {
+      status?: string;
+      buy_candidates_today?: number;
+      sell_candidates_today?: number;
+      verified_book_candidates_today?: number;
+      latest_bar_end?: string | null;
+    } | null;
+    decision_audit?: Array<Record<string, unknown>>;
+    latest_bar_end?: string | null;
+    market_feed?: {
+      status?: string;
+      latest_source?: string | null;
+      latest_age_ms?: number | null;
+      verified_book_symbols?: number;
+      verified_book_coverage_pct?: number;
+      verified_book_coverage_ready?: boolean;
+    } | null;
+    universe_coverage?: { active_universe?: number } | null;
+    error?: { message?: string };
+  };
+  type ReadinessPayload = {
+    ok?: boolean;
+    status?: string;
+    blockers?: string[];
+    generated_at?: string;
+    error?: { message?: string };
+  };
+
+  // The deployed API returns flat signal_state/decision_audit fields. Normalize that
+  // real response to the nested UI contract rather than treating the valid payload
+  // as an empty shadow object.
+  const [raw, readiness] = await Promise.all([
+    fetchJson<ShadowApiPayload>(
+      buildLunaApiUrl("shadow_status", { strategy: LUNA_STRATEGY, as_of: asOf }),
+    ),
+    fetchJson<ReadinessPayload>(
+      buildLunaApiUrl("latest_control", { strategy: LUNA_STRATEGY }),
+    ).catch((error) => ({
+      ok: false,
+      status: "READINESS_UNAVAILABLE",
+      blockers: [error instanceof Error ? error.message : "EXECUTION_READINESS_UNAVAILABLE"],
+    })),
+  ]);
+
+  if (raw.ok !== true) {
+    return { ok: false, generated_at: raw.generated_at, error: raw.error ?? { message: "SHADOW_STATUS_UNAVAILABLE" } };
+  }
+
+  const signalState = raw.signal_state ?? {};
+  const marketFeed = raw.market_feed ?? {};
+  const coverage = raw.universe_coverage ?? {};
+  const readinessBlockers = Array.isArray(readiness.blockers) ? readiness.blockers : [];
+  const ordersAllowed = readiness.ok === true && readiness.status === "READY_FOR_PAPER_ONLY" && readinessBlockers.length === 0;
+  const blockers = ordersAllowed ? [] : (readinessBlockers.length ? readinessBlockers : ["EXECUTION_READINESS_UNAVAILABLE"]);
+  const decisions: ShadowDecision[] = (Array.isArray(raw.decision_audit) ? raw.decision_audit : []).map((row) => ({
+    symbol: String(row.symbol ?? ""),
+    bar_end: String(row.bar_end ?? raw.latest_bar_end ?? ""),
+    candidate_action: String(row.candidate_action ?? "UNKNOWN"),
+    verified_book: row.verified_book === true,
+    feed_verified: row.feed_verified === true,
+    execution_blocked: row.execution_blocked !== false,
+    reason: typeof row.reason === "string" ? row.reason : null,
+  })).filter((row) => row.symbol.length > 0);
+
+  return {
+    ok: true,
+    generated_at: raw.generated_at,
+    shadow: {
+      state: ordersAllowed ? "READY_FOR_PAPER_ONLY" : String(readiness.status ?? raw.status ?? signalState.status ?? "BLOCKED"),
+      strategy_version: raw.strategy_version ?? LUNA_STRATEGY,
+      latest_bar_end: raw.latest_bar_end ?? signalState.latest_bar_end ?? decisions[0]?.bar_end ?? null,
+      eligible_symbols: typeof coverage.active_universe === "number" ? coverage.active_universe : undefined,
+      buy_candidates: typeof signalState.buy_candidates_today === "number" ? signalState.buy_candidates_today : 0,
+      sell_candidates: typeof signalState.sell_candidates_today === "number" ? signalState.sell_candidates_today : 0,
+      orders_allowed: ordersAllowed,
+      blockers,
+      latest_source: marketFeed.latest_source ?? null,
+      verified_book_symbols: typeof marketFeed.verified_book_symbols === "number" ? marketFeed.verified_book_symbols : undefined,
+      verified_book_coverage_pct: typeof marketFeed.verified_book_coverage_pct === "number" ? marketFeed.verified_book_coverage_pct : undefined,
+      decisions,
+    },
+  };
 }
 
 export async function fetchControlRoom(strategy = LUNA_STRATEGY): Promise<ControlRoomState> {
