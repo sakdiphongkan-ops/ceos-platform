@@ -11,7 +11,7 @@ export default function LunaLayout({ children }: { children: React.ReactNode }) 
     <header className="luna-global-header">
       <div className="luna-global-header-inner">
         <Link href="/luna" className="luna-global-brand">LUNA</Link>
-        <div className="luna-global-nav-scroll">
+        <div className="luna-global-nav-scroll" tabIndex={0} role="region" aria-label="Main navigation scroll area">
           <nav className="luna-global-nav" aria-label="Main navigation">
             {nav.map(([label,href,Icon])=><Link key={href} href={href} className="luna-global-nav-link"><Icon size={15}/><span>{label}</span></Link>)}
           </nav>
