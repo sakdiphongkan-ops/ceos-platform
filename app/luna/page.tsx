@@ -446,19 +446,24 @@ export default function LunaPortfolioPage() {
   } as const)[runtimeState];
 
   const shadow=shadowStatus?.shadow;
-  const shadowCoverageSymbols = typeof shadow?.verified_latest_bar_symbols === "number"
-    && Number.isFinite(shadow.verified_latest_bar_symbols)
-    ? Math.max(0, Math.floor(shadow.verified_latest_bar_symbols))
+  const shadowCoverageSymbols = typeof shadow?.verified_book_symbols === "number"
+    && Number.isFinite(shadow.verified_book_symbols)
+    ? Math.max(0, Math.floor(shadow.verified_book_symbols))
     : null;
+  const shadowCoverageUniverse = typeof shadow?.eligible_symbols === "number" && shadow.eligible_symbols > 0
+    ? Math.floor(shadow.eligible_symbols)
+    : 930;
   const shadowCoveragePercent = shadowCoverageSymbols === null
     ? null
-    : (shadowCoverageSymbols / 930 * 100).toFixed(1);
+    : (typeof shadow?.verified_book_coverage_pct === "number" && Number.isFinite(shadow.verified_book_coverage_pct)
+        ? shadow.verified_book_coverage_pct
+        : shadowCoverageSymbols / shadowCoverageUniverse * 100).toFixed(1);
   const shadowBarAgeMs = shadow?.latest_bar_end
     ? Date.now() - Date.parse(shadow.latest_bar_end)
     : null;
   const shadowCoverageDetail = shadowCoverageSymbols === null
-    ? "latest-bar verification coverage unavailable"
-    : `last 15m bar verified ${shadowCoverageSymbols}/930 target symbols (${shadowCoveragePercent}%)${shadowBarAgeMs !== null && Number.isFinite(shadowBarAgeMs) && shadowBarAgeMs >= 0 ? ` · bar age ${Math.floor(shadowBarAgeMs / 60000)}m` : ""}`;
+    ? "fresh verified order-book coverage unavailable"
+    : `fresh verified books ${shadowCoverageSymbols}/${shadowCoverageUniverse} (${shadowCoveragePercent}%)${shadowBarAgeMs !== null && Number.isFinite(shadowBarAgeMs) && shadowBarAgeMs >= 0 ? ` · latest 15m bar age ${Math.floor(shadowBarAgeMs / 60000)}m` : ""}`;
   const shadowBlocked=shadow && (shadow.orders_allowed!==true || (shadow.blockers?.length??0)>0);
   const runtimeDetail = runtimeState==="ACTIVE"
     ? strategyMismatch
