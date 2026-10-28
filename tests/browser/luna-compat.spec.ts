@@ -23,10 +23,10 @@ test.describe("LUNA cross-browser compatibility", () => {
     await page.locator('input[autocomplete="email"]').fill("trader@example.com");
     await page.locator('input[autocomplete="current-password"]').fill("wrong-password");
     await page.getByRole("button", { name: "Sign in" }).click();
-    await expect(page.getByRole("alert")).toContainText("อีเมลหรือรหัสผ่านไม่ถูกต้อง");
+    await expect(page.locator('main [role="alert"]')).toContainText("อีเมลหรือรหัสผ่านไม่ถูกต้อง");
 
     await page.goto("/luna/login?error=auth_callback_failed", { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("alert")).toContainText("ยืนยันตัวตนไม่สำเร็จ");
+    await expect(page.locator('main [role="alert"]')).toContainText("ยืนยันตัวตนไม่สำเร็จ");
   });
 
   test("historical candle authentication error offers the LUNA sign-in path", async ({ page }) => {
