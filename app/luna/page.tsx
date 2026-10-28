@@ -446,6 +446,19 @@ export default function LunaPortfolioPage() {
   } as const)[runtimeState];
 
   const shadow=shadowStatus?.shadow;
+  const shadowCoverageSymbols = typeof shadow?.verified_latest_bar_symbols === "number"
+    && Number.isFinite(shadow.verified_latest_bar_symbols)
+    ? Math.max(0, Math.floor(shadow.verified_latest_bar_symbols))
+    : null;
+  const shadowCoveragePercent = shadowCoverageSymbols === null
+    ? null
+    : (shadowCoverageSymbols / 930 * 100).toFixed(1);
+  const shadowBarAgeMs = shadow?.latest_bar_end
+    ? Date.now() - Date.parse(shadow.latest_bar_end)
+    : null;
+  const shadowCoverageDetail = shadowCoverageSymbols === null
+    ? "latest-bar verification coverage unavailable"
+    : `last 15m bar verified ${shadowCoverageSymbols}/930 target symbols (${shadowCoveragePercent}%)${shadowBarAgeMs !== null && Number.isFinite(shadowBarAgeMs) && shadowBarAgeMs >= 0 ? ` · bar age ${Math.floor(shadowBarAgeMs / 60000)}m` : ""}`;
   const shadowBlocked=shadow && (shadow.orders_allowed!==true || (shadow.blockers?.length??0)>0);
   const runtimeDetail = runtimeState==="ACTIVE"
     ? strategyMismatch
@@ -517,7 +530,7 @@ export default function LunaPortfolioPage() {
         <div><span>KILL SWITCH</span><strong>{killSwitchDisplay}</strong><small>{killSwitchDetail}</small></div>
         <div><span>RUNTIME</span><strong>{runtimeShort}</strong><small>{!clock ? "waiting for Bangkok clock" : sessionIsToday ? "today's session detected" : "no open session today"}</small></div>
         <div><span>LIVE ORDER GATE</span><strong>{liveExecution ? "READY" : "LOCKED"}</strong><small>broker bridge status</small></div>
-        <div><span>MARKET FEED</span><strong>{realtimeFresh ? "REALTIME STREAM" : realtimeAgeMs!=null ? "STREAM STALE" : marketFeedLabel}</strong><small>{realtimeFresh ? "public WS · " + marketFeedAge : realtimeAgeMs!=null ? "last UI tick · " + marketFeedAge : marketFeedSource + " · " + marketFeedAge}</small></div><div><span>SHADOW ENGINE</span><strong>{shadow ? `${shadow.buy_candidates??0} BUY · ${shadow.sell_candidates??0} SELL` : "SYNCING"}</strong><small>{shadow?.blockers?.length ? shadow.blockers.join(" · ") : "v1.4 observe · no order"}</small></div><div className="live-operating-note"><ShieldCheck size={15}/><span>{marketPhase==="ACTIVE" ? "Market session active — backend re-checks phase immediately before every execution." : "Market execution is locked at this phase; stale signals are shown as HOLD until a fresh in-session signal arrives."}</span></div>
+        <div><span>MARKET FEED</span><strong>{realtimeFresh ? "REALTIME STREAM" : realtimeAgeMs!=null ? "STREAM STALE" : marketFeedLabel}</strong><small>{realtimeFresh ? "public WS · " + marketFeedAge : realtimeAgeMs!=null ? "last UI tick · " + marketFeedAge : marketFeedSource + " · " + marketFeedAge}</small></div><div><span>SHADOW ENGINE</span><strong>{shadow ? `${shadow.buy_candidates??0} BUY · ${shadow.sell_candidates??0} SELL` : "SYNCING"}</strong><small>{shadow?.blockers?.length ? shadow.blockers.join(" · ") : "v1.4 observe · no order"} · {shadowCoverageDetail}</small></div><div className="live-operating-note"><ShieldCheck size={15}/><span>{marketPhase==="ACTIVE" ? "Market session active — backend re-checks phase immediately before every execution." : "Market execution is locked at this phase; stale signals are shown as HOLD until a fresh in-session signal arrives."}</span></div>
       </section>
       <AgentDecisionPanel shadow={shadow} generatedAt={shadowStatus?.generated_at}/>
       {error&&<div className="error-banner"><span>{error}</span><button onClick={load}>Retry</button></div>}
