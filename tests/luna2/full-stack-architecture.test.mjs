@@ -259,9 +259,9 @@ test("LUNA JEX-inspired candles render only validated Settrade OHLC and never ex
 
 test("LUNA UI market-phase mirror keeps the afternoon pre-open locked until 14:30", () => {
   const runtime = read("lib/luna-runtime.ts");
-  assert.match(runtime, /if \\(minutes < 750\\) return "ACTIVE";/);
-  assert.match(runtime, /if \\(minutes < 870\\) return "BREAK";/);
-  assert.match(runtime, /if \\(minutes < 980\\) return "ACTIVE";/);
+  assert.match(runtime, /if \(minutes < 750\) return "ACTIVE";/);
+  assert.match(runtime, /if \(minutes < 870\) return "BREAK";/);
+  assert.match(runtime, /if \(minutes < 980\) return "ACTIVE";/);
   assert.match(runtime, /Execution authority remains backend-controlled/);
 });
 
