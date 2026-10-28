@@ -257,6 +257,15 @@ test("LUNA JEX-inspired candles render only validated Settrade OHLC and never ex
   assert.doesNotMatch(panel, /mockQuotes|synthetic candle|Math\.random/);
 });
 
+test("LUNA dashboard exposes verified latest-bar coverage and bar freshness", () => {
+  const page = read("app/luna/page.tsx");
+  assert.match(page, /verified_latest_bar_symbols/);
+  assert.match(page, /shadowCoverageSymbols \/ 930 \* 100/);
+  assert.match(page, /last 15m bar verified/);
+  assert.match(page, /bar age/);
+  assert.match(page, /shadowCoverageDetail/);
+});
+
 test("LUNA UI market-phase mirror keeps the afternoon pre-open locked until 14:30", () => {
   const runtime = read("lib/luna-runtime.ts");
   assert.match(runtime, /if \(minutes < 750\) return "ACTIVE";/);
