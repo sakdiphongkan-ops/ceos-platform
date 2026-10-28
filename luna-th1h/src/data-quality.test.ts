@@ -23,4 +23,15 @@ assert.equal(assessQuoteQuality({...base,ts:"not-a-date"},now,2000).reason,"INVA
 assert.equal(assessQuoteQuality({...base,ts:"2026-09-24T03:00:01.200Z"},now,2000).reason,"INGEST_TIMESTAMP_IN_FUTURE");
 assert.equal(assessQuoteQuality({...base,bidSize:-1},now,2000).reason,"INVALID_BID_SIZE");
 
+// A recently ingested payload can still contain a stale provider observation.
+// Freshness must therefore be checked against sourceTs as well as the ingest ts.
+const staleSource=assessQuoteQuality({
+  ...base,
+  ts:"2026-09-24T02:59:59.900Z",
+  sourceTs:"2026-09-24T02:59:55.000Z"
+},now,2000);
+assert.equal(staleSource.reason,"STALE_SOURCE_TIMESTAMP");
+assert.equal(staleSource.ageMs,5000);
+assert.equal(staleSource.ok,false);
+
 console.log("data-quality tests passed");
