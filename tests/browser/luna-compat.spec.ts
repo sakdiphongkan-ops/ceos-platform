@@ -12,7 +12,7 @@ test.describe("LUNA cross-browser compatibility", () => {
   });
 
   test("login translates invalid credentials and callback failures into actionable messages", async ({ page }) => {
-    await page.route("**/auth/v1/token?grant_type=password", async (route) => {
+    await page.route(/\/auth\/v1\/token\?grant_type=password/, async (route) => {
       await route.fulfill({
         status: 400,
         contentType: "application/json",
