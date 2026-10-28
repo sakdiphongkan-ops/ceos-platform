@@ -86,3 +86,50 @@ export function summarizeWsChunk(input: {
     errors: input.errors.slice(0, 2),
   };
 }
+
+
+export type PairMismatchReason =
+  | "MISSING_BOOK_BID"
+  | "MISSING_BOOK_ASK"
+  | "BEST_BID_PRICE_MISMATCH"
+  | "BEST_ASK_PRICE_MISMATCH"
+  | "NONPOSITIVE_BOOK_DEPTH";
+
+export type PairMismatchClassification = {
+  reasons: PairMismatchReason[];
+  bidDiffAbs: number | null;
+  askDiffAbs: number | null;
+};
+
+/**
+ * Classifies tick-to-best-book rejection without including actual quote prices.
+ * This function is diagnostic only and never determines whether a quote is accepted.
+ */
+export function classifyTickBookMismatch(input: {
+  tickBid: number;
+  tickAsk: number;
+  bookBid: number | null;
+  bookAsk: number | null;
+  bidSize: number | null;
+  askSize: number | null;
+  tolerance?: number;
+}): PairMismatchClassification | null {
+  const tolerance = input.tolerance ?? 0.000001;
+  const reasons: PairMismatchReason[] = [];
+  const bidDiffAbs = input.bookBid == null ? null : Math.abs(input.tickBid - input.bookBid);
+  const askDiffAbs = input.bookAsk == null ? null : Math.abs(input.tickAsk - input.bookAsk);
+
+  if (input.bookBid == null) reasons.push("MISSING_BOOK_BID");
+  else if (bidDiffAbs !== null && bidDiffAbs > tolerance) reasons.push("BEST_BID_PRICE_MISMATCH");
+
+  if (input.bookAsk == null) reasons.push("MISSING_BOOK_ASK");
+  else if (askDiffAbs !== null && askDiffAbs > tolerance) reasons.push("BEST_ASK_PRICE_MISMATCH");
+
+  if (input.bidSize == null || input.askSize == null || input.bidSize <= 0 || input.askSize <= 0) {
+    reasons.push("NONPOSITIVE_BOOK_DEPTH");
+  }
+
+  return reasons.length
+    ? { reasons, bidDiffAbs, askDiffAbs }
+    : null;
+}

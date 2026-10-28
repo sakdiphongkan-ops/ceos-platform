@@ -3,6 +3,7 @@ import {
   emptyWsChunkMetrics,
   normalizeSubscriptionMode,
   summarizeWsChunk,
+  classifyTickBookMismatch,
   type SubscriptionMode,
 } from "./coverage-diagnostics.ts";
 
@@ -284,14 +285,48 @@ Deno.serve(async (req: Request) => {
     const now=Date.now();
     const valid:any[]=[];
     let stale=0, mismatch=0, pairMissing=0;
+    const mismatchReasonCounts: Record<string, number> = {};
+    const mismatchDiagnostics: Array<{
+      symbol:string;
+      reasons:string[];
+      tick_age_ms:number;
+      book_age_ms:number;
+      event_pair_skew_ms:number;
+      bid_diff_abs:number|null;
+      ask_diff_abs:number|null;
+    }> = [];
     for(const symbol of symbols){
       const t=tickMap.get(symbol), b=bookMap.get(symbol);
       if(!t||!b){pairMissing++;continue;}
       const tickAge=now-t.ts.getTime(), bookAge=now-b.ts.getTime(), skew=Math.abs(t.ts.getTime()-b.ts.getTime());
       if(tickAge < -2_000 || tickAge > MAX_TICK_AGE_MS || bookAge < -2_000 || bookAge > MAX_BOOK_AGE_MS || skew > MAX_PAIR_SKEW_MS){stale++;continue;}
-      const tol=0.000001;
-      if(Math.abs(t.bid-b.best.bid!)>tol || Math.abs(t.ask-b.best.ask!)>tol){mismatch++;continue;}
-      if(b.best.bidSize!<=0 || b.best.askSize!<=0) { mismatch++; continue; }
+      const mismatchClass = classifyTickBookMismatch({
+        tickBid:t.bid,
+        tickAsk:t.ask,
+        bookBid:b.best.bid,
+        bookAsk:b.best.ask,
+        bidSize:b.best.bidSize,
+        askSize:b.best.askSize,
+        tolerance:0.000001,
+      });
+      if(mismatchClass){
+        mismatch++;
+        for(const reason of mismatchClass.reasons){
+          mismatchReasonCounts[reason]=(mismatchReasonCounts[reason]??0)+1;
+        }
+        if(mismatchDiagnostics.length<20){
+          mismatchDiagnostics.push({
+            symbol,
+            reasons:mismatchClass.reasons,
+            tick_age_ms:Math.round(tickAge),
+            book_age_ms:Math.round(bookAge),
+            event_pair_skew_ms:Math.round(skew),
+            bid_diff_abs:mismatchClass.bidDiffAbs===null?null:Number(mismatchClass.bidDiffAbs.toPrecision(8)),
+            ask_diff_abs:mismatchClass.askDiffAbs===null?null:Number(mismatchClass.askDiffAbs.toPrecision(8)),
+          });
+        }
+        continue;
+      }
       const snapshotTs=Math.min(t.ts.getTime(),b.ts.getTime());
       valid.push({
         symbol,ts:new Date(snapshotTs).toISOString(),bid:t.bid,ask:t.ask,last:t.last,
@@ -328,6 +363,9 @@ Deno.serve(async (req: Request) => {
       websocket_connections_subscribe_sent:subscribed,
       frames_received:frames,tick_symbols:tickMap.size,book_symbols:bookMap.size,
       valid_two_sided_matches:valid.length,missing_tick_or_book:pairMissing,stale_pairs:stale,mismatch_pairs:mismatch,
+      mismatch_reason_counts:mismatchReasonCounts,
+      mismatch_diagnostics:mismatchDiagnostics,
+      mismatch_diagnostics_truncated:mismatch>mismatchDiagnostics.length,
       chunk_diagnostics:chunkDiagnostics,
       accepted_batches:accepted,rejected_batches:rejected,errors:errors.slice(0,8),generated_at:new Date().toISOString()
     });

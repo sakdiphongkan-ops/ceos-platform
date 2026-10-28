@@ -3,6 +3,7 @@ import {
   emptyWsChunkMetrics,
   normalizeSubscriptionMode,
   summarizeWsChunk,
+  classifyTickBookMismatch,
 } from "./coverage-diagnostics.ts";
 
 Deno.test("subscription mode defaults to the current dual-subscription behavior", () => {
@@ -61,4 +62,46 @@ Deno.test("message-only mode is reported as not using a query-string subscriptio
   });
   assertEquals(summary.query, false);
   assertEquals(summary.subscribe, true);
+});
+
+
+Deno.test("matching tick and book with positive depth has no mismatch", () => {
+  assertEquals(classifyTickBookMismatch({
+    tickBid: 10,
+    tickAsk: 10.1,
+    bookBid: 10,
+    bookAsk: 10.1,
+    bidSize: 100,
+    askSize: 120,
+  }), null);
+});
+
+Deno.test("best bid and ask mismatches are classified without exposing prices", () => {
+  const result = classifyTickBookMismatch({
+    tickBid: 10,
+    tickAsk: 10.1,
+    bookBid: 9.99,
+    bookAsk: 10.11,
+    bidSize: 100,
+    askSize: 120,
+  });
+  assert(result !== null);
+  assertEquals(result.reasons, ["BEST_BID_PRICE_MISMATCH", "BEST_ASK_PRICE_MISMATCH"]);
+  assert(Math.abs((result.bidDiffAbs ?? 0) - 0.01) < 1e-12);
+  assert(Math.abs((result.askDiffAbs ?? 0) - 0.01) < 1e-12);
+});
+
+Deno.test("missing book sides and nonpositive depth are classified", () => {
+  const result = classifyTickBookMismatch({
+    tickBid: 10,
+    tickAsk: 10.1,
+    bookBid: null,
+    bookAsk: 10.1,
+    bidSize: null,
+    askSize: 120,
+  });
+  assert(result !== null);
+  assertEquals(result.reasons, ["MISSING_BOOK_BID", "NONPOSITIVE_BOOK_DEPTH"]);
+  assertEquals(result.bidDiffAbs, null);
+  assertEquals(result.askDiffAbs, 0);
 });
