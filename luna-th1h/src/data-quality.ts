@@ -8,6 +8,7 @@ export type QuoteQualityReason =
   | "INVALID_SOURCE_TIMESTAMP"
   | "SOURCE_TIMESTAMP_IN_FUTURE"
   | "SOURCE_TIMESTAMP_AFTER_INGEST"
+  | "STALE_SOURCE_TIMESTAMP"
   | "STALE_QUOTE"
   | "NO_USABLE_PRICE"
   | "INVALID_BID"
@@ -52,6 +53,12 @@ export function assessQuoteQuality(
     }
     sourceToIngestMs=ingestMs-sourceMs;
     if(sourceToIngestMs<0) return {ok:false,reason:"SOURCE_TIMESTAMP_AFTER_INGEST",ageMs,sourceToIngestMs};
+
+    // Ingestion freshness is insufficient when a provider resends an old quote.
+    const sourceAgeMs=Math.max(0,nowMs-sourceMs);
+    if(sourceAgeMs>maxAgeMs){
+      return {ok:false,reason:"STALE_SOURCE_TIMESTAMP",ageMs:sourceAgeMs,sourceToIngestMs};
+    }
   }
 
   if(quote.last!=null && !isPositiveFinite(quote.last)) return {ok:false,reason:"NO_USABLE_PRICE",ageMs,sourceToIngestMs};

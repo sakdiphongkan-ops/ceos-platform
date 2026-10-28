@@ -13,6 +13,20 @@ on:
       - "luna-th1h/src/telemetry-queue.ts"
       - "luna-th1h/package.json"
       - ".github/workflows/luna-execution-gate.yml"
+  pull_request:
+    branches: [master]
+    paths:
+      - ".agents/skills/**"
+      - "luna-th1h/AGENTS.md"
+      - "luna-th1h/src/execution.ts"
+      - "luna-th1h/src/execution-price-only-paper.test.ts"
+      - "luna-th1h/src/config.ts"
+      - "luna-th1h/src/index.ts"
+      - "luna-th1h/src/data-quality.ts"
+      - "luna-th1h/src/data-quality.test.ts"
+      - "luna-th1h/src/telemetry-queue.ts"
+      - "luna-th1h/package.json"
+      - ".github/workflows/luna-execution-gate.yml"
 
 jobs:
   execution-gate:
