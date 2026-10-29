@@ -40,6 +40,51 @@ test.describe("LUNA cross-browser compatibility", () => {
     await expect(page.getByText(" OR ", { exact: true })).toHaveCount(0);
   });
 
+  test("email sign-up returns through the LUNA callback after confirmation", async ({ page }) => {
+    let redirectTo: string | null = null;
+    await page.route("**/auth/v1/signup**", async (route) => {
+      redirectTo = new URL(route.request().url()).searchParams.get("redirect_to");
+      const now = "2026-10-29T00:00:00.000Z";
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: "test-user-id",
+          aud: "authenticated",
+          role: "authenticated",
+          email: "trader@example.com",
+          app_metadata: { provider: "email", providers: ["email"] },
+          user_metadata: {},
+          identities: [{
+            identity_id: "test-user-identity",
+            id: "trader@example.com",
+            user_id: "test-user-id",
+            identity_data: { email: "trader@example.com", sub: "test-user-id" },
+            provider: "email",
+            created_at: now,
+            updated_at: now,
+          }],
+          created_at: now,
+          updated_at: now,
+        }),
+      });
+    });
+
+    await page.goto("/luna/login?mode=signup&next=%2Fluna", { waitUntil: "domcontentloaded" });
+    const appOrigin = new URL(page.url()).origin;
+    await expect(page.getByRole("heading", { name: "Create your account." })).toBeVisible();
+    await page.locator('input[autocomplete="email"]').fill("trader@example.com");
+    await page.locator('input[autocomplete="new-password"]').fill("valid-test-password");
+    await page.getByRole("button", { name: "Create account" }).click();
+
+    await expect(page.locator('main [role="status"]')).toContainText("กรุณาตรวจสอบอีเมล");
+    expect(redirectTo).not.toBeNull();
+    const redirect = new URL(redirectTo!);
+    expect(redirect.origin).toBe(appOrigin);
+    expect(redirect.pathname).toBe("/auth/callback");
+    expect(redirect.searchParams.get("next")).toBe("/luna");
+  });
+
   test("historical candle authentication error offers the LUNA sign-in path", async ({ page }) => {
     await page.route("**/api/luna/market-bars**", async (route) => {
       await route.fulfill({
@@ -52,6 +97,9 @@ test.describe("LUNA cross-browser compatibility", () => {
     const signIn = page.getByRole("link", { name: "Sign in to LUNA" });
     await expect(signIn).toBeVisible();
     await expect(signIn).toHaveAttribute("href", "/luna/login?next=%2Fluna");
+    const createAccount = page.getByRole("link", { name: "Create a LUNA account" });
+    await expect(createAccount).toBeVisible();
+    await expect(createAccount).toHaveAttribute("href", "/luna/login?mode=signup&next=%2Fluna");
   });
 
   test("login controls remain touch-friendly and keyboard-safe", async ({ page }) => {

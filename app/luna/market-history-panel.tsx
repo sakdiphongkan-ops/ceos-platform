@@ -18,7 +18,7 @@ type Interval = (typeof INTERVALS)[number]["value"];
 function errorText(code: string | undefined): string {
   switch (code) {
     case "AUTHENTICATION_REQUIRED":
-      return "Your LUNA session is not signed in. Sign in to LUNA before requesting historical bars from the authorized SETTRADE gateway.";
+      return "Sign in or create a LUNA account to load source-verified historical bars from the authorized SETTRADE gateway. New accounts must confirm their email first.";
     case "MARKET_HISTORY_NOT_CONFIGURED":
       return "The historical SETTRADE gateway is not configured in this environment.";
     case "MARKET_HISTORY_UPSTREAM_UNAVAILABLE":
@@ -181,12 +181,20 @@ export default function MarketHistoryPanel() {
             <strong>Verified candles not available</strong>
             <span>{error}</span>
             {error === errorText("AUTHENTICATION_REQUIRED") && (
-              <Link
-                href={"/luna/login?next=" + encodeURIComponent("/luna")}
-                className="inline-flex min-h-10 w-fit items-center justify-center rounded-xl border border-[#d8d8d0] bg-white px-4 text-sm font-medium text-[#33362f] transition hover:bg-[#f7f7f4] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#616d62]"
-              >
-                Sign in to LUNA
-              </Link>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Link
+                  href={"/luna/login?next=" + encodeURIComponent("/luna")}
+                  className="inline-flex min-h-10 w-fit items-center justify-center rounded-xl border border-[#d8d8d0] bg-white px-4 text-sm font-medium text-[#33362f] transition hover:bg-[#f7f7f4] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#616d62]"
+                >
+                  Sign in to LUNA
+                </Link>
+                <Link
+                  href={"/luna/login?mode=signup&next=" + encodeURIComponent("/luna")}
+                  className="inline-flex min-h-10 w-fit items-center justify-center rounded-xl border border-[#d8d8d0] bg-[#f7f7f4] px-4 text-sm font-medium text-[#33362f] transition hover:bg-[#efefe8] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#616d62]"
+                >
+                  Create a LUNA account
+                </Link>
+              </div>
             )}
           </div>
           <button type="button" onClick={() => setRetryToken((value) => value + 1)} disabled={loading}>Retry</button>
