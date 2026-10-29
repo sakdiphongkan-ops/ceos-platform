@@ -71,6 +71,7 @@ test.describe("LUNA cross-browser compatibility", () => {
     });
 
     await page.goto("/luna/login?mode=signup&next=%2Fluna", { waitUntil: "domcontentloaded" });
+    const appOrigin = new URL(page.url()).origin;
     await expect(page.getByRole("heading", { name: "Create your account." })).toBeVisible();
     await page.locator('input[autocomplete="email"]').fill("trader@example.com");
     await page.locator('input[autocomplete="new-password"]').fill("valid-test-password");
@@ -79,7 +80,7 @@ test.describe("LUNA cross-browser compatibility", () => {
     await expect(page.locator('main [role="status"]')).toContainText("กรุณาตรวจสอบอีเมล");
     expect(redirectTo).not.toBeNull();
     const redirect = new URL(redirectTo!);
-    expect(redirect.origin).toBe("http://127.0.0.1:3000");
+    expect(redirect.origin).toBe(appOrigin);
     expect(redirect.pathname).toBe("/auth/callback");
     expect(redirect.searchParams.get("next")).toBe("/luna");
   });
