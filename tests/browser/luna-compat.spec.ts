@@ -29,26 +29,15 @@ test.describe("LUNA cross-browser compatibility", () => {
     await expect(page.locator('main [role="alert"]')).toContainText("ยืนยันตัวตนไม่สำเร็จ");
   });
 
-  test("Google OAuth provider configuration errors stay on login with an email fallback", async ({ page }) => {
-    await page.route("**/auth/v1/authorize?provider=google**", async (route) => {
-      await route.fulfill({
-        status: 400,
-        contentType: "application/json",
-        body: JSON.stringify({
-          code: 400,
-          error_code: "validation_failed",
-          msg: "Unsupported provider: provider is not enabled",
-        }),
-      });
-    });
-
+  test("login uses email/password only while Google sign-in is temporarily removed", async ({ page }) => {
     await page.goto("/luna/login", { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: "Continue with Google" }).click();
 
-    await expect(page.locator("main [role=alert]")).toContainText("Google Login ยังไม่ได้เปิดใช้งาน");
-    await expect(page).toHaveURL(/\/luna\/login/);
-    await expect(page.getByLabel("Email")).toBeVisible();
+    await expect(page.locator('input[autocomplete="email"]')).toBeVisible();
+    await expect(page.locator('input[autocomplete="current-password"]')).toBeVisible();
+    await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Create a new LUNA account" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Google/i })).toHaveCount(0);
+    await expect(page.getByText(" OR ", { exact: true })).toHaveCount(0);
   });
 
   test("historical candle authentication error offers the LUNA sign-in path", async ({ page }) => {
