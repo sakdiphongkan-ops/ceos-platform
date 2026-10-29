@@ -21,9 +21,6 @@ function friendlyAuthError(value: unknown): string {
   if (normalized.includes("password should be at least") || normalized.includes("password is too short")) {
     return "รหัสผ่านสั้นเกินไป กรุณาตรวจสอบข้อกำหนดรหัสผ่านแล้วลองอีกครั้ง";
   }
-  if (normalized.includes("unsupported provider") || normalized.includes("provider is not enabled")) {
-    return "ขณะนี้ Google Login ยังไม่ได้เปิดใช้งานในระบบ กรุณาใช้ Email/Password หรือสร้างบัญชีด้วยอีเมลไปก่อน ผู้ดูแลระบบต้องตั้งค่า Google OAuth ใน Supabase ก่อนจึงจะใช้ปุ่มนี้ได้";
-  }
   if (normalized.includes("too many requests") || normalized.includes("rate limit")) {
     return "มีการลองเข้าสู่ระบบหลายครั้งเกินไป กรุณารอสักครู่แล้วลองใหม่";
   }
@@ -117,51 +114,6 @@ export default function LunaLoginPage() {
     }
   }
 
-  async function signInWithGoogle() {
-    setBusy(true);
-    setError("");
-    try {
-      const supabase = createClient();
-      const { data, error: authError } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: window.location.origin + "/auth/callback?next=" + encodeURIComponent(next),
-          // Check provider readiness before leaving the login page so configuration
-          // errors can be shown here instead of as a raw Supabase JSON document.
-          skipBrowserRedirect: true,
-        },
-      });
-      if (authError) throw authError;
-      if (!data.url) throw new Error("Google authorization URL was not returned");
-
-      const probe = await fetch(data.url, { method: "GET", redirect: "manual" });
-      if (probe.status >= 400) {
-        let providerMessage = "";
-        try {
-          const payload = await probe.json() as { msg?: string; message?: string; error_description?: string };
-          providerMessage = payload.msg ?? payload.message ?? payload.error_description ?? "";
-        } catch {
-          // The status code below still produces a useful fallback.
-        }
-        throw new Error(providerMessage || `Google authorization could not start (HTTP ${probe.status})`);
-      }
-
-      // Cross-origin manual redirects are opaque in browsers (status 0).
-      // Only navigate once the provider endpoint has accepted the request.
-      if (probe.type === "opaqueredirect" || probe.status === 0 || (probe.status >= 300 && probe.status < 400)) {
-        window.location.assign(data.url);
-        return;
-      }
-      if (probe.ok) {
-        window.location.assign(data.url);
-        return;
-      }
-      throw new Error(`Google authorization could not start (HTTP ${probe.status})`);
-    } catch (e) {
-      setError(friendlyAuthError(e));
-      setBusy(false);
-    }
-  }
 
   return (
     <main className="luna-login-page min-h-[calc(100vh-4rem)] min-h-[calc(100dvh-4rem)] bg-[#f7f7f4] px-5 py-12 sm:px-8">
@@ -206,15 +158,6 @@ export default function LunaLoginPage() {
               {busy ? "กำลังดำเนินการ…" : mode === "signin" ? "Sign in" : "Create account"}
             </button>
           </form>
-
-          <div className="my-5 flex items-center gap-3 text-[11px] text-[#999a93]">
-            <span className="h-px flex-1 bg-[#e8e8e1]" /> OR <span className="h-px flex-1 bg-[#e8e8e1]" />
-          </div>
-
-          <button onClick={signInWithGoogle} disabled={busy} style={{ minHeight: 48 }}
-            className="h-12 w-full rounded-2xl border border-[#d8d8d0] bg-white text-sm font-medium disabled:opacity-50">
-            Continue with Google
-          </button>
 
           <button onClick={()=>{setMode(mode === "signin" ? "signup" : "signin");setError("");setMessage("");}} style={{ minHeight: 44 }}
             className="mt-5 min-h-11 w-full rounded-xl px-3 py-2 text-sm text-[#55574f] underline underline-offset-4">
