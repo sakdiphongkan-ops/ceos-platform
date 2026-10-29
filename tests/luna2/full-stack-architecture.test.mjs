@@ -95,7 +95,8 @@ test("9. Auth/session/RBAC: guest boundary and logout contracts are explicit", (
   assert.match(middleware, /\/luna\/account/);
   assert.match(middleware, /\/luna\/login/);
   assert.match(login, /signInWithPassword/);
-  assert.match(login, /signInWithOAuth/);
+  assert.match(login, /auth\.signUp\(/);
+  assert.doesNotMatch(login, /signInWithOAuth|Continue with Google|provider:\s*["']google["']/i);
   assert.match(account, /auth\.signOut\(\{ scope: "global" \}\)/);
   assert.match(me, /authenticated:\s*false/);
   assert.match(rbac, /GUEST.*USER.*ADMIN/s);
