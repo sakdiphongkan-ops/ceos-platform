@@ -54,6 +54,7 @@ export default function LunaLoginPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    if (params.get("mode") === "signup") setMode("signup");
     const callbackCode = params.get("error");
     const callbackDetail = params.get("error_description") ?? "";
     if (callbackCode) {
@@ -90,7 +91,18 @@ export default function LunaLoginPage() {
       const supabase = createClient();
       const result = mode === "signin"
         ? await supabase.auth.signInWithPassword({ email, password })
-        : await supabase.auth.signUp({ email, password });
+        : await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+              // Email confirmation must return through the server callback so
+              // PKCE code exchange persists the LUNA session cookie before the dashboard loads.
+              emailRedirectTo: new URL(
+                "/auth/callback?next=" + encodeURIComponent(next),
+                window.location.origin,
+              ).toString(),
+            },
+          });
 
       if (result.error) throw result.error;
 
