@@ -1,11 +1,26 @@
 import type {Quote} from "../types.js";
+import {parseConfigBoolean} from "../config.js";
 import {mockQuotes} from "./mock.js";
 import {setMarketplaceQuotes} from "./set-marketplace.js";
 
+export function boundedPositiveNumber(value:unknown,fallback:number,minimum:number,maximum:number):number{
+  if(typeof value!=="number" && typeof value!=="string") return fallback;
+  if(typeof value==="string" && value.trim()==="") return fallback;
+  const parsed=Number(value);
+  return Number.isFinite(parsed) && parsed>=minimum && parsed<=maximum ? parsed : fallback;
+}
+
 const PUBLIC_FALLBACK_MAX_QUOTE_AGE_MS=Math.max(
   5_000,
-  Number(process.env.LUNA_PUBLIC_FALLBACK_MAX_QUOTE_AGE_MS ?? 8_000)
+  boundedPositiveNumber(process.env.LUNA_PUBLIC_FALLBACK_MAX_QUOTE_AGE_MS,8_000,1,60_000)
 );
+
+export function requireVerifiedBookFromEnvironment(value:unknown):boolean{
+  // Only explicitly configured false may disable this gate. Missing or
+  // malformed values preserve the safe verified-book requirement.
+  if(typeof value!=="string") return true;
+  return parseConfigBoolean(value,true);
+}
 
 const NORMALIZATION_REJECTIONS:Record<string,number>={
   missing_fields:0,
@@ -14,7 +29,17 @@ const NORMALIZATION_REJECTIONS:Record<string,number>={
   invalid_timestamp:0,
   future_timestamp:0,
   stale:0,
+  invalid_price:0,
+  invalid_book:0,
 };
+
+function nullableFiniteNumber(value:unknown):number|null{
+  if(value===null || value===undefined) return null;
+  if(typeof value==="string" && value.trim()==="") return null;
+  if(typeof value!=="number" && typeof value!=="string") return null;
+  const n=Number(value);
+  return Number.isFinite(n)?n:null;
+}
 
 export function marketQuotes(provider:string):AsyncGenerator<Quote>{
   switch(provider){
@@ -29,36 +54,84 @@ export function marketQuotes(provider:string):AsyncGenerator<Quote>{
   }
 }
 
-function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVerifiedBook:boolean, priceOnlyFallback:boolean, paperMode:boolean, liveTradingArmed:boolean):Quote|null{
-  if(!raw?.symbol || !raw?.ts){
+export function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVerifiedBook:boolean, priceOnlyFallback:boolean, paperMode:boolean, liveTradingArmed:boolean, nowMs:number=Date.now()):Quote|null{
+  const effectiveMaxQuoteAgeMs=boundedPositiveNumber(maxQuoteAgeMs,2_000,1,60_000);
+  if(typeof raw?.symbol!=="string" || !raw.symbol.trim()
+    || typeof raw?.ts!=="string" || !raw.ts.trim()){
     NORMALIZATION_REJECTIONS.missing_fields++;
     return null;
   }
+  if(raw.source_ts!==undefined && raw.source_ts!==null
+    && (typeof raw.source_ts!=="string" || !raw.source_ts.trim())){
+    NORMALIZATION_REJECTIONS.invalid_timestamp++;
+    return null;
+  }
   const q:Quote = {
-    symbol:String(raw.symbol),
-    ts:String(raw.ts),
-    sourceTs: raw.source_ts ? String(raw.source_ts) : undefined,
-    bid:Number.isFinite(Number(raw.bid))?Number(raw.bid):null,
-    ask:Number.isFinite(Number(raw.ask))?Number(raw.ask):null,
-    last:Number.isFinite(Number(raw.last))?Number(raw.last):null,
-    bidSize:Number.isFinite(Number(raw.bid_size))?Number(raw.bid_size):null,
-    askSize:Number.isFinite(Number(raw.ask_size))?Number(raw.ask_size):null,
-    bidLevels:Array.isArray(raw.bid_levels)?raw.bid_levels.map((x:any)=>({price:Number(x.price),size:Number(x.size)})).filter((x:any)=>Number.isFinite(x.price)&&x.price>0&&Number.isFinite(x.size)&&x.size>0):undefined,
-    askLevels:Array.isArray(raw.ask_levels)?raw.ask_levels.map((x:any)=>({price:Number(x.price),size:Number(x.size)})).filter((x:any)=>Number.isFinite(x.price)&&x.price>0&&Number.isFinite(x.size)&&x.size>0):undefined,
+    symbol:raw.symbol.trim().toUpperCase(),
+    ts:raw.ts,
+    sourceTs:typeof raw.source_ts==="string" && raw.source_ts.trim() ? raw.source_ts : undefined,
+    bookReceivedTs:typeof raw.book_received_ts==="string" && raw.book_received_ts.trim() ? raw.book_received_ts : undefined,
+    bookSourceTs:typeof raw.book_source_ts==="string" && raw.book_source_ts.trim() ? raw.book_source_ts : undefined,
+    bid:nullableFiniteNumber(raw.bid),
+    ask:nullableFiniteNumber(raw.ask),
+    last:nullableFiniteNumber(raw.last),
+    bidSize:nullableFiniteNumber(raw.bid_size),
+    askSize:nullableFiniteNumber(raw.ask_size),
+    bidLevels:Array.isArray(raw.bid_levels)?raw.bid_levels
+      .filter((x:any)=>x!==null && typeof x==="object" && !Array.isArray(x))
+      .map((x:any)=>({price:nullableFiniteNumber(x.price),size:nullableFiniteNumber(x.size)}))
+      .filter((x:any):x is {price:number;size:number}=>x.price!==null&&x.price>0&&x.size!==null&&x.size>0):undefined,
+    askLevels:Array.isArray(raw.ask_levels)?raw.ask_levels
+      .filter((x:any)=>x!==null && typeof x==="object" && !Array.isArray(x))
+      .map((x:any)=>({price:nullableFiniteNumber(x.price),size:nullableFiniteNumber(x.size)}))
+      .filter((x:any):x is {price:number;size:number}=>x.price!==null&&x.price>0&&x.size!==null&&x.size>0):undefined,
+    depthComplete:raw.depth_complete===true || raw.depthComplete===true,
     source:String(raw.source ?? "unknown-market-data"),
     dataQuality:raw.data_quality ? String(raw.data_quality) : undefined
   };
-  if(q.last===null && q.bid===null && q.ask===null){
-    NORMALIZATION_REJECTIONS.no_price++;
-    return null;
-  }
-
   const sourceName=String(q.source??"").toLowerCase();
   const allowPublicPriceOnly =
     priceOnlyFallback
     && paperMode
     && !liveTradingArmed
-    && sourceName.includes("tradingview-public-screener");
+    && sourceName==="tradingview-public-screener";
+
+  // A last price must be strictly positive. For normal feeds, validate any
+  // supplied top-of-book fields even when callers disable the verified-book gate.
+  // Public price-only fallback intentionally discards book fields below.
+  if(q.last!==null && q.last<=0){
+    NORMALIZATION_REJECTIONS.invalid_price++;
+    return null;
+  }
+  if(!allowPublicPriceOnly){
+    // Distinguish a missing optional field from a supplied value that cannot be
+    // parsed as a finite number. Invalid values must not silently become "missing"
+    // when a caller has disabled the verified-book gate.
+    const malformedNumeric=(value:unknown)=>
+      value!==null && value!==undefined
+      && !(typeof value==="string" && value.trim()==="")
+      && nullableFiniteNumber(value)===null;
+    if(malformedNumeric(raw.last) || malformedNumeric(raw.bid) || malformedNumeric(raw.ask)){
+      NORMALIZATION_REJECTIONS.invalid_price++;
+      return null;
+    }
+    if(malformedNumeric(raw.bid_size) || malformedNumeric(raw.ask_size)){
+      NORMALIZATION_REJECTIONS.invalid_book++;
+      return null;
+    }
+    if((q.bid!==null && q.bid<=0) || (q.ask!==null && q.ask<=0)){
+      NORMALIZATION_REJECTIONS.invalid_price++;
+      return null;
+    }
+    if(q.bid!==null && q.ask!==null && q.ask<q.bid){
+      NORMALIZATION_REJECTIONS.invalid_book++;
+      return null;
+    }
+    if((q.bidSize!==null && q.bidSize<=0) || (q.askSize!==null && q.askSize<=0)){
+      NORMALIZATION_REJECTIONS.invalid_book++;
+      return null;
+    }
+  }
 
   if(allowPublicPriceOnly){
     q.bid=null;
@@ -67,39 +140,101 @@ function normalizeGatewayQuote(raw:any, maxQuoteAgeMs:number, requireVerifiedBoo
     q.askSize=null;
     q.bidLevels=undefined;
     q.askLevels=undefined;
+    q.depthComplete=false;
   }
 
+  // Check usable price after applying any intentionally destructive fallback
+  // normalization so a price-less public quote cannot be emitted accidentally.
+  if(q.last===null && q.bid===null && q.ask===null){
+    NORMALIZATION_REJECTIONS.no_price++;
+    return null;
+  }
+
+  const quoteFreshnessLimit=allowPublicPriceOnly ? PUBLIC_FALLBACK_MAX_QUOTE_AGE_MS : effectiveMaxQuoteAgeMs;
   if(requireVerifiedBook){
+    const bookReceivedMs=q.bookReceivedTs ? Date.parse(q.bookReceivedTs) : Number.NaN;
+    // Prefer an actual book/source timestamp, then the quote's actual source timestamp.
+    // Only the exact authenticated Settrade realtime stream may fall back to local
+    // receive time when the provider does not publish a source timestamp.
+    const bookSourceMs=q.bookSourceTs
+      ? Date.parse(q.bookSourceTs)
+      : q.sourceTs ? Date.parse(q.sourceTs) : Number.NaN;
+    const bookReceivedAge=nowMs-bookReceivedMs;
+    const bookSourceAge=nowMs-bookSourceMs;
+    const receivedFresh=Number.isFinite(bookReceivedMs)
+      && bookReceivedAge>=0 && bookReceivedAge<=quoteFreshnessLimit;
+    const sourceFresh=Number.isFinite(bookSourceMs)
+      ? bookSourceAge>=0 && bookSourceAge<=quoteFreshnessLimit
+      : sourceName==="settrade-open-api-realtime" && !q.bookSourceTs && !q.sourceTs;
+    const bookFresh=receivedFresh && sourceFresh;
+    const quality=String(q.dataQuality??"").trim().toLowerCase().replace(/[\s-]+/g,"_");
+    const verifiedQuality=["verified","verified_book","book_verified","verified_execution_book"].includes(quality);
+    const explicitlyUnverified=quality.includes("unverified") || quality==="not_verified" || quality.startsWith("not_");
+    const authenticatedRealtimeSource =
+      sourceName==="settrade-open-api-realtime"
+      || sourceName==="set-market-data-api-realtime";
+    const explicitVerification =
+      raw?.verified_book===true
+      || raw?.verifiedBook===true
+      || raw?.verified===true
+      || verifiedQuality
+      // Only exact, configured authenticated realtime source identifiers bypass
+      // a separately-issued verification marker. Do not trust source-name prefixes.
+      || authenticatedRealtimeSource;
     const verifiedBook =
-      Number.isFinite(Number(q.bid))
-      && Number.isFinite(Number(q.ask))
-      && Number(q.bid)>0
-      && Number(q.ask)>=Number(q.bid)
-      && Number(q.bidSize)>0
-      && Number(q.askSize)>0
-      && !String(q.dataQuality??"").toLowerCase().includes("unverified");
+      typeof q.bid==="number" && Number.isFinite(q.bid) && q.bid>0
+      && typeof q.ask==="number" && Number.isFinite(q.ask) && q.ask>0
+      && q.ask>=q.bid
+      && typeof q.bidSize==="number" && Number.isFinite(q.bidSize) && q.bidSize>0
+      && typeof q.askSize==="number" && Number.isFinite(q.askSize) && q.askSize>0
+      && bookFresh
+      && explicitVerification
+      && !explicitlyUnverified;
     if(!verifiedBook && !allowPublicPriceOnly){
       NORMALIZATION_REJECTIONS.unverified_book++;
       return null;
     }
   }
 
-  const freshnessTs=q.sourceTs ?? q.ts;
-  const parsedTs=Date.parse(freshnessTs);
-  if(!Number.isFinite(parsedTs)){
+  const quoteTsMs=Date.parse(q.ts);
+  if(!Number.isFinite(quoteTsMs)){
     NORMALIZATION_REJECTIONS.invalid_timestamp++;
     return null;
   }
-  const quoteAgeMs=Date.now()-parsedTs;
-  if(quoteAgeMs<0){
+  const freshnessTs=q.sourceTs ?? q.ts;
+  const sourceTsMs=Date.parse(freshnessTs);
+  if(!Number.isFinite(sourceTsMs)){
+    NORMALIZATION_REJECTIONS.invalid_timestamp++;
+    return null;
+  }
+  const quoteAgeMs=nowMs-quoteTsMs;
+  const sourceAgeMs=nowMs-sourceTsMs;
+  if(quoteAgeMs<0 || sourceAgeMs<0){
     NORMALIZATION_REJECTIONS.future_timestamp++;
     return null;
   }
-  if(quoteAgeMs>(allowPublicPriceOnly ? PUBLIC_FALLBACK_MAX_QUOTE_AGE_MS : maxQuoteAgeMs)){
+  const effectiveFreshnessLimit=allowPublicPriceOnly ? PUBLIC_FALLBACK_MAX_QUOTE_AGE_MS : effectiveMaxQuoteAgeMs;
+  if(quoteAgeMs>effectiveFreshnessLimit || sourceAgeMs>effectiveFreshnessLimit){
     NORMALIZATION_REJECTIONS.stale++;
     return null;
   }
   return q;
+}
+
+export function shouldEmitQuote(previous:Map<string,string>,q:Quote):boolean{
+  // Receipt timestamps advance on every poll and must not defeat deduplication.
+  // Preserve actual source-time changes, while treating an absent provider source
+  // timestamp as absent rather than substituting the local receipt time.
+  const sourceTimestamp=q.sourceTs??null;
+  const bookSourceTimestamp=q.bookSourceTs??null;
+  const signature=JSON.stringify([
+    sourceTimestamp,bookSourceTimestamp,q.bid,q.ask,q.last,q.bidSize,q.askSize,
+    q.bidLevels??null,q.askLevels??null,q.depthComplete??null,
+    q.source,q.dataQuality??null
+  ]);
+  if(previous.get(q.symbol)===signature) return false;
+  previous.set(q.symbol,signature);
+  return true;
 }
 
 async function fetchGatewaySnapshot(url:string,key:string,timeoutMs:number){
@@ -237,8 +372,8 @@ async function* gatewayWebSocketMessages(streamUrl:string,key:string):AsyncGener
 async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
   const url = process.env.LUNA_MARKET_GATEWAY_URL ?? "";
   const key = process.env.LUNA_MARKET_GATEWAY_KEY ?? "";
-  const pollMs = Math.max(50,Number(process.env.LUNA_MARKET_GATEWAY_POLL_MS ?? 100));
-  const timeoutMs = Math.max(200,Number(process.env.LUNA_MARKET_GATEWAY_TIMEOUT_MS ?? 750));
+  const pollMs = boundedPositiveNumber(process.env.LUNA_MARKET_GATEWAY_POLL_MS,100,50,60_000);
+  const timeoutMs = boundedPositiveNumber(process.env.LUNA_MARKET_GATEWAY_TIMEOUT_MS,750,200,60_000);
   const streamEnabled=String(process.env.LUNA_MARKET_GATEWAY_STREAM_ENABLED ?? "true").toLowerCase()==="true";
   const configuredStreamUrl=String(process.env.LUNA_MARKET_GATEWAY_STREAM_URL ?? "").trim();
   const streamUrl = configuredStreamUrl || url.replace(/^http:/i,"ws:").replace(/^https:/i,"wss:")+"/quotes/stream";
@@ -247,14 +382,14 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
   const previous = new Map<string,string>();
   let lastGatewayCount=-1;
   let emptyBackoffMs=Math.max(500,Math.min(5000,pollMs));
-  const requireVerifiedBook=String(process.env.LUNA_REQUIRE_VERIFIED_BOOK ?? "true").toLowerCase()==="true";
+  const requireVerifiedBook=requireVerifiedBookFromEnvironment(process.env.LUNA_REQUIRE_VERIFIED_BOOK);
   const paperMode=String(process.env.LUNA_MODE ?? "paper").toLowerCase()==="paper";
   const liveTradingArmed=String(process.env.LIVE_TRADING_ARMED ?? "false").toLowerCase()==="true";
   const priceOnlyFallback=String(
     process.env.LUNA_PRICE_ONLY_FALLBACK
       ?? (paperMode && !liveTradingArmed ? "true" : "false")
   ).toLowerCase()==="true";
-  const maxQuoteAgeMs=Number(process.env.LUNA_MAX_QUOTE_AGE_MS ?? 2000);
+  const maxQuoteAgeMs=boundedPositiveNumber(process.env.LUNA_MAX_QUOTE_AGE_MS,2_000,1,60_000);
   let acceptedCount=0;
   let rejectedCount=0;
   let lastDiagnosticsAt=0;
@@ -278,9 +413,7 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
             liveTradingArmed
           );
           if(!q) continue;
-          const sig=JSON.stringify([q.ts,q.bid,q.ask,q.last,q.bidSize,q.askSize]);
-          if(previous.get(q.symbol)===sig) continue;
-          previous.set(q.symbol,sig);
+          if(!shouldEmitQuote(previous,q)) continue;
           yield q;
         }
       }catch(err){
@@ -368,9 +501,7 @@ async function* settradeGatewayQuotes():AsyncGenerator<Quote>{
         continue;
       }
       acceptedCount++;
-      const sig=JSON.stringify([q.ts,q.bid,q.ask,q.last,q.bidSize,q.askSize]);
-      if(previous.get(q.symbol)===sig) continue;
-      previous.set(q.symbol,sig);
+      if(!shouldEmitQuote(previous,q)) continue;
       yield q;
     }
     if(Date.now()-lastDiagnosticsAt>=10_000){

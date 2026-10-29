@@ -3,7 +3,14 @@ import type {Quote} from "../types.js";
 const BASE_URL=process.env.SET_MARKETPLACE_BASE_URL ?? "https://marketplace.set.or.th/api/public/realtime-data/stock";
 const API_KEY=process.env.SET_MARKETPLACE_API_KEY ?? "";
 const MARKETS=process.env.SET_MARKETPLACE_MARKETS ?? "SET,mai";
-const POLL_MS=Math.max(500,Number(process.env.SET_MARKETPLACE_POLL_MS ?? 1000));
+const pollCandidate=Number(process.env.SET_MARKETPLACE_POLL_MS ?? 1000);
+const POLL_MS=Number.isFinite(pollCandidate) && pollCandidate>=500 && pollCandidate<=60_000
+  ? pollCandidate
+  : 1000;
+const ageCandidate=Number(process.env.SET_MARKETPLACE_MAX_QUOTE_AGE_MS ?? 8_000);
+const MAX_QUOTE_AGE_MS=Number.isFinite(ageCandidate) && ageCandidate>=1_000 && ageCandidate<=60_000
+  ? ageCandidate
+  : 8_000;
 
 type SetLevel={rank:number;price:number|null;volume:number|null};
 type SetStock={
@@ -15,7 +22,10 @@ type SetStock={
   offer?:SetLevel[];
 };
 
-function numberOrNull(v:unknown){
+export function numberOrNull(v:unknown):number|null{
+  if(v===null || v===undefined) return null;
+  if(typeof v==="string" && v.trim()==="") return null;
+  if(typeof v!=="number" && typeof v!=="string") return null;
   const n=Number(v);
   return Number.isFinite(n)?n:null;
 }
@@ -27,32 +37,63 @@ function normalizeTime(value:unknown){
   return new Date(ms).toISOString();
 }
 
-function toQuote(row:SetStock):Quote|null{
-  if(!row.symbol || !row.time) return null;
-  const bid=(row.bid ?? []).find(x=>x?.rank===1) ?? row.bid?.[0];
-  const offer=(row.offer ?? []).find(x=>x?.rank===1) ?? row.offer?.[0];
-  const sourceTs=normalizeTime(row.time);
-  const bidLevels=(row.bid ?? [])
+export function normalizeSetStockQuote(value:unknown,nowMs:number=Date.now(),maxQuoteAgeMs:number=MAX_QUOTE_AGE_MS):Quote|null{
+  if(!value || typeof value!=="object" || Array.isArray(value)) return null;
+  const row=value as SetStock;
+  if(typeof row.symbol!=="string" || !row.symbol.trim()
+    || typeof row.time!=="string" || !row.time.trim()) return null;
+  // External JSON must not be trusted to honor the TypeScript interface.
+  // Malformed book containers must reject the row, not throw from .find().
+  if((row.bid!==undefined && !Array.isArray(row.bid))
+    || (row.offer!==undefined && !Array.isArray(row.offer))) return null;
+  const bidRows=(row.bid ?? []).filter((x):x is SetLevel=>!!x && typeof x==="object" && !Array.isArray(x));
+  const offerRows=(row.offer ?? []).filter((x):x is SetLevel=>!!x && typeof x==="object" && !Array.isArray(x));
+  const bid=bidRows.find(x=>x.rank===1) ?? bidRows[0];
+  const offer=offerRows.find(x=>x.rank===1) ?? offerRows[0];
+  let sourceTs:string;
+  try{
+    sourceTs=normalizeTime(row.time);
+  }catch{
+    return null;
+  }
+  const sourceTsMs=Date.parse(sourceTs);
+  const effectiveMaxAge=Number.isFinite(maxQuoteAgeMs) && maxQuoteAgeMs>=1_000 && maxQuoteAgeMs<=60_000
+    ? maxQuoteAgeMs
+    : MAX_QUOTE_AGE_MS;
+  if(!Number.isFinite(sourceTsMs) || sourceTsMs>nowMs || nowMs-sourceTsMs>effectiveMaxAge){
+    return null;
+  }
+  const bidLevels=bidRows
     .map(x=>({price:numberOrNull(x?.price),size:numberOrNull(x?.volume)}))
     .filter((x):x is {price:number;size:number}=>x.price!==null&&x.price>0&&x.size!==null&&x.size>0);
-  const askLevels=(row.offer ?? [])
+  const askLevels=offerRows
     .map(x=>({price:numberOrNull(x?.price),size:numberOrNull(x?.volume)}))
     .filter((x):x is {price:number;size:number}=>x.price!==null&&x.price>0&&x.size!==null&&x.size>0);
   const bidPrice=numberOrNull(bid?.price);
   const askPrice=numberOrNull(offer?.price);
   const last=numberOrNull(row.last);
+  if((last!==null && last<=0) || (bidPrice!==null && bidPrice<=0) || (askPrice!==null && askPrice<=0)){
+    return null;
+  }
+  if(bidPrice!==null && askPrice!==null && askPrice<bidPrice) return null;
+  if(last===null && bidPrice===null && askPrice===null) return null;
+
+  const bidSize=numberOrNull(bid?.volume);
+  const askSize=numberOrNull(offer?.volume);
   const verified = bidPrice!==null && askPrice!==null
     && bidPrice>0 && askPrice>0 && askPrice>=bidPrice
-    && Number(bid?.volume??0)>0 && Number(offer?.volume??0)>0;
+    && bidSize!==null && bidSize>0 && askSize!==null && askSize>0;
   return {
-    symbol:row.symbol,
-    ts:new Date().toISOString(),
+    symbol:row.symbol.trim().toUpperCase(),
+    ts:new Date(nowMs).toISOString(),
     sourceTs,
     bid:bidPrice,
     ask:askPrice,
     last,
-    bidSize:numberOrNull(bid?.volume),
-    askSize:numberOrNull(offer?.volume),
+    bidSize,
+    askSize,
+    bookReceivedTs:verified?new Date(nowMs).toISOString():undefined,
+    bookSourceTs:verified?sourceTs:undefined,
     bidLevels,
     askLevels,
     source:"set-marketplace",
@@ -79,7 +120,7 @@ async function fetchSnapshot():Promise<Quote[]>{
         ? (payload as any).stock
         : [];
 
-  return rows.map((row):Quote|null=>toQuote(row as SetStock)).filter((x):x is Quote=>x!==null);
+  return rows.map((row):Quote|null=>normalizeSetStockQuote(row as SetStock)).filter((x):x is Quote=>x!==null);
 }
 
 export async function* setMarketplaceQuotes():AsyncGenerator<Quote>{
