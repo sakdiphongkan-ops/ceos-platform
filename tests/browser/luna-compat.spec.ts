@@ -238,6 +238,11 @@ test("Research workspaces route to distinct pages with truthful data states", as
   await page.goto("/luna/research/evidence", { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("heading", { name: "Evidence & Decision Audit" })).toBeVisible();
   await expect(page.locator('main [role="alert"]')).toBeVisible();
+
+  await page.goto("/luna", { waitUntil: "domcontentloaded" });
+  await page.getByRole("navigation", { name: "LUNA workspace" }).getByRole("button", { name: "Research" }).click();
+  await expect(page.locator("#portfolio-workspace")).toBeInViewport();
+  await expect(page.getByText("Only the configured 50-symbol research sample is evaluated; full SET/mai coverage is not verified.")).toBeVisible();
 });
 
 test("Agent catalog links each role to a distinct detail page", async ({ page }) => {
