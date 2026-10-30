@@ -1,5 +1,3 @@
-"use client";
-
 import Link from "next/link";
 import { ArrowRight, BookOpen, Database, FlaskConical, ShieldCheck } from "lucide-react";
 
