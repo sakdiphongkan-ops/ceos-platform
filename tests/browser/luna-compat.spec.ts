@@ -375,3 +375,13 @@ test("A reported PASS cannot override a missing self-test check list", async ({ 
   await expect(page.locator(".control-stat").filter({ hasText: "SELF-TEST" })).toContainText("ไม่สามารถยืนยันผล self-test ได้");
   await expect(page.locator(".gate-list")).toContainText("Backend did not return self-test checks");
 });
+
+
+test("Release readiness does not hard-code stale deployment or authentication claims", async ({ page }) => {
+  await page.goto("/luna/release", { waitUntil: "domcontentloaded" });
+  await expect(page.getByRole("heading", { name: "LUNA Webapp Readiness" })).toBeVisible();
+  await expect(page.getByText("Awaiting deployment from master")).toHaveCount(0);
+  await expect(page.getByText("Sign-in required; authenticated user session not verified")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open Control Room" })).toHaveAttribute("href", "/luna");
+  await expect(page.getByText("Vercel production deployment context cannot be verified from this build")).toHaveCount(0);
+});
