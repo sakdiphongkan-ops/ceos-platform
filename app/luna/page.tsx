@@ -428,15 +428,17 @@ export default function LunaPortfolioPage() {
     ? "OFFLINE"
     : error
       ? "DEGRADED"
-      : marketPhase==="BREAK"
-        ? "STANDBY"
-        : backendRuntimeFresh
-          ? "ACTIVE"
-          : marketPhase==="CLOSED"
-            ? "STANDBY"
-            : backendRuntime?.state==="NO_OPEN_SESSION" || !backendRuntime?.session
+      : (runtimeStatus?.ok === false || !backendRuntime)
+        ? "DEGRADED"
+        : marketPhase==="BREAK"
+          ? "STANDBY"
+          : backendRuntimeFresh
+            ? "ACTIVE"
+            : marketPhase==="CLOSED"
               ? "STANDBY"
-              : "DEGRADED";
+              : backendRuntime?.state==="NO_OPEN_SESSION" || !backendRuntime?.session
+                ? "STANDBY"
+                : "DEGRADED";
 
   const runtimeLabel = ({
     ACTIVE:"SYSTEM ACTIVE · PAPER OBSERVE",
@@ -472,11 +474,13 @@ export default function LunaPortfolioPage() {
         ? `Server runtime is active · v1.4 observe engine is calculating candidates (${shadow.buy_candidates??0} BUY / ${shadow.sell_candidates??0} SELL). ${shadowBlocked ? "Order gate remains blocked by readiness." : "Order gate is available."}`
         : `Server runtime is active · fresh backend ticks are arriving every cycle · latest source ${backendRuntime?.latest_source??"unknown"}.`
     : runtimeState==="DEGRADED"
-      ? backendRuntime?.state==="LIVE" && runtimeAgeMs!=null
-        ? `Server runtime exists, but the latest backend tick is ${Math.round(runtimeAgeMs)} ms old. Treat the feed as degraded until freshness recovers.`
-        : marketPhase==="BREAK"
-        ? "Market is in the midday break. LUNA remains online and the order gate stays closed until the afternoon session resumes."
-        : "API is reachable, but the runtime health check is not yet healthy. Review the control room before assuming execution readiness."
+      ? (runtimeStatus?.ok === false || !backendRuntime)
+        ? "The portfolio feed responded, but backend runtime health is unavailable. Treat system readiness as unverified; no execution readiness can be inferred."
+        : backendRuntime?.state==="LIVE" && runtimeAgeMs!=null
+          ? `Server runtime exists, but the latest backend tick is ${Math.round(runtimeAgeMs)} ms old. Treat the feed as degraded until freshness recovers.`
+          : marketPhase==="BREAK"
+            ? "Market is in the midday break. LUNA remains online and the order gate stays closed until the afternoon session resumes."
+            : "API is reachable, but the runtime health check is not yet healthy. Review the control room before assuming execution readiness."
       : runtimeState==="STANDBY"
         ? (marketPhase==="ACTIVE" || marketPhase==="REDUCE_ONLY" || marketPhase==="FORCE_CLOSE")
           ? "API is healthy, but there is no active server session. This is standby, not an API outage."
@@ -505,14 +509,24 @@ export default function LunaPortfolioPage() {
   const killSwitchDisplay=feed ? (killSwitch ? "ON" : "OFF") : "LOCKED";
   const killSwitchDetail=feed ? (armed ? "armed" : "disarmed") : "awaiting backend";
 
+  const selectWorkspaceTab = useCallback((next: typeof tab) => {
+    setTab(next);
+    window.requestAnimationFrame(() => {
+      document.getElementById("portfolio-workspace")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }, []);
+
   return <main className="luna-shell">
     <header className="topbar">
       <div className="brand"><div className="brand-mark">L</div><div><div className="eyebrow">LUNA / INTELLIGENT INVESTMENT SYSTEM</div><h1>Mission Control</h1></div></div>
       <nav className="top-nav" aria-label="LUNA workspace">
-        <button className={tab==="holdings"?"active":""} onClick={()=>setTab("holdings")}>Overview</button>
-        <button className={tab==="trades"?"active":""} onClick={()=>setTab("trades")}>Trades</button>
-        <button className={tab==="closed"?"active":""} onClick={()=>setTab("closed")}>Closed</button>
-        <button className={tab==="research"?"active":""} onClick={()=>setTab("research")}>Research</button>
+        <button className={tab==="holdings"?"active":""} aria-pressed={tab==="holdings"} aria-controls="portfolio-workspace" onClick={()=>selectWorkspaceTab("holdings")}>Overview</button>
+        <button className={tab==="trades"?"active":""} aria-pressed={tab==="trades"} aria-controls="portfolio-workspace" onClick={()=>selectWorkspaceTab("trades")}>Trades</button>
+        <button className={tab==="closed"?"active":""} aria-pressed={tab==="closed"} aria-controls="portfolio-workspace" onClick={()=>selectWorkspaceTab("closed")}>Closed</button>
+        <button className={tab==="research"?"active":""} aria-pressed={tab==="research"} aria-controls="portfolio-workspace" onClick={()=>selectWorkspaceTab("research")}>Research</button>
       </nav>
       <div className="top-actions">
         <div className={`market-status phase-${marketPhase?.toLowerCase() ?? "syncing"}`}><CircleDot size={11}/> SET · {marketPhaseLabelText}</div><div className="timeframe-chip"><BarChart3 size={13}/> {TIMEFRAME}</div>
@@ -549,7 +563,7 @@ export default function LunaPortfolioPage() {
         <LatencyMetric label="Latency p95" metric={feed?.latency?.summary?.end_to_end_ms?.p95} sampleCount={feed?.latency?.summary?.sample_count??0} sub="real executions"/>
         <LatencyMetric label="Latency p99" metric={feed?.latency?.summary?.end_to_end_ms?.p99} sampleCount={feed?.latency?.summary?.sample_count??0} sub={feed?.latency?.summary?.queue_wait_ms?.p95 != null ? "queue p95 " + feed.latency.summary.queue_wait_ms.p95.toFixed(1) + " ms" : "queue p95 not measured"}/>
       </section>
-      <section className="content-grid">
+      <section id="portfolio-workspace" className="content-grid" aria-label="Portfolio workspace">
         <div className="main-card">
           <div className="card-head"><div><div className="card-title">Portfolio positions</div><div className="card-subtitle">{positions.length} open positions · {filteredPositions.length} visible · dynamic sizing from signal strength</div></div><div className="toolbar">
   <div className="search-box"><Search size={15}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search symbol"/></div>
@@ -687,7 +701,7 @@ function SystemControlRoom({strategy,asOf}:{strategy:string;asOf:string}) {
   const checks=test?.checks??[];
   const passed=checks.filter((c:any)=>c.pass).length;
   const total=checks.length;
-  const status=test?.overall_status??"LOADING";
+  const status=test?.overall_status??(loading?"LOADING":"UNAVAILABLE");
   const readiness=state?.readiness??{};
   const fastRows=state?.fast?.forecast_rank??[];
   const finalSummary=state?.final?.summary??{};
@@ -710,7 +724,7 @@ function SystemControlRoom({strategy,asOf}:{strategy:string;asOf:string}) {
     {error && <div className="error-banner compact"><span>{error}</span><button onClick={refresh}>Retry</button></div>}
 
     <div className="control-grid">
-      <div className="control-stat"><span>SELF-TEST</span><strong>{loading?"—":`${passed}/${total}`}</strong><small>{test?.summary?.integrity?"Integrity PASS":"ตรวจพบ gate ที่ยังไม่พร้อม"}</small></div>
+      <div className="control-stat"><span>SELF-TEST</span><strong>{loading?"—":total>0?`${passed}/${total}`:"—"}</strong><small>{test?.summary?.integrity?"Integrity PASS":total>0?"ตรวจพบ gate ที่ยังไม่พร้อม":loading?"กำลังตรวจสอบ…": "ไม่สามารถยืนยันผล self-test ได้"}</small></div>
       <div className="control-stat"><span>MONTH CLOSE</span><strong>{readiness.month_closed?"CLOSED":"OPEN"}</strong><small>{verifiedAsOf}</small></div>
       <div className="control-stat"><span>CEOS FEED</span><strong>{readiness.ceos_feed_rows??0}</strong><small>{readiness.ceos_allowed_rows??0} allowed</small></div>
       <div className="control-stat"><span>PAPER</span><strong>{readiness.paper_execution_permitted?"READY":"LOCKED"}</strong><small>{readiness.execution_mode??"—"}</small></div>
@@ -723,7 +737,7 @@ function SystemControlRoom({strategy,asOf}:{strategy:string;asOf:string}) {
         <div className="mini-title"><ShieldCheck size={15}/> Gate audit</div>
         <div className="gate-list">
           {checks.map((c:any)=><div className="gate-row" key={c.name}><span>{c.name.replaceAll("_"," ")}</span><GateBadge pass={!!c.pass}/></div>)}
-          {!checks.length && <div className="muted">กำลังโหลดผล self-test…</div>}
+          {!checks.length && <div className="muted">{loading?"กำลังโหลดผล self-test…":state?"Backend did not return self-test checks.":"Self-test unavailable — control API did not return a verified result."}</div>}
         </div>
       </div>
       <div className="control-panel">
