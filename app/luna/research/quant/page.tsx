@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, RefreshCw, AlertTriangle } from "lucide-react";
 import { fetchTournament100, type Tournament100Result } from "../../../../lib/luna-client";
 
-const fmt = (value: unknown) => Number.isFinite(Number(value)) ? Number(value).toFixed(2) : "—";
+const fmt = (value: unknown) => value == null || value === "" || !Number.isFinite(Number(value)) ? "—" : Number(value).toFixed(2);
 
 export default function QuantResearchPage() {
   const [data,setData] = useState<Tournament100Result | null>(null);
