@@ -188,3 +188,110 @@ test("12. Performance smoke: collect LCP and CLS for the control room", async ({
   expect(vitals.lcp == null || vitals.lcp < 4000).toBeTruthy();
   expect(vitals.cls == null || vitals.cls < 0.25).toBeTruthy();
 });
+
+
+test("Mission Control tabs scroll to the portfolio workspace and expose state", async ({ page }) => {
+  await page.goto("/luna", { waitUntil: "domcontentloaded" });
+  const tradesShortcut = page.getByRole("navigation", { name: "LUNA workspace" }).getByRole("button", { name: "Trades" });
+  await tradesShortcut.click();
+  await expect(tradesShortcut).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#portfolio-workspace")).toBeInViewport();
+  await expect(page.getByRole("button", { name: /Today's Trades/ })).toHaveClass(/active/);
+});
+
+test("Research workspaces route to distinct pages with truthful data states", async ({ page }) => {
+  await page.route("**/api/backtest/tournament100?mode=signal&universe=full", async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        strategiesTested: 1,
+        period: { start: "2026-10-20", end: "2026-10-30" },
+        data: { bars15m: 100, symbolsReturned: 1, universeCount: 1, errors: [] },
+        rules: { costModelBps: 45, fixedHorizonBars: 4 },
+        top20: [{ id: "ema-01", family: "EMA", name: "EMA test formula", source: "research-api", signals: 12, winRate: 40, avgNetBps: -12, medianNetBps: -8, profitFactor: 0.8, totalNetBps: -144 }],
+        allResults: [{ id: "ema-01", family: "EMA", name: "EMA test formula", source: "research-api", signals: 12, winRate: 40, avgNetBps: -12, medianNetBps: -8, profitFactor: 0.8, totalNetBps: -144 }],
+      }),
+    });
+  });
+  await page.route("**/functions/v1/luna-api**", async route => {
+    await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ ok: false, error: "UPSTREAM_UNAVAILABLE" }) });
+  });
+
+  await page.goto("/luna/research", { waitUntil: "domcontentloaded" });
+  await expect(page.getByRole("link", { name: /Fundamental Intelligence/ })).toHaveAttribute("href", "/luna/research/fundamentals");
+  await expect(page.getByRole("link", { name: /Quant Lab/ })).toHaveAttribute("href", "/luna/research/quant");
+  await expect(page.getByRole("link", { name: /Evidence & Audit/ })).toHaveAttribute("href", "/luna/research/evidence");
+
+  await page.getByRole("link", { name: /Fundamental Intelligence/ }).click();
+  await expect(page).toHaveURL(/\/luna\/research\/fundamentals$/);
+  await expect(page.getByRole("heading", { name: "Fundamental Intelligence" })).toBeVisible();
+  await expect(page.getByText("NOT CALCULATED")).toBeVisible();
+
+  await page.goto("/luna/research/quant", { waitUntil: "domcontentloaded" });
+  await expect(page.getByRole("heading", { name: "Formula Research" })).toBeVisible();
+  await expect(page.getByText("EMA test formula")).toBeVisible();
+  await expect(page.getByText("-12.00")).toBeVisible();
+
+  await page.goto("/luna/research/evidence", { waitUntil: "domcontentloaded" });
+  await expect(page.getByRole("heading", { name: "Evidence & Decision Audit" })).toBeVisible();
+  await expect(page.locator('main [role="alert"]')).toBeVisible();
+});
+
+test("Agent catalog links each role to a distinct detail page", async ({ page }) => {
+  const slugs = ["cio", "research", "fundamental", "quant", "risk", "portfolio", "governance"];
+  await page.goto("/luna/agents", { waitUntil: "domcontentloaded" });
+  for (const slug of slugs) {
+    await expect(page.locator('a[href="/luna/agents/' + slug + '"]')).toHaveCount(1);
+  }
+  await page.locator('a[href="/luna/agents/fundamental"]').click();
+  await expect(page).toHaveURL(/\/luna\/agents\/fundamental$/);
+  await expect(page.getByRole("heading", { name: "Fundamental Agent" })).toBeVisible();
+  await expect(page.getByText(/does not launch a model run/)).toBeVisible();
+});
+
+test("Pricing shows a clear unavailable state instead of inert checkout buttons", async ({ page }) => {
+  let attempts = 0;
+  await page.route("**/api/luna2/plans", async route => {
+    attempts += 1;
+    await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "billing temporarily unavailable" }) });
+  });
+  await page.goto("/luna/pricing", { waitUntil: "domcontentloaded" });
+  await expect(page.locator('main [role="alert"]')).toContainText("Plans API returned HTTP 503");
+  await expect(page.getByRole("button", { name: "Retry" })).toBeVisible();
+  await page.getByRole("button", { name: "Retry" }).click();
+  await expect.poll(() => attempts).toBe(2);
+  await expect(page.getByText("Plan information only · checkout not available")).toBeVisible();
+});
+
+test("Self-test reports unavailable when the control API fails", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-10-30T03:15:00.000Z") });
+  const feed = {
+    ok: true, generated_at: "2026-10-30T03:15:00.000Z", sessions: [], ticks: [], signals: [],
+    snapshots: [], orders: [], fills: [], positions: [], execution_control: null,
+    counts: {}, errors: [], market_feed: { status: "NO_TICKS", verified_realtime: false, public_fallback: false, latest_source: null, latest_age_ms: null, sources: [] },
+  };
+  await page.route("**/functions/v1/luna-api**", async route => {
+    const url = new URL(route.request().url());
+    const view = url.searchParams.get("view");
+    if (view === "feed") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(feed) });
+    } else if (view === "runtime_status") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, runtime: { state: "NO_OPEN_SESSION", session: null } }) });
+    } else if (view === "shadow_status") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, generated_at: "2026-10-30T03:15:00.000Z", signal_state: {}, decision_audit: [], market_feed: {}, universe_coverage: {} }) });
+    } else if (view === "latest_control") {
+      await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ ok: false, error: "CONTROL_API_UNAVAILABLE" }) });
+    } else {
+      await route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ ok: false }) });
+    }
+  });
+  await page.route("**/api/luna/market-bars**", async route => {
+    await route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ ok: false, error: "AUTHENTICATION_REQUIRED" }) });
+  });
+
+  await page.goto("/luna", { waitUntil: "domcontentloaded" });
+  await expect(page.locator(".system-status")).toContainText("UNAVAILABLE");
+  await expect(page.locator(".control-stat").filter({ hasText: "SELF-TEST" })).toContainText("ไม่สามารถยืนยันผล self-test ได้");
+  await expect(page.locator(".gate-list")).toContainText("Self-test unavailable");
+});
