@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ArrowRight, Check, ShieldCheck, AlertTriangle, RefreshCw } from "lucide-react";
+import { Check, ShieldCheck, AlertTriangle, RefreshCw } from "lucide-react";
 import Link from "next/link";
 
 type Plan={code:string;name:string;monthlyPriceTHB:number|null;billingInterval:string;features:string[]};
