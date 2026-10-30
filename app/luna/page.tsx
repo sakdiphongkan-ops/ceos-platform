@@ -701,7 +701,7 @@ function SystemControlRoom({strategy,asOf}:{strategy:string;asOf:string}) {
   const checks=test?.checks??[];
   const passed=checks.filter((c:any)=>c.pass).length;
   const total=checks.length;
-  const status=test?.overall_status??(loading?"LOADING":"UNAVAILABLE");
+  const status=total>0?(test?.overall_status??"UNKNOWN"):(loading?"LOADING":"UNAVAILABLE");
   const readiness=state?.readiness??{};
   const fastRows=state?.fast?.forecast_rank??[];
   const finalSummary=state?.final?.summary??{};
@@ -724,7 +724,7 @@ function SystemControlRoom({strategy,asOf}:{strategy:string;asOf:string}) {
     {error && <div className="error-banner compact"><span>{error}</span><button onClick={refresh}>Retry</button></div>}
 
     <div className="control-grid">
-      <div className="control-stat"><span>SELF-TEST</span><strong>{loading?"—":total>0?`${passed}/${total}`:"—"}</strong><small>{test?.summary?.integrity?"Integrity PASS":total>0?"ตรวจพบ gate ที่ยังไม่พร้อม":loading?"กำลังตรวจสอบ…": "ไม่สามารถยืนยันผล self-test ได้"}</small></div>
+      <div className="control-stat"><span>SELF-TEST</span><strong>{loading?"—":total>0?`${passed}/${total}`:"—"}</strong><small>{test?.summary?.integrity && total>0?"Integrity PASS":total>0?"ตรวจพบ gate ที่ยังไม่พร้อม":loading?"กำลังตรวจสอบ…": "ไม่สามารถยืนยันผล self-test ได้"}</small></div>
       <div className="control-stat"><span>MONTH CLOSE</span><strong>{readiness.month_closed?"CLOSED":"OPEN"}</strong><small>{verifiedAsOf}</small></div>
       <div className="control-stat"><span>CEOS FEED</span><strong>{readiness.ceos_feed_rows??0}</strong><small>{readiness.ceos_allowed_rows??0} allowed</small></div>
       <div className="control-stat"><span>PAPER</span><strong>{readiness.paper_execution_permitted?"READY":"LOCKED"}</strong><small>{readiness.execution_mode??"—"}</small></div>
