@@ -383,5 +383,5 @@ test("Release readiness does not hard-code stale deployment or authentication cl
   await expect(page.getByText("Awaiting deployment from master")).toHaveCount(0);
   await expect(page.getByText("Sign-in required; authenticated user session not verified")).toBeVisible();
   await expect(page.getByRole("link", { name: "Open Control Room" })).toHaveAttribute("href", "/luna");
-  await expect(page.getByText("Vercel production deployment context cannot be verified from this build")).toHaveCount(0);
+  await expect(page.getByText(/^(READY|PREVIEW|UNVERIFIED)$/)).toHaveCount(1);
 });
