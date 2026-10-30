@@ -172,8 +172,12 @@ export type Tournament100Result = {
   period?: { start?: string; end?: string; sessions?: number };
   data?: {
     universe?: string;
+    requestedUniverse?: string;
+    coverageStatus?: string;
+    coverageMessage?: string;
     universeCount?: number;
     symbolsReturned?: number;
+    symbolsWithoutBars?: number;
     symbolsFailed?: number;
     bars15m?: number;
     errors?: string[];
