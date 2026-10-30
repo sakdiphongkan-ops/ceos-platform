@@ -52,9 +52,13 @@ export default function QuantResearchPage() {
 
       {data && (
         <>
-          <div className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-7 rounded-3xl border border-[#e4d9bd] bg-white p-5">
+            <div className="text-xs font-semibold tracking-[.14em] text-[#777970]">UNIVERSE COVERAGE · {data.data?.coverageStatus ?? "NOT REPORTED"}</div>
+            <p className="mt-2 text-sm leading-6 text-[#66685f]">{data.data?.coverageMessage ?? "The API did not return a coverage statement. Treat this sample scope as unverified."}</p>
+          </div>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <Metric label="Strategies tested" value={String(data.strategiesTested ?? 0)} detail="Signal study"/>
-            <Metric label="Universe coverage" value={`${data.data?.symbolsReturned ?? 0}/${data.data?.universeCount ?? 0}`} detail="Symbols with data"/>
+            <Metric label="Symbols with bars" value={`${data.data?.symbolsReturned ?? 0}/${data.data?.universeCount ?? 0}`} detail={`No bars: ${data.data?.symbolsWithoutBars ?? "not reported"} · failed requests: ${data.data?.symbolsFailed ?? 0}`}/>
             <Metric label="Trading cost" value={`${data.rules?.costModelBps ?? "—"} bps`} detail="Fee + tax + slippage model"/>
             <Metric label="15m bars" value={String(data.data?.bars15m ?? "—")} detail={data.period ? `${data.period.start ?? "—"} → ${data.period.end ?? "—"}` : "Period not returned"}/>
           </div>
