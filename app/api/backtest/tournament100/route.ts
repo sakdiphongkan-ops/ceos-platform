@@ -100,6 +100,9 @@ async function loadMarketData(symbols: string[], start: number, end: number): Pr
 }
 
 function summarizeData(universe: UniverseSelection, data: MarketData) {
+  const barsBySymbol = Array.from(data.barsBySymbol.values());
+  const symbolsReturned = barsBySymbol.filter((bars) => bars.length > 0).length;
+  const symbolsWithoutBars = barsBySymbol.length - symbolsReturned;
   return {
     universe: universe.name,
     requestedUniverse: universe.requestedUniverse,
@@ -108,9 +111,10 @@ function summarizeData(universe: UniverseSelection, data: MarketData) {
       ? "Only the configured 50-symbol research sample is evaluated; full SET/mai coverage is not verified."
       : "Explicit 10-symbol sample only; this is not full SET/mai coverage.",
     universeCount: universe.symbols.length,
-    symbolsReturned: data.barsBySymbol.size,
+    symbolsReturned,
+    symbolsWithoutBars,
     symbolsFailed: data.errors.length,
-    bars15m: Array.from(data.barsBySymbol.values()).reduce((total, bars) => total + bars.length, 0),
+    bars15m: barsBySymbol.reduce((total, bars) => total + bars.length, 0),
     errors: data.errors,
   };
 }

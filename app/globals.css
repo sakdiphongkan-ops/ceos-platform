@@ -1460,3 +1460,59 @@ body [tabindex]:focus-visible {
 .luna-shell .side-card .empty-detail span{color:#c2cfc3!important}
 /* WCAG AA: inactive workspace navigation labels must remain readable on the light surface. */
 .luna-shell .top-nav button:not(.active){color:#566156!important}
+
+
+/* Keep the Mission Control sub-navigation reachable on tablet and mobile. */
+@media (min-width: 641px) and (max-width: 1200px) {
+  .luna-shell .topbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    row-gap: 8px;
+    height: auto;
+    min-height: 82px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+  .luna-shell .topbar > .brand {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .luna-shell .topbar > .top-actions {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+  .luna-shell .topbar > .top-nav {
+    display: flex;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: stretch;
+    width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+}
+@media (max-width: 640px) {
+  .luna-shell .topbar > .top-nav {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    justify-content: flex-start;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    padding: 4px;
+    gap: 4px;
+  }
+  .luna-shell .topbar > .top-nav button {
+    flex: 0 0 auto;
+    min-height: 40px;
+    padding: 9px 12px;
+    white-space: nowrap;
+  }
+}

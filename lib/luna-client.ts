@@ -40,9 +40,9 @@ export type ShadowDecision = {
   momentum_1?: number | null;
   bar_count?: number | null;
   candidate_action: string;
-  verified_book: boolean;
-  feed_verified: boolean;
-  execution_blocked: boolean;
+  verified_book: boolean | null;
+  feed_verified: boolean | null;
+  execution_blocked: boolean | null;
   reason?: string | null;
 };
 
@@ -172,8 +172,12 @@ export type Tournament100Result = {
   period?: { start?: string; end?: string; sessions?: number };
   data?: {
     universe?: string;
+    requestedUniverse?: string;
+    coverageStatus?: string;
+    coverageMessage?: string;
     universeCount?: number;
     symbolsReturned?: number;
+    symbolsWithoutBars?: number;
     symbolsFailed?: number;
     bars15m?: number;
     errors?: string[];
@@ -358,9 +362,9 @@ export async function fetchShadowStatus(asOf: string): Promise<ShadowStatus> {
     symbol: String(row.symbol ?? ""),
     bar_end: String(row.bar_end ?? raw.latest_bar_end ?? ""),
     candidate_action: String(row.candidate_action ?? "UNKNOWN"),
-    verified_book: row.verified_book === true,
-    feed_verified: row.feed_verified === true,
-    execution_blocked: row.execution_blocked !== false,
+    verified_book: typeof row.verified_book === "boolean" ? row.verified_book : null,
+    feed_verified: typeof row.feed_verified === "boolean" ? row.feed_verified : null,
+    execution_blocked: typeof row.execution_blocked === "boolean" ? row.execution_blocked : null,
     reason: typeof row.reason === "string" ? row.reason : null,
   })).filter((row) => row.symbol.length > 0);
 
