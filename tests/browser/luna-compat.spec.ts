@@ -277,7 +277,7 @@ test("Self-test reports unavailable when the control API fails", async ({ page }
     if (view === "feed") {
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(feed) });
     } else if (view === "runtime_status") {
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, runtime: { state: "NO_OPEN_SESSION", session: null } }) });
+      await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ ok: false, error: { message: "RUNTIME_STATUS_UNAVAILABLE" } }) });
     } else if (view === "shadow_status") {
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, generated_at: "2026-10-30T03:15:00.000Z", signal_state: {}, decision_audit: [], market_feed: {}, universe_coverage: {} }) });
     } else if (view === "latest_control") {
@@ -292,6 +292,8 @@ test("Self-test reports unavailable when the control API fails", async ({ page }
 
   await page.goto("/luna", { waitUntil: "domcontentloaded" });
   await expect(page.locator(".system-status")).toContainText("UNAVAILABLE");
+  await expect(page.locator(".runtime-banner")).toContainText("SYSTEM DEGRADED");
+  await expect(page.locator(".runtime-banner")).toContainText("backend runtime health is unavailable");
   await expect(page.locator(".control-stat").filter({ hasText: "SELF-TEST" })).toContainText("ไม่สามารถยืนยันผล self-test ได้");
   await expect(page.locator(".gate-list")).toContainText("Self-test unavailable");
 });
