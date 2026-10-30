@@ -383,5 +383,8 @@ test("Release readiness does not hard-code stale deployment or authentication cl
   await expect(page.getByText("Awaiting deployment from master")).toHaveCount(0);
   await expect(page.getByText("Sign-in required; authenticated user session not verified")).toBeVisible();
   await expect(page.getByRole("link", { name: "Open Control Room" })).toHaveAttribute("href", "/luna");
-  await expect(page.getByText(/^(READY|PREVIEW|UNVERIFIED)$/)).toHaveCount(1);
+  const sourceRow = page.getByText("SOURCE", { exact: true }).locator("..");
+  const vercelRow = page.getByText("VERCEL", { exact: true }).locator("..");
+  await expect(sourceRow).toContainText(/(PASS|NON-MASTER|UNVERIFIED)/);
+  await expect(vercelRow).toContainText(/(READY|PREVIEW|UNVERIFIED)/);
 });
