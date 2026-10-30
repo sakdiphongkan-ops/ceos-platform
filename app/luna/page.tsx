@@ -839,9 +839,14 @@ function ResearchPanel() {
         <>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:10}}>
             <div className="mini-card"><div className="mini-title">Strategies tested</div><strong style={{fontSize:24}}>{data.strategiesTested ?? 0}</strong><div className="muted">signal study</div></div>
-            <div className="mini-card"><div className="mini-title">Universe</div><strong style={{fontSize:24}}>{data.data?.symbolsReturned ?? 0}/{data.data?.universeCount ?? 0}</strong><div className="muted">symbols with data</div></div>
+            <div className="mini-card"><div className="mini-title">Symbols with bars</div><strong style={{fontSize:24}}>{data.data?.symbolsReturned ?? 0}/{data.data?.universeCount ?? 0}</strong><div className="muted">No bars: {data.data?.symbolsWithoutBars ?? "not reported"} · Failed: {data.data?.symbolsFailed ?? 0}</div></div>
             <div className="mini-card"><div className="mini-title">Trading cost</div><strong style={{fontSize:24}}>{data.rules?.costModelBps ?? 0} bps</strong><div className="muted">fee + tax + slippage</div></div>
             <div className="mini-card"><div className="mini-title">Ranking</div><strong style={{fontSize:24}}>Net bps</strong><div className="muted">after stated costs</div></div>
+          </div>
+
+          <div className="mini-card" style={{borderColor:"#eadfae"}}>
+            <div className="mini-title">UNIVERSE COVERAGE · {data.data?.coverageStatus ?? "NOT REPORTED"}</div>
+            <div style={{lineHeight:1.55}}>{data.data?.coverageMessage ?? "The research API did not return a coverage statement. Treat this universe scope as unverified."}</div>
           </div>
 
           <div className="table-wrap" tabIndex={0} role="region" aria-label="Backtest results data table">
