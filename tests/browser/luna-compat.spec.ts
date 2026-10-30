@@ -207,7 +207,7 @@ test("Research workspaces route to distinct pages with truthful data states", as
       body: JSON.stringify({
         strategiesTested: 1,
         period: { start: "2026-10-20", end: "2026-10-30" },
-        data: { bars15m: 100, symbolsReturned: 1, universeCount: 1, errors: [] },
+        data: { bars15m: 100, symbolsReturned: 1, symbolsWithoutBars: 0, universeCount: 50, coverageStatus: "PARTIAL_SAMPLE", coverageMessage: "Only the configured 50-symbol research sample is evaluated; full SET/mai coverage is not verified.", errors: [] },
         rules: { costModelBps: 45, fixedHorizonBars: 4 },
         top20: [{ id: "ema-01", family: "EMA", name: "EMA test formula", source: "research-api", signals: 12, winRate: 40, avgNetBps: -12, medianNetBps: -8, profitFactor: 0.8, totalNetBps: -144 }],
         allResults: [{ id: "ema-01", family: "EMA", name: "EMA test formula", source: "research-api", signals: 12, winRate: 40, avgNetBps: -12, medianNetBps: -8, profitFactor: 0.8, totalNetBps: -144 }],
@@ -232,6 +232,8 @@ test("Research workspaces route to distinct pages with truthful data states", as
   await expect(page.getByRole("heading", { name: "Formula Research" })).toBeVisible();
   await expect(page.getByText("EMA test formula")).toBeVisible();
   await expect(page.getByText("-12.00")).toBeVisible();
+  await expect(page.getByText("Only the configured 50-symbol research sample is evaluated; full SET/mai coverage is not verified.")).toBeVisible();
+  await expect(page.getByText("UNIVERSE COVERAGE · PARTIAL_SAMPLE")).toBeVisible();
 
   await page.goto("/luna/research/evidence", { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("heading", { name: "Evidence & Decision Audit" })).toBeVisible();
@@ -296,4 +298,75 @@ test("Self-test reports unavailable when the control API fails", async ({ page }
   await expect(page.locator(".runtime-banner")).toContainText("backend runtime health is unavailable");
   await expect(page.locator(".control-stat").filter({ hasText: "SELF-TEST" })).toContainText("ไม่สามารถยืนยันผล self-test ได้");
   await expect(page.locator(".gate-list")).toContainText("Self-test unavailable");
+});
+
+
+test("Evidence audit keeps absent verification flags as UNKNOWN", async ({ page }) => {
+  await page.route("**/functions/v1/luna-api**", async route => {
+    const url = new URL(route.request().url());
+    const view = url.searchParams.get("view");
+    if (view === "shadow_status") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          generated_at: "2026-10-30T03:00:00.000Z",
+          latest_bar_end: "2026-10-30T03:00:00.000Z",
+          signal_state: {},
+          decision_audit: [{ symbol: "PTT", bar_end: "2026-10-30T03:00:00.000Z", candidate_action: "HOLD", reason: "Source flags were not present in this decision record." }],
+          market_feed: {},
+          universe_coverage: {},
+        }),
+      });
+    } else if (view === "latest_control") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true, status: "BLOCKED", blockers: ["NO_VERIFIED_EXECUTION_BOOK"] }),
+      });
+    } else {
+      await route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ ok: false }) });
+    }
+  });
+  await page.goto("/luna/research/evidence", { waitUntil: "domcontentloaded" });
+  await expect(page.getByRole("heading", { name: "Evidence & Decision Audit" })).toBeVisible();
+  await expect(page.getByText("Feed: UNKNOWN")).toBeVisible();
+  await expect(page.getByText("Order book: UNKNOWN")).toBeVisible();
+  await expect(page.getByText("Execution: UNKNOWN")).toBeVisible();
+});
+
+test("A reported PASS cannot override a missing self-test check list", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-10-30T03:15:00.000Z") });
+  const feed = {
+    ok: true, generated_at: "2026-10-30T03:15:00.000Z", sessions: [], ticks: [], signals: [],
+    snapshots: [], orders: [], fills: [], positions: [], execution_control: null,
+    counts: {}, errors: [], market_feed: { status: "NO_TICKS", verified_realtime: false, public_fallback: false, latest_source: null, latest_age_ms: null, sources: [] },
+  };
+  await page.route("**/functions/v1/luna-api**", async route => {
+    const url = new URL(route.request().url());
+    const view = url.searchParams.get("view");
+    if (view === "feed") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(feed) });
+    } else if (view === "runtime_status") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, runtime: { state: "NO_OPEN_SESSION", session: null } }) });
+    } else if (view === "shadow_status") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, signal_state: {}, decision_audit: [], market_feed: {}, universe_coverage: {} }) });
+    } else if (view === "latest_control") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true, system_test: { overall_status: "PASS", checks: [], summary: { integrity: true } }, readiness: {} }),
+      });
+    } else {
+      await route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ ok: false }) });
+    }
+  });
+  await page.route("**/api/luna/market-bars**", async route => {
+    await route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ ok: false, error: "AUTHENTICATION_REQUIRED" }) });
+  });
+  await page.goto("/luna", { waitUntil: "domcontentloaded" });
+  await expect(page.locator(".system-status")).toContainText("UNAVAILABLE");
+  await expect(page.locator(".control-stat").filter({ hasText: "SELF-TEST" })).toContainText("ไม่สามารถยืนยันผล self-test ได้");
+  await expect(page.locator(".gate-list")).toContainText("Backend did not return self-test checks");
 });
