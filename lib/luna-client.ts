@@ -422,13 +422,17 @@ export function connectRealtimeMarketStream({
 }: RealtimeStreamOptions): () => void {
   let socket: WebSocket | null = null;
   let retryTimer: ReturnType<typeof setTimeout> | null = null;
-  let retryMs = 1_000;
+  let retryMs = 5_000;
   let stopped = false;
 
-  const scheduleReconnect = () => {
-    if (stopped) return;
+  // These close codes describe configuration/auth failures, not transient network faults.
+  // Retrying them indefinitely only creates noisy failed handshakes.
+  const terminalCloseCodes = new Set([4401, 4403]);
+
+  const scheduleReconnect = (closeCode?: number) => {
+    if (stopped || (closeCode != null && terminalCloseCodes.has(closeCode))) return;
     retryTimer = setTimeout(connect, retryMs);
-    retryMs = Math.min(15_000, retryMs * 2);
+    retryMs = Math.min(60_000, retryMs * 2);
   };
 
   const connect = () => {
@@ -443,7 +447,7 @@ export function connectRealtimeMarketStream({
     }
 
     socket.onopen = () => {
-      retryMs = 1_000;
+      retryMs = 5_000;
       onConnectionChange(false);
     };
 
@@ -474,9 +478,9 @@ export function connectRealtimeMarketStream({
       }
     };
 
-    socket.onclose = () => {
+    socket.onclose = (event) => {
       onConnectionChange(false);
-      scheduleReconnect();
+      scheduleReconnect(event.code);
     };
 
     socket.onerror = () => {
