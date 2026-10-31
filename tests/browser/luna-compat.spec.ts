@@ -388,3 +388,17 @@ test("Release readiness does not hard-code stale deployment or authentication cl
   await expect(sourceRow).toContainText(/(PASS|NON-MASTER|UNVERIFIED)/);
   await expect(vercelRow).toContainText(/(READY|PREVIEW|UNVERIFIED)/);
 });
+
+
+test("public quote stream stops retrying on terminal authorization/disabled close codes", async ({ page }) => {
+  let connectionCount = 0;
+  await page.routeWebSocket("**/quotes/public-stream", async (socket) => {
+    connectionCount += 1;
+    await socket.close({ code: 4403, reason: "public feed is not enabled" });
+  });
+
+  await page.goto("/luna", { waitUntil: "domcontentloaded" });
+  await expect.poll(() => connectionCount, { timeout: 5000 }).toBe(1);
+  await page.waitForTimeout(3000);
+  expect(connectionCount).toBe(1);
+});
