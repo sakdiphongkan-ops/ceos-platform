@@ -414,28 +414,57 @@ type RealtimeStreamOptions = {
   onConnectionChange: (connected: boolean) => void;
 };
 
+const RETIRED_PUBLIC_MARKET_STREAM_HOSTS = new Set([
+  "luna-execution-gateway-production.up.railway.app",
+]);
+
+function resolvePublicMarketStreamUrl(value: string): string | null {
+  if (!value.trim()) return null;
+
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "wss:") return null;
+    if (RETIRED_PUBLIC_MARKET_STREAM_HOSTS.has(parsed.hostname.toLowerCase())) return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
 export function connectRealtimeMarketStream({
   url = LUNA_PUBLIC_MARKET_STREAM,
   onQuotes,
   onTick,
   onConnectionChange,
 }: RealtimeStreamOptions): () => void {
+  const resolvedUrl = resolvePublicMarketStreamUrl(url);
   let socket: WebSocket | null = null;
   let retryTimer: ReturnType<typeof setTimeout> | null = null;
-  let retryMs = 1_000;
+  let retryMs = 5_000;
   let stopped = false;
 
-  const scheduleReconnect = () => {
-    if (stopped) return;
+  // Auth/config close codes are terminal. Backing off transient failures prevents
+  // a dead or unavailable stream from creating a high-frequency retry loop.
+  const terminalCloseCodes = new Set([4401, 4403]);
+
+  if (!resolvedUrl) {
+    onConnectionChange(false);
+    return () => {
+      stopped = true;
+    };
+  }
+
+  const scheduleReconnect = (closeCode?: number) => {
+    if (stopped || (closeCode != null && terminalCloseCodes.has(closeCode))) return;
     retryTimer = setTimeout(connect, retryMs);
-    retryMs = Math.min(15_000, retryMs * 2);
+    retryMs = Math.min(60_000, retryMs * 2);
   };
 
   const connect = () => {
     if (stopped) return;
 
     try {
-      socket = new WebSocket(url);
+      socket = new WebSocket(resolvedUrl);
     } catch {
       onConnectionChange(false);
       scheduleReconnect();
@@ -443,7 +472,8 @@ export function connectRealtimeMarketStream({
     }
 
     socket.onopen = () => {
-      retryMs = 1_000;
+      retryMs = 5_000;
+      // A connected socket is not a fresh market tick. Freshness is set by onTick.
       onConnectionChange(false);
     };
 
@@ -474,9 +504,9 @@ export function connectRealtimeMarketStream({
       }
     };
 
-    socket.onclose = () => {
+    socket.onclose = (event) => {
       onConnectionChange(false);
-      scheduleReconnect();
+      scheduleReconnect(event.code);
     };
 
     socket.onerror = () => {
