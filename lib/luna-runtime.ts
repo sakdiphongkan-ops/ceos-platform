@@ -12,9 +12,9 @@ export const LUNA_API =
   process.env.NEXT_PUBLIC_LUNA_API_URL ??
   "https://wigzicwgcsrhdummrbjx.supabase.co/functions/v1/luna-api";
 
+// Optional acceleration only. HTTP/Supabase remains the source of record.
 export const LUNA_PUBLIC_MARKET_STREAM =
-  process.env.NEXT_PUBLIC_LUNA_PUBLIC_MARKET_STREAM_URL ??
-  "wss://luna-execution-gateway-production.up.railway.app/quotes/public-stream";
+  process.env.NEXT_PUBLIC_LUNA_PUBLIC_MARKET_STREAM_URL ?? "";
 
 export const LUNA_STRATEGY = "luna-th1h-v1.4.0-15m-riskgated";
 export const TIMEFRAME = "15m";
