@@ -215,3 +215,13 @@ A first implementation slice is committed on the research branch:
 - `restore:research-archive` requires explicit `LUNA_ARCHIVE_RESTORE_CONFIRM=RESTORE_VERIFIED_ARCHIVE`, re-verifies the entire archive before writing, restores in 500-row upserts, and checks the resulting dataset row count. It never deletes data.
 - The source table's identity ID is regenerated during restore; no foreign keys reference `luna_research_prices`. The stable business key is `(dataset_id,symbol,date)`.
 - Only after archive readback and a successful restore test should a separate, explicitly approved retention migration be considered.
+
+
+## Paper-runtime and TopTrader held-position probe (2026-11-12)
+
+- The current intraday session opened with strategy `luna-th1h-v1.4.0-15m-riskgated`. During the observed window it recorded 5,221 TopTrader ticks across 688 symbols; the current 15-minute shadow stream produced 356 verified decisions. No paper orders were created.
+- The existing `luna_paper_live_runtime` is `PAUSED` (last update 2026-10-30) and contains 42 open paper positions with only THB 1,540.38 cash. Its last equity snapshot is from 2026-10-15. The runtime has no recorded pause-reason field.
+- A priority REST refresh for all 42 holdings returned 42 observations but zero fresh verified execution quotes.
+- A no-write WebSocket probe over 10 seconds for the 42 holdings returned valid tick/book pairs for only 7 symbols (AJA, CPW, EA, LIT, RPC, TAE, THG); the other 35 produced no matching event in that window. This does not prove they are unsupported, but it is insufficient to mark the portfolio fully fresh.
+- Deployed `luna-toptrader-ws-ingest` v16 with a bounded 1–10 second probe mode. Probe mode performs no database writes and creates no orders. It is a diagnostic only.
+- Do not resume the legacy paper runtime until the 42 positions are reconciled and portfolio valuation can be trusted. Do not relax execution freshness requirements to make the runtime appear active. A future improvement should separate stale-position valuation from fresh execution eligibility, preserve cash-only limits, and label stale marks explicitly.
