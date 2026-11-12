@@ -114,7 +114,8 @@ begin
   ) sources;
 
   v_status := case
-    when v_duplicates>0 or v_missing_available>0 or v_invalid_adj>0 then 'FAIL'
+    when v_dataset.row_count is distinct from v_actual_rows or v_dataset.symbol_count is distinct from v_actual_symbols
+      or v_duplicates>0 or v_missing_available>0 or v_invalid_adj>0 then 'FAIL'
     when v_null_ohlc>0 or v_inconsistent>0 or v_invalid_volume>0 or v_invalid_amount>0 then 'WARN'
     else 'PASS'
   end;
