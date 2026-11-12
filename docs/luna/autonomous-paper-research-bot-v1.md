@@ -184,3 +184,14 @@ A first implementation slice is committed on the research branch:
 - The database-native worker is scheduled by Supabase `pg_cron` every five minutes and is independent of the browser, Railway, and the market runtime. It writes a durable heartbeat and processes up to five small audit jobs per tick.
 - The optional Node worker is reserved for future compute-heavy jobs and requires a separate Railway service with `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`; the service-role key must never be placed in the frontend or market runtime's public environment.
 - The current handlers only audit queue health and dataset manifests. They do not train models, ingest new market data, or promote strategies. The migration, cron tick, heartbeat, and seven-day soak must be verified before calling this production-ready.
+
+
+## Live Supabase verification and storage ceiling (2026-11-12)
+
+- The database-native research worker was applied to Supabase project `wigzicwgcsrhdummrbjx`. Direct invocation processed both health and dataset-inventory jobs successfully; the `service_role` heartbeat row was written.
+- The `pg_cron` job `luna-research-worker-tick-every-5-minutes` is active; observed successful runs at 03:10 and 03:15 UTC.
+- The current paper session remains `luna-th1h-v1.4.0-15m-riskgated`, initial capital THB 30,000. Latest observed TopTrader batches were accepted, but the latest quote cache from 2026-11-11 had 926 symbols and 0 execution-eligible rows; do not infer verified execution readiness from book_complete alone.
+- The historical daily dataset has 1,057,024 rows / 927 symbols from 2021-10-14 to 2026-10-26; its dataset manifest currently has no checksum. The research_prices table occupies ~223 MB. Database size observed at ~513 MB on Free plan, above the documented 500 MB database quota.
+- A read-only keyset export RPC uses the existing unique `(dataset_id,symbol,date)` index. Two sequential 5-row test pages returned the expected advancing cursor. The archive registry and service-only R2 exporter/readback verifier are in the branch.
+- No data has been deleted. Cloudflare R2 API currently returns `Please enable R2 through the Cloudflare Dashboard`; R2 bucket and credentials are not yet available. Do not trim the source price table until the R2 object has passed full gzip readback, SHA-256 and row-count verification, and a restore test.
+- Supabase's own Free Plan database-size quota is 500 MB; R2 Standard free tier includes 10 GB-month, 1M Class A requests, 10M Class B requests and free egress, subject to Cloudflare's current pricing terms. See https://supabase.com/docs/guides/platform/database-size and https://developers.cloudflare.com/r2/pricing/.
