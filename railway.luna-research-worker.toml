@@ -1,0 +1,9 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile.luna-research-worker"
+
+[deploy]
+startCommand = "npm run research:worker"
+restartPolicyType = "ALWAYS"
+restartPolicyMaxRetries = 10
+healthcheckTimeout = 120
