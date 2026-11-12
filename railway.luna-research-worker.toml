@@ -1,6 +1,6 @@
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "luna-th1h/Dockerfile.research-worker"
+dockerfilePath = "Dockerfile.luna-research-worker"
 
 [deploy]
 startCommand = "npm run research:worker"
