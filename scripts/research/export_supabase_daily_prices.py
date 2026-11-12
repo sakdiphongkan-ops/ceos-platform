@@ -10,15 +10,17 @@ import pandas as pd
 import requests
 
 COLUMNS = [
-    "date","symbol","market","open","high","low","close","adj_close",
-    "volume","amount","available_at"
+    "dataset_id","date","symbol","market","open","high","low","close","adj_close",
+    "volume","amount","available_at","source_available_at","source","source_seq",
+    "ohlc_valid","bar_eligible","close_return_eligible","availability_policy"
 ]
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--url", default=os.getenv("SUPABASE_URL", ""))
-    ap.add_argument("--table", default="luna_research_prices")
+    ap.add_argument("--table", default="luna_research_prices_pit_v1")
+    ap.add_argument("--dataset-id", default=os.getenv("LUNA_RESEARCH_DATASET_ID", "1af83c59-a56f-461f-b03e-f3d04e67e384"))
     ap.add_argument("--output", required=True)
     ap.add_argument("--start", default="2021-09-01")
     ap.add_argument("--end", default="2026-08-31")
@@ -39,13 +41,15 @@ def main():
     rows = []
     offset = 0
     while True:
-        params = {
-            "select": ",".join(COLUMNS),
-            "date": f"gte.{args.start}",
-            "order": "date.asc,symbol.asc",
-            "limit": args.page_size,
-            "offset": offset,
-        }
+        params = [
+            ("select", ",".join(COLUMNS)),
+            ("dataset_id", f"eq.{args.dataset_id}"),
+            ("date", f"gte.{args.start}"),
+            ("date", f"lte.{args.end}"),
+            ("order", "date.asc,symbol.asc"),
+            ("limit", args.page_size),
+            ("offset", offset),
+        ]
         r = requests.get(url, headers=headers, params=params, timeout=120)
         r.raise_for_status()
         page = r.json()
@@ -56,7 +60,6 @@ def main():
         offset += args.page_size
 
     df = pd.DataFrame(rows, columns=COLUMNS)
-    df = df[df["date"] <= args.end].copy()
     df["date"] = pd.to_datetime(df["date"])
     for c in [x for x in COLUMNS if x not in {"date","symbol","market","available_at"}]:
         df[c] = pd.to_numeric(df[c], errors="coerce")
