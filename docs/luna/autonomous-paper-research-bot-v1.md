@@ -206,3 +206,12 @@ A first implementation slice is committed on the research branch:
 - The strict daily integrity audit returned `WARN`: 1,057,024 rows and 927 symbols match the dataset manifest; 954 rows have null OHLC (no-observation records), 4,667 non-null bars have inconsistent OHLC bounds, 127 symbols have less than one year of history, and there are zero duplicate symbol/date rows, zero missing availability timestamps, and zero invalid adjusted closes on complete bars. OHLC-invalid rows must not be used for OHLC execution/replay; adjusted-close-only monthly returns are a separate data path.
 - Existing strict formula-family runs were marked failed because five candidates selected F&D in Aug 2026 without a Sep forward month-end close. F&D has only May–Aug 2026 monthly observations in this dataset. Do not substitute rank 21 or fabricate returns; cap the evaluable horizon at Jul 2026 until the next month is present.
 - The 925/927-symbol historical universe remains survivorship-biased and point-in-time membership is unverified. The current monthly experiment results are exploratory, not promotion evidence.
+
+
+### Cold archive round-trip safety
+
+- `archive:research-prices` writes a deterministic NDJSON.GZ object plus manifest and inserts an archive registry row. It does not delete source data.
+- `verify:research-archive` downloads the full object, decompresses it, and verifies row count plus SHA-256 before marking the archive `VERIFIED`.
+- `restore:research-archive` requires explicit `LUNA_ARCHIVE_RESTORE_CONFIRM=RESTORE_VERIFIED_ARCHIVE`, re-verifies the entire archive before writing, restores in 500-row upserts, and checks the resulting dataset row count. It never deletes data.
+- The source table's identity ID is regenerated during restore; no foreign keys reference `luna_research_prices`. The stable business key is `(dataset_id,symbol,date)`.
+- Only after archive readback and a successful restore test should a separate, explicitly approved retention migration be considered.
