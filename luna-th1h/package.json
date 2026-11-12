@@ -40,7 +40,8 @@
     "test:data-quality": "tsx src/data-quality.test.ts",
     "research:worker": "tsx src/research-worker.ts",
     "archive:research-prices": "tsx src/archive-research-prices.ts",
-    "verify:research-archive": "tsx src/verify-research-prices-archive.ts"
+    "verify:research-archive": "tsx src/verify-research-prices-archive.ts",
+    "restore:research-archive": "tsx src/restore-research-prices-archive.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.0",
