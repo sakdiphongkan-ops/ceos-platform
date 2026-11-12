@@ -59,6 +59,10 @@ async function scheduleJobs(){
       await enqueue("DATASET_INVENTORY_AUDIT",`dataset:${b.date}:${w.key}`,50,{window:w.key,local_date:b.date});
     }
   }
+  if(b.hour===0 && b.minute<5 && lastRetentionDate!==b.date){
+    await pruneHistory();
+    lastRetentionDate=b.date;
+  }
 }
 async function heartbeat(status="ONLINE"){
   const {error}=await db.from("luna_research_worker_heartbeats").upsert({
@@ -66,6 +70,16 @@ async function heartbeat(status="ONLINE"){
     current_job_id:currentJobId,metadata:{pid:process.pid,node:process.version,timezone:"Asia/Bangkok"}
   },{onConflict:"worker_id"});
   if(error) throw error;
+  lastHeartbeatAt=Date.now();
+}
+async function pruneHistory(){
+  const successCutoff=new Date(Date.now()-90*24*60*60_000).toISOString();
+  const deadCutoff=new Date(Date.now()-180*24*60*60_000).toISOString();
+  const a=await db.from("luna_research_jobs").delete().eq("status","SUCCEEDED").lt("finished_at",successCutoff);
+  if(a.error) throw a.error;
+  const b=await db.from("luna_research_jobs").delete().eq("status","DEAD_LETTER").lt("finished_at",deadCutoff);
+  if(b.error) throw b.error;
+  console.log(JSON.stringify({event:"RESEARCH_JOB_RETENTION_APPLIED",success_days:90,dead_letter_days:180}));
 }
 async function exactCount(table:string){
   const {count,error}=await db.from(table).select("*",{count:"exact",head:true});
@@ -87,8 +101,7 @@ async function runJob(job:Job){
       .order("created_at",{ascending:false}).limit(500);
     if(error) throw error;
     const rows=data??[];
-    const invalid=rows.filter(x=>!x.checksum_sha256 || !x.source || !x.status || Number(x.row_count??0)<0);
-    const statuses=rows.reduce((acc:Record<string,number>,x)=>{const k=String(x.status??"UNKNOWN");acc[k]=(acc[k]??0)+1;return acc;},{});
+    const invalid=rows.filter(x=>!x.checksum_sha256 || !x.source || !x.name);
     return {kind:job.job_type,observed_at:new Date().toISOString(),scanned_rows:rows.length,invalid_manifest_count:invalid.length,window:job.payload.window??null,local_date:job.payload.local_date??null,warning:rows.length===500?"CAPPED_AT_500_LATEST_DATASETS":null,worker_version:VERSION};
   }
   throw new Error(`NO_HANDLER_REGISTERED:${job.job_type}`);
@@ -137,6 +150,7 @@ async function main(){
     try{
       await scheduleJobs();
       const processed=await processOne();
+      if(Date.now()-lastHeartbeatAt>=30_000) await heartbeat();
       if(!processed) await sleep(pollMs);
     }catch(error){
       console.error(JSON.stringify({event:"LUNA_RESEARCH_WORKER_LOOP_ERROR",error:String(error)}));
