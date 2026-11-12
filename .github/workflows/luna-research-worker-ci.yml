@@ -6,6 +6,8 @@ on:
     paths:
       - "luna-th1h/src/research-worker.ts"
       - "luna-th1h/src/archive-research-prices.ts"
+      - "luna-th1h/src/verify-research-prices-archive.ts"
+      - "supabase/migrations/20261112050000_luna_research_archive_registry_v1.sql"
       - "supabase/migrations/20261112040000_luna_research_prices_cold_archive_export_v1.sql"
       - "luna-th1h/package.json"
       - "luna-th1h/tsconfig.json"
