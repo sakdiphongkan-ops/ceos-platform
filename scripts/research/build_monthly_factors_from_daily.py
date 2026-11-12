@@ -27,6 +27,24 @@ def main() -> None:
 
     p["date"] = pd.to_datetime(p["date"], errors="raise")
     p["symbol"] = p["symbol"].astype(str).str.strip().str.upper()
+    availability_rows_verified = 0
+    if "available_at" in p.columns:
+        p["available_at"] = pd.to_datetime(p["available_at"], utc=True, errors="coerce")
+        if "source" in p.columns:
+            yahoo_daily = p["source"].astype(str).eq("YAHOO_FINANCE_CHART:1d")
+            expected_available = (
+                p["date"].dt.tz_localize("Asia/Bangkok")
+                + pd.Timedelta(hours=17, minutes=5)
+            ).dt.tz_convert("UTC")
+            early_or_missing = yahoo_daily & (
+                p["available_at"].isna() | (p["available_at"] < expected_available)
+            )
+            if early_or_missing.any():
+                raise SystemExit(
+                    f"point-in-time availability violation: {int(early_or_missing.sum())} Yahoo daily rows "
+                    "are available before 17:05 Asia/Bangkok"
+                )
+            availability_rows_verified = int(yahoo_daily.sum())
     for c in ["open", "high", "low", "close", "volume", "adj_close", "amount"]:
         if c in p.columns:
             p[c] = pd.to_numeric(p[c], errors="coerce")
@@ -80,6 +98,7 @@ def main() -> None:
         "ohlc_valid_rows": int(p["ohlc_valid"].fillna(False).sum()) if "ohlc_valid" in p.columns else None,
         "source": sorted(p["source"].dropna().astype(str).unique().tolist()) if "source" in p.columns else None,
         "availability_policy": "consume available_at from luna_research_prices_pit_v1; daily bars available after 17:05 Asia/Bangkok",
+        "availability_rows_verified": int(availability_rows_verified),
         "output": str(args.output),
         "factor_definition": "21/63/126/252 valid trading-observation momentum, 252D high, 20D vol, 60D drawdown proxy, 20D avg amount",
         "missing_policy": "No forward fill; exclude rows without positive adjusted close before factor calculation and month-end selection",
