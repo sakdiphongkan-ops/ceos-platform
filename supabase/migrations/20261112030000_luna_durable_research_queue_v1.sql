@@ -156,7 +156,7 @@ returns jsonb
 language plpgsql
 security definer
 set search_path=public,pg_temp
-as $
+as $worker$
 declare
   v_now timestamptz := now();
   v_local timestamp := now() at time zone 'Asia/Bangkok';
