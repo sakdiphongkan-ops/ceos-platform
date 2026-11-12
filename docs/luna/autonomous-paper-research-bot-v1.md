@@ -173,3 +173,13 @@ The GitHub connection can read and write the user's repository, and a dedicated 
 - SET Thai securities data helper: https://github.com/lumduan/settfex
 - SET security master mirror: https://github.com/lumduan/thai-securities-data
 - Existing LUNA research gap analysis: research-results/luna-platform-gap-analysis-20260921.md
+
+
+## Implementation slice — durable queue and worker v1
+
+A first implementation slice is committed on the research branch:
+- `supabase/migrations/202611120001_luna_durable_research_queue_v1.sql` creates a service-role-only queue, worker heartbeat registry, atomic `FOR UPDATE SKIP LOCKED` job claiming, lease ownership, bounded retries, and dead-letter state.
+- `luna-th1h/src/research-worker.ts` is a separate always-on process. It schedules a five-minute queue health audit and four Bangkok-time dataset inventory checkpoints, then claims and executes jobs independently of the dashboard.
+- The worker currently implements metadata/queue audits only. It does not claim to run alpha training, ingest market data, or promote strategies. Those handlers must be added only after their data contracts and test harnesses are wired.
+- The worker requires a dedicated Railway service with `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`; the service-role key must never be placed in the frontend or market runtime's public environment.
+- Deployment, migration application, runtime heartbeat, and seven-day soak are still pending external authorization and verification.
