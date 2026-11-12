@@ -9,6 +9,8 @@ on:
       - "tests/research/test_build_monthly_factors_from_daily.py"
       - "supabase/migrations/20261112070000_luna_research_pit_availability_v1.sql"
       - "supabase/functions/luna-daily-ingest/index.ts"
+      - "supabase/functions/luna-toptrader-ws-ingest/index.ts"
+      - "supabase/functions/luna-toptrader-ws-ingest/coverage-diagnostics.ts"
       - ".github/workflows/luna-research-data-quality-ci.yml"
   pull_request:
     paths:
@@ -31,3 +33,4 @@ jobs:
       - run: python tests/research/test_build_monthly_factors_from_daily.py
       - uses: denoland/setup-deno@v2
       - run: deno check --node-modules-dir=auto supabase/functions/luna-daily-ingest/index.ts
+      - run: deno check --node-modules-dir=auto supabase/functions/luna-toptrader-ws-ingest/index.ts
