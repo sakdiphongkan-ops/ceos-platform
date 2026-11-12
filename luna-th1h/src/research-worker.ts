@@ -1,4 +1,4 @@
-import {createClient, type SupabaseClient} from "@supabase/supabase-js";
+import {createClient} from "@supabase/supabase-js";
 import {randomUUID} from "node:crypto";
 
 const VERSION="luna-research-worker-v1.0.0";
@@ -83,13 +83,13 @@ async function runJob(job:Job){
   }
   if(job.job_type==="DATASET_INVENTORY_AUDIT"){
     const {data,error}=await db.from("luna_research_datasets")
-      .select("id,name,dataset_type,source,start_date,end_date,symbol_count,row_count,checksum_sha256,status,created_at")
+      .select("id,name,source,checksum_sha256,created_at")
       .order("created_at",{ascending:false}).limit(500);
     if(error) throw error;
     const rows=data??[];
     const invalid=rows.filter(x=>!x.checksum_sha256 || !x.source || !x.status || Number(x.row_count??0)<0);
     const statuses=rows.reduce((acc:Record<string,number>,x)=>{const k=String(x.status??"UNKNOWN");acc[k]=(acc[k]??0)+1;return acc;},{});
-    return {kind:job.job_type,observed_at:new Date().toISOString(),scanned_rows:rows.length,invalid_manifest_count:invalid.length,statuses,window:job.payload.window??null,local_date:job.payload.local_date??null,warning:rows.length===500?"CAPPED_AT_500_LATEST_DATASETS":null,worker_version:VERSION};
+    return {kind:job.job_type,observed_at:new Date().toISOString(),scanned_rows:rows.length,invalid_manifest_count:invalid.length,window:job.payload.window??null,local_date:job.payload.local_date??null,warning:rows.length===500?"CAPPED_AT_500_LATEST_DATASETS":null,worker_version:VERSION};
   }
   throw new Error(`NO_HANDLER_REGISTERED:${job.job_type}`);
 }
