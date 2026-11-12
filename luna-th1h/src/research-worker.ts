@@ -18,7 +18,7 @@ const db=createClient(supabaseUrl,serviceRoleKey,{
 type Job={id:string;job_type:string;payload:Record<string,unknown>;attempts:number;checkpoint:Record<string,unknown>;idempotency_key:string};
 let stopping=false;
 let currentJobId:string|null=null;
-let lastScheduleBucket="";
+let lastScheduleBucket="";\nlet lastHeartbeatAt=0;\nlet lastRetentionDate="";
 
 function bangkokParts(date=new Date()){
   const parts=new Intl.DateTimeFormat("en-CA",{
@@ -42,7 +42,7 @@ async function enqueue(type:string,key:string,priority:number,payload:Record<str
 }
 async function scheduleJobs(){
   const b=bangkokParts();
-  const bucket=isoBucket(5);
+  const bucket=isoBucket(15);
   if(bucket!==lastScheduleBucket){
     lastScheduleBucket=bucket;
     await enqueue("RESEARCH_HEALTH_AUDIT",`health:${bucket}`,100,{bucket});
