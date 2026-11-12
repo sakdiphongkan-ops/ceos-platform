@@ -168,6 +168,7 @@ declare
   v_ids jsonb := '[]'::jsonb;
   v_worker text := 'supabase-cron-research-worker';
   v_slot text;
+  i integer;
 begin
   -- 15-minute health pulse; idempotency prevents duplicate work on retries.
   v_bucket := floor(extract(epoch from v_now)/900)::bigint;
