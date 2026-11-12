@@ -272,13 +272,13 @@ begin
 
   return jsonb_build_object('ok',true,'worker_id',v_worker,'processed',v_processed,'jobs',v_ids,'observed_at',v_now);
 end;
-$;
+$worker$;
 
 revoke all on function public.luna_research_worker_tick() from public, anon, authenticated;
 grant execute on function public.luna_research_worker_tick() to service_role;
 
 -- Replace only this named job; unrelated LUNA schedules remain untouched.
-do $
+do $schedule$
 declare v_job_id bigint;
 begin
   select jobid into v_job_id from cron.job where jobname='luna-research-worker-tick-every-5-minutes' limit 1;
@@ -286,6 +286,6 @@ begin
   perform cron.schedule('luna-research-worker-tick-every-5-minutes','*/5 * * * *',
     'select public.luna_research_worker_tick();');
 end;
-$;
+$schedule$;
 
 commit;
