@@ -134,6 +134,7 @@ async function main(){
     hashStream.destroy(error instanceof Error?error:new Error(String(error)));
     body.destroy(error instanceof Error?error:new Error(String(error)));
     await upload.abort().catch(()=>undefined);
+    await uploadPromise.catch(()=>undefined);
     throw error;
   }
 }
