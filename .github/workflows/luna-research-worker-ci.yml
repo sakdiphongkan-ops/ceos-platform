@@ -1,0 +1,34 @@
+name: LUNA Research Worker CI
+
+on:
+  push:
+    branches: [research/autonomous-paper-bot-20261112]
+    paths:
+      - "luna-th1h/src/research-worker.ts"
+      - "luna-th1h/package.json"
+      - "luna-th1h/tsconfig.json"
+      - "luna-th1h/Dockerfile.research-worker"
+      - "Dockerfile.luna-research-worker"
+      - "supabase/migrations/202611120001_luna_durable_research_queue_v1.sql"
+      - ".github/workflows/luna-research-worker-ci.yml"
+  pull_request:
+    paths:
+      - "luna-th1h/src/research-worker.ts"
+      - "luna-th1h/package.json"
+      - "luna-th1h/tsconfig.json"
+      - "Dockerfile.luna-research-worker"
+      - "supabase/migrations/202611120001_luna_durable_research_queue_v1.sql"
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: luna-th1h
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
