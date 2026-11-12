@@ -122,7 +122,14 @@ async function main(){
     }));
     const manifestHead=await s3.send(new HeadObjectCommand({Bucket:bucket,Key:manifestKey}));
     if(!manifestHead.ContentLength) throw new Error("ARCHIVE_MANIFEST_NOT_VERIFIED");
-    console.log(JSON.stringify({event:"ARCHIVE_VERIFIED",manifest}));
+    const {error:registryError}=await db.from("luna_research_archives").insert({
+      dataset_id:datasetId,object_key:key,manifest_key:manifestKey,
+      source_sha256:sourceSha256,row_count:rowsWritten,
+      object_size_bytes:head.ContentLength,status:"UPLOADED",
+      metadata:{run_id:runId,format:"ndjson",compression:"gzip",chunks,chunk_size:chunkSize}
+    });
+    if(registryError) throw registryError;
+    console.log(JSON.stringify({event:"ARCHIVE_UPLOADED_PENDING_READBACK_VERIFICATION",manifest}));
   }catch(error){
     hashStream.destroy(error instanceof Error?error:new Error(String(error)));
     body.destroy(error instanceof Error?error:new Error(String(error)));
