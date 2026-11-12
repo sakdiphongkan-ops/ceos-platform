@@ -30,4 +30,4 @@ jobs:
       - run: python -m pip install pandas numpy
       - run: python tests/research/test_build_monthly_factors_from_daily.py
       - uses: denoland/setup-deno@v2
-      - run: deno check supabase/functions/luna-daily-ingest/index.ts
+      - run: deno check --node-modules-dir=auto supabase/functions/luna-daily-ingest/index.ts
