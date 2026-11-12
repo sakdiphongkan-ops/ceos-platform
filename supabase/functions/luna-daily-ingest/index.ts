@@ -67,23 +67,45 @@ Deno.serve(async(req:Request)=>{
         if(!chart?.timestamp?.length) throw new Error("no timestamp");
         const q=chart?.indicators?.quote?.[0]??{};
         const a=chart?.indicators?.adjclose?.[0]?.adjclose??[];
-        const rows=chart.timestamp.map((ts:number,i:number)=>({
-          dataset_id:researchDatasetId,
-          date:new Date(ts*1000).toISOString().slice(0,10),
-          symbol:job.symbol,
-          market:job.market,
-          open:q.open?.[i]??null,
-          high:q.high?.[i]??null,
-          low:q.low?.[i]??null,
-          close:q.close?.[i]??null,
-          adj_close:a?.[i]??null,
-          volume:q.volume?.[i]??null,
-          amount:(q.close?.[i]!=null&&q.volume?.[i]!=null)?q.close[i]*q.volume[i]:null,
-          available_at:new Date(ts*1000).toISOString(),
-          source_seq:i,
-          source:"YAHOO_FINANCE_CHART:1d",
-          raw:{}
-        }));
+        const rows=chart.timestamp.map((ts:number,i:number)=>{
+          const date=new Date(ts*1000).toISOString().slice(0,10);
+          const open=q.open?.[i]??null;
+          const high=q.high?.[i]??null;
+          const low=q.low?.[i]??null;
+          const close=q.close?.[i]??null;
+          const adjClose=a?.[i]??null;
+          const volume=q.volume?.[i]??null;
+          const ohlcValid=open!=null&&high!=null&&low!=null&&close!=null
+            &&open>0&&high>0&&low>0&&close>0
+            &&high>=low&&high>=Math.max(open,close)&&low<=Math.min(open,close);
+          const nullBar=open==null&&high==null&&low==null&&close==null
+            &&adjClose==null&&volume==null;
+          const [year,month,day]=date.split("-").map(Number);
+          // Yahoo's chart timestamp is not the time the completed Thai daily bar became knowable.
+          // Set conservative point-in-time availability to 17:05 Asia/Bangkok (10:05 UTC).
+          const availableAt=new Date(Date.UTC(year,month-1,day,10,5,0)).toISOString();
+          return {
+            dataset_id:researchDatasetId,
+            date,
+            symbol:job.symbol,
+            market:job.market,
+            open,high,low,close,
+            adj_close:adjClose,
+            volume,
+            amount:(close!=null&&volume!=null)?close*volume:null,
+            available_at:availableAt,
+            source_seq:i,
+            source:"YAHOO_FINANCE_CHART:1d",
+            raw:{
+              provider:"YAHOO_FINANCE_CHART",
+              provider_timestamp:new Date(ts*1000).toISOString(),
+              availability_policy:"THAI_DAILY_BAR_AFTER_CLOSE_17:05_ASIA_BANGKOK",
+              ohlc_valid:ohlcValid,
+              null_bar:nullBar,
+              adjusted_close_valid:adjClose!=null&&adjClose>0
+            }
+          };
+        });
         for(let i=0;i<rows.length;i+=500){
           const {error}=await supabase.from("luna_research_prices")
             .upsert(rows.slice(i,i+500),{onConflict:"dataset_id,symbol,date"});
