@@ -9,7 +9,7 @@ on:
       - "luna-th1h/tsconfig.json"
       - "luna-th1h/Dockerfile.research-worker"
       - "Dockerfile.luna-research-worker"
-      - "supabase/migrations/202611120001_luna_durable_research_queue_v1.sql"
+      - "supabase/migrations/20261112030000_luna_durable_research_queue_v1.sql"
       - ".github/workflows/luna-research-worker-ci.yml"
   pull_request:
     paths:
