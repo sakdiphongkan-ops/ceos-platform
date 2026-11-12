@@ -32,6 +32,7 @@ async function getManifest(key:string){
     dataset_id:string;row_count:number;source_sha256_uncompressed_ndjson:string;object_key:string;
   };
   if(manifest.object_key!==key||manifest.dataset_id!==archive.dataset_id) throw new Error("ARCHIVE_MANIFEST_IDENTITY_MISMATCH");
+  if(manifest.source_sha256_uncompressed_ndjson!==archive.source_sha256||Number(manifest.row_count)!==Number(archive.row_count)) throw new Error("ARCHIVE_REGISTRY_MANIFEST_MISMATCH");
   return {archive,manifest};
 }
 async function verifyStream(key:string,expectedRows:number,expectedHash:string){
