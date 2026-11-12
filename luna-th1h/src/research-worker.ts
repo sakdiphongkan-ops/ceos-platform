@@ -18,7 +18,9 @@ const db=createClient(supabaseUrl,serviceRoleKey,{
 type Job={id:string;job_type:string;payload:Record<string,unknown>;attempts:number;checkpoint:Record<string,unknown>;idempotency_key:string};
 let stopping=false;
 let currentJobId:string|null=null;
-let lastScheduleBucket="";\nlet lastHeartbeatAt=0;\nlet lastRetentionDate="";
+let lastScheduleBucket="";
+let lastHeartbeatAt=0;
+let lastRetentionDate="";
 
 function bangkokParts(date=new Date()){
   const parts=new Intl.DateTimeFormat("en-CA",{
