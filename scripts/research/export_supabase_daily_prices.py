@@ -61,9 +61,12 @@ def main():
 
     df = pd.DataFrame(rows, columns=COLUMNS)
     df["date"] = pd.to_datetime(df["date"])
-    for c in [x for x in COLUMNS if x not in {"date","symbol","market","available_at"}]:
+    for c in ["open","high","low","close","adj_close","volume","amount","source_seq"]:
         df[c] = pd.to_numeric(df[c], errors="coerce")
+    for c in ["ohlc_valid","bar_eligible","close_return_eligible"]:
+        df[c] = df[c].astype("boolean")
     df["available_at"] = pd.to_datetime(df["available_at"], utc=True, errors="coerce")
+    df["source_available_at"] = pd.to_datetime(df["source_available_at"], utc=True, errors="coerce")
     df = df.sort_values(["symbol","date"]).drop_duplicates(["symbol","date"])
 
     out = Path(args.output)
