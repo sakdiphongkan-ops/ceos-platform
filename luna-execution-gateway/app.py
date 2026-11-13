@@ -1,5 +1,6 @@
 import asyncio
 import json
+import math
 import os
 import threading
 import time
@@ -18,7 +19,7 @@ except Exception:
     websockets = None
 
 from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictInt, field_validator
 from broker_timing import extract_broker_native_submitted_at_ms
 
 try:
@@ -27,6 +28,43 @@ try:
 except Exception:  # pragma: no cover
     Investor = None
     settrade_config = {}
+
+def _env_bool(raw: Optional[str], fallback: bool) -> bool:
+    """Parse an explicit boolean; malformed values preserve the safe default."""
+    if raw is None:
+        return fallback
+    value = raw.strip().lower()
+    if value == "true":
+        return True
+    if value == "false":
+        return False
+    return fallback
+
+
+def _bounded_float(raw: Optional[str], fallback: float, minimum: float, maximum: float) -> float:
+    """Parse a finite, bounded environment number without crashing startup."""
+    try:
+        value = float(raw) if raw is not None and raw.strip() else float(fallback)
+    except (TypeError, ValueError, OverflowError):
+        return float(fallback)
+    if not math.isfinite(value) or value < minimum or value > maximum:
+        return float(fallback)
+    return value
+
+
+def _bounded_int(raw: Optional[str], fallback: int, minimum: int, maximum: int) -> int:
+    """Parse an integer environment value; fractional/non-finite input falls back."""
+    try:
+        numeric = float(raw) if raw is not None and raw.strip() else float(fallback)
+    except (TypeError, ValueError, OverflowError):
+        return int(fallback)
+    if not math.isfinite(numeric) or not numeric.is_integer():
+        return int(fallback)
+    value = int(numeric)
+    if value < minimum or value > maximum:
+        return int(fallback)
+    return value
+
 
 APP_VERSION = "0.7.3"
 RELEASE_SOURCE_REVISION = (
@@ -51,21 +89,21 @@ print(
 
 # This service is paper-only by default. Live broker execution requires an explicit
 # operator override of LUNA_PAPER_ONLY_MODE=false in addition to the existing gates.
-PAPER_ONLY_MODE = os.getenv("LUNA_PAPER_ONLY_MODE", "true").lower() == "true"
-LIVE_ARMED = os.getenv("LIVE_TRADING_ARMED", "false").lower() == "true" and not PAPER_ONLY_MODE
+PAPER_ONLY_MODE = _env_bool(os.getenv("LUNA_PAPER_ONLY_MODE"), True)
+LIVE_ARMED = _env_bool(os.getenv("LIVE_TRADING_ARMED"), False) and not PAPER_ONLY_MODE
 GATEWAY_KEY = os.getenv("LUNA_GATEWAY_KEY", "")
 MARKETDATA_INGEST_KEY = os.getenv("LUNA_MARKETDATA_INGEST_KEY", "")
 
 
-GATEWAY_ORDER_GATE_ENABLED = os.getenv("LUNA_GATEWAY_ORDER_GATE_ENABLED", "false").lower() == "true"
-GATEWAY_KILL_SWITCH = os.getenv("LUNA_GATEWAY_KILL_SWITCH", "true").lower() == "true"
-GATEWAY_MAX_ORDER_NOTIONAL = max(1.0, float(os.getenv("LUNA_GATEWAY_MAX_ORDER_NOTIONAL", "50000")))
-GATEWAY_MAX_ORDERS_PER_MINUTE = max(1, int(os.getenv("LUNA_GATEWAY_MAX_ORDERS_PER_MINUTE", "2")))
-GATEWAY_MAX_QUOTE_AGE_SEC = max(0.1, float(os.getenv("LUNA_GATEWAY_MAX_QUOTE_AGE_SEC", "2")))
-GATEWAY_MAX_PRICE_DEVIATION_BPS = max(1.0, float(os.getenv("LUNA_GATEWAY_MAX_PRICE_DEVIATION_BPS", "75")))
-GATEWAY_BROKER_FAILURE_TRIP_COUNT = max(1, int(os.getenv("LUNA_GATEWAY_BROKER_FAILURE_TRIP_COUNT", "3")))
+GATEWAY_ORDER_GATE_ENABLED = _env_bool(os.getenv("LUNA_GATEWAY_ORDER_GATE_ENABLED"), False)
+GATEWAY_KILL_SWITCH = _env_bool(os.getenv("LUNA_GATEWAY_KILL_SWITCH"), True)
+GATEWAY_MAX_ORDER_NOTIONAL = _bounded_float(os.getenv("LUNA_GATEWAY_MAX_ORDER_NOTIONAL"), 50000.0, 1.0, 1_000_000_000.0)
+GATEWAY_MAX_ORDERS_PER_MINUTE = _bounded_int(os.getenv("LUNA_GATEWAY_MAX_ORDERS_PER_MINUTE"), 2, 1, 1000)
+GATEWAY_MAX_QUOTE_AGE_SEC = _bounded_float(os.getenv("LUNA_GATEWAY_MAX_QUOTE_AGE_SEC"), 2.0, 0.1, 60.0)
+GATEWAY_MAX_PRICE_DEVIATION_BPS = _bounded_float(os.getenv("LUNA_GATEWAY_MAX_PRICE_DEVIATION_BPS"), 75.0, 1.0, 10_000.0)
+GATEWAY_BROKER_FAILURE_TRIP_COUNT = _bounded_int(os.getenv("LUNA_GATEWAY_BROKER_FAILURE_TRIP_COUNT"), 3, 1, 1000)
 GATEWAY_CIRCUIT_RESET_KEY = os.getenv("LUNA_GATEWAY_CIRCUIT_RESET_KEY", "")
-LUNA_LIVE_MIN_REALTIME_COVERAGE = min(1.0, max(0.0, float(os.getenv("LUNA_LIVE_MIN_REALTIME_COVERAGE", "0.99"))))
+LUNA_LIVE_MIN_REALTIME_COVERAGE = _bounded_float(os.getenv("LUNA_LIVE_MIN_REALTIME_COVERAGE"), 0.99, 0.5, 1.0)
 
 _safety_lock = threading.Lock()
 _broker_failure_streak = 0
@@ -95,26 +133,26 @@ SET_API_BASE = os.getenv(
     "SET_MARKETDATA_API_BASE",
     "https://marketplace.set.or.th/api/public/realtime-data/stock",
 )
-SET_API_POLL_SEC = max(1.0, float(os.getenv("SET_MARKETDATA_POLL_SEC", "2")))
-SET_API_TIMEOUT_SEC = max(2.0, float(os.getenv("SET_MARKETDATA_TIMEOUT_SEC", "8")))
-TOPTRADER_ENABLED = os.getenv("LUNA_TOPTRADER_BACKUP_ENABLED", "true").lower() == "true"
+SET_API_POLL_SEC = _bounded_float(os.getenv("SET_MARKETDATA_POLL_SEC"), 2.0, 1.0, 60.0)
+SET_API_TIMEOUT_SEC = _bounded_float(os.getenv("SET_MARKETDATA_TIMEOUT_SEC"), 8.0, 2.0, 120.0)
+TOPTRADER_ENABLED = _env_bool(os.getenv("LUNA_TOPTRADER_BACKUP_ENABLED"), True)
 TOPTRADER_API_BASE = os.getenv("LUNA_TOPTRADER_API_BASE", "https://api.toptrader.co.th/v1/market/tick")
 TOPTRADER_SYMBOLS_BASE = os.getenv("LUNA_TOPTRADER_SYMBOLS_BASE", "https://api.toptrader.co.th/v1/market/symbols")
-TOPTRADER_WS_ENABLED = os.getenv("LUNA_TOPTRADER_WS_ENABLED", "true").lower() == "true"
+TOPTRADER_WS_ENABLED = _env_bool(os.getenv("LUNA_TOPTRADER_WS_ENABLED"), True)
 TOPTRADER_WS_BASE = os.getenv("LUNA_TOPTRADER_WS_BASE", "wss://ws.toptrader.co.th/market")
-TOPTRADER_WS_CHUNK_SIZE = max(1, min(512, int(os.getenv("LUNA_TOPTRADER_WS_CHUNK_SIZE", "128"))))
-TOPTRADER_WS_RECONNECT_SEC = max(1.0, float(os.getenv("LUNA_TOPTRADER_WS_RECONNECT_SEC", "3")))
-TOPTRADER_POLL_SEC = max(1.0, float(os.getenv("LUNA_TOPTRADER_POLL_SEC", "2")))
-TOPTRADER_TIMEOUT_SEC = max(2.0, float(os.getenv("LUNA_TOPTRADER_TIMEOUT_SEC", "8")))
-TOPTRADER_REST_PUMP_ENABLED = os.getenv("LUNA_TOPTRADER_REST_PUMP_ENABLED", "true").lower() == "true"
+TOPTRADER_WS_CHUNK_SIZE = _bounded_int(os.getenv("LUNA_TOPTRADER_WS_CHUNK_SIZE"), 128, 1, 512)
+TOPTRADER_WS_RECONNECT_SEC = _bounded_float(os.getenv("LUNA_TOPTRADER_WS_RECONNECT_SEC"), 3.0, 1.0, 300.0)
+TOPTRADER_POLL_SEC = _bounded_float(os.getenv("LUNA_TOPTRADER_POLL_SEC"), 2.0, 1.0, 60.0)
+TOPTRADER_TIMEOUT_SEC = _bounded_float(os.getenv("LUNA_TOPTRADER_TIMEOUT_SEC"), 8.0, 2.0, 120.0)
+TOPTRADER_REST_PUMP_ENABLED = _env_bool(os.getenv("LUNA_TOPTRADER_REST_PUMP_ENABLED"), True)
 
 # Paper-only public fallback. TradingView's public Thailand screener is not
 # treated as exchange-certified real-time data; it is used only to keep the
 # Paper Trading pipeline alive when licensed providers are unavailable.
 TRADINGVIEW_URL = os.getenv("TRADINGVIEW_SCANNER_URL", "https://scanner.tradingview.com/thailand/scan")
-TRADINGVIEW_POLL_SEC = max(2.0, float(os.getenv("TRADINGVIEW_POLL_SEC", "5")))
+TRADINGVIEW_POLL_SEC = _bounded_float(os.getenv("TRADINGVIEW_POLL_SEC"), 5.0, 2.0, 300.0)
 PUBLIC_FALLBACK_ENABLED = (
-    os.getenv("LUNA_PUBLIC_MARKETDATA_FALLBACK", "false").lower() == "true"
+    _env_bool(os.getenv("LUNA_PUBLIC_MARKETDATA_FALLBACK"), False)
     and not LIVE_ARMED
 )
 
@@ -125,7 +163,7 @@ APP_CODE = os.getenv("LUNA_SETTRADE_APP_CODE") or os.getenv("SETTRADE_APP_CODE",
 SETTRADE_ENV = (os.getenv("LUNA_SETTRADE_ENV") or os.getenv("SETTRADE_ENV", "prod")).lower()
 EXECUTION_LEDGER_URL = os.getenv("LUNA_EXECUTION_LEDGER_URL", "https://wigzicwgcsrhdummrbjx.supabase.co/functions/v1/luna-execution-gateway").rstrip("/")
 EXECUTION_LEDGER_KEY = os.getenv("LUNA_AGENT_KEY", "")
-EXECUTION_LEDGER_ENABLED = os.getenv("LUNA_EXECUTION_LEDGER_ENABLED", "false").lower() == "true"
+EXECUTION_LEDGER_ENABLED = _env_bool(os.getenv("LUNA_EXECUTION_LEDGER_ENABLED"), False)
 ORDER_AUTH_KEY = os.getenv("LUNA_ORDER_AUTH_KEY", "")
 try:
     SETTRADE_SDK_VERSION = package_version("settrade-v2")
@@ -138,20 +176,20 @@ try:
 except Exception:
     pass
 
-REALTIME_ENABLED = os.getenv("REALTIME_MARKETDATA_ENABLED", "false").lower() == "true"
-REALTIME_BOOK = os.getenv("REALTIME_BID_OFFER_ENABLED", "true").lower() == "true"
+REALTIME_ENABLED = _env_bool(os.getenv("REALTIME_MARKETDATA_ENABLED"), False)
+REALTIME_BOOK = _env_bool(os.getenv("REALTIME_BID_OFFER_ENABLED"), True)
 INGEST_ENABLED = bool(MARKETDATA_INGEST_KEY)
-EXTERNAL_BRIDGE_MAX_AGE_SEC = max(5.0, float(os.getenv("LUNA_EXTERNAL_BRIDGE_MAX_AGE_SEC", "10")))
+EXTERNAL_BRIDGE_MAX_AGE_SEC = _bounded_float(os.getenv("LUNA_EXTERNAL_BRIDGE_MAX_AGE_SEC"), 10.0, 5.0, 600.0)
 _external_bridge_last_ts = 0.0
-PUBLIC_STREAM_ENABLED = os.getenv("LUNA_PUBLIC_STREAM_ENABLED", "true").lower() == "true"
-PUBLIC_AUTHORIZED_FEED_ENABLED = os.getenv("LUNA_PUBLIC_AUTHORIZED_FEED_ENABLED", "false").lower() == "true"
-PUBLIC_STREAM_MAX_CLIENTS = max(1, int(os.getenv("LUNA_PUBLIC_STREAM_MAX_CLIENTS", "50")))
+PUBLIC_STREAM_ENABLED = _env_bool(os.getenv("LUNA_PUBLIC_STREAM_ENABLED"), True)
+PUBLIC_AUTHORIZED_FEED_ENABLED = _env_bool(os.getenv("LUNA_PUBLIC_AUTHORIZED_FEED_ENABLED"), False)
+PUBLIC_STREAM_MAX_CLIENTS = _bounded_int(os.getenv("LUNA_PUBLIC_STREAM_MAX_CLIENTS"), 50, 1, 500)
 SYMBOLS = [s.strip().upper() for s in os.getenv("SETTRADE_REALTIME_SYMBOLS", "").split(",") if s.strip()]
 
-RECONNECT_BASE_SEC = max(1.0, float(os.getenv("LUNA_MARKET_RECONNECT_BASE_SEC", "2")))
-RECONNECT_MAX_SEC = max(RECONNECT_BASE_SEC, float(os.getenv("LUNA_MARKET_RECONNECT_MAX_SEC", "60")))
-STALE_AFTER_SEC = max(5.0, float(os.getenv("LUNA_MARKET_STALE_AFTER_SEC", "20")))
-CREDENTIAL_RETRY_SEC = max(5.0, float(os.getenv("LUNA_MARKET_CREDENTIAL_RETRY_SEC", "10")))
+RECONNECT_BASE_SEC = _bounded_float(os.getenv("LUNA_MARKET_RECONNECT_BASE_SEC"), 2.0, 1.0, 300.0)
+RECONNECT_MAX_SEC = _bounded_float(os.getenv("LUNA_MARKET_RECONNECT_MAX_SEC"), max(60.0, RECONNECT_BASE_SEC), RECONNECT_BASE_SEC, 600.0)
+STALE_AFTER_SEC = _bounded_float(os.getenv("LUNA_MARKET_STALE_AFTER_SEC"), 20.0, 5.0, 600.0)
+CREDENTIAL_RETRY_SEC = _bounded_float(os.getenv("LUNA_MARKET_CREDENTIAL_RETRY_SEC"), 10.0, 5.0, 600.0)
 
 SETTRADE_MARKETDATA_CREDENTIALS = {
     "SETTRADE_BROKER_ID": BROKER_ID,
@@ -394,12 +432,56 @@ def _prune_order_attempts(now: float):
         _order_attempt_timestamps.pop(0)
 
 
+def _timestamp_is_fresh(value: Any, now: float, max_age_sec: float) -> bool:
+    if not isinstance(value, str) or not value.strip():
+        return False
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            return False
+        age = now - parsed.timestamp()
+    except (TypeError, ValueError, OverflowError):
+        return False
+    return 0.0 <= age <= max_age_sec
+
+
+def _quote_freshness_state(quote: Dict[str, Any], now: Optional[float] = None) -> tuple[bool, bool]:
+    """Return (fresh_quote, fresh_book), keeping source timestamps distinct from receipt time."""
+    current = time.time() if now is None else now
+    source = str(quote.get("source") or "").strip().lower()
+    try:
+        ingested = float(quote.get("_ingested_ts"))
+        ingested_age = current - ingested
+        receive_fresh = math.isfinite(ingested) and 0.0 <= ingested_age <= GATEWAY_MAX_QUOTE_AGE_SEC
+    except (TypeError, ValueError, OverflowError):
+        receive_fresh = False
+
+    quote_source_ts = quote.get("source_ts")
+    if quote_source_ts is None or (isinstance(quote_source_ts, str) and not quote_source_ts.strip()):
+        quote_source_fresh = source == "settrade-open-api-realtime"
+    else:
+        quote_source_fresh = _timestamp_is_fresh(quote_source_ts, current, GATEWAY_MAX_QUOTE_AGE_SEC)
+    quote_fresh = receive_fresh and quote_source_fresh
+    if not quote_fresh:
+        return False, False
+
+    book_received_fresh = _timestamp_is_fresh(
+        quote.get("book_received_ts"), current, GATEWAY_MAX_QUOTE_AGE_SEC
+    )
+    book_source_ts = quote.get("book_source_ts")
+    if book_source_ts is None or (isinstance(book_source_ts, str) and not book_source_ts.strip()):
+        book_source_fresh = source == "settrade-open-api-realtime"
+    else:
+        book_source_fresh = _timestamp_is_fresh(book_source_ts, current, GATEWAY_MAX_QUOTE_AGE_SEC)
+    return True, book_received_fresh and book_source_fresh
+
+
 def _quote_matches_selected_provider(quote: Dict[str, Any]) -> bool:
     source = str(quote.get("source") or "").lower()
     if _selected_provider == "SETTRADE":
-        return source.startswith("settrade")
+        return source == "settrade-open-api-realtime"
     if _selected_provider == "SET_API":
-        return source.startswith("set-market-data-api")
+        return source == "set-market-data-api-realtime"
     return False
 
 
@@ -416,16 +498,22 @@ def _quote_coverage_snapshot() -> Dict[str, Any]:
             continue
         if not _quote_matches_selected_provider(quote):
             continue
-        ts = quote.get("_ingested_ts")
-        if ts is None:
+        quote_fresh, book_timestamps_fresh = _quote_freshness_state(quote, now)
+        if not quote_fresh:
             continue
-        age = now - float(ts)
-        if 0.0 <= age <= GATEWAY_MAX_QUOTE_AGE_SEC:
-            fresh_symbols.add(symbol)
-            bid = _num(quote.get("bid")); ask = _num(quote.get("ask"))
-            bs = _num(quote.get("bid_size")); ass = _num(quote.get("ask_size"))
-            if bid and bid > 0 and ask and ask > 0 and ask >= bid and bs and bs > 0 and ass and ass > 0:
-                verified_book_symbols.add(symbol)
+
+        fresh_symbols.add(symbol)
+        bid = _num(quote.get("bid")); ask = _num(quote.get("ask"))
+        bs = _num(quote.get("bid_size")); ass = _num(quote.get("ask_size"))
+        book_fresh = (
+            book_timestamps_fresh
+            and bid is not None and bid > 0
+            and ask is not None and ask > 0 and ask >= bid
+            and bs is not None and bs > 0
+            and ass is not None and ass > 0
+        )
+        if book_fresh:
+            verified_book_symbols.add(symbol)
     target_count = len(target_symbols)
     return {
         "target_count": target_count,
@@ -464,6 +552,8 @@ def _connectivity_proof() -> Dict[str, Any]:
         "set_api_backup_configured": set_api_configured(),
         "realtime_enabled": REALTIME_ENABLED,
         "symbols_configured": coverage["target_count"] > 0,
+        "fresh_quotes_present": coverage["fresh_quote_count"] > 0,
+        "verified_book_present": coverage["verified_book_count"] > 0,
         "fresh_coverage_sufficient": coverage["fresh_coverage_ratio"] >= LUNA_LIVE_MIN_REALTIME_COVERAGE,
         "verified_book_coverage_sufficient": coverage["verified_book_coverage_ratio"] >= LUNA_LIVE_MIN_REALTIME_COVERAGE,
     }
@@ -481,6 +571,8 @@ def _connectivity_proof() -> Dict[str, Any]:
             and checks["execution_ledger_configured"]
             and checks["realtime_enabled"]
             and checks["symbols_configured"]
+            and checks["fresh_quotes_present"]
+            and checks["verified_book_present"]
             and checks["fresh_coverage_sufficient"]
             and checks["verified_book_coverage_sufficient"]
         ),
@@ -505,7 +597,13 @@ def _system_status() -> str:
     if LIVE_ARMED and proof["live_execution_ready"] and not GATEWAY_KILL_SWITCH and GATEWAY_ORDER_GATE_ENABLED:
         return "LIVE_READY"
     if not LIVE_ARMED:
-        if proof["checks"]["authorized_marketdata_selected"] and proof["checks"]["fresh_coverage_sufficient"]:
+        if (
+            proof["checks"]["authorized_marketdata_selected"]
+            and proof["checks"]["fresh_quotes_present"]
+            and proof["checks"]["verified_book_present"]
+            and proof["checks"]["fresh_coverage_sufficient"]
+            and proof["checks"]["verified_book_coverage_sufficient"]
+        ):
             return "PAPER_READY"
         if proof["checks"]["realtime_enabled"] and proof["coverage"]["quoted_count"] > 0:
             return "PAPER_DEGRADED"
@@ -548,22 +646,31 @@ def _hard_order_gate(payload: Any):
     if side == "BUY" and phase != "ACTIVE":
         raise HTTPException(status_code=423, detail={"code": "buy_locked_by_market_phase", "market_phase": phase})
 
-    notional = float(payload.price) * int(payload.volume)
-    if notional <= 0 or notional > GATEWAY_MAX_ORDER_NOTIONAL + 1e-9:
+    price = _num(payload.price)
+    volume = payload.volume
+    if price is None or price <= 0 or isinstance(volume, bool) or not isinstance(volume, int) or volume <= 0:
+        raise HTTPException(status_code=422, detail={"code": "invalid_order_price_or_volume"})
+    notional = price * volume
+    if not math.isfinite(notional) or notional <= 0 or notional > GATEWAY_MAX_ORDER_NOTIONAL + 1e-9:
         raise HTTPException(status_code=422, detail={"code": "max_order_notional", "notional": notional})
 
+    symbol = str(payload.symbol).strip().upper()
     with _quote_lock:
-        quote = dict(_quotes.get(str(payload.symbol).strip().upper(), {}))
+        quote = dict(_quotes.get(symbol, {}))
     if not quote:
         raise HTTPException(status_code=503, detail={"code": "verified_quote_unavailable"})
+    if str(quote.get("symbol") or "").strip().upper() != symbol:
+        raise HTTPException(status_code=503, detail={"code": "quote_symbol_mismatch"})
     if not _quote_matches_selected_provider(quote):
         raise HTTPException(
             status_code=503,
             detail={"code": "quote_provider_mismatch", "selected_provider": _selected_provider},
         )
-    age = time.time() - float(quote.get("_ingested_ts") or 0.0)
-    if age < 0 or age > GATEWAY_MAX_QUOTE_AGE_SEC:
-        raise HTTPException(status_code=503, detail={"code": "quote_stale", "age_sec": age})
+    quote_fresh, book_timestamps_fresh = _quote_freshness_state(quote)
+    if not quote_fresh:
+        raise HTTPException(status_code=503, detail={"code": "quote_source_stale_or_unverified"})
+    if not book_timestamps_fresh:
+        raise HTTPException(status_code=503, detail={"code": "book_source_stale_or_unverified"})
     bid = _num(quote.get("bid"))
     ask = _num(quote.get("ask"))
     bid_size = _num(quote.get("bid_size"))
@@ -577,7 +684,7 @@ def _hard_order_gate(payload: Any):
     ):
         raise HTTPException(status_code=503, detail={"code": "verified_book_unavailable"})
     executable = ask if side == "BUY" else bid
-    deviation_bps = abs(float(payload.price) - executable) / executable * 10000.0
+    deviation_bps = abs(price - executable) / executable * 10000.0
     if deviation_bps > GATEWAY_MAX_PRICE_DEVIATION_BPS:
         raise HTTPException(status_code=423, detail={
             "code": "price_deviation_guard",
@@ -799,13 +906,19 @@ def _normalize_account_state(eq):
 
 
 def _num(value):
-    try:
-        if value is None or value == "":
-            return None
-        n = float(value)
-        return n if n == n and n not in (float("inf"), float("-inf")) else None
-    except Exception:
+    # JSON booleans are Python integers by inheritance; never turn true into price 1.
+    # Reject containers and non-finite values instead of coercing provider payloads.
+    if value is None or isinstance(value, bool):
         return None
+    if not isinstance(value, (int, float, str)):
+        return None
+    if isinstance(value, str) and not value.strip():
+        return None
+    try:
+        n = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return n if math.isfinite(n) else None
 
 
 def _now_iso():
@@ -880,30 +993,70 @@ def _quote_payload(
     last: Any = None,
     bid: Any = None,
     ask: Any = None,
-    bid_size: Any = None,    ask_size: Any = None,
+    bid_size: Any = None,
+    ask_size: Any = None,
     source: str = "",
     source_ts: Any = None,
     raw: Any = None,
     total_volume: Any = None,
+    book_snapshot: bool = False,
 ):
     now = _now_iso()
+    received_at = time.time()
     with _quote_lock:
         prior = dict(_quotes.get(symbol, {}))
         effective_source = source or prior.get("source")
         same_source = bool(prior) and effective_source == prior.get("source")
+
+        # Price-only events must never refresh the age of a previously seen book.
+        # For a book event, require all four executable top-of-book fields to be
+        # finite, positive, and non-crossed in this same event; otherwise clear
+        # the book rather than mixing a new side with a stale side.
+        if book_snapshot:
+            bid_value = _num(bid)
+            ask_value = _num(ask)
+            bid_size_value = _num(bid_size)
+            ask_size_value = _num(ask_size)
+            complete_book = (
+                bid_value is not None and bid_value > 0
+                and ask_value is not None and ask_value > 0 and ask_value >= bid_value
+                and bid_size_value is not None and bid_size_value > 0
+                and ask_size_value is not None and ask_size_value > 0
+            )
+            if complete_book:
+                quote_bid, quote_ask = bid_value, ask_value
+                quote_bid_size, quote_ask_size = bid_size_value, ask_size_value
+                book_received_ts = now
+                # Preserve only an actual provider timestamp. Never label local receive time
+                # as source time; the exact authenticated Settrade source has a controlled
+                # receive-time freshness fallback in the coverage and consumer validators.
+                book_source_ts = source_ts if isinstance(source_ts, str) and source_ts.strip() else None
+            else:
+                quote_bid = quote_ask = quote_bid_size = quote_ask_size = None
+                book_received_ts = book_source_ts = None
+        else:
+            quote_bid = prior.get("bid") if same_source else None
+            quote_ask = prior.get("ask") if same_source else None
+            quote_bid_size = prior.get("bid_size") if same_source else None
+            quote_ask_size = prior.get("ask_size") if same_source else None
+            book_received_ts = prior.get("book_received_ts") if same_source else None
+            book_source_ts = prior.get("book_source_ts") if same_source else None
+
         quote = {
             "symbol": symbol,
             "ts": now,
             "source_ts": source_ts,
-            "bid": _num(bid) if bid is not None else (prior.get("bid") if same_source else None),
-            "ask": _num(ask) if ask is not None else (prior.get("ask") if same_source else None),
+            "book_received_ts": book_received_ts,
+            "book_source_ts": book_source_ts,
+            "bid": quote_bid,
+            "ask": quote_ask,
             "last": _num(last) if last is not None else (prior.get("last") if same_source else None),
-            "bid_size": _num(bid_size) if bid_size is not None else (prior.get("bid_size") if same_source else None),
-            "ask_size": _num(ask_size) if ask_size is not None else (prior.get("ask_size") if same_source else None),
+            "bid_size": quote_bid_size,
+            "ask_size": quote_ask_size,
             "total_volume": _num(total_volume) if total_volume is not None else (prior.get("total_volume") if same_source else None),
             "source": effective_source,
             "raw": raw,
-            "_ingested_ts": time.time(),
+            "_ingested_ts": received_at,
         }
         prior_public = {k: v for k, v in prior.items() if k not in ("raw", "_ingested_ts")}
         current_public = {k: v for k, v in quote.items() if k not in ("raw", "_ingested_ts")}
@@ -933,6 +1086,7 @@ def _update_settrade_quote(symbol: str, data: Dict[str, Any], channel: str):
             ask_size=data.get("ask_volume1"),
             source="settrade-open-api-realtime",
             raw=data,
+            book_snapshot=True,
         )
     _collector_error = None
     if was_new:
@@ -1009,7 +1163,7 @@ def _toptrader_ws_message(message: str):
                 bid, bid_size = level.get("price"), level.get("volume")
             elif side == "sell" and ask is None:
                 ask, ask_size = level.get("price"), level.get("volume")
-        _quote_payload(symbol=symbol, bid=bid, ask=ask, bid_size=bid_size, ask_size=ask_size, source="toptrader-public-ws", source_ts=_epoch_to_iso(data.get("datetime")), raw=data)
+        _quote_payload(symbol=symbol, bid=bid, ask=ask, bid_size=bid_size, ask_size=ask_size, source="toptrader-public-ws", source_ts=_epoch_to_iso(data.get("datetime")), raw=data, book_snapshot=True)
     with _toptrader_ws_lock:
         _toptrader_ws_seen.add(symbol)
 
@@ -1150,7 +1304,7 @@ def _apply_toptrader_rest_payload(payload: Any) -> int:
         symbol = str(row.get("symbol") or "").upper()
         if symbol not in SYMBOLS:
             continue
-        _quote_payload(symbol=symbol, last=row.get("last"), bid=row.get("bid") if REALTIME_BOOK else None, ask=row.get("ask") if REALTIME_BOOK else None, source="toptrader-public-rest", source_ts=_epoch_to_iso(row.get("datetime")), total_volume=row.get("volume"), raw=row)
+        _quote_payload(symbol=symbol, last=row.get("last"), bid=row.get("bid") if REALTIME_BOOK else None, ask=row.get("ask") if REALTIME_BOOK else None, source="toptrader-public-rest", source_ts=_epoch_to_iso(row.get("datetime")), total_volume=row.get("volume"), raw=row, book_snapshot=REALTIME_BOOK)
         found += 1
     return found
 
@@ -1276,6 +1430,7 @@ def _run_set_api():
                     source="set-market-data-api-realtime",
                     source_ts=row.get("time"),
                     total_volume=row.get("totalVolume"),
+                    book_snapshot=REALTIME_BOOK,
                     raw=row,
                 )
                 found += 1
@@ -1645,9 +1800,20 @@ class PlaceOrder(BaseModel):
     strategy_version: str = Field(min_length=1, max_length=200)
     symbol: str = Field(min_length=1, max_length=32)
     side: str
-    price: float = Field(gt=0)
-    volume: int = Field(gt=0)
+    price: float = Field(gt=0, allow_inf_nan=False)
+    volume: StrictInt = Field(gt=0)
     reason: str = ""
+
+    @field_validator("price", mode="before")
+    @classmethod
+    def price_must_be_numeric_not_boolean(cls, value: Any) -> Any:
+        # Permit integer-valued stock prices (e.g. 100), but reject booleans and
+        # strings/containers before Pydantic's float conversion.
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError("price_must_be_numeric")
+        if not math.isfinite(float(value)):
+            raise ValueError("price_must_be_finite")
+        return value
 
 
 class CancelOrder(BaseModel):
@@ -1980,6 +2146,7 @@ def marketdata_ingest(payload: MarketQuoteBatch, x_luna_gateway: Optional[str] =
             source_ts=quote.source_ts,
             total_volume=quote.total_volume,
             raw=quote.raw,
+            book_snapshot=any(v is not None for v in (quote.bid, quote.ask, quote.bid_size, quote.ask_size)),
         )
         accepted += 1
     global _collector_error, _external_bridge_last_ts, _selected_provider
@@ -2074,6 +2241,17 @@ def place(
     }
 
 
+def _hard_cancel_gate():
+    # Cancelling is a broker-side mutation too; never bypass the paper-only,
+    # armed-state, kill-switch or order-gate controls used for new orders.
+    if PAPER_ONLY_MODE or not LIVE_ARMED:
+        raise HTTPException(status_code=423, detail={"code": "live_trading_not_armed"})
+    if GATEWAY_KILL_SWITCH:
+        raise HTTPException(status_code=423, detail={"code": "gateway_kill_switch_active"})
+    if not GATEWAY_ORDER_GATE_ENABLED:
+        raise HTTPException(status_code=423, detail={"code": "hard_order_gate_disabled"})
+
+
 @app.post("/cancel")
 def cancel(
     payload: CancelOrder,
@@ -2081,6 +2259,7 @@ def cancel(
     x_luna_order: Optional[str] = Header(default=None),
 ):
     order_auth(x_luna_gateway, x_luna_order)
+    _hard_cancel_gate()
     eq = client()
     try:
         ledger = _ledger_lookup_broker_order(payload.broker_order_id)
@@ -2091,6 +2270,10 @@ def cancel(
         not request
         or not request.get("executed")
         or str(request.get("broker_order_id")) != payload.broker_order_id
+        or (
+            request.get("client_order_id") is not None
+            and str(request.get("client_order_id")) != payload.client_order_id
+        )
     ):
         raise HTTPException(status_code=409, detail={"code": "cancel_order_not_bound_to_persisted_execution"})
 

@@ -52,4 +52,27 @@ if(!state.positions[quote.symbol] || state.positions[quote.symbol].qty<=0){
   throw new Error("price-only paper BUY did not produce a position after simulated fill");
 }
 
+// A prefix-spoofed source must not inherit the price-only fallback.
+const spoofState=createPortfolio(config.initialCapital);
+const spoofQuote={...quote,source:"tradingview-public-screener-spoof"};
+mark(spoofState,spoofQuote);
+const spoofOrder=planOrder({...signal,symbol:spoofQuote.symbol},spoofQuote,spoofState);
+if(spoofOrder.accepted){
+  throw new Error("spoofed public-screener source must not be executable");
+}
+
+// An invalid execution mode is not equivalent to paper mode.
+const previousExecutionMode=config.executionMode;
+config.executionMode="invalid-mode";
+try{
+  const invalidModeState=createPortfolio(config.initialCapital);
+  mark(invalidModeState,quote);
+  const invalidModeOrder=planOrder(signal,quote,invalidModeState);
+  if(invalidModeOrder.accepted){
+    throw new Error("invalid execution mode must not allow price-only paper execution");
+  }
+}finally{
+  config.executionMode=previousExecutionMode;
+}
+
 console.log("execution price-only paper gate test: PASS");
