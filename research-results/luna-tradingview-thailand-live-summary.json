@@ -2,9 +2,9 @@
   "status": "COMPLETED",
   "endpoint": "https://scanner.tradingview.com/thailand/scan",
   "rows_by_interval": {
-    "1D": 887,
-    "1M": 887,
-    "1W": 887
+    "1D": 886,
+    "1M": 886,
+    "1W": 886
   },
   "intervals": [
     "1D",
