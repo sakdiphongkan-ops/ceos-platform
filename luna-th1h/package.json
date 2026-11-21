@@ -37,10 +37,16 @@
     "test:research-monthly-stats": "tsx src/research-monthly-stats.test.ts",
     "freeze:holdout": "tsx src/freeze-holdout.ts",
     "test:m1-overlay": "tsx src/m1-overlay.test.ts",
-    "test:data-quality": "tsx src/data-quality.test.ts"
+    "test:data-quality": "tsx src/data-quality.test.ts",
+    "research:worker": "tsx src/research-worker.ts",
+    "archive:research-prices": "tsx src/archive-research-prices.ts",
+    "verify:research-archive": "tsx src/verify-research-prices-archive.ts",
+    "restore:research-archive": "tsx src/restore-research-prices-archive.ts"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.57.0"
+    "@supabase/supabase-js": "^2.57.0",
+    "@aws-sdk/client-s3": "^3.900.0",
+    "@aws-sdk/lib-storage": "^3.900.0"
   },
   "devDependencies": {
     "tsx": "^4.19.1",
