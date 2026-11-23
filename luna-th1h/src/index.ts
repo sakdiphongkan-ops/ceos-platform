@@ -691,6 +691,9 @@ async function executeSignal(
       const control=await getExecutionControl();
       const gatewayHealth=await cachedLiveGatewayHealth(false);
       const snap=snapshot(portfolio);
+      if(!snap.valuation_ready || snap.market_value===null){
+        throw new Error(`LIVE_SAFETY_VALUATION_INCOMPLETE:${snap.unpriced_symbols.join(",")}`);
+      }
       const equity=snap.cash+snap.market_value;
       const dayStart=Number(portfolio.dayStartEquity??portfolio.initialCapital);
       const dailyPnl=equity-dayStart;
