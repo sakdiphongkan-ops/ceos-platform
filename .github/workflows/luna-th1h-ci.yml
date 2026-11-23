@@ -196,3 +196,19 @@ jobs:
           git add research-results/
           git diff --cached --quiet || git commit -m "research(luna): save repaired public tournament v3 rerun"
           git push
+
+  agent-platform-contract:
+    name: Multi-agent orchestrator contract tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Install Edge Function npm dependencies
+        run: deno install --node-modules-dir=auto --entrypoint supabase/functions/luna-ceo-agent/index.ts
+      - name: Type-check CEO orchestrator and validation tests
+        run: deno check supabase/functions/luna-ceo-agent/index.ts supabase/functions/luna-ceo-agent/plan_helpers_test.ts
+      - name: Run role routing, dependency and human-gate tests
+        run: deno test supabase/functions/luna-ceo-agent/plan_helpers_test.ts
