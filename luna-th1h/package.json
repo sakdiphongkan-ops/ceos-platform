@@ -29,6 +29,7 @@
     "test:risk-guards": "tsx src/execution-risk-guards.test.ts",
     "test:cost-replay": "tsx src/execution-cost-replay.test.ts",
     "test:price-only-paper-execution": "tsx src/execution-price-only-paper.test.ts",
+    "test:paper-trading-smoke": "tsx src/paper-trading-smoke.test.ts",
     "qa:verified-15m": "python3 ../scripts/research/qa_verified_15m.py",
     "test:latency-ledger": "tsx src/latency-ledger.test.ts",
     "test:research-preflight": "tsx src/research-preflight.test.ts",
