@@ -388,3 +388,15 @@ test("Release readiness does not hard-code stale deployment or authentication cl
   await expect(sourceRow).toContainText(/(PASS|NON-MASTER|UNVERIFIED)/);
   await expect(vercelRow).toContainText(/(READY|PREVIEW|UNVERIFIED)/);
 });
+
+test("LUNA never connects to the retired Railway public market stream", async ({ page }) => {
+  const websocketUrls: string[] = [];
+  page.on("websocket", (socket) => websocketUrls.push(socket.url()));
+
+  await page.goto("/luna", { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(2_000);
+
+  expect(
+    websocketUrls.some((url) => url.includes("luna-execution-gateway-production.up.railway.app")),
+  ).toBe(false);
+});
