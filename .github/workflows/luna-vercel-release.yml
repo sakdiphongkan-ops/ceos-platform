@@ -1,0 +1,78 @@
+name: LUNA Vercel Release
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - "app/**"
+      - "lib/**"
+      - "public/**"
+      - "next.config.mjs"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.json"
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+env:
+  VERCEL_ORG_ID: team_2TAZ4KjwLsycf8764AzDHap5
+  VERCEL_PROJECT_ID: prj_Zl2Xs9PREpxW6pHnnudqb604Yloa
+
+jobs:
+  preview:
+    if: ${{ github.event_name == 'pull_request' && secrets.VERCEL_TOKEN != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm install
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+      - name: Pull Preview environment
+        run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      - name: Build Vercel artifact
+        run: vercel build --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      - name: Deploy Preview
+        run: |
+          vercel deploy --prebuilt --token="$VERCEL_TOKEN" > deployment-url.txt
+          echo "Preview URL: $(cat deployment-url.txt)"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+  production:
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' && secrets.VERCEL_TOKEN != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm install
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+      - name: Pull Production environment
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      - name: Build Vercel artifact
+        run: vercel build --prod --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      - name: Deploy Production
+        run: |
+          vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}

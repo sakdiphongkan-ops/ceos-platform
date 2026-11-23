@@ -13,3 +13,5 @@ const nextConfig = {
 };
 
 export default nextConfig;
+
+// LUNA release marker: preview-first verification before production promotion.
