@@ -215,15 +215,17 @@ async function sha256(value:string) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return Array.from(new Uint8Array(digest)).map(b=>b.toString(16).padStart(2,"0")).join("");
 }
-async function runProbeOnly(input: unknown[], requestedMode: unknown = "both") {
+async function runProbeOnly(input: unknown[], requestedMode: unknown = "both", requestedListenMs: unknown = 3000) {
   const symbols = [...new Set(input.map(x=>String(x).trim().toUpperCase()).filter(x=>/^[A-Z0-9._&-]{1,20}$/.test(x)))].slice(0,10);
   if(!symbols.length) throw new Error("EMPTY_SYMBOL_LIST");
   const subscriptionMode = normalizeSubscriptionMode(requestedMode);
-  const c = await collectChunk(symbols, 3_000, subscriptionMode);
+  const requestedMs = Number(requestedListenMs);
+  const listenMs = Number.isFinite(requestedMs) ? Math.max(1_000,Math.min(10_000,Math.floor(requestedMs))) : 3_000;
+  const c = await collectChunk(symbols, listenMs, subscriptionMode);
   return {
     ok:true,status:c.opened?"PROBE_CONNECTED":"PROBE_CONNECTION_FAILED",
     no_database_writes:true,no_orders_created:true,live_execution_allowed:false,source:"TOPTRADER_PUBLIC_WEBSOCKET",
-    requested_symbols:symbols,subscription_mode:subscriptionMode,
+    requested_symbols:symbols,subscription_mode:subscriptionMode,listen_window_ms:listenMs,
     query_subscription_used:subscriptionMode!=="message",
     opened:c.opened,explicit_subscribe_sent:c.subscribeSent,frame_messages:c.frameCount,
     frame_metrics:c.metrics,
@@ -240,7 +242,8 @@ Deno.serve(async (req: Request) => {
   try {
     if(body?.probe_only===true) return json(await runProbeOnly(
       Array.isArray(body.symbols)?body.symbols:["PTT","KBANK","AOT","ADVANC"],
-      body.subscription_mode
+      body.subscription_mode,
+      body.listen_ms
     ));
 
     if(!(await inMarketWindow())) return json({

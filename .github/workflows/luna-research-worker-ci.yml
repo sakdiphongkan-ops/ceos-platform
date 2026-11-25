@@ -1,0 +1,48 @@
+name: LUNA Research Worker CI
+
+on:
+  push:
+    branches: [research/autonomous-paper-bot-20261112]
+    paths:
+      - "luna-th1h/src/research-worker.ts"
+      - "luna-th1h/src/archive-research-prices.ts"
+      - "luna-th1h/src/verify-research-prices-archive.ts"
+      - "luna-th1h/src/restore-research-prices-archive.ts"
+      - "supabase/migrations/20261112050000_luna_research_archive_registry_v1.sql"
+      - "supabase/migrations/20261112040000_luna_research_prices_cold_archive_export_v1.sql"
+      - "supabase/migrations/20261112060000_luna_research_dataset_integrity_audit_v1.sql"
+      - "supabase/migrations/20261112070000_luna_research_pit_availability_v1.sql"
+      - "luna-th1h/package.json"
+      - "luna-th1h/tsconfig.json"
+      - "luna-th1h/Dockerfile.research-worker"
+      - "Dockerfile.luna-research-worker"
+      - "supabase/migrations/20261112030000_luna_durable_research_queue_v1.sql"
+      - ".github/workflows/luna-research-worker-ci.yml"
+  pull_request:
+    paths:
+      - "luna-th1h/src/research-worker.ts"
+      - "luna-th1h/src/archive-research-prices.ts"
+      - "luna-th1h/src/verify-research-prices-archive.ts"
+      - "luna-th1h/src/restore-research-prices-archive.ts"
+      - "supabase/migrations/20261112030000_luna_durable_research_queue_v1.sql"
+      - "supabase/migrations/20261112040000_luna_research_prices_cold_archive_export_v1.sql"
+      - "supabase/migrations/20261112050000_luna_research_archive_registry_v1.sql"
+      - "supabase/migrations/20261112060000_luna_research_dataset_integrity_audit_v1.sql"
+      - "supabase/migrations/20261112070000_luna_research_pit_availability_v1.sql"
+      - "luna-th1h/package.json"
+      - "luna-th1h/tsconfig.json"
+      - "Dockerfile.luna-research-worker"
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: luna-th1h
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
