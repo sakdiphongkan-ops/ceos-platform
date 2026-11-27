@@ -15,7 +15,8 @@ const q=(symbol:string,last:number)=>({
   last,
   bidSize:100,
   askSize:100,
-  source:"test"
+  source:"test",
+  dataQuality:"verified_book"
 });
 
 const signal=(symbol:string)=>({

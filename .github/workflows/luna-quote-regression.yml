@@ -1,0 +1,107 @@
+name: LUNA quote regression matrix
+
+on:
+  push:
+    branches:
+      - luna/quote-regression-20261018
+    paths:
+      - "luna-th1h/src/market/provider.ts"
+      - "luna-th1h/src/market/set-marketplace.ts"
+      - "luna-th1h/src/execution.ts"
+      - "luna-th1h/src/risk.ts"
+      - "luna-th1h/src/config.ts"
+      - "luna-th1h/src/types.ts"
+      - "luna-th1h/src/execution-reservation.test.ts"
+      - "luna-th1h/src/quote-regression.test.ts"
+      - "luna-th1h/src/ingest-retention-migration-contract.test.ts"
+      - "supabase/migrations/20261019021449_luna_verified_ingest_retention_idempotency_20261018.sql"
+      - "supabase/migrations/20261019021452_luna_ingest_http_request_audit_20261018.sql"
+      - "supabase/tests/luna_ingest_retention_idempotency.pg.sql"
+      - "luna-th1h/package.json"
+      - "luna-execution-gateway/**"
+      - ".github/workflows/luna-quote-regression.yml"
+  pull_request:
+    branches: [master]
+    paths:
+      - "luna-th1h/src/market/provider.ts"
+      - "luna-th1h/src/market/set-marketplace.ts"
+      - "luna-th1h/src/execution.ts"
+      - "luna-th1h/src/risk.ts"
+      - "luna-th1h/src/config.ts"
+      - "luna-th1h/src/types.ts"
+      - "luna-th1h/src/execution-reservation.test.ts"
+      - "luna-th1h/src/quote-regression.test.ts"
+      - "luna-th1h/src/ingest-retention-migration-contract.test.ts"
+      - "supabase/migrations/20261019021449_luna_verified_ingest_retention_idempotency_20261018.sql"
+      - "supabase/migrations/20261019021452_luna_ingest_http_request_audit_20261018.sql"
+      - "supabase/tests/luna_ingest_retention_idempotency.pg.sql"
+      - "luna-th1h/package.json"
+      - "luna-execution-gateway/**"
+      - ".github/workflows/luna-quote-regression.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  quote-regression:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: luna_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d luna_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: luna_test
+    defaults:
+      run:
+        working-directory: luna-th1h
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install project dependencies
+        run: npm install --no-audit --no-fund
+      - name: Run deterministic regression matrix
+        run: npm run test:quote-regression
+      - name: Check staged ingest-retention migration contract
+        run: npm run test:ingest-retention-contract
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Exercise idempotency fix in disposable PostgreSQL
+        run: psql -X -v ON_ERROR_STOP=1 -f ../supabase/tests/luna_ingest_retention_idempotency.pg.sql
+      - name: Typecheck worker and test sources
+        run: npm run typecheck
+
+  gateway-health-liveness:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: luna-execution-gateway
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install gateway dependencies
+        run: python -m pip install --no-cache-dir -r requirements.txt
+      - name: Verify liveness remains available when diagnostics are blocked
+        run: python test_health_liveness.py
+      - name: Verify book freshness survives price-only events correctly
+        run: python test_quote_book_freshness.py
+      - name: Run gateway order-guard tests
+        run: python test_safety.py
+      - name: Compile Python source and tests
+        run: python -m compileall -q .
